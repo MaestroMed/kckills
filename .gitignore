@@ -1,0 +1,37 @@
+# Dependencies
+node_modules/
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Build
+.next/
+out/
+
+# Environment
+.env
+.env.local
+.env*.local
+
+# Worker temp files
+worker/clips/
+worker/thumbnails/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Claude Code — local user preferences (permissions, etc.)
+.claude/settings.local.json
+.claude/cache/
+.claude/conversations/
+
+# Worker state
+worker/local_cache.db
+worker/state.json
+worker/logs/

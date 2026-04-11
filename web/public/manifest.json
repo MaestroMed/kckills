@@ -1,0 +1,17 @@
+{
+  "name": "KCKILLS",
+  "short_name": "KCKILLS",
+  "description": "Every Kill. Rated. Remembered.",
+  "start_url": "/scroll",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#010A13",
+  "theme_color": "#C8AA6E",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}
