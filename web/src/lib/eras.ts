@@ -148,6 +148,13 @@ export const ERAS: Era[] = [
     keyMoment:
       "Showmatch historique organise entre Kameto et Ibai au Palau Sant Jordi de Barcelone le 15 decembre 2021. KOI (Ibai + Pique + amis) gagne 2-1 devant 15 000 fans espagnols \u2014 mais 257 fans du Blue Wall ont fait le voyage en terre hostile et couvrent le stade en chants KC. Le show atteint 477 000 viewers simultanes sur Twitch, depassant la finale LCS Summer 2021 (364K). Match retour le 8 janvier 2022 au Carrousel du Louvre a Paris. Naissance de la rivalite KC vs KOI et preuve que les showmatchs Streamer Legend pouvaient rivaliser avec le plus haut niveau competitif.",
     viewership: "477K peak viewers Twitch \u00b7 257 Blue Wall en terre hostile",
+    events: [
+      "15 dec 2021 \u2014 Palau Sant Jordi, Barcelone (15 000 places)",
+      "257 Blue Wall en terre hostile \u2014 les legendes du voyage",
+      "477K peak viewers Twitch \u2014 plus que la finale LCS Summer 2021 (364K)",
+      "Match retour 8 jan 2022 \u2014 Carrousel du Louvre, Paris",
+      "Naissance de la rivalite KC vs KOI",
+    ],
     clipsQuery: "karmine corp vs koi showmatch barcelona 2021 ibai",
     links: [
       {
@@ -343,7 +350,7 @@ export const ERAS: Era[] = [
     period: "Winter 2024",
     phase: "LEC",
     label: "Bienvenue en LEC",
-    subtitle: "Le debut brutal",
+    subtitle: "L'entree dans l'ere sombre",
     color: "#FF9800",
     result: "\uD83D\uDC94 10e (dernier)",
     icon: "\uD83C\uDF31",
@@ -353,8 +360,13 @@ export const ERAS: Era[] = [
     roster: "Cabochard (top) \u00b7 Bo (jgl) \u00b7 Saken (mid) \u00b7 Upset (adc) \u00b7 Targamas (sup)",
     coach: "Striker",
     keyMoment:
-      "Premier split LEC de l'histoire de KC. Roster renforce : Bo et Upset signes depuis Vitality. Caliste, pourtant present dans le pipeline, ne peut pas jouer \u2014 la LEC exige 18 ans, il en a 17. Mais l'aventure commence brutalement : KC finit DERNIER (10e). L'apprentissage est rude, la scene de Berlin est sans pitie.",
-    events: ["Premier match LEC de l'histoire de KC", "Bo & Upset recrutes depuis Vitality", "Caliste age-restricted (17 ans)"],
+      "Premier split LEC de l'histoire de KC \u2014 et debut de l'ere sombre. Porte par la plus grosse fanbase d'Europe apres le rachat du slot Astralis, le club arrive a Berlin avec des attentes ecrasantes : le Blue Wall s'attend a voir KC se battre pour les playoffs des le premier split. Roster renforce : Bo (ex-Vitality, ex-BLG, reputation mechanique top-tier) et Upset (ex-Fnatic, Worlds multiple). Caliste, deja dans le pipeline, ne peut pas jouer \u2014 la LEC exige 18 ans, il en a 17. Il va dominer la LFL sur KCB en attendant son heure. Sur la scene LEC pourtant, tout s'ecroule : 10e et dernier. Aucun playoff, aucun momentum, les casts francais parlent de \u00ab choc culturel \u00bb. L'apprentissage est brutal et la scene de Berlin, sans pitie.",
+    events: [
+      "Premier match LEC de l'histoire de KC",
+      "Bo & Upset recrutes depuis Vitality et Fnatic",
+      "Caliste age-restricted (17 ans) \u2014 domine la LFL sur KCB",
+      "\uD83D\uDC94 10e LEC Winter 2024 \u2014 aucun playoff",
+    ],
     clipsQuery: "karmine corp lec winter 2024 debut",
     links: [
       {
@@ -374,7 +386,7 @@ export const ERAS: Era[] = [
     period: "Spring 2024",
     phase: "LEC",
     label: "Le Cauchemar",
-    subtitle: "Reverse sweep cruel vs G2",
+    subtitle: "L'ere sombre \u00b7 reverse sweep G2 brise",
     color: "#E84057",
     result: "\uD83D\uDC94 10e (dernier)",
     icon: "\uD83D\uDCA5",
@@ -384,8 +396,12 @@ export const ERAS: Era[] = [
     roster: "Cabochard (top) \u00b7 Bo (jgl) \u00b7 Saken (mid) \u00b7 Upset (adc) \u00b7 Targamas (sup)",
     coach: "Striker",
     keyMoment:
-      "Deuxieme split LEC, meme resultat : 10e. Lueur d'espoir en playoffs : KC bat GIANTX et accroche G2 en BO5. Menes 0-2, KC sort de ses tripes pour remonter 2-2... puis s'effondre au Game 5. Deux derniers rangs consecutifs declenchent la reconstruction totale. Le club sait que quelque chose doit changer, et vite.",
-    events: ["2 derniers rangs LEC consecutifs", "BO5 G2 \u2014 KC remonte 0-2 a 2-2 puis perd Game 5"],
+      "Deuxieme split LEC, meme resultat : 10e et dernier \u2014 deux derniers rangs consecutifs, une premiere pour un club de cette taille. La lueur d'espoir arrive en playoffs : KC bat GIANTX et accroche G2 en BO5. Menes 0-2, KC sort de ses tripes, remonte 2-2 dans une ambiance electrique... puis s'effondre au Game 5. Le reverse sweep reverse \u2014 une cruaute rare, diffusee en prime-time. Kameto, en larmes a la fin du match, publie un message aux fans reconnaissant la profondeur de l'echec. Ce soir-la, tout le monde comprend que le statu quo est fini : la reconstruction doit etre totale, immediate, impitoyable. Cabochard, Bo et Saken seront benches des fins mai.",
+    events: [
+      "\uD83D\uDC94 2 derniers rangs LEC consecutifs (record negatif du club)",
+      "BO5 G2 \u2014 KC remonte 0-2 a 2-2 puis perd Game 5",
+      "Kameto public apology \u2014 reconstruction annoncee",
+    ],
     clipsQuery: "karmine corp g2 lec spring 2024 bo5",
     links: [
       {
@@ -400,7 +416,7 @@ export const ERAS: Era[] = [
     period: "Summer 2024",
     phase: "LEC",
     label: "Le Pari Coreen",
-    subtitle: "Canna + Vladi = transformation",
+    subtitle: "La fin de l'ere sombre \u00b7 Canna + Vladi",
     color: "#FF9800",
     result: "4e place Summer",
     icon: "\uD83C\uDF1F",
@@ -410,7 +426,7 @@ export const ERAS: Era[] = [
     roster: "Canna (top) \u00b7 Closer (jgl) \u00b7 Vladi (mid) \u00b7 Upset (adc) \u00b7 Targamas (sup)",
     coach: "Striker",
     keyMoment:
-      "Le 2 mai 2024, KC annonce un remaniement massif : Cabochard, Bo et Saken sont benches. Canna (ex-T1, ex-Dplus KIA) arrive \u2014 premier import LCK majeur de l'histoire du club. Closer (ex-100 Thieves) prend la jungle. Vladi est promu depuis l'academie KCB, ou il vient de remporter le LFL Spring. Le resultat est spectaculaire : de dernier a 4e en un split. Premier playoff LEC gagne dans l'histoire du club.",
+      "Le 2 mai 2024, KC annonce un remaniement massif qui met un terme a l'ere sombre : Cabochard, Bo et Saken sont benches. Canna (ex-T1, ex-Dplus KIA, champion du monde 2020) arrive \u2014 premier import LCK majeur de l'histoire du club et l'un des plus gros transferts LEC jamais signes par une equipe francaise. Closer (ex-100 Thieves) prend la jungle. Vladi est promu depuis l'academie KCB ou il vient de remporter le LFL Spring. Le resultat est spectaculaire : de dernier a 4e en un seul split. Premier playoff LEC gagne dans l'histoire du club. L'ombre de 2024 n'est pas tout a fait dissipee, mais le renouveau est la \u2014 et il porte deja les graines du Sacre de 2025.",
     events: [
       "Arrivee de Canna (ex-T1)",
       "Closer recrute depuis 100 Thieves",
