@@ -1,20 +1,28 @@
 """
-LoLTok Worker — Asyncio supervised daemon.
+KCKILLS / LoLTok Worker — Asyncio supervised daemon.
 
 Each module runs in its own task with auto-restart on crash.
 Modules are independent — a crash in CLIPPER doesn't block HARVESTER.
 
 Usage:
-    python main.py              # Start daemon
-    python main.py sentinel     # Run only sentinel once
-    python main.py harvester    # Run only harvester once
-    python main.py watchdog     # Run only watchdog once
+    python main.py                         # Start supervised daemon
+    python main.py sentinel                # Run sentinel once
+    python main.py harvester               # Run harvester once
+    python main.py clipper                 # Run clipper once
+    python main.py analyzer                # Run analyzer once
+    python main.py og                      # Run og_generator once
+    python main.py heartbeat               # Run heartbeat once
+    python main.py watchdog                # Run watchdog once
+    python main.py pipeline <match_ext_id> # End-to-end run on one match
 """
 
-import sys
+from __future__ import annotations
+
 import asyncio
+import sys
 import time
 import traceback
+
 import structlog
 
 structlog.configure(
@@ -27,16 +35,21 @@ structlog.configure(
 
 log = structlog.get_logger()
 
-# Module intervals (seconds)
-MODULE_CONFIG = {
-    "sentinel":  {"interval": 300,  "module": "modules.sentinel"},
-    "harvester": {"interval": 300,  "module": "modules.harvester"},
-    "clipper":   {"interval": 300,  "module": "modules.clipper"},
-    "analyzer":  {"interval": 300,  "module": "modules.analyzer"},
-    "watchdog":  {"interval": 1800, "module": "modules.watchdog"},
-}
+# Module intervals in seconds. The order in the daemon is intentional:
+# sentinel finds matches → harvester fills kills → clipper produces videos →
+# analyzer tags them → og_generator publishes them.
+DAEMON_MODULES: list[tuple[str, int, str]] = [
+    # (name, interval_seconds, dotted import path)
+    ("sentinel",     300,   "modules.sentinel"),      # 5 min
+    ("harvester",    600,   "modules.harvester"),     # 10 min
+    ("clipper",      300,   "modules.clipper"),       # 5 min
+    ("analyzer",     600,   "modules.analyzer"),      # 10 min
+    ("og_generator", 900,   "modules.og_generator"),  # 15 min
+    ("heartbeat",    21600, "modules.heartbeat"),     # 6h
+    ("watchdog",     1800,  "modules.watchdog"),      # 30 min
+]
 
-RESTART_DELAY = 10  # seconds before restarting a crashed task
+RESTART_DELAY = 10  # seconds between a module crash and its next attempt
 
 
 async def supervised_task(name: str, interval: int, run_func):
@@ -49,60 +62,56 @@ async def supervised_task(name: str, interval: int, run_func):
             elapsed = time.monotonic() - start
             log.info("module_done", module=name, elapsed_s=round(elapsed, 1))
         except Exception as e:
-            log.error("module_crash", module=name, error=str(e),
-                      traceback=traceback.format_exc()[:1000])
+            log.error(
+                "module_crash",
+                module=name,
+                error=str(e),
+                traceback=traceback.format_exc()[:1500],
+            )
             try:
                 from services import discord_webhook
-                await discord_webhook.notify_error(name, str(e))
+                await discord_webhook.notify_error(name, f"{type(e).__name__}: {e}")
             except Exception:
                 pass
+            await asyncio.sleep(RESTART_DELAY)
+            continue
 
         await asyncio.sleep(interval)
 
 
 async def run_daemon():
-    """Start all modules as supervised asyncio tasks."""
-    log.info("daemon_start", modules=list(MODULE_CONFIG.keys()))
+    """Start every module as an independent supervised asyncio task."""
+    log.info("daemon_start", modules=[m[0] for m in DAEMON_MODULES])
 
-    tasks = []
+    import importlib
 
-    # Sentinel
-    from modules import sentinel
-    tasks.append(asyncio.create_task(
-        supervised_task("sentinel", 300, sentinel.run),
-        name="sentinel"
-    ))
-
-    # VOD Hunter
-    from modules import vod_hunter
-    tasks.append(asyncio.create_task(
-        supervised_task("vod_hunter", 600, vod_hunter.run),
-        name="vod_hunter"
-    ))
-
-    # Heartbeat (every 6h to prevent Supabase pause)
-    from modules import heartbeat
-    tasks.append(asyncio.create_task(
-        supervised_task("heartbeat", 21600, heartbeat.run),
-        name="heartbeat"
-    ))
-
-    # Watchdog
-    from modules import watchdog
-    tasks.append(asyncio.create_task(
-        supervised_task("watchdog", 1800, watchdog.run),
-        name="watchdog"
-    ))
+    tasks: list[asyncio.Task] = []
+    for name, interval, dotted in DAEMON_MODULES:
+        try:
+            mod = importlib.import_module(dotted)
+        except Exception as e:
+            log.error("module_import_failed", module=name, error=str(e))
+            continue
+        if not hasattr(mod, "run"):
+            log.error("module_no_run", module=name)
+            continue
+        tasks.append(asyncio.create_task(
+            supervised_task(name, interval, mod.run),
+            name=name,
+        ))
 
     # Daily report at 23:00 UTC
     async def daily_report_loop():
         from modules import watchdog as wd
         while True:
-            await asyncio.sleep(3600)  # check every hour
+            await asyncio.sleep(3600)
             from datetime import datetime, timezone
             now = datetime.now(timezone.utc)
             if now.hour == 23:
-                await wd.send_daily_report()
+                try:
+                    await wd.send_daily_report()
+                except Exception as e:
+                    log.warn("daily_report_failed", error=str(e))
 
     tasks.append(asyncio.create_task(daily_report_loop(), name="daily_report"))
 
@@ -117,31 +126,59 @@ async def run_daemon():
 
 
 async def run_once(module_name: str):
-    """Run a single module once."""
-    modules_map = {
-        "sentinel": "modules.sentinel",
-        "watchdog": "modules.watchdog",
-        "vod_hunter": "modules.vod_hunter",
-        "heartbeat": "modules.heartbeat",
+    """Run a single module once, then return."""
+    aliases = {
+        "og": "og_generator",
+        "ogen": "og_generator",
+        "harvest": "harvester",
+        "clip": "clipper",
+        "analyze": "analyzer",
+        "watch": "watchdog",
     }
-    if module_name in modules_map:
-        import importlib
-        mod = importlib.import_module(modules_map[module_name])
-        await mod.run()
-    else:
+    canonical = aliases.get(module_name, module_name)
+
+    import importlib
+    try:
+        mod = importlib.import_module(f"modules.{canonical}")
+    except ModuleNotFoundError:
         log.error("unknown_module", module=module_name)
-        print(f"Available: {', '.join(modules_map.keys())}")
+        print(f"Available: sentinel, harvester, clipper, analyzer, og, heartbeat, watchdog, pipeline <match_id>")
+        return
+
+    if not hasattr(mod, "run"):
+        log.error("module_no_run", module=canonical)
+        return
+
+    await mod.run()
+
+
+async def run_pipeline(match_external_id: str):
+    """Run the end-to-end pipeline on a single match."""
+    from modules import pipeline
+    report = await pipeline.run_for_match(match_external_id)
+    pipeline.print_report(report)
 
 
 def main():
-    if len(sys.argv) > 1:
-        module = sys.argv[1].lower()
-        asyncio.run(run_once(module))
-    else:
-        print("=" * 50)
-        print("  LoLTok Worker — Starting daemon")
-        print("=" * 50)
+    argv = sys.argv[1:]
+
+    if not argv:
+        print("=" * 60)
+        print("  KCKILLS / LoLTok Worker — daemon mode")
+        print("=" * 60)
         asyncio.run(run_daemon())
+        return
+
+    command = argv[0].lower()
+
+    if command == "pipeline":
+        if len(argv) < 2:
+            print("Usage: python main.py pipeline <match_external_id>")
+            sys.exit(1)
+        asyncio.run(run_pipeline(argv[1]))
+        return
+
+    asyncio.run(run_once(command))
 
 
 if __name__ == "__main__":

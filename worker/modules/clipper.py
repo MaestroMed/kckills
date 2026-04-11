@@ -2,104 +2,108 @@
 CLIPPER — Downloads VOD segments, produces triple format clips, uploads to R2.
 
 Output per kill:
-  {id}_h.mp4     — 16:9 1280x720  (desktop, kill detail)
-  {id}_v.mp4     — 9:16 720x1280  (scroll mobile, HQ)
-  {id}_v_low.mp4 — 9:16 360x640   (scroll mobile, slow network)
-  {id}_thumb.jpg — 9:16 720x1280  (poster frame)
+  {id}_h.mp4      — 16:9 1280x720  (desktop, kill detail page)
+  {id}_v.mp4      — 9:16 720x1280  (scroll mobile, HQ)
+  {id}_v_low.mp4  — 9:16 360x640   (scroll mobile, slow network)
+  {id}_thumb.jpg  — 9:16 720x1280  (poster frame, OG base)
 
-All MP4s: H.264, movflags +faststart, AAC 96k.
+All MP4s: H.264, movflags +faststart, AAC 96k / 64k for v_low.
+
+Flow:
+1. Compute clip window (game_time_seconds + vod_offset ± pad)
+2. yt-dlp --download-sections to grab a raw 20-second segment
+3. ffmpeg × 4 to produce horizontal / vertical / vertical-low / thumbnail
+4. Upload each artefact to R2 via services.r2_client.upload_clip
+5. Return a dict of the four public URLs
+6. Clean up all temp files
 """
 
+from __future__ import annotations
+
+import asyncio
 import os
-import hashlib
 import subprocess
 import structlog
+
 from config import config
 from scheduler import scheduler
+from services import r2_client
+from services.supabase_client import safe_select, safe_update
 
 log = structlog.get_logger()
+
+FFMPEG_TIMEOUT = 180  # seconds per ffmpeg invocation
+YTDLP_TIMEOUT = 180   # seconds for a single segment download
 
 
 async def clip_kill(
     kill_id: str,
     youtube_id: str,
-    vod_offset: int,
+    vod_offset_seconds: int,
     game_time_seconds: int,
 ) -> dict | None:
-    """
-    Download and clip a single kill from a YouTube VOD.
-    Returns {horizontal, vertical, vertical_low, thumbnail} URLs or None.
-    """
-    can_dl = await scheduler.wait_for("ytdlp")
-    if not can_dl:
-        return None
-
-    # Calculate timestamps
-    vod_time = vod_offset + game_time_seconds
-    clip_start = max(0, vod_time - config.CLIP_BEFORE_SECONDS)
-    clip_end = vod_time + config.CLIP_AFTER_SECONDS
-    clip_duration = config.CLIP_BEFORE_SECONDS + config.CLIP_AFTER_SECONDS
-
-    file_hash = hashlib.md5(f"{kill_id}-{vod_time}".encode()).hexdigest()[:10]
-    vod_url = f"https://www.youtube.com/watch?v={youtube_id}"
-
+    """Download, encode and upload a single kill. Returns dict of R2 URLs or None."""
     os.makedirs(config.CLIPS_DIR, exist_ok=True)
     os.makedirs(config.THUMBNAILS_DIR, exist_ok=True)
 
-    raw_path = os.path.join(config.CLIPS_DIR, f"raw_{file_hash}.mp4")
+    vod_time = int(vod_offset_seconds or 0) + int(game_time_seconds or 0)
+    clip_start = max(0, vod_time - config.CLIP_BEFORE_SECONDS)
+    clip_end = vod_time + config.CLIP_AFTER_SECONDS
+
+    raw_path = os.path.join(config.CLIPS_DIR, f"raw_{kill_id}.mp4")
     h_path = os.path.join(config.CLIPS_DIR, f"{kill_id}_h.mp4")
     v_path = os.path.join(config.CLIPS_DIR, f"{kill_id}_v.mp4")
     vl_path = os.path.join(config.CLIPS_DIR, f"{kill_id}_v_low.mp4")
     thumb_path = os.path.join(config.THUMBNAILS_DIR, f"{kill_id}_thumb.jpg")
 
-    try:
-        # Step 1: Download segment with yt-dlp
-        log.info("clip_download", kill_id=kill_id, start=clip_start, end=clip_end)
-        result = subprocess.run([
-            "yt-dlp",
-            "--download-sections", f"*{clip_start}-{clip_end}",
-            "--force-keyframes-at-cuts",
-            "-f", "bestvideo[height<=720]+bestaudio/best[height<=720]",
-            "--merge-output-format", "mp4",
-            "-o", raw_path,
-            "--no-playlist",
-            vod_url,
-        ], capture_output=True, text=True, timeout=120)
+    vod_url = f"https://www.youtube.com/watch?v={youtube_id}"
 
-        if not os.path.exists(raw_path):
-            log.error("clip_download_failed", kill_id=kill_id, stderr=result.stderr[:500])
+    try:
+        # ─── 1. Download segment ────────────────────────────────────
+        can_dl = await scheduler.wait_for("ytdlp")
+        if not can_dl:
+            log.warn("ytdlp_quota_exceeded", kill_id=kill_id)
             return None
 
-        await scheduler.wait_for("ffmpeg_cooldown")
+        log.info("clip_download", kill_id=kill_id, start=clip_start, end=clip_end)
+        ok = await _run_ytdlp(vod_url, raw_path, clip_start, clip_end)
+        if not ok or not os.path.exists(raw_path):
+            log.error("clip_download_failed", kill_id=kill_id)
+            return None
 
-        # Step 2: Horizontal 16:9 1280x720
-        _ffmpeg([
+        # ─── 2. Encode horizontal 16:9 ──────────────────────────────
+        await scheduler.wait_for("ffmpeg_cooldown")
+        if not await _ffmpeg([
             "-i", raw_path,
             "-vf", "scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2",
             "-c:v", "libx264", "-preset", "fast", "-crf", "23",
+            "-profile:v", "main", "-level", "3.1",
             "-maxrate", "2M", "-bufsize", "4M",
             "-c:a", "aac", "-b:a", "96k",
             "-movflags", "+faststart",
             "-y", h_path,
-        ])
+        ]):
+            log.error("ffmpeg_horizontal_failed", kill_id=kill_id)
+            return None
 
+        # ─── 3. Encode vertical 9:16 HQ ─────────────────────────────
         await scheduler.wait_for("ffmpeg_cooldown")
-
-        # Step 3: Vertical 9:16 720x1280 (crop center)
-        _ffmpeg([
+        if not await _ffmpeg([
             "-i", raw_path,
             "-vf", "crop=ih*9/16:ih:iw/2-ih*9/32:0,scale=720:1280",
             "-c:v", "libx264", "-preset", "fast", "-crf", "23",
+            "-profile:v", "main", "-level", "3.1",
             "-maxrate", "2M", "-bufsize", "4M",
             "-c:a", "aac", "-b:a", "96k",
             "-movflags", "+faststart",
             "-y", v_path,
-        ])
+        ]):
+            log.error("ffmpeg_vertical_failed", kill_id=kill_id)
+            return None
 
+        # ─── 4. Encode vertical 9:16 low (360p baseline) ────────────
         await scheduler.wait_for("ffmpeg_cooldown")
-
-        # Step 4: Vertical low 360x640
-        _ffmpeg([
+        if not await _ffmpeg([
             "-i", raw_path,
             "-vf", "crop=ih*9/16:ih:iw/2-ih*9/32:0,scale=360:640",
             "-c:v", "libx264", "-preset", "fast", "-crf", "28",
@@ -108,78 +112,109 @@ async def clip_kill(
             "-c:a", "aac", "-b:a", "64k",
             "-movflags", "+faststart",
             "-y", vl_path,
-        ])
+        ]):
+            log.warn("ffmpeg_low_failed", kill_id=kill_id)  # non-fatal
 
-        # Step 5: Thumbnail at kill moment
-        _ffmpeg([
+        # ─── 5. Extract thumbnail at kill moment ────────────────────
+        await _ffmpeg([
             "-ss", str(config.CLIP_BEFORE_SECONDS),
             "-i", v_path,
             "-vframes", "1",
             "-q:v", "2",
-            thumb_path,
+            "-y", thumb_path,
         ])
 
-        # Clean up raw file
-        _safe_remove(raw_path)
+        # ─── 6. Upload everything to R2 in parallel ─────────────────
+        h_url, v_url, vl_url, thumb_url = await asyncio.gather(
+            r2_client.upload_clip(kill_id, h_path, "h"),
+            r2_client.upload_clip(kill_id, v_path, "v"),
+            r2_client.upload_clip(kill_id, vl_path, "v_low") if os.path.exists(vl_path) else _noop(),
+            r2_client.upload_clip(kill_id, thumb_path, "thumb") if os.path.exists(thumb_path) else _noop(),
+        )
 
-        # Step 6: Upload to R2
-        urls = {}
-        for local_path, r2_key in [
-            (h_path, f"clips/{kill_id}_h.mp4"),
-            (v_path, f"clips/{kill_id}_v.mp4"),
-            (vl_path, f"clips/{kill_id}_v_low.mp4"),
-            (thumb_path, f"thumbnails/{kill_id}_thumb.jpg"),
-        ]:
-            if os.path.exists(local_path):
-                url = await _upload_r2(local_path, r2_key)
-                urls[r2_key.split("/")[0]] = url
+        log.info(
+            "clip_done",
+            kill_id=kill_id,
+            h=bool(h_url), v=bool(v_url), vl=bool(vl_url), thumb=bool(thumb_url),
+        )
 
-        log.info("clip_done", kill_id=kill_id, formats=len(urls))
         return {
-            "clip_url_horizontal": urls.get("clips"),
-            "clip_url_vertical": urls.get("clips"),
-            "clip_url_vertical_low": urls.get("clips"),
-            "thumbnail_url": urls.get("thumbnails"),
+            "clip_url_horizontal": h_url,
+            "clip_url_vertical": v_url,
+            "clip_url_vertical_low": vl_url,
+            "thumbnail_url": thumb_url,
         }
 
-    except subprocess.TimeoutExpired:
-        log.error("clip_timeout", kill_id=kill_id)
-        _safe_remove(raw_path)
-        return None
     except Exception as e:
         log.error("clip_error", kill_id=kill_id, error=str(e))
-        _safe_remove(raw_path)
         return None
+    finally:
+        for p in (raw_path, h_path, v_path, vl_path, thumb_path):
+            _safe_remove(p)
 
 
-def _ffmpeg(args: list[str]):
-    """Run ffmpeg with args."""
-    subprocess.run(["ffmpeg"] + args, capture_output=True, timeout=120)
-
-
-async def _upload_r2(file_path: str, key: str) -> str | None:
-    """Upload file to Cloudflare R2."""
-    if not config.R2_ACCOUNT_ID or not config.R2_ACCESS_KEY_ID:
-        return None
-
-    await scheduler.wait_for("r2")
-    endpoint = f"https://{config.R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
-
+async def _run_ytdlp(url: str, output_path: str, start: float, end: float) -> bool:
+    """Run yt-dlp with --download-sections in a subprocess."""
+    cmd = [
+        "yt-dlp",
+        "--download-sections", f"*{start}-{end}",
+        "--force-keyframes-at-cuts",
+        "-f", "bestvideo[height<=720]+bestaudio/best[height<=720]",
+        "--merge-output-format", "mp4",
+        "-o", output_path,
+        "--no-playlist",
+        "--quiet", "--no-warnings",
+        url,
+    ]
     try:
-        subprocess.run([
-            "aws", "s3", "cp", file_path,
-            f"s3://{config.R2_BUCKET_NAME}/{key}",
-            "--endpoint-url", endpoint,
-        ], capture_output=True, timeout=60, env={
-            **os.environ,
-            "AWS_ACCESS_KEY_ID": config.R2_ACCESS_KEY_ID,
-            "AWS_SECRET_ACCESS_KEY": config.R2_SECRET_ACCESS_KEY,
-            "AWS_DEFAULT_REGION": "auto",
-        })
-        return f"{config.R2_PUBLIC_URL}/{key}"
-    except Exception as e:
-        log.error("r2_upload_failed", key=key, error=str(e))
-        return None
+        proc = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        try:
+            _, stderr = await asyncio.wait_for(proc.communicate(), timeout=YTDLP_TIMEOUT)
+        except asyncio.TimeoutError:
+            proc.kill()
+            await proc.wait()
+            log.error("ytdlp_timeout", url=url[:60])
+            return False
+        if proc.returncode != 0:
+            log.warn("ytdlp_nonzero", rc=proc.returncode, stderr=(stderr or b"")[:400].decode("utf-8", "ignore"))
+            return False
+        return True
+    except FileNotFoundError:
+        log.error("ytdlp_not_installed")
+        return False
+
+
+async def _ffmpeg(args: list[str]) -> bool:
+    """Run ffmpeg asynchronously, return True on success."""
+    cmd = ["ffmpeg", "-hide_banner", "-loglevel", "error", *args]
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        try:
+            _, stderr = await asyncio.wait_for(proc.communicate(), timeout=FFMPEG_TIMEOUT)
+        except asyncio.TimeoutError:
+            proc.kill()
+            await proc.wait()
+            log.error("ffmpeg_timeout", cmd=" ".join(cmd[:6]))
+            return False
+        if proc.returncode != 0:
+            log.warn("ffmpeg_nonzero", rc=proc.returncode, stderr=(stderr or b"")[:400].decode("utf-8", "ignore"))
+            return False
+        return True
+    except FileNotFoundError:
+        log.error("ffmpeg_not_installed")
+        return False
+
+
+async def _noop():
+    return None
 
 
 def _safe_remove(path: str):
@@ -188,3 +223,58 @@ def _safe_remove(path: str):
             os.remove(path)
     except Exception:
         pass
+
+
+# ─── Daemon loop: pick up kills that need clipping ─────────────────────────
+
+async def run() -> int:
+    """Find kills in status='vod_found' and clip them. Returns clip count."""
+    log.info("clipper_scan_start")
+
+    kills = safe_select(
+        "kills",
+        "id, game_id, game_time_seconds, status",
+        status="vod_found",
+    )
+    if not kills:
+        log.info("clipper_no_pending")
+        return 0
+
+    processed = 0
+    for kill in kills:
+        # Fetch parent game to find the VOD info
+        games = safe_select(
+            "games",
+            "vod_youtube_id, vod_offset_seconds",
+            id=kill.get("game_id", ""),
+        )
+        if not games:
+            continue
+        game = games[0]
+        yt_id = game.get("vod_youtube_id")
+        offset = int(game.get("vod_offset_seconds") or 0)
+        if not yt_id:
+            continue
+
+        safe_update("kills", {"status": "clipping"}, "id", kill["id"])
+
+        urls = await clip_kill(
+            kill_id=kill["id"],
+            youtube_id=yt_id,
+            vod_offset_seconds=offset,
+            game_time_seconds=int(kill.get("game_time_seconds") or 0),
+        )
+        if urls and urls.get("clip_url_horizontal"):
+            payload = {**urls, "status": "clipped"}
+            safe_update("kills", payload, "id", kill["id"])
+            processed += 1
+        else:
+            safe_update(
+                "kills",
+                {"status": "clip_error", "retry_count": int(kill.get("retry_count") or 0) + 1},
+                "id",
+                kill["id"],
+            )
+
+    log.info("clipper_scan_done", processed=processed)
+    return processed
