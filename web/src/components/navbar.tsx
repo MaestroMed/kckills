@@ -8,7 +8,8 @@ const NAV_LINKS = [
   { href: "/scroll", label: "Scroll" },
   { href: "/players", label: "Joueurs" },
   { href: "/matches", label: "Matchs" },
-  { href: "/top", label: "Top" },
+  { href: "/hall-of-fame", label: "Hall of Fame" },
+  { href: "/records", label: "Records" },
 ];
 
 export function Navbar() {
