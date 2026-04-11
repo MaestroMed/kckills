@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback, useEffect } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { m, AnimatePresence } from "framer-motion";
 import Image from "next/image";
 import { KC_LOGO } from "@/lib/kc-assets";
 
@@ -57,7 +57,7 @@ export function MacronEasterEgg() {
 
       <AnimatePresence>
         {show && (
-          <motion.div
+          <m.div
             initial={{ opacity: 0, y: -20, scale: 0.9 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -20, scale: 0.9 }}
@@ -124,7 +124,7 @@ export function MacronEasterEgg() {
                 </p>
               </div>
             </button>
-          </motion.div>
+          </m.div>
         )}
       </AnimatePresence>
     </>

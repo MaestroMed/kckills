@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { m, AnimatePresence } from "framer-motion";
 import type { Era, EraLink } from "@/lib/eras";
 
 const LINK_ICONS: Record<string, string> = {
@@ -55,7 +55,7 @@ export function EraClipsSection({ era }: { era: Era }) {
           {directClips.map((link, i) => {
             const videoId = extractYouTubeId(link.url)!;
             return (
-              <motion.button
+              <m.button
                 key={`direct-${i}`}
                 onClick={() => setActiveClip(videoId)}
                 whileHover={{ y: -4 }}
@@ -73,7 +73,7 @@ export function EraClipsSection({ era }: { era: Era }) {
 
                 {/* Play button */}
                 <div className="absolute inset-0 flex items-center justify-center">
-                  <motion.div
+                  <m.div
                     className="flex h-16 w-16 items-center justify-center rounded-full backdrop-blur-md border border-white/30"
                     style={{ backgroundColor: `${era.color}30` }}
                     whileHover={{ scale: 1.15 }}
@@ -86,7 +86,7 @@ export function EraClipsSection({ era }: { era: Era }) {
                     >
                       <path d="M8 5v14l11-7z" />
                     </svg>
-                  </motion.div>
+                  </m.div>
                 </div>
 
                 {/* Label */}
@@ -98,7 +98,7 @@ export function EraClipsSection({ era }: { era: Era }) {
                     YouTube &middot; Clip officiel
                   </p>
                 </div>
-              </motion.button>
+              </m.button>
             );
           })}
         </div>
@@ -144,14 +144,14 @@ export function EraClipsSection({ era }: { era: Era }) {
       {/* Lightbox for direct embeds */}
       <AnimatePresence>
         {activeClip && (
-          <motion.div
+          <m.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             className="fixed inset-0 z-[200] flex items-center justify-center bg-black/95 backdrop-blur-xl p-6"
             onClick={() => setActiveClip(null)}
           >
-            <motion.div
+            <m.div
               initial={{ scale: 0.9, y: 20 }}
               animate={{ scale: 1, y: 0 }}
               exit={{ scale: 0.9, y: 20 }}
@@ -176,8 +176,8 @@ export function EraClipsSection({ era }: { era: Era }) {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                 </svg>
               </button>
-            </motion.div>
-          </motion.div>
+            </m.div>
+          </m.div>
         )}
       </AnimatePresence>
     </section>
@@ -186,7 +186,7 @@ export function EraClipsSection({ era }: { era: Era }) {
 
 function SearchLinkCard({ link, color }: { link: EraLink; color: string }) {
   return (
-    <motion.a
+    <m.a
       href={link.url}
       target="_blank"
       rel="noopener noreferrer"
@@ -219,6 +219,6 @@ function SearchLinkCard({ link, color }: { link: EraLink; color: string }) {
       >
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
       </svg>
-    </motion.a>
+    </m.a>
   );
 }

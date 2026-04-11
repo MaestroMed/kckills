@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { m, AnimatePresence } from "framer-motion";
 import { useRouter } from "next/navigation";
 import { ERAS, type Era } from "@/lib/eras";
 
@@ -230,7 +230,7 @@ export function KCTimeline() {
           const hoverZ = isHovered ? 50 : 10 - Math.abs(i - ERAS.length / 2);
 
           return (
-            <motion.div
+            <m.div
               key={era.id}
               data-era-id={era.id}
               onMouseEnter={() => onCardHoverStart(era)}
@@ -270,7 +270,7 @@ export function KCTimeline() {
               {era.image && (
                 <>
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <motion.img
+                  <m.img
                     src={era.image}
                     alt=""
                     className="absolute inset-0 w-full h-full object-cover pointer-events-none"
@@ -282,7 +282,7 @@ export function KCTimeline() {
                     transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-black via-black/70 to-black/20 pointer-events-none" />
-                  <motion.div
+                  <m.div
                     className="absolute inset-0 pointer-events-none"
                     style={{
                       background: `linear-gradient(135deg, ${era.color}30 0%, transparent 40%, transparent 100%)`,
@@ -300,7 +300,7 @@ export function KCTimeline() {
                 />
               )}
 
-              <motion.div
+              <m.div
                 className="absolute top-0 left-0 h-[4px] pointer-events-none"
                 style={{
                   backgroundColor: era.color,
@@ -311,7 +311,7 @@ export function KCTimeline() {
                 transition={{ duration: 0.5 }}
               />
 
-              <motion.div
+              <m.div
                 className="absolute left-0 top-0 w-[3px] pointer-events-none"
                 style={{ backgroundColor: era.color }}
                 initial={{ height: "0%" }}
@@ -353,7 +353,7 @@ export function KCTimeline() {
               </div>
 
               <div className="absolute bottom-0 left-0 right-0 p-6 z-10 pointer-events-none">
-                <motion.div
+                <m.div
                   className="text-6xl mb-3"
                   animate={{
                     scale: isHovered ? 1.2 : 1,
@@ -362,8 +362,8 @@ export function KCTimeline() {
                   transition={{ type: "spring", stiffness: 200 }}
                 >
                   {era.icon}
-                </motion.div>
-                <motion.h3
+                </m.div>
+                <m.h3
                   className="font-display font-black leading-tight mb-2"
                   style={{
                     fontSize: "2.25rem",
@@ -372,14 +372,14 @@ export function KCTimeline() {
                   animate={{ y: isHovered ? -4 : 0 }}
                 >
                   {era.label}
-                </motion.h3>
-                <motion.p
+                </m.h3>
+                <m.p
                   className="text-sm text-white/70 font-medium mb-3"
                   animate={{ y: isHovered ? -4 : 0 }}
                 >
                   {era.subtitle}
-                </motion.p>
-                <motion.div
+                </m.p>
+                <m.div
                   className="inline-block px-3 py-1.5 rounded-lg font-bold text-xs"
                   style={{
                     backgroundColor: `${era.color}20`,
@@ -389,9 +389,9 @@ export function KCTimeline() {
                   animate={{ y: isHovered ? -4 : 0 }}
                 >
                   {era.result}
-                </motion.div>
+                </m.div>
 
-                <motion.div
+                <m.div
                   className="mt-4 flex items-center gap-2"
                   initial={{ opacity: 0, y: 10 }}
                   animate={{
@@ -403,7 +403,7 @@ export function KCTimeline() {
                   <span className="text-[10px] uppercase tracking-[0.2em] text-white/70">
                     D&eacute;couvrir l&apos;&eacute;poque
                   </span>
-                  <motion.svg
+                  <m.svg
                     className="h-3 w-3 text-white/70"
                     fill="none"
                     stroke="currentColor"
@@ -412,10 +412,10 @@ export function KCTimeline() {
                     transition={{ repeat: Infinity, duration: 1.2 }}
                   >
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M9 5l7 7-7 7" />
-                  </motion.svg>
-                </motion.div>
+                  </m.svg>
+                </m.div>
               </div>
-            </motion.div>
+            </m.div>
           );
         })}
       </div>
@@ -423,7 +423,7 @@ export function KCTimeline() {
       {/* ═══ HOVER-DELAY POPUP — sustained hover triggers a cinematic full-image lightbox ═══ */}
       <AnimatePresence>
         {popupEra && (
-          <motion.div
+          <m.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -431,7 +431,7 @@ export function KCTimeline() {
             className="fixed inset-0 z-[200] flex items-center justify-center bg-black/85 backdrop-blur-xl p-6"
             onClick={() => setPopupEra(null)}
           >
-            <motion.div
+            <m.div
               initial={{ scale: 0.95, y: 20 }}
               animate={{ scale: 1, y: 0 }}
               exit={{ scale: 0.95, y: 20 }}
@@ -539,8 +539,8 @@ export function KCTimeline() {
                   </svg>
                 </button>
               </div>
-            </motion.div>
-          </motion.div>
+            </m.div>
+          </m.div>
         )}
       </AnimatePresence>
     </>

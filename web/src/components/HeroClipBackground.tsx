@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { m, AnimatePresence } from "framer-motion";
 
 interface ClipEntry {
   /** YouTube 11-char videoId (not the full URL) */
@@ -92,7 +92,7 @@ export function HeroClipBackground({ clips, posterSrc = "/images/hero-bg.jpg" }:
           poster celebration photo underneath still bleeds through around
           the edges and during transitions. */}
       <AnimatePresence mode="sync">
-        <motion.div
+        <m.div
           key={`${current.videoId}-${index}`}
           className="absolute inset-0 overflow-hidden pointer-events-none"
           initial={{ opacity: 0, scale: 1.02 }}
@@ -115,12 +115,12 @@ export function HeroClipBackground({ clips, posterSrc = "/images/hero-bg.jpg" }:
             allowFullScreen={false}
             loading="lazy"
           />
-        </motion.div>
+        </m.div>
       </AnimatePresence>
 
       {/* Bottom-left caption for the currently-playing clip */}
       <AnimatePresence mode="wait">
-        <motion.div
+        <m.div
           key={`caption-${index}`}
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
@@ -139,7 +139,7 @@ export function HeroClipBackground({ clips, posterSrc = "/images/hero-bg.jpg" }:
               {current.title}
             </p>
           </div>
-        </motion.div>
+        </m.div>
       </AnimatePresence>
 
       {/* Progress pips — top-right, discrete */}

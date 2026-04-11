@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { m, AnimatePresence } from "framer-motion";
 import Link from "next/link";
 import { ERAS, type Era, type EraLink } from "@/lib/eras";
 
@@ -88,14 +88,14 @@ export function HomeClipsShowcase() {
       {/* Lightbox */}
       <AnimatePresence>
         {activeClip && (
-          <motion.div
+          <m.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             className="fixed inset-0 z-[300] flex items-center justify-center bg-black/95 backdrop-blur-xl p-6"
             onClick={() => setActiveClip(null)}
           >
-            <motion.div
+            <m.div
               initial={{ scale: 0.9, y: 20 }}
               animate={{ scale: 1, y: 0 }}
               exit={{ scale: 0.9, y: 20 }}
@@ -175,8 +175,8 @@ export function HomeClipsShowcase() {
                   </svg>
                 </Link>
               </div>
-            </motion.div>
-          </motion.div>
+            </m.div>
+          </m.div>
         )}
       </AnimatePresence>
     </section>
@@ -193,7 +193,7 @@ function ClipThumbnail({
   index: number;
 }) {
   return (
-    <motion.button
+    <m.button
       onClick={onClick}
       whileHover={{ y: -6, scale: 1.02 }}
       whileTap={{ scale: 0.98 }}
@@ -235,7 +235,7 @@ function ClipThumbnail({
 
       {/* Play icon center */}
       <div className="absolute inset-0 flex items-center justify-center">
-        <motion.div
+        <m.div
           className="flex h-14 w-14 items-center justify-center rounded-full backdrop-blur-md border-2"
           style={{
             backgroundColor: `${clip.era.color}25`,
@@ -251,7 +251,7 @@ function ClipThumbnail({
           >
             <path d="M8 5v14l11-7z" />
           </svg>
-        </motion.div>
+        </m.div>
       </div>
 
       {/* Era badge top-left */}
@@ -282,6 +282,6 @@ function ClipThumbnail({
           {clip.era.label}
         </p>
       </div>
-    </motion.button>
+    </m.button>
   );
 }
