@@ -14,6 +14,8 @@ Usage:
     python main.py heartbeat               # Run heartbeat once
     python main.py watchdog                # Run watchdog once
     python main.py pipeline <match_ext_id> # End-to-end run on one match
+    python main.py backfill [--limit N] [--from YYYY-MM-DD] [--resume]
+                                           # Batch the full kc_matches.json
 """
 
 from __future__ import annotations
@@ -176,6 +178,11 @@ def main():
             print("Usage: python main.py pipeline <match_external_id>")
             sys.exit(1)
         asyncio.run(run_pipeline(argv[1]))
+        return
+
+    if command == "backfill":
+        from modules import backfill
+        backfill.main_cli(argv[1:])
         return
 
     asyncio.run(run_once(command))

@@ -1,0 +1,48 @@
+# KCKILLS / LoLTok Worker — systemd unit template
+#
+# Install:
+#   sudo cp scripts/kckills-worker.service /etc/systemd/system/
+#   sudo sed -i 's|/home/mehdi|'"$HOME"'|g' /etc/systemd/system/kckills-worker.service
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now kckills-worker
+#
+# Logs:
+#   sudo journalctl -u kckills-worker -f
+#
+# Edit the User=, WorkingDirectory= and ExecStart= paths to match your setup
+# before enabling.
+
+[Unit]
+Description=KCKILLS / LoLTok Worker daemon (asyncio)
+Documentation=https://github.com/maestromed/kckills
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=mehdi
+Group=mehdi
+WorkingDirectory=/home/mehdi/kckills/worker
+Environment="PYTHONUNBUFFERED=1"
+Environment="PYTHONIOENCODING=utf-8"
+
+# Use a venv if present, otherwise system python
+ExecStart=/bin/bash -c 'if [ -x .venv/bin/python ]; then exec .venv/bin/python main.py; else exec /usr/bin/env python3 main.py; fi'
+
+# Resilience
+Restart=always
+RestartSec=10
+StartLimitIntervalSec=0
+
+# Resource ceilings — tune if ffmpeg starts OOM-killing
+# MemoryMax=2G
+# CPUQuota=80%
+
+# Security hardening (optional, uncomment once stable)
+# NoNewPrivileges=true
+# ProtectSystem=strict
+# ProtectHome=read-only
+# ReadWritePaths=/home/mehdi/kckills/worker
+
+[Install]
+WantedBy=multi-user.target
