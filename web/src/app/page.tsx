@@ -6,6 +6,7 @@ import { PLAYER_PHOTOS, TEAM_LOGOS, KC_LOGO } from "@/lib/kc-assets";
 import { AudioPlayer } from "@/components/AudioPlayer";
 import { HomeFilteredContent } from "@/components/HomeFilteredContent";
 import { HomeClipsShowcase } from "@/components/HomeClipsShowcase";
+import { AnimatedNumber } from "@/components/AnimatedNumber";
 
 export const dynamic = "force-dynamic";
 
@@ -47,9 +48,41 @@ export default function HomePage() {
           </p>
 
           {!isEmpty && (
-            <div className="mt-10 inline-flex items-baseline gap-3">
-              <span className="font-data text-6xl font-black text-[var(--gold)] md:text-7xl">{stats.totalKills}</span>
-              <span className="text-base text-[var(--text-muted)]">kills &middot; {stats.wins}W-{stats.losses}L &middot; {stats.totalGames} games</span>
+            <div className="mt-10 flex flex-col items-center gap-2">
+              <div className="inline-flex items-baseline gap-3">
+                <AnimatedNumber
+                  value={stats.totalKills}
+                  duration={2}
+                  className="font-data text-6xl font-black text-[var(--gold)] md:text-7xl tabular-nums"
+                />
+                <span className="text-base text-[var(--text-muted)] uppercase tracking-widest">kills</span>
+              </div>
+              <div className="flex items-center gap-6 text-sm text-[var(--text-muted)] font-data">
+                <span className="flex items-baseline gap-1">
+                  <AnimatedNumber value={stats.wins} duration={1.6} className="text-[var(--green)] font-bold text-xl" />
+                  <span className="text-xs uppercase tracking-wider">W</span>
+                </span>
+                <span className="text-white/20">&bull;</span>
+                <span className="flex items-baseline gap-1">
+                  <AnimatedNumber value={stats.losses} duration={1.6} className="text-[var(--red)] font-bold text-xl" />
+                  <span className="text-xs uppercase tracking-wider">L</span>
+                </span>
+                <span className="text-white/20">&bull;</span>
+                <span className="flex items-baseline gap-1">
+                  <AnimatedNumber value={stats.totalGames} duration={1.6} className="font-bold text-xl" />
+                  <span className="text-xs uppercase tracking-wider">games</span>
+                </span>
+                <span className="text-white/20">&bull;</span>
+                <span className="flex items-baseline gap-1">
+                  <AnimatedNumber
+                    value={(stats.wins / (stats.wins + stats.losses)) * 100}
+                    duration={1.8}
+                    format={(n) => `${n.toFixed(1)}%`}
+                    className="text-[var(--gold)] font-bold text-xl"
+                  />
+                  <span className="text-xs uppercase tracking-wider">WR</span>
+                </span>
+              </div>
             </div>
           )}
 
