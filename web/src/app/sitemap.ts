@@ -1,5 +1,6 @@
 import type { MetadataRoute } from "next";
 import { ERAS } from "@/lib/eras";
+import { ALUMNI } from "@/lib/alumni";
 import { loadRealData, getKCRoster } from "@/lib/real-data";
 
 const SITE_URL =
@@ -63,6 +64,21 @@ export default function sitemap(): MetadataRoute.Sitemap {
     priority: 0.7,
   }));
 
+  const alumniPages: MetadataRoute.Sitemap = [
+    {
+      url: `${SITE_URL}/alumni`,
+      lastModified: now,
+      changeFrequency: "monthly",
+      priority: 0.6,
+    },
+    ...ALUMNI.map((a) => ({
+      url: `${SITE_URL}/alumni/${a.slug}`,
+      lastModified: now,
+      changeFrequency: "monthly" as const,
+      priority: 0.55,
+    })),
+  ];
+
   const playerPages: MetadataRoute.Sitemap = roster.map((player) => ({
     url: `${SITE_URL}/player/${encodeURIComponent(player.name)}`,
     lastModified: now,
@@ -77,5 +93,5 @@ export default function sitemap(): MetadataRoute.Sitemap {
     priority: 0.5,
   }));
 
-  return [...staticPages, ...eraPages, ...playerPages, ...matchPages];
+  return [...staticPages, ...eraPages, ...alumniPages, ...playerPages, ...matchPages];
 }

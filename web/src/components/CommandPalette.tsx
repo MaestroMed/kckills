@@ -29,6 +29,7 @@ import { useRouter } from "next/navigation";
 
 import kcMatchesJson from "@/data/kc_matches.json";
 import { ERAS } from "@/lib/eras";
+import { ALUMNI } from "@/lib/alumni";
 
 // ─── Index types ────────────────────────────────────────────────────────────
 
@@ -50,6 +51,7 @@ const PAGES: Entry[] = [
   { id: "page-home",    group: "page", label: "Accueil",       subtitle: "Landing KCKILLS", href: "/",            searchText: "accueil home landing" },
   { id: "page-scroll",  group: "page", label: "Scroll kills",  subtitle: "Mode TikTok",      href: "/scroll",      searchText: "scroll tiktok feed clips kills" },
   { id: "page-players", group: "page", label: "Joueurs",       subtitle: "Roster KC",        href: "/players",     searchText: "joueurs players roster" },
+  { id: "page-alumni",  group: "page", label: "Alumni",        subtitle: "Legendes passees", href: "/alumni",      searchText: "alumni ancien past legendes rekkles xmatty cabochard" },
   { id: "page-matches", group: "page", label: "Matchs",        subtitle: "Historique",       href: "/matches",     searchText: "matchs matches historique" },
   { id: "page-top",     group: "page", label: "Top kills",     subtitle: "Leaderboard",      href: "/top",         searchText: "top leaderboard best meilleurs" },
   { id: "page-hof",     group: "page", label: "Hall of Fame",  subtitle: "Legendes KC",      href: "/hall-of-fame", searchText: "hall fame legendes legends" },
@@ -57,6 +59,17 @@ const PAGES: Entry[] = [
   { id: "page-community",group: "page", label: "Community",    subtitle: "Edits fans",       href: "/community",   searchText: "community communaute edits fans" },
   { id: "page-settings",group: "page", label: "Parametres",    subtitle: "Profil",           href: "/settings",    searchText: "settings parametres profil" },
 ];
+
+// Alumni are grouped under "player" so the search UX is consistent
+const ALUMNI_ENTRIES: Entry[] = ALUMNI.map((a) => ({
+  id: `alumni-${a.slug}`,
+  group: "player",
+  label: a.name,
+  subtitle: `Alumni ${a.period} - ${a.subtitle}`,
+  href: `/alumni/${a.slug}`,
+  hint: a.role.toUpperCase(),
+  searchText: `${a.name} ${a.realName ?? ""} ${a.role} ${a.tag} ${a.period} alumni`.toLowerCase(),
+}));
 
 // ─── Eras index ─────────────────────────────────────────────────────────────
 
@@ -159,6 +172,7 @@ const MATCH_ENTRIES: Entry[] = kc.matches
 const INDEX: Entry[] = [
   ...PAGES,
   ...ERA_ENTRIES,
+  ...ALUMNI_ENTRIES,
   ...PLAYER_ENTRIES,
   ...MATCH_ENTRIES,
 ];
