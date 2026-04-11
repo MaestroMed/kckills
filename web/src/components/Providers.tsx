@@ -2,6 +2,7 @@
 
 import { LazyMotion, domAnimation } from "framer-motion";
 import { ToastProvider } from "./Toast";
+import { CommandPalette } from "./CommandPalette";
 
 /**
  * App-wide providers.
@@ -13,11 +14,17 @@ import { ToastProvider } from "./Toast";
  *
  * Children must import `m` from framer-motion (not `motion`) and keep
  * hooks like useMotionValue / useInView as direct imports.
+ *
+ * The CommandPalette is mounted globally so the ⌘K / Ctrl+K shortcut works
+ * on every route.
  */
 export function Providers({ children }: { children: React.ReactNode }) {
   return (
     <LazyMotion features={domAnimation} strict>
-      <ToastProvider>{children}</ToastProvider>
+      <ToastProvider>
+        {children}
+        <CommandPalette />
+      </ToastProvider>
     </LazyMotion>
   );
 }

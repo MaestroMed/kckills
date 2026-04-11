@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useState, useEffect } from "react";
+import { CommandPaletteButton } from "./CommandPalette";
 
 const NAV_LINKS = [
   { href: "/", label: "Accueil" },
@@ -58,8 +59,9 @@ export function Navbar() {
           ))}
         </div>
 
-        {/* Right side — CTA + Auth */}
+        {/* Right side — Search + CTA + Auth */}
         <div className="hidden items-center gap-3 md:flex">
+          <CommandPaletteButton />
           {user ? (
             <Link href="/settings" className="flex items-center gap-2 rounded-lg border border-[var(--border-gold)] bg-[var(--bg-surface)] px-3 py-1.5 text-xs font-medium text-[var(--text-secondary)] hover:border-[var(--gold)]/40">
               {user.avatar ? (
