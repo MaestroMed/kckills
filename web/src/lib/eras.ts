@@ -101,8 +101,23 @@ export const ERAS: Era[] = [
     clipsQuery: "karmine corp eu masters summer 2021 fnatic rising",
     links: [
       {
-        label: "Finale EU Masters Summer 2021 vs Fnatic Rising",
-        url: "https://www.youtube.com/results?search_query=EU+Masters+Summer+2021+Final+Karmine+Corp+Fnatic+Rising+Game+5",
+        label: "Full BO5 \u2014 KC vs FNC.R EU Masters Summer 2021",
+        url: "https://www.youtube.com/watch?v=tQCYNY2nbPY",
+        type: "youtube",
+      },
+      {
+        label: "Finale Game 1 vs Fnatic Rising",
+        url: "https://www.youtube.com/watch?v=fshmFmnkTzc",
+        type: "youtube",
+      },
+      {
+        label: "Finale Game 4 vs Fnatic Rising",
+        url: "https://www.youtube.com/watch?v=C_8MnJqUmdE",
+        type: "youtube",
+      },
+      {
+        label: "OTP VODs \u2014 Finale complete",
+        url: "https://www.youtube.com/watch?v=3bTnsLX3euw",
         type: "youtube",
       },
       {
@@ -174,18 +189,33 @@ export const ERAS: Era[] = [
     clipsQuery: "karmine corp rekkles eu masters spring 2022 ldlc",
     links: [
       {
-        label: "Finale EU Masters Spring 2022 vs LDLC OL",
-        url: "https://www.youtube.com/results?search_query=Karmine+Corp+LDLC+EU+Masters+Spring+2022+Final+Rekkles",
+        label: "Rekkles PENTAKILL Jinx vs GameWard (Kameto Clips)",
+        url: "https://www.youtube.com/watch?v=j9JlExfa9mY",
         type: "youtube",
       },
       {
-        label: "Rekkles Pentakill Jinx vs GameWard",
-        url: "https://www.youtube.com/results?search_query=Rekkles+Pentakill+Jinx+Karmine+Corp+GameWard+LFL+2022",
+        label: "Rekkles Pentakill \u2014 EpicSkillshot",
+        url: "https://www.youtube.com/watch?v=XlBBtLR2ZIY",
         type: "youtube",
       },
       {
-        label: "KCX2 Recap \u2014 AccorHotels Arena",
-        url: "https://www.youtube.com/results?search_query=KCX2+Karmine+Corp+Accor+Arena+Bercy+2022",
+        label: "Rekkles Pentakill \u2014 EsportTV",
+        url: "https://www.youtube.com/watch?v=xpTfK-c4724",
+        type: "youtube",
+      },
+      {
+        label: "Finale EUM Spring 2022 \u2014 Game 2 KC vs LDLC",
+        url: "https://www.youtube.com/watch?v=cTs8IKYW5lI",
+        type: "youtube",
+      },
+      {
+        label: "Finale EUM Spring 2022 \u2014 Game 2 Highlights EN",
+        url: "https://www.youtube.com/watch?v=_WpInkIi7RM",
+        type: "youtube",
+      },
+      {
+        label: "Finale EUM Spring 2022 \u2014 Full broadcast OTP",
+        url: "https://www.youtube.com/watch?v=XnDoVuynLr8",
         type: "youtube",
       },
       {
@@ -424,23 +454,53 @@ export const ERAS: Era[] = [
     clipsQuery: "karmine corp g2 lec winter 2025 grand finals",
     links: [
       {
-        label: "Grande Finale KC 3-0 G2 (COMPLETE)",
-        url: "https://www.youtube.com/results?search_query=LEC+Karmine+Corp+G2+Winter+2025+Grand+Finals+3-0",
+        label: "G2 vs KC \u2014 LEC Winter 2025 Split Final (Official LEC)",
+        url: "https://www.youtube.com/watch?v=N9NA4wfvOiY",
         type: "youtube",
       },
       {
-        label: "Vladi Game 3 Viktor 10/1/7",
-        url: "https://www.youtube.com/results?search_query=Vladi+Viktor+LEC+Winter+2025+Finals+Game+3",
+        label: "G2 vs KC Highlights ALL GAMES (Kaza)",
+        url: "https://www.youtube.com/watch?v=bqBVNEm52A0",
         type: "youtube",
       },
       {
-        label: "Kameto REACTION victoire LEC",
-        url: "https://www.youtube.com/results?search_query=kameto+reaction+karmine+corp+champion+lec+winter+2025",
+        label: "Finale KC vs G2 \u2014 Full Karmine Corp Replay",
+        url: "https://www.youtube.com/watch?v=js_M0Pvxnw0",
         type: "youtube",
       },
       {
-        label: "Karmine Life \u2014 Le Sacre",
-        url: "https://www.youtube.com/results?search_query=karmine+life+le+sacre+champion+lec+winter+2025",
+        label: "\u00ab WE ARE THE CHAMPIONS ! \u00bb \u2014 KC LEC VoiceComms",
+        url: "https://www.youtube.com/watch?v=AelCWTFNOZQ",
+        type: "youtube",
+      },
+      {
+        label: "Le discours de Kameto apres la finale",
+        url: "https://www.youtube.com/watch?v=VXdc0Q2HdCg",
+        type: "youtube",
+      },
+      {
+        label: "Caedrel co-stream LEC Winter Grand Finals",
+        url: "https://www.youtube.com/watch?v=J3q06LUN6tY",
+        type: "youtube",
+      },
+      {
+        label: "OTP VODs \u2014 KC vs G2 ils sont champions",
+        url: "https://www.youtube.com/watch?v=_W8Ga_bLojU",
+        type: "youtube",
+      },
+      {
+        label: "Game 3 Highlights \u2014 Loleventvods",
+        url: "https://www.youtube.com/watch?v=pMSFp7wku5Y",
+        type: "youtube",
+      },
+      {
+        label: "Game 3 Highlights \u2014 EpicSkillshot",
+        url: "https://www.youtube.com/watch?v=apoTJw7aV4c",
+        type: "youtube",
+      },
+      {
+        label: "G2 VoiceComms \u2014 How it sounds to NOT win LEC",
+        url: "https://www.youtube.com/watch?v=dxSmn9_yCj0",
         type: "youtube",
       },
       {
@@ -481,23 +541,33 @@ export const ERAS: Era[] = [
     clipsQuery: "karmine corp first stand 2025 seoul hle",
     links: [
       {
-        label: "Comeback vs CTBC Flying Oyster",
-        url: "https://www.youtube.com/results?search_query=First+Stand+2025+Karmine+Corp+CTBC+Flying+Oyster+comeback",
+        label: "CFO vs KC Game 1 \u2014 First Stand Semifinals (Loleventvods)",
+        url: "https://www.youtube.com/watch?v=U13_8VpxH4M",
         type: "youtube",
       },
       {
-        label: "Finale vs Hanwha Life",
-        url: "https://www.youtube.com/results?search_query=First+Stand+2025+Karmine+Corp+Hanwha+Life+final",
+        label: "KC vs CFO \u2014 Demi-finale complete (KC Replay)",
+        url: "https://www.youtube.com/watch?v=yuXlKZyJEfo",
         type: "youtube",
       },
       {
-        label: "KC vs Top Esports upset",
-        url: "https://www.youtube.com/results?search_query=Karmine+Corp+Top+Esports+First+Stand+2025+upset",
+        label: "OTP VODs \u2014 KC vs CFO un match dans la legende",
+        url: "https://www.youtube.com/watch?v=8AJP6HleZh8",
         type: "youtube",
       },
       {
-        label: "Karmine Life Seoul",
-        url: "https://www.youtube.com/results?search_query=karmine+life+seoul+first+stand+2025",
+        label: "KC vs HLE \u2014 Finale First Stand (KC Replay)",
+        url: "https://www.youtube.com/watch?v=2AhbiChWFPM",
+        type: "youtube",
+      },
+      {
+        label: "HLE vs KC Highlights ALL GAMES",
+        url: "https://www.youtube.com/watch?v=qZvljnaSNHU",
+        type: "youtube",
+      },
+      {
+        label: "OTP VODs \u2014 HLE vs KC une finale pour l'histoire",
+        url: "https://www.youtube.com/watch?v=XH4x-Fy4jMU",
         type: "youtube",
       },
       {
@@ -567,7 +637,17 @@ export const ERAS: Era[] = [
     clipsQuery: "karmine corp fnatic lec summer 2025 playoffs",
     links: [
       {
-        label: "FNC 3-1 KC \u2014 elimination",
+        label: "KC Caliste \u2014 2025 LEC Rookie of the Year (Official)",
+        url: "https://www.youtube.com/watch?v=a953ZreZp8A",
+        type: "youtube",
+      },
+      {
+        label: "Top 10 Caliste Plays \u2014 Best of 2025 (GWP)",
+        url: "https://www.youtube.com/watch?v=EfN64vP2n2o",
+        type: "youtube",
+      },
+      {
+        label: "FNC 3-1 KC \u2014 recherche elimination",
         url: "https://www.youtube.com/results?search_query=LEC+Summer+2025+Fnatic+Karmine+Corp+playoffs+Oscarinin",
         type: "youtube",
       },
@@ -577,7 +657,7 @@ export const ERAS: Era[] = [
         type: "youtube",
       },
       {
-        label: "Caliste ROY 2025",
+        label: "Caliste ROY 2025 (Sheep Esports)",
         url: "https://www.sheepesports.com/en/articles/lol-lec-caliste-named-2025-rookie-of-the-year/en",
         type: "article",
       },
@@ -613,13 +693,38 @@ export const ERAS: Era[] = [
         type: "youtube",
       },
       {
+        label: "Finale Game 3 (LEC Official)",
+        url: "https://www.youtube.com/watch?v=0pBxCGvx6xU",
+        type: "youtube",
+      },
+      {
         label: "Finale Game 5 (LEC Official)",
         url: "https://www.youtube.com/watch?v=02qq94BQoPY",
         type: "youtube",
       },
       {
-        label: "All Games Highlights (Onivia)",
+        label: "All Games Highlights (LEC)",
         url: "https://www.youtube.com/watch?v=9aM1SIsGWDk",
+        type: "youtube",
+      },
+      {
+        label: "All Games Highlights (Kaza)",
+        url: "https://www.youtube.com/watch?v=42lv5jASq9I",
+        type: "youtube",
+      },
+      {
+        label: "Caedrel co-stream \u2014 Legendary LEC Finals",
+        url: "https://www.youtube.com/watch?v=ed9u6RRmZgk",
+        type: "youtube",
+      },
+      {
+        label: "OTP VODs \u2014 Une des meilleures finales LEC",
+        url: "https://www.youtube.com/watch?v=XxnW57M0l5o",
+        type: "youtube",
+      },
+      {
+        label: "LEC full broadcast (7h22)",
+        url: "https://www.youtube.com/watch?v=JIw6VIycNto",
         type: "youtube",
       },
       {
@@ -653,8 +758,13 @@ export const ERAS: Era[] = [
     clipsQuery: "karmine corp lec spring 2026",
     links: [
       {
-        label: "KC vs Vitality Week 1",
-        url: "https://www.youtube.com/results?search_query=karmine+corp+vitality+lec+spring+2026",
+        label: "KC vs VIT Highlights \u2014 LEC Spring Week 1 Day 1 (LEC Official)",
+        url: "https://www.youtube.com/watch?v=M7xaenPvPU4",
+        type: "youtube",
+      },
+      {
+        label: "Caliste highlights Spring 2026 (recherche)",
+        url: "https://www.youtube.com/results?search_query=caliste+karmine+corp+lec+spring+2026",
         type: "youtube",
       },
       {
