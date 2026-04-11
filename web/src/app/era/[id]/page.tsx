@@ -18,13 +18,40 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { id } = await params;
   const era = getEraById(id);
   if (!era) return { title: "\u00c9poque \u2014 KCKILLS" };
+
+  const description = `${era.subtitle} \u2014 ${era.result}. ${era.keyMoment.slice(0, 140)}...`;
+  const title = `${era.label} \u2014 ${era.period}`;
+  const canonicalPath = `/era/${era.id}`;
+
   return {
-    title: `${era.label} \u2014 ${era.period} \u2014 KCKILLS`,
-    description: era.keyMoment.slice(0, 160),
+    title,
+    description,
+    alternates: {
+      canonical: canonicalPath,
+    },
     openGraph: {
-      title: `${era.label} \u2014 ${era.period}`,
-      description: era.subtitle,
-      images: era.image ? [{ url: era.image }] : undefined,
+      title: `${title} \u2014 KCKILLS`,
+      description,
+      type: "article",
+      url: canonicalPath,
+      images: era.image
+        ? [
+            {
+              url: era.image,
+              width: 1200,
+              height: 630,
+              alt: `${era.label} \u2014 Karmine Corp ${era.period}`,
+            },
+          ]
+        : undefined,
+      siteName: "KCKILLS",
+      locale: "fr_FR",
+    },
+    twitter: {
+      card: "summary_large_image",
+      title: `${title} \u2014 KCKILLS`,
+      description,
+      images: era.image ? [era.image] : undefined,
     },
   };
 }

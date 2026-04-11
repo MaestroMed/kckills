@@ -117,6 +117,12 @@ export default function RootLayout({
         <link rel="manifest" href="/manifest.json" />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
+        {/* Preload the primary display font so the hero headline renders without FOIT */}
+        <link
+          rel="preload"
+          as="style"
+          href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Inter+Tight:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;700&display=swap"
+        />
         <link
           href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Inter+Tight:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;700&display=swap"
           rel="stylesheet"

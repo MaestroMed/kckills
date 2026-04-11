@@ -16,7 +16,38 @@ interface Props {
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params;
   const name = decodeURIComponent(slug);
-  return { title: `${name} \u2014 KCKILLS` };
+  const data = loadRealData();
+  const stats = getPlayerStats(data, name);
+  const photo = PLAYER_PHOTOS[name];
+  const canonicalPath = `/player/${encodeURIComponent(name)}`;
+
+  const description =
+    stats.gamesPlayed > 0
+      ? `${name} \u2014 Karmine Corp \u00b7 ${stats.gamesPlayed} games, ${stats.kills} kills, KDA ${stats.kda}. Explore les meilleurs moments et stats du joueur sur KCKILLS.`
+      : `${name} \u2014 Profil Karmine Corp sur KCKILLS.`;
+
+  return {
+    title: name,
+    description,
+    alternates: { canonical: canonicalPath },
+    openGraph: {
+      title: `${name} \u2014 KCKILLS`,
+      description,
+      type: "profile",
+      url: canonicalPath,
+      images: photo
+        ? [{ url: photo, width: 1200, height: 630, alt: name }]
+        : undefined,
+      siteName: "KCKILLS",
+      locale: "fr_FR",
+    },
+    twitter: {
+      card: "summary_large_image",
+      title: `${name} \u2014 KCKILLS`,
+      description,
+      images: photo ? [photo] : undefined,
+    },
+  };
 }
 
 export default async function PlayerPage({ params }: Props) {

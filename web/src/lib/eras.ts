@@ -146,8 +146,8 @@ export const ERAS: Era[] = [
     dateEnd: "2021-12-31",
     coach: "Striker",
     keyMoment:
-      "Showmatch historique organise entre Kameto et Ibai au Palau Sant Jordi de Barcelone. KOI (Ibai + Pique + amis) gagne 2-1 mais le show atteint 477 000 viewers simultanes sur Twitch, depassant la finale LCS Summer 2021 (364K). Naissance de la rivalite KC vs KOI et preuve que les showmatchs Streamer Legend pouvaient rivaliser avec le plus haut niveau competitif.",
-    viewership: "477K peak viewers Twitch \u2014 record showmatch",
+      "Showmatch historique organise entre Kameto et Ibai au Palau Sant Jordi de Barcelone le 15 decembre 2021. KOI (Ibai + Pique + amis) gagne 2-1 devant 15 000 fans espagnols \u2014 mais 257 fans du Blue Wall ont fait le voyage en terre hostile et couvrent le stade en chants KC. Le show atteint 477 000 viewers simultanes sur Twitch, depassant la finale LCS Summer 2021 (364K). Match retour le 8 janvier 2022 au Carrousel du Louvre a Paris. Naissance de la rivalite KC vs KOI et preuve que les showmatchs Streamer Legend pouvaient rivaliser avec le plus haut niveau competitif.",
+    viewership: "477K peak viewers Twitch \u00b7 257 Blue Wall en terre hostile",
     clipsQuery: "karmine corp vs koi showmatch barcelona 2021 ibai",
     links: [
       {
@@ -441,15 +441,18 @@ export const ERAS: Era[] = [
     roster: "Canna (top) \u00b7 Yike (jgl) \u00b7 Vladi (mid) \u00b7 Caliste (adc) \u00b7 Targamas (sup)",
     coach: "Striker",
     keyMoment:
-      "Le moment le plus important de l'histoire de KC. Caliste, enfin majeur, rejoint le roster principal. Yike arrive depuis l'ecosysteme G2/MAD. Upper bracket : KC perd 1-3 vs G2. Grand finale : TROISIEME confrontation, KC sort de ses tripes un 3-0 ECLATANT a la Riot Games Arena de Berlin. Vladi est MVP avec un Game 3 Viktor a 10/1/7 \u2014 il demonte Caps en ligne. Yike tue Caps (son ex-coequipier) match apres match. A 18 ans, Caliste devient le plus jeune champion LEC de l'histoire. Premiere equipe francaise a remporter la LEC. 801 369 pics de viewers (dont 233 351 sur le co-stream de Kameto).",
-    viewership: "801 369 peak \u00b7 Kameto co-stream 233K",
+      "Le moment le plus important de l'histoire de KC. Moins d'un an apres un split a la 10e place (dernier), KC realise la redemption la plus folle de l'histoire de la LEC. Caliste, enfin majeur, rejoint le roster principal. Yike arrive depuis l'ecosysteme G2/MAD. Parcours en bracket : victoire contre Fnatic, puis effondrement en upper bracket final \u2014 G2 stomp KC 3-1. La KC Army tremble. Lower bracket : KC bat Vitality, puis Movistar KOI dans une serie de folie. Retour en Grand Final pour affronter G2 une TROISIEME fois. Puis l'impensable : 3-0 SEC a la Riot Games Arena de Berlin. Vladi est MVP avec un Game 3 Viktor a 10/1/7 \u2014 il demonte Caps en ligne. Yike tue Caps (son ex-coequipier) match apres match. Canna immovable top side. A 18 ans, Caliste devient le plus jeune champion LEC de l'histoire (Royal Roader \u2014 trophee en rookie split). Premiere equipe francaise a remporter la LEC. Premier trophee LEC de l'histoire du club. Emmanuel Macron congratulait KC en 2021 pour les EU Masters \u2014 cette fois, c'est le president qui devrait s'incliner. 801 369 pics de viewers (dont 233 351 sur le co-stream de Kameto).",
+    viewership: "801 369 peak \u00b7 Kameto co-stream 233K \u00b7 Record LEC",
     events: [
       "LEC Winter 2025 Finals Berlin \u2014 2 mars 2025",
-      "KC 3-0 G2 Esports (apres avoir perdu 1-3 en UB final)",
+      "Lower bracket run : FNC \u2192 VIT \u2192 MKOI",
+      "Upper bracket final : KC 1-3 G2 (l'effondrement)",
+      "Grand Final : KC 3-0 G2 (la redemption absolue)",
       "Vladi MVP \u2014 Game 3 Viktor 10/1/7",
-      "Caliste : plus jeune champion LEC de l'histoire (18 ans)",
+      "Caliste : plus jeune champion LEC de l'histoire (18 ans, Royal Roader)",
       "Premier titre LEC de l'histoire de KC",
       "Premiere equipe francaise championne LEC",
+      "De 10e en 2024 a champions en 2025 \u2014 la redemption arc",
     ],
     clipsQuery: "karmine corp g2 lec winter 2025 grand finals",
     links: [

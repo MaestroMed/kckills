@@ -52,8 +52,28 @@ export function ScrollFeed({ items }: { items: KillItem[] }) {
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
           </svg>
         </Link>
-        <span className="font-display text-sm font-bold tracking-widest text-[var(--gold)]/80">KCKILLS</span>
-        <div className="w-9" />
+        <div className="flex flex-col items-center">
+          <span className="font-display text-sm font-bold tracking-widest text-[var(--gold)]/80">KCKILLS</span>
+          <span className="font-data text-[9px] uppercase tracking-widest text-[var(--gold)]/50">
+            {items.length} kills &middot; splash mode
+          </span>
+        </div>
+        <Link
+          href="/#highlights"
+          className="flex h-9 items-center gap-1 rounded-full bg-red-600/90 backdrop-blur-sm px-3 text-[10px] font-bold text-white"
+          aria-label="Voir les clips YouTube sur la home"
+        >
+          <span>&#9654;</span>
+          <span>Clips</span>
+        </Link>
+      </div>
+
+      {/* Beta notice for first-time visitors */}
+      <div className="fixed bottom-4 left-4 z-50 rounded-full bg-black/70 backdrop-blur-sm border border-[var(--gold)]/30 px-3 py-1.5 text-[10px] text-[var(--gold)]/70 uppercase tracking-widest pointer-events-none">
+        <span className="inline-flex items-center gap-1.5">
+          <span className="h-1.5 w-1.5 rounded-full bg-[var(--gold)] animate-pulse" />
+          Beta &middot; clips video en integration
+        </span>
       </div>
 
       {items.map((item, i) => (
@@ -62,9 +82,25 @@ export function ScrollFeed({ items }: { items: KillItem[] }) {
 
       {items.length === 0 && (
         <div className="scroll-item flex items-center justify-center">
-          <div className="text-center">
-            <div className="text-4xl mb-4 animate-pulse">{"\u2694\uFE0F"}</div>
-            <p className="text-[var(--text-muted)]">Chargement des kills...</p>
+          <div className="text-center max-w-md px-6">
+            <div className="text-6xl mb-6">{"\u2694\uFE0F"}</div>
+            <h1 className="font-display text-3xl font-black text-[var(--gold)] mb-3 uppercase">
+              Clips en cours de traitement
+            </h1>
+            <p className="text-sm text-[var(--text-muted)] leading-relaxed mb-6">
+              Le worker Python broie les 83 matchs KC pour en extraire les
+              kills les plus hypes. En attendant, va regarder les clips YouTube
+              officiels sur la home.
+            </p>
+            <Link
+              href="/#highlights"
+              className="inline-flex items-center gap-2 rounded-xl bg-[var(--gold)] px-6 py-3 font-display text-xs font-bold uppercase tracking-widest text-[var(--bg-primary)]"
+            >
+              Voir les clips YouTube
+              <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M9 5l7 7-7 7" />
+              </svg>
+            </Link>
           </div>
         </div>
       )}

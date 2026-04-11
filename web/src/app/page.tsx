@@ -7,6 +7,7 @@ import { AudioPlayer } from "@/components/AudioPlayer";
 import { HomeFilteredContent } from "@/components/HomeFilteredContent";
 import { HomeClipsShowcase } from "@/components/HomeClipsShowcase";
 import { AnimatedNumber } from "@/components/AnimatedNumber";
+import { MacronEasterEgg } from "@/components/MacronEasterEgg";
 
 export const dynamic = "force-dynamic";
 
@@ -34,7 +35,7 @@ export default function HomePage() {
 
         <div className="relative z-10 text-center px-4 w-full max-w-5xl">
           <div className="flex items-center justify-center gap-3 mb-6">
-            <Image src={KC_LOGO} alt="KC" width={48} height={48} className="rounded-xl" />
+            <MacronEasterEgg />
             <span className="rounded-full border border-[var(--gold)]/20 bg-[var(--gold)]/5 px-5 py-2 text-xs font-medium text-[var(--gold)]">
               LEC 2026 &middot; Karmine Corp
             </span>
