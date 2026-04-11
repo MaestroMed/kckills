@@ -61,6 +61,51 @@ export const viewport: Viewport = {
   viewportFit: "cover",
 };
 
+// JSON-LD structured data — helps Google understand the site structure
+const jsonLdWebsite = {
+  "@context": "https://schema.org",
+  "@type": "WebSite",
+  name: "KCKILLS",
+  alternateName: "KC Kills",
+  url: SITE_URL,
+  description:
+    "Le TikTok des kills League of Legends. Scroll, rate, et partage chaque moment Karmine Corp de la LEC.",
+  inLanguage: "fr-FR",
+  potentialAction: {
+    "@type": "SearchAction",
+    target: {
+      "@type": "EntryPoint",
+      urlTemplate: `${SITE_URL}/matches?q={search_term_string}`,
+    },
+    "query-input": "required name=search_term_string",
+  },
+};
+
+const jsonLdSportsTeam = {
+  "@context": "https://schema.org",
+  "@type": "SportsTeam",
+  name: "Karmine Corp",
+  alternateName: ["KC", "KCorp"],
+  url: "https://karminecorp.fr",
+  sameAs: [
+    "https://x.com/KarmineCorp",
+    "https://www.twitch.tv/karminecorp",
+    "https://www.youtube.com/@KarmineCorp",
+    "https://www.instagram.com/karminecorp",
+  ],
+  sport: "League of Legends",
+  memberOf: {
+    "@type": "SportsOrganization",
+    name: "LEC",
+    url: "https://lolesports.com/en-US/leagues/lec",
+  },
+  foundingDate: "2020-03-14",
+  foundingLocation: {
+    "@type": "Place",
+    name: "France",
+  },
+};
+
 export default function RootLayout({
   children,
 }: {
@@ -75,6 +120,15 @@ export default function RootLayout({
         <link
           href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Inter+Tight:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;700&display=swap"
           rel="stylesheet"
+        />
+        {/* JSON-LD structured data for SEO */}
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLdWebsite) }}
+        />
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLdSportsTeam) }}
         />
       </head>
       <body className="min-h-screen antialiased">
