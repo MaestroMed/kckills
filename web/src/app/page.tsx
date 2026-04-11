@@ -78,7 +78,7 @@ export default function HomePage() {
                   <AnimatedNumber
                     value={(stats.wins / (stats.wins + stats.losses)) * 100}
                     duration={1.8}
-                    format={(n) => `${n.toFixed(1)}%`}
+                    format="percent1"
                     className="text-[var(--gold)] font-bold text-xl"
                   />
                   <span className="text-xs uppercase tracking-wider">WR</span>
