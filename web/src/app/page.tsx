@@ -5,6 +5,7 @@ import { championIconUrl, championSplashUrl } from "@/lib/constants";
 import { PLAYER_PHOTOS, TEAM_LOGOS, KC_LOGO } from "@/lib/kc-assets";
 import { AudioPlayer } from "@/components/AudioPlayer";
 import { HomeFilteredContent } from "@/components/HomeFilteredContent";
+import { HomeClipsShowcase } from "@/components/HomeClipsShowcase";
 
 export const dynamic = "force-dynamic";
 
@@ -144,6 +145,9 @@ export default function HomePage() {
           </div>
         </section>
       )}
+
+      {/* ═══ HIGHLIGHTS CLIPS SHOWCASE (real YouTube clips) ═══════════════ */}
+      <HomeClipsShowcase />
 
       {/* ═══ TIMELINE + MATCHES (filtered) ═══════════════════════════════ */}
       <HomeFilteredContent allMatches={allMatches} />
