@@ -22,7 +22,7 @@ from __future__ import annotations
 
 import asyncio
 import os
-import subprocess
+import sys
 import structlog
 
 from config import config
@@ -154,9 +154,9 @@ async def clip_kill(
 
 
 async def _run_ytdlp(url: str, output_path: str, start: float, end: float) -> bool:
-    """Run yt-dlp with --download-sections in a subprocess."""
+    """Run yt-dlp via `python -m yt_dlp` to stay cross-platform and venv-safe."""
     cmd = [
-        "yt-dlp",
+        sys.executable, "-m", "yt_dlp",
         "--download-sections", f"*{start}-{end}",
         "--force-keyframes-at-cuts",
         "-f", "bestvideo[height<=720]+bestaudio/best[height<=720]",
