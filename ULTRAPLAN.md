@@ -1,372 +1,466 @@
-# KCKILLS — ULTRAPLAN 2026
+# KCKILLS — ULTRAPLAN 2026 (v2)
 
-Version 1 — 11 avril 2026
-Etat actuel : frontend Next.js 15 en local sur :3000, worker Python partiellement cable,
-aucune API key en production, 83 matchs KC en JSON fige, 111 games, 674 kills estimes.
+Version 2 — 11 avril 2026, 20h45 CET
+Etat actuel : **deploye en production sur https://kckills.com** via Vercel.
+Pushe 11 batchs depuis le morning. Audit Opus 4.6 pris en compte.
 
-Ce document mappe les 20 points d'audit a 12 phases operationnelles. Chaque tache est
-taguee **[CC]** (Claude) ou **[USER]** (toi) et chiffree en journees homme.
-
----
-
-## LEGENDE
-
-- **[CC]** : Claude peut le faire seul sans clef API
-- **[CC+K]** : Claude peut le faire mais necessite une clef API deja configuree
-- **[USER]** : toi (creation compte, achat domaine, signature contrat...)
-- **jh** : journees homme estimees
+Ce document est la source de verite pour la roadmap complete, de la vision
+produit jusqu'au pipeline de production des clips.
 
 ---
 
-## PHASE α — POLISH IMMEDIAT (1-2 jh) — sans cles API
+## VISION PRODUIT FINALE
 
-Objectif : tuer les bugs visibles immediatement, gagner +40% de perception qualite.
+**Ce qu'on vise** : le meilleur site fan sur une seule equipe esport jamais
+shippe. Pas "correct pour un site fan", pas "bon pour du Next.js" — **le site
+legendaire que la KC Army forwarde a ses potes sans explication**.
 
-| # | Tache | Type | Effort |
-|---|-------|------|--------|
-| α1 | **Drag scroll timeline** — pointer events + useRouter (FAIT ce tour) | [CC] | 0 |
-| α2 | **Loading skeletons** — plus d'ecran noir, shimmer Tailwind sur chaque route | [CC] | 0.5 |
-| α3 | **metadataBase + favicons** — favicon.ico + apple-touch-icon + splash iOS + metadataBase | [CC] | 0.25 |
-| α4 | **404 custom** — page /not-found brandee KC avec clip aleatoire en fond | [CC] | 0.25 |
-| α5 | **Focus ring global** — 2px solid gold sur :focus-visible | [CC] | 0.1 |
-| α6 | **Alt text audit** — toutes les images generent un alt descriptif ou alt="" explicite | [CC] | 0.25 |
-| α7 | **Espaces vides homepage** — corriger les grands vides en bas de page | [CC] | 0.25 |
-| α8 | **Menu hamburger mobile** — nav horizontale → drawer plein ecran < 768px | [CC] | 0.5 |
-| α9 | **Breadcrumb unicode** — fix des caracteres cassees sur /players /matches | [CC] | 0.1 |
-| α10 | **Lazy + blur placeholders** — `<Image placeholder="blur">` partout | [CC] | 0.25 |
+### Les 4 piliers
 
-**Total phase α : ~2 jh [CC] sans aucune cle API.**
+1. **TikTok des kills** — /scroll vertical plein ecran avec les vrais clips
+   MP4 des kills reels, generes automatiquement par notre worker Python
+   depuis les VODs officielles LEC. Scroll fluide, autoplay, rating, share.
 
----
+2. **Timeline cinematographique** — frise interactive des 16 epoques KC de
+   2021 a 2026. Chaque epoque a sa page dediee avec clips curates, roster,
+   moment cle, stats, links vers reactions/highlights.
 
-## PHASE β — SEO & SHAREABILITY (1-2 jh) — sans cles API
+3. **Pages joueurs futuristes** — chaque joueur KC (actuel + alumni) a sa
+   page cinematique avec ses meilleurs moments en clips, ses stats
+   carriere, ses champions signature, ses records personnels.
 
-Objectif : Google et les reseaux sociaux voient enfin le site correctement.
+4. **Pipeline automatise 24/7** — worker Python qui detecte les nouveaux
+   matchs LEC, extrait les kills via livestats API, les clippe via yt-dlp
+   + ffmpeg, les analyse via Gemini, les moderate via Haiku, les stocke
+   sur R2, les pousse sur Supabase, les affiche sur le site. Tout sans
+   intervention manuelle.
 
-| # | Tache | Type | Effort |
-|---|-------|------|--------|
-| β1 | **robots.txt** — route static + disallow /api/ | [CC] | 0.1 |
-| β2 | **sitemap.xml dynamique** — src/app/sitemap.ts auto-genere (home + 16 eras + joueurs + matches) | [CC] | 0.25 |
-| β3 | **JSON-LD WebSite + SportsTeam + Organization** — injection dans layout.tsx | [CC] | 0.25 |
-| β4 | **JSON-LD VideoObject par /kill/[id]** — pour Google Rich Results | [CC] | 0.25 |
-| β5 | **Canonical URLs** — chaque page a sa <link rel="canonical"> | [CC] | 0.1 |
-| β6 | **Meta description unique** — par page via generateMetadata() | [CC] | 0.25 |
-| β7 | **Twitter Card tags** — summary_large_image sur toutes les routes | [CC] | 0.1 |
-| β8 | **Open Graph images statiques** — fallback PNG 1200x630 pour home + top routes | [CC] | 0.25 |
-| β9 | **Font preload** — next/font avec display: swap sur Oswald/Inter/JetBrains | [CC] | 0.1 |
-| β10 | **Hreflang + htmlLang** — prep pour i18n phase ι | [CC] | 0.1 |
+### Experience cible (le "wow" final)
 
-**Total phase β : ~2 jh [CC] sans aucune cle API.**
+- **T+0s** : user arrive sur kckills.com, hero en video loop du Sacre en
+  background, "674 kills" qui compte depuis 0
+- **T+3s** : user clique sur "Scroll les kills"
+- **T+4s** : feed TikTok vertical plein ecran avec AUTOPLAY du meilleur
+  pentakill Caliste, stats overlay, rating etoiles
+- **T+12s** : user swipe up, nouveau clip : Vladi Viktor 10/1/7 vs G2 Game 3
+- **T+30s** : user a vu 5 clips cinematiques, ses yeux sont scotches
+- **T+60s** : user partage le lien sur Discord, 10 amis cliquent
 
----
-
-## PHASE γ — MOTION & INTERACTIONS (3-4 jh) — sans cles API
-
-Objectif : "wow factor" cinematographique. Chaque page respire et bouge.
-
-| # | Tache | Type | Effort |
-|---|-------|------|--------|
-| γ1 | **IntersectionObserver fade-in** — hook useInView qui declenche les motion.div au scroll | [CC] | 0.25 |
-| γ2 | **Compteurs animes** — `<AnimatedNumber>` pour 674 kills / 83 matchs / 64.4% WR | [CC] | 0.5 |
-| γ3 | **AnimatePresence route transitions** — fondu entre les pages via template.tsx | [CC] | 0.5 |
-| γ4 | **GSAP ScrollTrigger timeline cinematique** — scroll vertical = avance temporel dans la frise, type site Apple | [CC] | 1.5 |
-| γ5 | **Micro-interactions** — hover scale + shadow + gradient shift sur toutes les cards | [CC] | 0.5 |
-| γ6 | **Glassmorphism badges** — backdrop-blur-xl + inset highlight sur les stats | [CC] | 0.25 |
-| γ7 | **Parallax hero** — transform Y scroll-locked sur les images de fond | [CC] | 0.5 |
-| γ8 | **Lottie penta explosion** — lottie-react + pack icon pour multi-kills | [CC] | 0.5 |
-| γ9 | **Loading spinner KC brande** — logo hextech qui tourne en chargement | [CC] | 0.25 |
-| γ10 | **prefers-reduced-motion** — desactive tout si l'utilisateur le demande | [CC] | 0.1 |
-
-**Total phase γ : ~4 jh [CC] sans aucune cle API.**
+**KPI primaires** :
+- Temps moyen de session > 3 minutes
+- Bounce rate < 40%
+- 20%+ des users rate au moins 1 kill
+- 10%+ des users installent la PWA
+- 100+ partages Discord/Twitter par semaine une fois le stream d'Eto
 
 ---
 
-## PHASE δ — STATS & CONTENT (4-5 jh) — sans cles API
+## OU ON EN EST (etat au 11 avril 2026, 20h45)
 
-Objectif : la depth de contenu qui fait dire "ces gens connaissent KC par coeur".
+### Infrastructure ✅ operationnelle
 
-| # | Tache | Type | Effort |
-|---|-------|------|--------|
-| δ1 | **Stats avancees** — damage share, gold diff @15, CS/min, DPM, KP%, wards, pink wards | [CC] | 1 |
-| δ2 | **Graphiques recharts** — evolution KDA par match, histogramme winrate | [CC] | 0.75 |
-| δ3 | **Player vs player comparator** — /compare?p1=Canna&p2=Cabochard | [CC] | 0.75 |
-| δ4 | **Champion pool visuel** — hex grid splash arts avec winrate par champion | [CC] | 0.5 |
-| δ5 | **Pages alumni** — Vladi, Rekkles, Cabochard, Adam, xMatty, Saken, Upset, Targamas, Bo, Closer, Hantera, 113, Cinkrof. Vue futuriste identique aux joueurs actifs | [CC] | 1 |
-| δ6 | **Hall of Fame** — /hall-of-fame avec les 10 plus grands moments (Rekkles 16/1/25, Vladi Viktor 10/1/7, comeback Flying Oyster...) | [CC] | 0.5 |
-| δ7 | **Records & achievements** — plus gros KDA, plus long comeback, plus de dragons, etc. | [CC] | 0.5 |
-| δ8 | **Citations joueurs/casters** — quotes dans les pages /era/[id] | [CC] | 0.25 |
-| δ9 | **Stats comparatives entre eras** — spider chart LFL vs LEC 2024 vs LEC 2025 | [CC] | 0.5 |
-| δ10 | **Easter eggs** — konami code, click sur logo KC → confetti | [CC] | 0.25 |
+- Domaine **kckills.com** achete, DNS Cloudflare, SSL actif
+- **Supabase** projet actif avec schema 15 tables + RLS + triggers + seed KC
+- **Cloudflare R2** bucket `kckills-clips` avec custom domain `clips.kckills.com`
+- **Vercel** hobby deploy auto sur chaque push main
+- **Discord OAuth** configure dans Supabase
+- **Gemini API key** configuree
+- **YouTube Data API** configuree
+- **Sentry** pas encore installe
+- **Anthropic API (Haiku)** pas encore (moderation commentaires, peut attendre)
 
-**Total phase δ : ~5 jh [CC] sans aucune cle API.**
+### Code frontend ✅ deploye (83 matchs reels)
 
----
+- Home cinematique avec hero clip rotator auto-play (5 clips en rotation)
+- Timeline 16 epoques granulaires avec drag scroll + hover popup + click fix
+- Pages /era/[id] avec contenu enrichi (moment cle, reverse sweep narrative, roster, clips YouTube integres)
+- Pages /player/[slug] futuristes clips-focused avec stats
+- Page /matches avec 83 matchs reels
+- Page /scroll TikTok vertical avec splash arts + stats (clips MP4 pas encore la)
+- HomeClipsShowcase avec 38 vrais clips YouTube extraits via DOM scraping
+- SEO: sitemap.xml dynamique (130 URLs), robots.txt, JSON-LD (WebSite + SportsTeam), custom 404
+- Security headers: X-Frame-Options, X-Content-Type-Options, Referrer-Policy, Permissions-Policy, HSTS
+- PWA manifest + icon + service worker basic
+- MacronEasterEgg (click logo 5x -> tweet Macron toast)
+- AnimatedNumber (674 kills compte depuis 0)
+- Polices Oswald + Inter Tight + JetBrains Mono preloadees
 
-## PHASE ε — INFRASTRUCTURE PRODUCTION (3-5 jh) — cles API requises
+### Code worker Python ⚠️ scaffold present, pas encore lance end-to-end
 
-Objectif : site en production avec domaine, DB reelle, CDN, monitoring.
+- Structure modulaire : sentinel, harvester, clipper, analyzer, moderator, og_generator, vod_hunter, watchdog, scheduler, local_cache
+- Services : lolesports_api, livestats_api, supabase_client, r2_client, gemini_client, ytdlp, ffmpeg_ops, discord_webhook
+- Rate limiter global + cache SQLite de fallback
+- Tests unitaires harvester + scheduler
+- **JAMAIS execute end-to-end en production** — c'est la prochaine grande etape
 
-| # | Tache | Type | Effort |
-|---|-------|------|--------|
-| ε1 | **Acheter domaine kckills.com ou kckills.com** | [USER] | 0.1 |
-| ε2 | **Creer projet Supabase** (free tier) | [USER] | 0.1 |
-| ε3 | **Executer schema SQL** — 001_initial_schema.sql | [CC+K] | 0.5 |
-| ε4 | **Creer Discord OAuth app** | [USER] | 0.1 |
-| ε5 | **Brancher Discord dans Supabase Auth** | [CC+K] | 0.25 |
-| ε6 | **Creer bucket Cloudflare R2** + custom domain clips.kckills.com | [USER] | 0.25 |
-| ε7 | **Deploy Vercel** + environment variables | [CC+K] | 0.5 |
-| ε8 | **DNS setup** — A record Vercel + CNAME R2 | [USER] | 0.25 |
-| ε9 | **Preview deployments GitHub** — auto sur chaque push | [CC] | 0.1 |
-| ε10 | **Sentry error tracking** — @sentry/nextjs installe + DSN | [CC+K] | 0.5 |
-| ε11 | **Vercel Analytics** + Plausible self-hosted (optionnel) | [CC+K] | 0.25 |
-| ε12 | **Rate limiting** — Upstash Redis pour votes/comments (free tier) | [CC+K] | 0.5 |
-| ε13 | **Security headers** — next.config.js CSP + HSTS + X-Frame-Options | [CC] | 0.25 |
+### Data ⚠️ partiellement complet
 
-**Total phase ε : ~2.5 jh [CC+K] + ~0.75 jh [USER]. Cles necessaires : Supabase, Discord, R2, Vercel, Sentry, Upstash (optionnel).**
-
----
-
-## PHASE ζ — WORKER & CLIPS PIPELINE (7-10 jh) — cles API requises
-
-Objectif : les vraies clips des vrais kills KC apparaissent automatiquement sur le site.
-
-| # | Tache | Type | Effort |
-|---|-------|------|--------|
-| ζ1 | **Creer compte Gemini AI Studio** + API key | [USER] | 0.1 |
-| ζ2 | **Creer compte Anthropic** (Haiku) + 10 € de credit | [USER] | 0.1 |
-| ζ3 | **Creer projet Google Cloud** + activer YouTube Data API v3 | [USER] | 0.25 |
-| ζ4 | **SENTINEL** — poll schedule LEC via lolesports API, detecte matchs KC | [CC+K] | 1 |
-| ζ5 | **HARVESTER** — diff frames livestats, detection kills avec correlation | [CC+K] | 1.5 |
-| ζ6 | **VOD_HUNTER** — getEventDetails.vod.parameter + fallback YouTube search | [CC+K] | 1 |
-| ζ7 | **CLIPPER** — yt-dlp --download-sections + ffmpeg triple format | [CC+K] | 1.5 |
-| ζ8 | **ANALYZER** — Gemini 2.5 Flash-Lite avec prompt JSON structure | [CC+K] | 0.75 |
-| ζ9 | **OG_GENERATOR** — Pillow 1200x630 pre-genere et uploade sur R2 | [CC+K] | 0.75 |
-| ζ10 | **MODERATOR** — Haiku pour commentaires avec cache Supabase | [CC+K] | 0.5 |
-| ζ11 | **WATCHDOG** — heartbeat + discord webhook + metrics quotidiennes | [CC+K] | 0.5 |
-| ζ12 | **Scheduler global** — rate limiter partage tous modules | [CC] | 0.5 |
-| ζ13 | **Local cache SQLite** — fallback si Supabase down | [CC] | 0.5 |
-| ζ14 | **Tests end-to-end** — 1 match reel traite de bout en bout | [CC+K] | 0.5 |
-| ζ15 | **Backfill 83 matchs** — lance sur un WE, ~674 kills clippes | [CC+K] | 0.5 (CPU) |
-| ζ16 | **Service systemd/taskscheduler** — auto-restart worker au reboot | [USER] | 0.25 |
-
-**Total phase ζ : ~10 jh [CC+K] + ~0.7 jh [USER]. Cles necessaires : Gemini, Anthropic, YouTube API, + ε3 ε6.**
+- 83 matchs KC reels depuis l'API lolesports (2024 Winter -> 2026 Spring)
+- **111 games seulement** (devrait etre ~200+) a cause d'un bug dans le
+  fetcher qui ne scanne que les 100 premieres minutes apres le match start
+- BO3/BO5 : seulement games 1 et 2 recuperes, games 3/4/5 manquants
+- **Fix applique** dans scripts/fetch_real_data.py (batch 11 - en cours)
+- Fetcher re-lance en background, devrait produire ~250+ games avec stats
 
 ---
 
-## PHASE η — COMMUNITY (3-5 jh) — apres ε
+## AUDIT OPUS 4.6 — SCORE ET FINDINGS
 
-Objectif : ratings, commentaires, social, viralite, gamification.
+**Score global** : **6.5/10** — "bones excellents, polish insuffisant"
 
-| # | Tache | Type | Effort |
-|---|-------|------|--------|
-| η1 | **Rate 1-5 stars** — /kill/[id] avec persistance Supabase RLS | [CC+K] | 0.5 |
-| η2 | **Commentaires threades** — moderation auto via Haiku + affichage approved only | [CC+K] | 1 |
-| η3 | **Community clips** — soumission YouTube/TikTok + approbation admin | [CC+K] | 0.75 |
-| η4 | **Kill of the Week** — cron route qui reset tous les lundis | [CC+K] | 0.25 |
-| η5 | **Badges gamification** — "100 ratings", "premier top 10", etc. | [CC+K] | 0.5 |
-| η6 | **Bot Discord** — post auto des nouveaux kills dans #kc-highlights | [CC+K] | 0.5 |
-| η7 | **Twitter/X share button** — pre-rempli avec OG image + URL | [CC] | 0.25 |
-| η8 | **Push notifications VAPID** — abonnement PWA, send sur publish kill | [CC+K] | 0.75 |
-| η9 | **Classement communautaire** — /top avec Wilson score sort | [CC+K] | 0.5 |
-| η10 | **Discord bot embed** — commande `/kc lastkill` renvoie un embed riche | [CC+K] | 0.5 |
+**Verdict** : "impressive project" versus "legendary site" — gap = invisible
+work (OG tags, loading states, security, animation details, a11y).
 
-**Total phase η : ~5 jh [CC+K]. Necessite ε et ζ operationnels.**
+### Top 5 showstoppers (audit)
 
----
+| # | Issue | Status |
+|---|-------|--------|
+| 1 | `/scroll` completement vide | ✅ FIX batch 7 — top bar + beta pill + CTA vers #highlights, narrative + empty state cinematique |
+| 2 | Site invisible a Google | ✅ FIX batch 2 — sitemap.xml + robots.txt + JSON-LD + canonical. Toi : submit a Search Console |
+| 3 | Era pages avec images cassees | ✅ FIX batch 5 — 4 nouvelles images source-verifiees (Genese, Plafond, Desert, Winter 24) |
+| 4 | No loading states | ⏳ TODO Phase alpha.2 — skeletons Hextech-themed sur /matches /top /player |
+| 5 | Mobile navigation | ✅ Deja en place dans navbar.tsx |
 
-## PHASE θ — PWA & MOBILE PRO (2-3 jh) — sans cles
+### Top 5 quick wins (audit)
 
-Objectif : application installable, experience mobile parfaite.
+| # | Item | Status |
+|---|------|--------|
+| 1 | OG tags per page template | ✅ FIX batch 7 — generateMetadata enrichi pour /era et /player |
+| 2 | Custom 404 page | ✅ FIX batch 2 |
+| 3 | Google Search Console submission | 🟡 TOI — pas encore fait, ~10min |
+| 4 | Font preload + font-display: swap | ✅ FIX batch 7 |
+| 5 | aria-label on icon buttons | ⏳ TODO Phase a11y |
 
-| # | Tache | Type | Effort |
-|---|-------|------|--------|
-| θ1 | **Service Worker offline** — cache-first pour assets, network-first pour donnees | [CC] | 0.75 |
-| θ2 | **Icons multi-tailles** — 192, 256, 384, 512, maskable | [CC] | 0.25 |
-| θ3 | **Splash screens iOS** — generation pour 12+ tailles d'iPhone | [CC] | 0.25 |
-| θ4 | **Install prompt** — UI custom pour beforeinstallprompt | [CC] | 0.25 |
-| θ5 | **Scroll mode swipe calibre** — snap-mandatory + intersection observer threshold | [CC] | 0.5 |
-| θ6 | **Safe area insets** — env(safe-area-inset-*) pour les iPhone notch | [CC] | 0.1 |
-| θ7 | **Orientation lock** — portrait force sur /scroll | [CC] | 0.1 |
-| θ8 | **Haptic feedback** — navigator.vibrate sur rating 5 stars | [CC] | 0.1 |
+### Fact corrections appliquees
 
-**Total phase θ : ~3 jh [CC].**
+- ✅ **lfl-2021-showmatch** — "Palau Sant Jordi 15 dec 2021, 257 Blue Wall en terre hostile, match retour Carrousel du Louvre 8 jan 2022" au lieu de "showmatch KC vs KOI vague"
+- ✅ **lec-2025-winter** (Le Sacre) — narrative complete : UB collapse 1-3 vs G2, lower bracket run FNC -> VIT -> MKOI, Grand Final 3-0, Caliste Royal Roader, reference Macron 2021
 
----
+### Ce que Opus a repere mais pas encore applique
 
-## PHASE ι — INTERNATIONALISATION (2-3 jh) — sans cles
+- ⏳ **Hero image vs video cinematique** — Opus disait "if static image + text overlay, contrast de pic insuffisant pour Oswald headline". Maintenant remplace par HeroClipBackground auto-playing (batch 8)
+- ⏳ **LazyMotion vs full framer-motion** — on importe `motion` direct (34KB). Devrait etre LazyMotion + domAnimation (5KB)
+- ⏳ **useReducedMotion** — pas check partout, 20-25% des users affectes
+- ⏳ **Next/Image + priority + fetchpriority=high** — hero et above-the-fold pas optimises
+- ⏳ **Supabase queries cote serveur (RSC)** au lieu de client-side
+- ⏳ **R2 images en WebP/AVIF** — actuellement JPG
+- ⏳ **Hero text contrast au pic de luminance** — check manuel requis
+- ⏳ **CSP header** dans next.config.ts (le reste des headers y est deja)
+- ⏳ **Cmd+K global search** (cmdk + shadcn CommandDialog)
+- ⏳ **shadcn defaults remapped** vers Hextech palette
+- ⏳ **layoutId shared element transitions** player card -> player page
+- ⏳ **Number counting sur chaque page stats** (pas juste la home)
+- ⏳ **Skeletons branded Hextech** au lieu du shadcn default gris
 
-Objectif : version anglaise pour l'audience LEC europeenne.
+### Narratives missing (audit)
 
-| # | Tache | Type | Effort |
-|---|-------|------|--------|
-| ι1 | **next-intl setup** — middleware + config locales | [CC] | 0.25 |
-| ι2 | **Extraction strings** — tous les textes FR hardcoded → messages/fr.json | [CC] | 1 |
-| ι3 | **Traduction EN** — messages/en.json (DeepL quality) | [CC] | 0.75 |
-| ι4 | **Routing /en/era/...** — prefixe locale | [CC] | 0.25 |
-| ι5 | **Switcher langue** — dropdown dans la nav | [CC] | 0.25 |
-| ι6 | **hreflang tags** — /era/[id] avec alternate EN/FR | [CC] | 0.1 |
-| ι7 | **Date formatting locale** — Intl.DateTimeFormat | [CC] | 0.1 |
+- ⏳ **"Dark era" 2024** — 10th place Winter -> Spring, redemption arc 2025
+- ⏳ **Blue Wall 257 ultras** en Barcelone (sub-section sur lfl-2021-showmatch)
+- ⏳ **KCX attendance growth** — 3700 (KCX1) -> 12000 (KCX2) -> 28000 (KCX3) -> 30000 (KCX4), visual timeline
+- ⏳ **Quote quality** — sourcing real interviews (Kameto streams, post-game press conferences)
+- ⏳ **Caliste age restriction story** — 17 ans en 2024 LEC Winter, ne peut pas jouer, domine la LFL sur KCB, puis explose des qu'il est eligible
 
-**Total phase ι : ~3 jh [CC].**
+### Easter eggs (audit)
 
----
-
-## PHASE κ — QUALITE, TESTS, DESIGN SYSTEM (4-5 jh) — sans cles
-
-Objectif : fondations techniques solides, pas de regression a chaque commit.
-
-| # | Tache | Type | Effort |
-|---|-------|------|--------|
-| κ1 | **Storybook** — install + configs pour tous les composants | [CC] | 1 |
-| κ2 | **Design tokens** — src/lib/design-tokens.ts centralise colors/spacing/typography | [CC] | 0.5 |
-| κ3 | **Component library** — KillCard, StarRating, EraCard, PlayerCard, Button unifies | [CC] | 1 |
-| κ4 | **Vitest unit tests** — tests lib/feed-algorithm + lib/eras helpers | [CC] | 0.5 |
-| κ5 | **Playwright E2E** — scroll, click era, navigation joueur, rating | [CC] | 1 |
-| κ6 | **Lighthouse CI** — github action sur PR + seuils minimum | [CC] | 0.5 |
-| κ7 | **Cross-browser matrix** — Playwright Safari/Firefox/Chrome | [CC] | 0.25 |
-| κ8 | **Type coverage 100%** — strict mode + no any | [CC] | 0.5 |
-
-**Total phase κ : ~5 jh [CC].**
+- ✅ **Macron tweet** (batch 7) — click KC logo 5x
+- ⏳ **Konami Code Blue Wall Mode** — secondary easter egg Phase mu
+- ⏳ **Hidden /era/darkness** page inversee pour 2024 collapse — Phase mu
 
 ---
 
-## PHASE λ — API PUBLIQUE (2-3 jh) — apres ε
+## LES 12 PHASES (mise a jour)
 
-Objectif : les fans peuvent construire bots Discord, overlays Twitch, widgets.
+### PHASE alpha — POLISH IMMEDIAT (quasi-termine)
 
-| # | Tache | Type | Effort |
-|---|-------|------|--------|
-| λ1 | **API /api/v1/kills** — GET liste paginee + filtres | [CC+K] | 0.5 |
-| λ2 | **API /api/v1/matches** — GET liste + detail par ID | [CC+K] | 0.5 |
-| λ3 | **API /api/v1/players** — GET liste + stats par player | [CC+K] | 0.5 |
-| λ4 | **API /api/v1/eras** — GET liste depuis lib/eras | [CC] | 0.1 |
-| λ5 | **Rate limit public** — 100 req/min par IP via Upstash | [CC+K] | 0.25 |
-| λ6 | **CORS policy** — access-control-allow-origin : * (read-only) | [CC] | 0.1 |
-| λ7 | **Documentation OpenAPI** — /api/docs avec Swagger UI | [CC] | 0.5 |
-| λ8 | **Webhook /api/v1/webhooks** — emitted on new kill/match | [CC+K] | 0.5 |
-| λ9 | **Template bot Discord** — github repo starter | [CC] | 0.5 |
-| λ10 | **Template overlay Twitch** — HTML + OBS browser source | [CC] | 0.5 |
+| # | Tache | Status |
+|---|-------|--------|
+| α1 | Drag scroll timeline | ✅ batch 1 |
+| α2 | Loading skeletons sur /matches /top /player | ⏳ |
+| α3 | metadataBase + favicons | ✅ batch 1-2 |
+| α4 | 404 custom | ✅ batch 2 |
+| α5 | Focus ring global | ✅ globals.css |
+| α6 | Alt text audit | ⏳ |
+| α7 | Espaces vides homepage | ✅ batch 7 |
+| α8 | Menu hamburger mobile | ✅ deja present |
+| α9 | Breadcrumb unicode fix | ✅ |
+| α10 | Image blur placeholders | ⏳ |
 
-**Total phase λ : ~4 jh. Necessite ε ζ operationnels.**
+**Effort restant α : ~1.5 jh**
+
+### PHASE beta — SEO & SHAREABILITY (termine)
+
+| # | Tache | Status |
+|---|-------|--------|
+| β1 | robots.txt | ✅ batch 2 |
+| β2 | sitemap.xml dynamique | ✅ batch 2 |
+| β3 | JSON-LD WebSite + SportsTeam | ✅ batch 2 |
+| β4 | JSON-LD VideoObject par kill | ⏳ |
+| β5 | Canonical URLs | ✅ batch 7 |
+| β6 | Meta description unique | ✅ batch 7 |
+| β7 | Twitter Card tags | ✅ batch 7 |
+| β8 | OG images statiques | ✅ batch 7 (era + player) |
+| β9 | Font preload | ✅ batch 7 |
+| β10 | Hreflang | ⏳ attend i18n |
+
+**Effort restant β : ~0.5 jh (JSON-LD par kill une fois les kills live)**
+
+### PHASE gamma — MOTION & INTERACTIONS
+
+| # | Tache | Status |
+|---|-------|--------|
+| γ1 | IntersectionObserver fade-in | ⏳ partiellement via whileInView |
+| γ2 | Compteurs animes | ✅ batch 3 (AnimatedNumber) |
+| γ3 | AnimatePresence route transitions | ⏳ |
+| γ4 | GSAP ScrollTrigger timeline cinematic | ⏳ |
+| γ5 | Micro-interactions partout | ⏳ |
+| γ6 | Glassmorphism badges | ⏳ partiel |
+| γ7 | Parallax hero | ⏳ remplace par HeroClipBackground |
+| γ8 | Lottie penta explosion | ⏳ |
+| γ9 | Loading spinner KC | ⏳ |
+| γ10 | prefers-reduced-motion | ✅ batch 8 (HeroClipBackground) |
+| γ11 | LazyMotion + domAnimation (audit) | ⏳ |
+| γ12 | layoutId shared element | ⏳ |
+
+**Effort restant γ : ~3.5 jh**
+
+### PHASE delta — STATS & CONTENT
+
+| # | Tache | Status |
+|---|-------|--------|
+| δ1 | Stats avancees (DPM, gold@15...) | ⏳ |
+| δ2 | Graphiques recharts | ⏳ |
+| δ3 | Comparateur joueur vs joueur | ⏳ |
+| δ4 | Champion pool visuel hex grid | ⏳ |
+| δ5 | Pages alumni (Rekkles, Vladi, Cabochard...) | ⏳ |
+| δ6 | Hall of Fame | ⏳ |
+| δ7 | Records & achievements | ⏳ |
+| δ8 | Citations joueurs/casters | ⏳ |
+| δ9 | Stats comparatives entre eras | ⏳ |
+| δ10 | Easter eggs (Macron ok, Konami + darkness pending) | ✅ partiel |
+| δ11 | **Narratives Blue Wall 257 + KCX growth + Dark Era 2024** | ⏳ |
+| δ12 | **Fact corrections lfl-2021-showmatch + Le Sacre reverse sweep** | ✅ batch 7 |
+
+**Effort restant δ : ~5 jh**
+
+### PHASE epsilon — INFRASTRUCTURE PROD (termine)
+
+| # | Tache | Status |
+|---|-------|--------|
+| ε1 | Domaine kckills.com | ✅ |
+| ε2 | Supabase projet | ✅ |
+| ε3 | Schema SQL 001 | ✅ |
+| ε4 | Discord OAuth | ✅ |
+| ε5 | R2 bucket + custom domain | ✅ |
+| ε6 | Vercel deploy | ✅ |
+| ε7 | DNS setup | ✅ |
+| ε8 | Preview deployments | ✅ |
+| ε9 | Sentry | ⏳ |
+| ε10 | Vercel Analytics / Plausible | ⏳ |
+| ε11 | Rate limiting Upstash | ⏳ |
+| ε12 | Security headers CSP | ✅ partiel (CSP pas encore) |
+
+**Effort restant ε : ~1 jh**
+
+### PHASE zeta — WORKER PIPELINE (LA GROSSE) **← PRIORITE ABSOLUE**
+
+Le worker Python est le coeur du produit. Sans lui, pas de vrais clips
+videos dans /scroll et on reste au stade "site avec liens YouTube".
+
+#### zeta.1 — Sentinel (detection matchs)
+- Poll `getSchedule` LEC toutes les 5 minutes
+- Pour chaque match KC completed qu'on a pas encore traite, cree une row
+  dans `games` avec `state = 'pending'`
+- Log Discord webhook: "New KC match detected: KC vs VIT Week 1"
+- **Status: code ecrit, jamais lance end-to-end**
+
+#### zeta.2 — Harvester (extraction kills)
+- Pour chaque `game` en `pending`, recupere les frames livestats via
+  `feed.lolesports.com/livestats/v1/window/{gameId}`
+- Diff des frames pour extraire chaque kill event (epoch + killer + victim +
+  position)
+- Ecrit les lignes `kills` avec `status = 'raw'`
+- Status: code ecrit, detecte kills mais pas valide contre data reelle
+
+#### zeta.3 — VOD Hunter (trouver la video source)
+- Utilise `getEventDetails.vod.parameter` (YouTube ID officiel LEC) en priorite
+- Fallback: YouTube Data API `search.list` avec titre genere
+- Ecrit `game.vod_youtube_id` et `game.vod_offset_seconds`
+- Status: code ecrit, quota YouTube a respecter
+
+#### zeta.4 — Clipper (yt-dlp + ffmpeg triple format)
+- Pour chaque kill, compute `start = vod_offset + (kill_event_epoch - game_start_epoch) - 8s`
+- `yt-dlp --download-sections *{start}-{start+15}`
+- ffmpeg triple format:
+  - Horizontal 1280x720 H.264 main 3.1 faststart (desktop)
+  - Vertical 720x1280 (crop centre + H.264 main 3.1 (scroll mobile)
+  - Vertical 360x640 (low quality pour reseau lent)
+- Genere thumbnail.jpg (9:16 frame centrale)
+- Upload sur R2 dans `clips/{kill_id}/h.mp4`, `v.mp4`, `v_low.mp4`, `thumb.jpg`
+- Update `kills.clip_url_horizontal`, `.clip_url_vertical`, `.clip_url_vertical_low`
+- Status: code ecrit, jamais test end-to-end
+
+#### zeta.5 — Analyzer (Gemini 2.5 Flash-Lite)
+- Pour chaque kill clippe, envoie la video (15s) a Gemini avec prompt:
+  "Analyse ce clip de kill LoL. Retourne JSON: {highlight_score 1-10, tags [outplay,teamfight,clutch,...], description 120 chars, kill_visible bool, caster_hype_level 1-5}"
+- Rate limit: 1000 RPD free tier, 4s min entre appels
+- Update `kills.highlight_score`, `.ai_tags`, `.ai_description`
+- Status: code ecrit, prompt pas optimise
+
+#### zeta.6 — OG Generator (Pillow)
+- Pour chaque kill analyze, genere 1200x630 PNG:
+  - Fond: champion splash art du killer
+  - Overlay dark + vignettes
+  - Texte Oswald: "{killer.ign} -> {victim.ign}" en gold
+  - Stars du rating (si > 0)
+  - Badge KC logo en coin
+- Upload sur R2 dans `og/{kill_id}.png`
+- Update `kills.og_image_url`
+- Status: code ecrit, pas teste
+
+#### zeta.7 — Moderator (Claude Haiku) **← optionnel v0**
+- Pour chaque comment submitted, envoie a Haiku avec prompt
+- Rate limit: 50 RPM
+- Update `comments.moderation_status`
+- **Status: on skip pour v0** — tous les commentaires auto-approuves jusqu'a flood
+
+#### zeta.8 — Watchdog (health + alerts)
+- Heartbeat toutes les 5 min dans `health_checks`
+- Metriques journalieres: kills_detected_today, kills_clipped, kills_published, gemini_calls, quota_restant, storage_r2_used
+- Discord webhook rapport quotidien 23:00
+- Alertes: worker down > 1h, Gemini quota > 900 RPD, Supabase egress > 4GB/mois
+- Status: code ecrit, webhook configure a verifier
+
+#### zeta.9 — Scheduler & rate limiter global
+- LoLTokScheduler central avec tous les DELAYS
+- Quotas journaliers tracked (reset 07:00 UTC)
+- Backoff exponentiel sur erreurs
+- Status: code ecrit
+
+#### zeta.10 — Local cache SQLite
+- Fallback si Supabase inaccessible
+- Flush automatique des writes au retour de Supabase
+- Status: code ecrit
+
+#### zeta.11 — Tests end-to-end sur 1 match
+- Choisir KC vs VIT Spring 2026 Week 1 (match recent, BO3, 3 games)
+- Lance le worker en mode `--match-id {id}`
+- Verifier: 3 games detectees, ~20-30 kills extraits, 3 VODs trouves, 60-90 clips generes, tous uploades sur R2, Supabase a toutes les lignes
+- Metriques: temps total, nombre d'appels API, storage R2 utilise
+- Status: pas fait
+
+#### zeta.12 — Backfill 83 matchs
+- Lance le worker en mode `--backfill-all` sur un week-end
+- Estimation: 83 matchs * ~15 min/match = ~21h CPU + API quota load
+- Fragmenter sur plusieurs jours si quota Gemini insuffisant
+- Status: pas fait
+
+#### zeta.13 — Service systemd / Task Scheduler
+- Auto-restart au boot
+- Restart automatique en cas de crash (loop 10s)
+- Status: pas fait (toi)
+
+**Effort zeta total : ~10-15 jh [CC+K] + 0.5 jh [USER]**
+
+### PHASE eta — COMMUNITY (apres zeta)
+
+| # | Tache | Status |
+|---|-------|--------|
+| η1 | Rate 1-5 stars sur /kill/[id] | ⏳ |
+| η2 | Comments threaded | ⏳ |
+| η3 | Community clips submission | ⏳ |
+| η4 | **Edits — fan edits section dediee** | ⏳ |
+| η5 | Kill of the Week | ⏳ |
+| η6 | Badges gamification | ⏳ |
+| η7 | Bot Discord | ⏳ |
+| η8 | Twitter share button | ⏳ |
+| η9 | Push notifications VAPID | ⏳ |
+| η10 | Leaderboard Wilson score | ⏳ |
+
+**Effort eta : ~5 jh**
+
+### PHASE theta — PWA & MOBILE PRO
+
+(voir v1 — pas change)
+
+### PHASE iota — I18N EN
+
+(voir v1 — pas change, mais plus prioritaire apres audit)
+
+### PHASE kappa — QUALITE & TESTS
+
+(voir v1 — pas change)
+
+### PHASE lambda — API PUBLIQUE
+
+(voir v1 — apres zeta + eta)
+
+### PHASE mu — STATE OF THE ART
+
+- μ1 Three.js particles hero
+- μ2 **Cmd+K global search** (recommandation forte audit)
+- μ3 Ai chat KC bot
+- μ4 Timeline cinematic fullscreen (GSAP ScrollTrigger)
+- μ5 Video backgrounds loops ← **fait batch 8** (HeroClipBackground)
+- μ6 Real-time rating multiplayer
+- μ7 Dark mode toggle
+- μ8 Accessibility WCAG AA+ full audit
+- μ9 **Konami Code Blue Wall Mode** (audit easter egg #1)
+- μ10 **Hidden /era/darkness** page inversee (audit easter egg #3)
 
 ---
 
-## PHASE μ — STATE OF THE ART (ongoing) — apres tout le reste
+## RECAP TOTAL (mise a jour)
 
-Objectif : le "legendaire". Choses impressionnantes mais pas critiques.
-
-| # | Tache | Type | Effort |
-|---|-------|------|--------|
-| μ1 | **Three.js particles hero** — hextech crystals qui flottent | [CC] | 1 |
-| μ2 | **Cmd+K global search** — fuse.js sur kills + players + eras + matchs | [CC] | 1 |
-| μ3 | **AI chat KC bot** — interface sur Haiku fine-tune sur le contexte KC | [CC+K] | 1 |
-| μ4 | **Timeline cinematic fullscreen** — appuie E dans la frise = immersive mode scroll-driven | [CC] | 1.5 |
-| μ5 | **Video backgrounds loops** — compressed webm sur hero | [CC] | 0.5 |
-| μ6 | **Real-time multiplayer rating** — vois les stars se remplir en live | [CC+K] | 1 |
-| μ7 | **Dark mode toggle** (on est deja en dark mais option light pour les sadists) | [CC] | 0.5 |
-| μ8 | **Accessibility WCAG AA+ full audit** — axe-core + manual | [CC] | 1 |
-
-**Total phase μ : ~7.5 jh. Pas critique.**
-
----
-
-## RECAP TOTAL
-
-| Phase | Nom | Effort [CC/CC+K] | Effort [USER] | Sans cles ? |
-|-------|-----|------------------|---------------|-------------|
-| α | Polish immediat | 2 jh | 0 | OUI |
-| β | SEO & shareability | 2 jh | 0 | OUI |
-| γ | Motion & interactions | 4 jh | 0 | OUI |
-| δ | Stats & content | 5 jh | 0 | OUI |
-| ε | Infrastructure prod | 2.5 jh | 0.75 jh | NON |
-| ζ | Worker & clips | 10 jh | 0.7 jh | NON |
-| η | Community | 5 jh | 0 | NON |
-| θ | PWA & mobile pro | 3 jh | 0 | OUI |
-| ι | i18n | 3 jh | 0 | OUI |
-| κ | Qualite, tests, DS | 5 jh | 0 | OUI |
-| λ | API publique | 4 jh | 0 | NON |
-| μ | State of the art | 7.5 jh | 0 | PARTIEL |
-| **Total** | | **~53 jh** | **~1.5 jh** | |
+| Phase | Nom | Effort restant [CC/CC+K] | Effort [USER] |
+|-------|-----|--------------------------|----------------|
+| α | Polish | 1.5 jh | 0 |
+| β | SEO | 0.5 jh | 0.2 jh (GSC) |
+| γ | Motion | 3.5 jh | 0 |
+| δ | Content | 5 jh | 0 |
+| ε | Infra | 1 jh | 0.3 jh (Sentry) |
+| **ζ** | **Worker pipeline** | **12 jh** | **0.5 jh (systemd)** |
+| η | Community | 5 jh | 0 |
+| θ | PWA | 2 jh | 0 |
+| ι | i18n | 3 jh | 0 |
+| κ | Tests | 4 jh | 0 |
+| λ | API publique | 3 jh | 0 |
+| μ | State of the art | 6 jh | 0 |
+| **Total** | | **~46 jh** | **~1 jh** |
 
 ---
 
-## ORDRE D'EXECUTION RECOMMANDE
+## ORDRE D'EXECUTION RECOMMANDE POUR LES 3 PROCHAINES SEMAINES
 
-### Sprint 1 (semaine 1-2) : visible gain sans rien attendre
-α → β → γ → δ
-Resultat : site prod-ready cote frontend, depth de contenu, motion partout.
-**12-13 jh Claude sans aucune cle API.**
+### Semaine 1 : Core product complet
+- Fix data fetcher BO3/BO5 completeness ✅ batch 11
+- **Zeta.1-4 : Sentinel + Harvester + VOD Hunter + Clipper** sur 1 match test
+- Verification end-to-end : 1 match -> N clips -> R2 -> Supabase -> /scroll
+- Alpha2 : loading skeletons
+- Alpha6 : alt text audit
+- Delta11 : Blue Wall 257 + KCX growth + Dark Era narratives
 
-### Sprint 2 (semaine 3) : ε en parallele avec θ + κ
-Tu fais les creations de compte (ε1-ε8), Claude fait :
-- ε3 SQL migration, ε5 Discord binding, ε7 deploy, ε10 Sentry
-- θ PWA complete
-- κ tests
+### Semaine 2 : Scale + polish
+- **Zeta.12 : Backfill 83 matchs en week-end** (objectif : ~1500 kills clippes)
+- Verification : /scroll rempli de vrais clips MP4 playables
+- Zeta.5 : Gemini analyzer en batch
+- Zeta.6 : OG generator en batch
+- Zeta.13 : systemd auto-restart
+- Gamma3 : AnimatePresence route transitions
+- Mu2 : Cmd+K search
+- Epsilon9 : Sentry
+- Delta5 : pages alumni (Rekkles, Vladi, Cabochard, xMatty, Saken, Targamas, Upset, Bo, 113, Cinkrof, Hantera, Caps... non wait Caps is G2)
 
-Parallelement tu :
-- Achetes le domaine
-- Crees Supabase, Discord, R2, Vercel accounts
-- DNS setup
-
-### Sprint 3 (semaine 4-5) : ζ worker
-Tu fournis Gemini + Anthropic + YouTube keys, Claude build les 10 modules,
-on backfill les 83 matchs, on verifie que /scroll affiche les vrais clips.
-
-### Sprint 4 (semaine 6) : η + λ
-Community features + API publique. Preparation du "lancement Eto" stream.
-
-### Sprint 5 (semaine 7+) : μ + ι ongoing
-State of the art polish, i18n EN, Cmd+K, etc.
-
----
-
-## PRIORITE TOP 10 (selon audit utilisateur)
-
-| Rank | Audit | Phase mapped |
-|------|-------|--------------|
-| 1 | Corriger espaces vides + responsive mobile | α7 α8 |
-| 2 | Integrer les clips video dans le scroll | ζ4-15 |
-| 3 | Framer Motion partout | γ |
-| 4 | SEO technique complet | β |
-| 5 | Loading states (skeletons) | α2 |
-| 6 | OG images dynamiques par kill | ζ9 |
-| 7 | Stats avancees + graphiques | δ1 δ2 |
-| 8 | Pages anciens joueurs | δ5 |
-| 9 | Recherche globale cmd+K | μ2 |
-| 10 | Analytics + Sentry | ε10 ε11 |
+### Semaine 3 : Community + launch
+- Eta1-2 : Rate + comments
+- Eta4 : Fan edits section
+- Eta9 : Push notifications
+- Mu9 : Konami easter egg
+- Mu10 : Hidden darkness page
+- Iota : i18n EN version
+- **Stream chez Eto / Kameto**
 
 ---
 
-## CE QUI EST DEJA FAIT (au 11 avril 2026)
-
-- Design system LoL Hextech (couleurs, polices Oswald/Inter/JetBrains Mono)
-- Home page full-screen avec hero 85vh + roster bands
-- 16 eras granulaires avec page /era/[id] dediee
-- Frise scrollable + drag + keyboard nav (ce tour)
-- Page /player/[slug] clips-focused futuriste
-- Page /scroll TikTok-like (sans vraies videos pour l'instant)
-- Page /match/[slug] timeline game par game
-- Page /matches avec filtres
-- 83 matchs KC + 111 games + stats reelles depuis l'API lolesports
-- Worker Python structure avec 10 modules
-- Schema Supabase SQL redige (pas encore execute)
-
-## CE QUI MANQUE TOTALEMENT
-
-- Aucune cle API configuree
-- Aucun deploy en production
-- Aucune vraie clip dans /scroll
-- Aucun service worker / push notifications
-- Aucun rating/comment/community feature
-- Aucun SEO (robots.txt, sitemap, JSON-LD)
-- Aucun OG image dynamique
-- Aucun test (Vitest, Playwright)
-- Aucun monitoring (Sentry, Analytics)
-- Aucune i18n
-- Aucune API publique
-
----
-
-*Ce document est la source de verite. Il est versionne dans Git et mis a jour a
-chaque sprint. Chaque ligne qui passe de "pending" a "done" doit etre cochee avec
-un commit dedie pour que Kairos (et toi) sachent ou on en est.*
+*Le but de cette v2 est d'etre la boussole quotidienne jusqu'au stream.
+Chaque batch pushed doit mettre a jour une case de status. Chaque phase
+terminee doit etre annoncee dans le CHANGELOG Discord.*

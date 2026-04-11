@@ -92,13 +92,45 @@ def fetch_all_kc_events():
     return all_kc
 
 
-def fetch_game_end_stats(game_id, match_start_time):
-    """Find end-of-game stats by scanning timestamps."""
+def fetch_game_end_stats(game_id, match_start_time, game_number=1):
+    """Find end-of-game stats by scanning timestamps.
+
+    For BO3/BO5 series, game N doesn't start at match_start — each game takes
+    ~15min draft + ~30-45min play = ~45-60min total. So we scan a range
+    proportional to the game number to catch games 2-5 of a series.
+    """
     start = datetime.fromisoformat(match_start_time.replace("Z", "+00:00"))
 
-    # Games typically start 10-20 min after match start (draft phase)
-    # and last 25-40 min. Scan from +20min to +90min in 10min steps.
-    for offset_min in range(20, 100, 10):
+    # First, try the feed WITHOUT a startingTime — the livestats endpoint
+    # returns the latest available frames for a game_id when no timestamp
+    # is provided. This is the cheapest + most accurate path when the game
+    # has ended.
+    data = feed_get(f"window/{game_id}")
+    if data:
+        frames = data.get("frames", [])
+        if frames:
+            last = frames[-1]
+            blue = last.get("blueTeam", {})
+            red = last.get("redTeam", {})
+            tk = (blue.get("totalKills", 0) or 0) + (red.get("totalKills", 0) or 0)
+            tg = (blue.get("totalGold", 0) or 0) + (red.get("totalGold", 0) or 0)
+            if tk > 0 or tg > 30000:
+                return data, last
+
+    # Fallback: scan a window sized for this specific game number.
+    # Game 1: offset 20-100min
+    # Game 2: offset 50-130min
+    # Game 3: offset 90-170min
+    # Game 4: offset 130-210min
+    # Game 5: offset 170-250min
+    scan_start_min = max(20, (game_number - 1) * 40 + 10)
+    scan_end_min = scan_start_min + 90
+
+    best_data = None
+    best_last = None
+    best_kills = 0
+
+    for offset_min in range(scan_start_min, scan_end_min, 10):
         t = start + timedelta(minutes=offset_min)
         ts = t.strftime("%Y-%m-%dT%H:%M:%S.000Z")
         data = feed_get(f"window/{game_id}?startingTime={ts}")
@@ -116,27 +148,15 @@ def fetch_game_end_stats(game_id, match_start_time):
         total_gold = (blue.get("totalGold", 0) or 0) + (red.get("totalGold", 0) or 0)
 
         if total_kills > 0 or total_gold > 30000:
-            # Found game data. Now get the latest possible frame.
-            # Try 10 min later to see if game was still going
-            later = t + timedelta(minutes=10)
-            ts2 = later.strftime("%Y-%m-%dT%H:%M:%S.000Z")
-            data2 = feed_get(f"window/{game_id}?startingTime={ts2}")
-            if data2:
-                frames2 = data2.get("frames", [])
-                if frames2:
-                    last2 = frames2[-1]
-                    blue2 = last2.get("blueTeam", {})
-                    total_kills2 = (blue2.get("totalKills", 0) or 0) + (last2.get("redTeam", {}).get("totalKills", 0) or 0)
-                    if total_kills2 > total_kills:
-                        # Game still ongoing, use this later frame
-                        data = data2
-                        last = last2
-
-            return data, last
+            # Keep the frame with the most kills (latest state of the game)
+            if total_kills >= best_kills:
+                best_kills = total_kills
+                best_data = data
+                best_last = last
 
         time.sleep(0.2)
 
-    return None, None
+    return best_data, best_last
 
 
 def process_match(event):
