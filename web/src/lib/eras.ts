@@ -762,7 +762,7 @@ export const ERAS: Era[] = [
     color: "#C8AA6E",
     result: "Spring en cours \uD83D\uDD25",
     icon: "\uD83D\uDD25",
-    image: "/images/eras/2026-spring.jpg",
+    image: "/images/hero-bg.jpg",
     dateStart: "2026-03-15",
     dateEnd: "2026-06-30",
     roster: "Canna (top) \u00b7 Yike (jgl) \u00b7 kyeahoo (mid) \u00b7 Caliste (adc) \u00b7 Busio (sup)",

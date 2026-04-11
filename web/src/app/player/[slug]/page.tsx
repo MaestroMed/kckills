@@ -77,11 +77,33 @@ export default async function PlayerPage({ params }: Props) {
       )
     : 0;
 
+  // Try to use a custom Hextech background for this player (generated with
+  // Gemini). Falls back to the champion loading art if no custom bg exists.
+  const customBg = `/images/players/player-bg-${name.toLowerCase()}.jpg`;
+
   return (
-    <div className="-mx-4 -mt-6">
+    <div
+      className="-mt-6"
+      style={{
+        // Full-bleed to escape the parent <main max-w-7xl> container
+        width: "100vw",
+        position: "relative",
+        left: "50%",
+        right: "50%",
+        marginLeft: "-50vw",
+        marginRight: "-50vw",
+      }}
+    >
       {/* ═══ HERO — full-screen cinematic ═══ */}
       <section className="relative h-[90vh] min-h-[720px] w-full overflow-hidden">
-        {/* Champion loading art as vertical background */}
+        {/* Layer 1 (deepest) — blurred champion splash */}
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={championSplashUrl(signatureChamp)}
+          alt=""
+          className="absolute inset-0 h-full w-full object-cover opacity-30 scale-105 blur-2xl"
+        />
+        {/* Layer 2 — champion loading art (always shown) */}
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={championLoadingUrl(signatureChamp)}
@@ -89,12 +111,15 @@ export default async function PlayerPage({ params }: Props) {
           className="absolute inset-0 h-full w-full object-cover scale-110"
           style={{ filter: "brightness(0.45) saturate(1.1)" }}
         />
-        {/* Splash as second layer, blurred */}
+        {/* Layer 3 (top) — custom Hextech Gemini background if it exists.
+            If the file 404s, the img is invisible and the champion loading
+            art below shows through normally. No flicker, no broken icon. */}
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
-          src={championSplashUrl(signatureChamp)}
+          src={customBg}
           alt=""
-          className="absolute inset-0 h-full w-full object-cover opacity-30 scale-105 blur-2xl"
+          className="absolute inset-0 h-full w-full object-cover scale-105"
+          style={{ filter: "brightness(0.85) saturate(1.1)" }}
         />
 
         {/* Dark vignettes */}

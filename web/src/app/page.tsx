@@ -141,25 +141,24 @@ export default function HomePage() {
               </span>
             </div>
 
-            {/* Title with a subtle dark backdrop blur pad for legibility
-                on top of the clip rotator. Keeps the video visible but
-                guarantees contrast for the wordmark. */}
-            <div className="relative inline-block">
-              <div
-                className="absolute -inset-x-6 -inset-y-3 rounded-2xl bg-black/35 backdrop-blur-[2px] -z-10"
-                aria-hidden="true"
-              />
-              <h1
-                className="relative font-display font-black tracking-tight leading-[0.82] text-6xl md:text-7xl lg:text-[9rem]"
-                style={{
-                  textShadow:
-                    "0 4px 40px rgba(0,0,0,1), 0 2px 20px rgba(0,0,0,0.95), 0 0 80px rgba(200,170,110,0.3)",
-                  WebkitTextStroke: "1px rgba(0,0,0,0.3)",
-                }}
-              >
-                <span className="text-shimmer">KCKILLS</span>
-              </h1>
-            </div>
+            {/* Title — no backdrop pad, just multi-layered text shadows
+                for legibility on top of the clip rotator. Looks clean and
+                lets the video breathe around the letters. */}
+            <h1
+              className="font-display font-black tracking-tight leading-[0.82] text-6xl md:text-7xl lg:text-[9rem]"
+              style={{
+                textShadow: [
+                  "0 0 1px rgba(0,0,0,0.9)",
+                  "0 0 2px rgba(0,0,0,0.9)",
+                  "0 2px 4px rgba(0,0,0,0.9)",
+                  "0 4px 12px rgba(0,0,0,0.85)",
+                  "0 8px 30px rgba(0,0,0,0.8)",
+                  "0 0 60px rgba(200,170,110,0.35)",
+                ].join(", "),
+              }}
+            >
+              <span className="text-shimmer">KCKILLS</span>
+            </h1>
 
             <p
               className="mt-5 max-w-md text-base md:text-lg lg:text-xl text-white/85 font-medium"
