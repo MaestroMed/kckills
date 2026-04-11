@@ -90,18 +90,31 @@ export default function HomePage() {
   const heroChamp = topPlayer?.champions[0] ?? "Jhin";
 
   return (
-    <div className="-mx-4 -mt-6">
+    <div
+      className="-mt-6"
+      style={{
+        // Full-bleed: break out of the parent <main max-w-7xl> container
+        // so the hero, roster bands, timeline and clips grid can span the
+        // entire viewport width instead of being caged at 1280px.
+        width: "100vw",
+        position: "relative",
+        left: "50%",
+        right: "50%",
+        marginLeft: "-50vw",
+        marginRight: "-50vw",
+      }}
+    >
       <AudioPlayer />
 
-      {/* ═══ HERO — Full viewport 2-col layout with clip rotator ═══════ */}
+      {/* ═══ HERO — 2-col layout with clip rotator (full-bleed via parent) ═══ */}
       <section className="relative min-h-[100vh] md:min-h-[92vh] overflow-hidden">
         <HeroClipBackground clips={HERO_CLIPS} posterSrc="/images/hero-bg.jpg" />
 
-        {/* Gradients tuned to keep the video visible while still giving text
-            legibility on both sides */}
-        <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-[var(--bg-primary)] pointer-events-none" />
-        <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent pointer-events-none" />
-        <div className="absolute inset-0 bg-gradient-to-r from-black/65 via-transparent to-black/55 pointer-events-none hidden md:block" />
+        {/* Very light overlays — let the video breathe and feel alive.
+            Only the bottom fade stays strong to blend into the next section.
+            No side vignettes — the cards themselves have dark backdrops. */}
+        <div className="absolute inset-0 bg-gradient-to-b from-black/10 via-transparent to-[var(--bg-primary)] pointer-events-none" />
+        <div className="absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-black/50 to-transparent pointer-events-none" />
 
         {/* ─── Full-width 2-column grid on desktop ─── */}
         <div className="relative z-10 min-h-[100vh] md:min-h-[92vh] max-w-[1920px] mx-auto px-6 md:px-10 lg:px-16 py-24 md:py-0 flex flex-col md:grid md:grid-cols-12 md:items-center gap-8">

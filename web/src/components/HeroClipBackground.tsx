@@ -68,7 +68,7 @@ export function HeroClipBackground({ clips, posterSrc = "/images/hero-bg.jpg" }:
         src={posterSrc}
         alt=""
         className="absolute inset-0 w-full h-full object-cover"
-        style={{ opacity: 0.75 }}
+        style={{ opacity: 0.85 }}
       />
     );
   }
@@ -83,18 +83,18 @@ export function HeroClipBackground({ clips, posterSrc = "/images/hero-bg.jpg" }:
         src={posterSrc}
         alt=""
         className="absolute inset-0 w-full h-full object-cover"
-        style={{ opacity: 0.75 }}
+        style={{ opacity: 0.85 }}
       />
 
-      {/* Stacked iframes crossfading */}
+      {/* Stacked iframes crossfading — full opacity so the background feels alive */}
       <AnimatePresence mode="sync">
         <motion.div
           key={`${current.videoId}-${index}`}
           className="absolute inset-0 overflow-hidden pointer-events-none"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 0.65 }}
-          exit={{ opacity: 0 }}
-          transition={{ duration: 1.2, ease: [0.16, 1, 0.3, 1] }}
+          initial={{ opacity: 0, scale: 1.02 }}
+          animate={{ opacity: 0.92, scale: 1 }}
+          exit={{ opacity: 0, scale: 1.02 }}
+          transition={{ duration: 1.4, ease: [0.16, 1, 0.3, 1] }}
         >
           {/* 16:9 iframe scaled to cover: the CSS trick keeps the aspect ratio
               correct regardless of viewport — 177.77vh = 100vh * 16/9 */}
