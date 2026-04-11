@@ -1,19 +1,23 @@
 """
-HARVESTER — Kill detection by diffing consecutive livestats frames.
+HARVESTER — Kill detection by diffing livestats window snapshots.
 
-Algorithm:
-- Fetch frames at ~10s intervals for a completed game via
-  feed.lolesports.com/livestats/v1/window/{game_id}
-- Diff frame N vs N+1: detect KDA changes
-- Case 1 (70%): 1 killer +1K, 1 victim +1D, opposite sides → high confidence
-- Case 2 (teamfights): N killers, M victims → correlate by side → medium confidence
-- Multi-kill: +N kills on one player in a single frame
-- First blood: totalKills goes from 0 to 1
+Strategy (validated 2026-04-11 against the real API, see LIVESTATS_FINDINGS.md):
 
-Output is a list of KillEvent dataclasses that the orchestrator turns into
-`kills` rows. Exposes both a low-level `extract_kills_from_game` (used by
-the pipeline orchestrator) and a daemon-friendly `run()` that scans the DB
-for any games in state 'vod_found' whose kills have not been extracted yet.
+1. Call `/livestats/v1/window/{game_id}` WITHOUT `startingTime` to receive a
+   snapshot anchored at the real game start (draft + setup excluded).
+2. Parse the first frame's `rfc460Timestamp` and round it DOWN to the 10s
+   boundary — the API rejects any `startingTime` whose seconds % 10 != 0
+   with a 400 BAD_QUERY_PARAMETER.
+3. Walk forward from that anchor in 10-second probes. Each probe returns 200
+   with a 10-frame snapshot, 204 No Content, or silently nothing.
+4. Diff consecutive snapshots on per-participant KDA to derive kill events.
+5. Tolerate long runs of 204 (mid-game quiet periods can easily produce 30+
+   consecutive empty probes); only give up after `max_consecutive_empty`
+   empties in a row OR once `max_game_minutes` is reached.
+
+`extract_kills_from_game` no longer takes a scheduled start because
+`match.startTime` is the announced broadcast slot, not the real game start —
+the two can differ by 30+ minutes.
 """
 
 from __future__ import annotations
@@ -21,10 +25,9 @@ from __future__ import annotations
 import structlog
 from datetime import datetime, timedelta
 
-from config import config
 from models.kill_event import KillEvent
 from services import livestats_api
-from services.supabase_client import safe_select, safe_update, safe_insert
+from services.supabase_client import safe_insert, safe_select, safe_update
 
 log = structlog.get_logger()
 
@@ -34,94 +37,131 @@ log = structlog.get_logger()
 async def extract_kills_from_game(
     external_game_id: str,
     db_game_id: str,
-    match_start_iso: str,
     kc_side: str | None = None,
+    probe_step_seconds: int = 10,
+    max_game_minutes: int = 65,
+    max_consecutive_empty: int = 60,
 ) -> list[KillEvent]:
-    """Extract all kills from a completed game by diffing frames.
+    """Extract every kill from a completed game by diffing window snapshots.
 
     Args:
         external_game_id: Riot/lolesports game ID used by the livestats feed.
-        db_game_id: The `games.id` UUID to stamp on each KillEvent so they
-            can be inserted with the correct FK.
-        match_start_iso: RFC3339 string of the match scheduled start. We walk
-            the window endpoint starting from +15 min to +90 min.
-        kc_side: 'blue' or 'red' if already known. Otherwise detected from
-            the first successful window response.
+        db_game_id: The `games.id` UUID to stamp on each emitted KillEvent.
+        kc_side: 'blue' or 'red' if already known. Otherwise inferred from the
+            anchor snapshot's participant metadata.
+        probe_step_seconds: Walk step between probes. Must be ≥ 10 (API grid).
+        max_game_minutes: Hard cap from anchor → stop probing past this.
+        max_consecutive_empty: Early-stop threshold if the feed is silent for
+            this many probes in a row (10 min with default 10s step).
     """
     kills: list[KillEvent] = []
 
-    try:
-        start = datetime.fromisoformat(match_start_iso.replace("Z", "+00:00"))
-    except Exception:
-        log.error("harvester_bad_match_start", start=match_start_iso)
+    # ─── Anchor: call without startingTime → real game start ─────────────
+    anchor_data = await livestats_api.get_window(external_game_id, starting_time=None)
+    frames = (anchor_data or {}).get("frames") or []
+    if not frames:
+        log.warn("harvester_no_anchor", game_id=external_game_id)
         return []
 
-    prev_kda: dict[str, dict] | None = None
-    participants: dict[str, dict] = {}
-    game_start_epoch_ms: int | None = None
-    total_kills_seen = 0
+    anchor_ts_raw = frames[0].get("rfc460Timestamp")
+    try:
+        anchor = datetime.fromisoformat(anchor_ts_raw.replace("Z", "+00:00"))
+    except Exception:
+        log.error("harvester_bad_anchor_ts", ts=anchor_ts_raw, game_id=external_game_id)
+        return []
+    anchor = _round_down_10s(anchor)
+    game_start_epoch_ms = int(anchor.timestamp() * 1000)
 
-    # Step through 3-minute windows from +15 to +90 min
-    for offset_min in range(15, 95, 3):
-        t = start + timedelta(minutes=offset_min)
+    participants = livestats_api.extract_participants(anchor_data)
+    if kc_side is None:
+        kc_side = _detect_kc_side(participants)
+
+    log.info(
+        "harvester_anchor",
+        game_id=external_game_id,
+        anchor=anchor.isoformat(),
+        kc_side=kc_side,
+        n_participants=len(participants),
+    )
+
+    # Seed prev_kda from the anchor snapshot. If the anchor already contains
+    # kills (unlikely but possible on a late poll), we log so they aren't
+    # silently lost.
+    prev_kda = livestats_api.extract_kda(frames[-1])
+    total_kills_seen = sum(v.get("kills", 0) for v in prev_kda.values())
+    if total_kills_seen:
+        log.warn(
+            "harvester_anchor_has_kills",
+            game_id=external_game_id,
+            kills_lost=total_kills_seen,
+        )
+
+    # ─── Walk forward in 10-second probes ────────────────────────────────
+    step = timedelta(seconds=max(probe_step_seconds, 10))
+    end = anchor + timedelta(minutes=max_game_minutes)
+    t = anchor + step
+    consecutive_empty = 0
+    probes = 0
+    hits = 0
+
+    while t < end:
+        probes += 1
         ts = t.strftime("%Y-%m-%dT%H:%M:%S.000Z")
-
         data = await livestats_api.get_window(external_game_id, ts)
-        if not data:
-            continue
+        probe_frames = (data or {}).get("frames") or []
 
-        frames = data.get("frames", [])
-        if not frames:
-            continue
-
-        # First successful fetch: pull participant metadata + infer kc_side
-        if not participants:
-            participants = livestats_api.extract_participants(data)
-            if kc_side is None:
-                kc_side = _detect_kc_side(participants)
-            log.info(
-                "harvester_participants_loaded",
-                game_id=external_game_id,
-                kc_side=kc_side,
-                n=len(participants),
-            )
-
-        for frame in frames:
-            curr_kda = livestats_api.extract_kda(frame)
-            frame_ts = frame.get("rfc460Timestamp", ts)
-            frame_epoch = _parse_epoch_ms(frame_ts)
-
-            if game_start_epoch_ms is None and any(v.get("kills", 0) > 0 or v.get("gold", 0) > 600 for v in curr_kda.values()):
-                # First frame where game is ongoing — not perfect but good enough
-                # to compute game_time_seconds relative to this anchor.
-                game_start_epoch_ms = frame_epoch
-
-            if prev_kda is not None and kc_side is not None:
-                new_kills = _diff_frames(
-                    prev_kda,
-                    curr_kda,
-                    participants,
-                    frame_ts,
-                    db_game_id,
-                    kc_side,
-                    total_kills_seen,
+        if not probe_frames:
+            consecutive_empty += 1
+            if consecutive_empty >= max_consecutive_empty:
+                log.info(
+                    "harvester_stop_empty_run",
+                    game_id=external_game_id,
+                    at=ts,
+                    consecutive_empty=consecutive_empty,
                 )
-                for k in new_kills:
-                    # Stamp game_time_seconds relative to first "active" frame
-                    if game_start_epoch_ms and k.event_epoch:
-                        k.game_time_seconds = max(0, (k.event_epoch - game_start_epoch_ms) // 1000)
-                    kills.append(k)
-                total_kills_seen += len(new_kills)
+                break
+            t += step
+            continue
 
-            prev_kda = curr_kda
+        consecutive_empty = 0
+        hits += 1
+
+        latest = probe_frames[-1]
+        curr_kda = livestats_api.extract_kda(latest)
+        frame_ts = latest.get("rfc460Timestamp", ts)
+
+        if kc_side is not None:
+            new_kills = _diff_frames(
+                prev_kda,
+                curr_kda,
+                participants,
+                frame_ts,
+                db_game_id,
+                kc_side,
+                total_kills_seen,
+            )
+            for k in new_kills:
+                if k.event_epoch:
+                    k.game_time_seconds = max(0, (k.event_epoch - game_start_epoch_ms) // 1000)
+                kills.append(k)
+            total_kills_seen += len(new_kills)
+
+        prev_kda = curr_kda
+        t += step
 
     log.info(
         "kills_extracted",
         external_game_id=external_game_id,
         count=len(kills),
         kc_side=kc_side,
+        probes=probes,
+        hits=hits,
     )
     return kills
+
+
+def _round_down_10s(dt: datetime) -> datetime:
+    return dt.replace(microsecond=0, second=(dt.second // 10) * 10)
 
 
 def _detect_kc_side(participants: dict[str, dict]) -> str | None:
@@ -303,13 +343,12 @@ def _detect_multi_kill(delta_kills: int) -> str | None:
 # ─── Daemon loop ────────────────────────────────────────────────────────────
 
 async def run() -> int:
-    """Scan games in 'vod_found' state and extract kills. Returns kill count."""
+    """Scan games whose kills haven't been extracted yet and fill them in."""
     log.info("harvester_scan_start")
 
-    # Games where kills haven't been extracted yet
     games = safe_select(
         "games",
-        "id, external_id, match_id, kills_extracted, state",
+        "id, external_id, kills_extracted, state",
         kills_extracted=False,
     )
 
@@ -319,23 +358,12 @@ async def run() -> int:
             continue
         if game.get("state") not in ("vod_found", "pending", "completed"):
             continue
-
-        match_id = game.get("match_id")
-        if not match_id:
-            continue
-
-        matches = safe_select("matches", "external_id, scheduled_at", id=match_id)
-        if not matches:
-            continue
-
-        match_start = matches[0].get("scheduled_at") or ""
-        if not match_start:
+        if not game.get("external_id"):
             continue
 
         kills = await extract_kills_from_game(
             external_game_id=game["external_id"],
             db_game_id=game["id"],
-            match_start_iso=match_start,
         )
 
         for k in kills:

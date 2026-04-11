@@ -133,11 +133,10 @@ async def run_for_match(match_external_id: str) -> dict:
         if not (game_ext_id and game_db_id):
             continue
 
-        # Harvester
+        # Harvester — self-anchors via livestats default call, no scheduled_at needed
         kills = await harvester.extract_kills_from_game(
             external_game_id=game_ext_id,
             db_game_id=game_db_id,
-            match_start_iso=scheduled_at or "",
         )
         log.info("pipeline_kills_detected", game=game_ext_id, n=len(kills))
         report["kills_detected"] += len(kills)
