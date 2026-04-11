@@ -141,23 +141,16 @@ export default function HomePage() {
               </span>
             </div>
 
-            {/* Title — no backdrop pad, just multi-layered text shadows
-                for legibility on top of the clip rotator. Looks clean and
-                lets the video breathe around the letters. */}
-            <h1
-              className="font-display font-black tracking-tight leading-[0.82] text-6xl md:text-7xl lg:text-[9rem]"
-              style={{
-                textShadow: [
-                  "0 0 1px rgba(0,0,0,0.9)",
-                  "0 0 2px rgba(0,0,0,0.9)",
-                  "0 2px 4px rgba(0,0,0,0.9)",
-                  "0 4px 12px rgba(0,0,0,0.85)",
-                  "0 8px 30px rgba(0,0,0,0.8)",
-                  "0 0 60px rgba(200,170,110,0.35)",
-                ].join(", "),
-              }}
-            >
-              <span className="text-shimmer">KCKILLS</span>
+            {/* Title — metallic gold shimmer with breathing glow.
+                The .hero-title-glow wrapper uses filter: drop-shadow which
+                respects the actual rendered gradient pixels (unlike
+                text-shadow which creates black silhouettes on the
+                transparent-fill shimmer text). Subtle 4s breathe animates
+                scale + glow intensity. */}
+            <h1 className="font-display font-black tracking-tight leading-[0.82] text-6xl md:text-7xl lg:text-[9rem]">
+              <span className="hero-title-glow">
+                <span className="text-shimmer">KCKILLS</span>
+              </span>
             </h1>
 
             <p
