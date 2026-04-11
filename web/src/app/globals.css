@@ -268,6 +268,46 @@ main > * > *:nth-child(6) { animation-delay: 0.28s; }
 .star-rating .star.active { color: var(--gold); }
 .star-rating .star.inactive { color: var(--text-disabled); }
 
+/* ─── Skeleton Hextech shimmer ───────────────────── */
+/* Applied to loading placeholders. Gold diagonal sheen moving at ~2s,
+   layered with a faint hex-blue pulse. Auto-disables for reduced motion. */
+@keyframes hextechShimmer {
+  0%   { background-position: -150% 0; }
+  100% { background-position: 150% 0; }
+}
+@keyframes hextechPulse {
+  0%, 100% { box-shadow: inset 0 0 0 1px rgba(200,170,110,0.08); }
+  50%      { box-shadow: inset 0 0 0 1px rgba(200,170,110,0.25), 0 0 24px rgba(10,200,185,0.06); }
+}
+.skel-hextech {
+  position: relative;
+  background: linear-gradient(
+    110deg,
+    rgba(15, 29, 54, 0.8) 20%,
+    rgba(200, 170, 110, 0.12) 40%,
+    rgba(240, 230, 210, 0.18) 50%,
+    rgba(200, 170, 110, 0.12) 60%,
+    rgba(15, 29, 54, 0.8) 80%
+  );
+  background-size: 300% 100%;
+  animation: hextechShimmer 2.4s cubic-bezier(0.4, 0, 0.2, 1) infinite, hextechPulse 3s ease-in-out infinite;
+  border: 1px solid rgba(200, 170, 110, 0.12);
+  overflow: hidden;
+}
+.skel-hextech::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 30% 40%, rgba(10, 200, 185, 0.05), transparent 60%);
+  pointer-events: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .skel-hextech {
+    animation: none;
+    background: rgba(15, 29, 54, 0.8);
+  }
+}
+
 /* ─── Multi-kill badges ──────────────────────────── */
 @keyframes shimmer {
   0% { background-position: -200% 0; }
