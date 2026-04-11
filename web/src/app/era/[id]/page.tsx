@@ -487,6 +487,22 @@ export default async function EraPage({ params }: Props) {
           {next && <EraNavCard era={next} direction="next" />}
         </div>
       </section>
+
+      {/* ═══ HIDDEN EASTER EGG ═══ */}
+      {/* Only visible on the 3 Dark Era 2024 eras — tiny blood-red hint
+          leading to the hidden /era/darkness inverted chronicle. Not in the
+          sitemap, noindex, not in the command palette. */}
+      {(era.id === "lec-2024-winter" || era.id === "lec-2024-spring" || era.id === "lec-2024-summer") && (
+        <section className="relative max-w-5xl mx-auto px-6 pb-16 text-center">
+          <Link
+            href="/era/darkness"
+            className="inline-block font-data text-[10px] uppercase tracking-[0.3em] text-[#5a2020] transition-colors hover:text-[#e84057]"
+            aria-label="Le chapitre qu'on prefere oublier"
+          >
+            &laquo; le chapitre qu&rsquo;on pr&eacute;f&egrave;re oublier
+          </Link>
+        </section>
+      )}
     </div>
   );
 }
