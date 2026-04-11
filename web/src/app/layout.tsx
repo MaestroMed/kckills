@@ -151,7 +151,7 @@ export default function RootLayout({
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6">
               {/* Brand */}
               <div>
-                <p className="font-display text-lg font-bold">KC<span className="text-[var(--gold)]">Tok</span></p>
+                <p className="font-display text-lg font-black tracking-[0.1em]">KC<span className="text-[var(--gold)]">KILLS</span></p>
                 <p className="text-xs text-[var(--text-muted)] mt-1">Every kill. Rated. Remembered.</p>
               </div>
               {/* Nav */}

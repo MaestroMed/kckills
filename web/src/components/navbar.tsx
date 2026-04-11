@@ -37,10 +37,10 @@ export function Navbar() {
     <nav className="sticky top-0 z-50 border-b border-[var(--border-gold)] glass">
       <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-2.5">
         {/* Logo */}
-        <Link href="/" className="flex items-center gap-2.5">
+        <Link href="/" className="flex items-center gap-2.5 group">
           <KCKILLSLogo />
-          <span className="font-display text-lg font-bold tracking-wide hidden sm:inline">
-            KC<span className="text-[var(--gold)]">Tok</span>
+          <span className="font-display text-base md:text-lg font-black tracking-[0.1em] hidden sm:inline">
+            KC<span className="text-[var(--gold)]">KILLS</span>
           </span>
         </Link>
 
@@ -144,21 +144,59 @@ export function Navbar() {
 
 function KCKILLSLogo() {
   return (
-    <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-      {/* Hextech-inspired logo */}
-      <rect width="32" height="32" rx="8" fill="url(#logo-gradient)" />
-      {/* L shape */}
-      <path d="M9 8h3v12h6v3H9V8z" fill="#010A13" />
-      {/* T shape */}
-      <path d="M14 8h9v3h-3v12h-3V11h-3V8z" fill="#010A13" />
-      {/* Gold accent line */}
-      <rect x="0" y="0" width="32" height="2" rx="1" fill="#C8AA6E" opacity="0.6" />
+    <svg
+      width="34"
+      height="34"
+      viewBox="0 0 34 34"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      className="transition-transform group-hover:scale-105"
+      aria-label="KCKILLS logo"
+    >
+      {/* Hextech hexagonal mark (crystalline LoL vibe) */}
       <defs>
-        <linearGradient id="logo-gradient" x1="0" y1="0" x2="32" y2="32">
-          <stop stopColor="#C89B3C" />
+        <linearGradient id="kckills-logo-gradient" x1="0" y1="0" x2="34" y2="34">
+          <stop stopColor="#F0E6D2" />
+          <stop offset="0.5" stopColor="#C8AA6E" />
           <stop offset="1" stopColor="#785A28" />
         </linearGradient>
+        <filter id="kckills-glow" x="-50%" y="-50%" width="200%" height="200%">
+          <feGaussianBlur stdDeviation="1" result="blur" />
+          <feMerge>
+            <feMergeNode in="blur" />
+            <feMergeNode in="SourceGraphic" />
+          </feMerge>
+        </filter>
       </defs>
+
+      {/* Hexagonal outer frame */}
+      <path
+        d="M17 2 L30 9 L30 25 L17 32 L4 25 L4 9 Z"
+        fill="url(#kckills-logo-gradient)"
+      />
+      {/* Inner dark cutout */}
+      <path
+        d="M17 5 L27 10.5 L27 23.5 L17 29 L7 23.5 L7 10.5 Z"
+        fill="#010A13"
+      />
+
+      {/* KC monogram — bold, crisp */}
+      <g filter="url(#kckills-glow)">
+        {/* K */}
+        <path
+          d="M10 10 L12.5 10 L12.5 15.5 L16 10 L18.8 10 L14.6 16 L18.8 24 L16 24 L12.7 18 L12.5 18.3 L12.5 24 L10 24 Z"
+          fill="#C8AA6E"
+        />
+        {/* C */}
+        <path
+          d="M24 12 Q24 10 22 10 L20.5 10 Q18.5 10 18.5 12 L18.5 22 Q18.5 24 20.5 24 L22 24 Q24 24 24 22 L24 20.5 L22 20.5 L22 21.5 Q22 22 21.5 22 L21 22 Q20.5 22 20.5 21.5 L20.5 12.5 Q20.5 12 21 12 L21.5 12 Q22 12 22 12.5 L22 13.5 L24 13.5 Z"
+          fill="#C8AA6E"
+        />
+      </g>
+
+      {/* Gold accent corner */}
+      <circle cx="30" cy="9" r="1.5" fill="#F0E6D2" />
+      <circle cx="4" cy="25" r="1.5" fill="#F0E6D2" />
     </svg>
   );
 }

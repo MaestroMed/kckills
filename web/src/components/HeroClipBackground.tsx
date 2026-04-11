@@ -138,9 +138,9 @@ export function HeroClipBackground({ clips, posterSrc = "/images/hero-bg.jpg" }:
         </motion.div>
       </AnimatePresence>
 
-      {/* Progress pips bottom-right */}
+      {/* Progress pips — top-right, discrete */}
       {clips.length > 1 && (
-        <div className="absolute bottom-4 right-4 md:bottom-8 md:right-8 z-20 flex gap-1.5 pointer-events-none">
+        <div className="absolute top-16 right-4 md:top-20 md:right-12 z-20 flex gap-1.5 pointer-events-none">
           {clips.map((_, i) => (
             <span
               key={i}

@@ -17,11 +17,15 @@ class LoLTokScheduler:
         "youtube_search": 2.0,
         "ytdlp": 10.0,
         "discord": 2.5,            # 30/60s
-        "lolesports_idle": 300.0,  # 5 min
-        "lolesports_live": 30.0,
-        "livestats": 10.0,
+        # lolesports has no published rate limit; 2s is courteous for scan
+        # loops that paginate the full schedule (7 pages). Main throttle is
+        # the daemon's poll interval, not per-call delay.
+        "lolesports_idle": 2.0,
+        "lolesports_live": 10.0,
+        "livestats": 2.0,          # game frames are lightweight and we
+                                    # scan ~15 windows per BO5 game
         "ffmpeg_cooldown": 5.0,
-        "supabase": 0.1,           # generous
+        "supabase": 0.1,
         "r2": 0.5,
     }
 

@@ -10,7 +10,9 @@ import { AnimatedNumber } from "@/components/AnimatedNumber";
 import { MacronEasterEgg } from "@/components/MacronEasterEgg";
 import { HeroClipBackground } from "@/components/HeroClipBackground";
 
-/** Iconic clips that play in the hero background, one after the other */
+/** Iconic clips that play in the hero background, one after the other.
+ *  Mixed variety: highlights, pentakills, voicecomms, reactions, comebacks.
+ */
 const HERO_CLIPS = [
   {
     videoId: "bqBVNEm52A0",
@@ -20,27 +22,57 @@ const HERO_CLIPS = [
   },
   {
     videoId: "AelCWTFNOZQ",
-    title: "« WE ARE THE CHAMPIONS ! » — KC LEC VoiceComms",
+    title: "« WE ARE THE CHAMPIONS ! » — KC VoiceComms",
     context: "Le Sacre · Backstage",
-    durationMs: 18000,
-  },
-  {
-    videoId: "9aM1SIsGWDk",
-    title: "KC vs G2 — ALL GAMES HIGHLIGHTS",
-    context: "LEC Versus 2026 · Final",
-    durationMs: 18000,
+    durationMs: 15000,
   },
   {
     videoId: "j9JlExfa9mY",
     title: "REKKLES PENTAKILL JINX vs GameWard",
     context: "L'Ere Rekkles · LFL 2022",
+    durationMs: 14000,
+  },
+  {
+    videoId: "9aM1SIsGWDk",
+    title: "KC vs G2 — ALL GAMES HIGHLIGHTS",
+    context: "LEC Versus 2026 · Final",
     durationMs: 16000,
   },
   {
-    videoId: "M7xaenPvPU4",
-    title: "KC vs Vitality — Week 1 Day 1",
-    context: "LEC Spring 2026",
+    videoId: "VXdc0Q2HdCg",
+    title: "Le discours de Kameto apres la finale",
+    context: "Le Sacre · Post-match",
+    durationMs: 18000,
+  },
+  {
+    videoId: "pMSFp7wku5Y",
+    title: "KC vs G2 Game 3 — Vladi Viktor 10/1/7",
+    context: "Le Sacre · Game 3 MVP",
+    durationMs: 18000,
+  },
+  {
+    videoId: "42lv5jASq9I",
+    title: "KC vs G2 ALL GAMES — LEC 2026 Grand Final",
+    context: "Le Renouveau · Versus 2026",
     durationMs: 16000,
+  },
+  {
+    videoId: "8AJP6HleZh8",
+    title: "KC vs CFO — Un match dans la legende",
+    context: "First Stand · Seoul 2025",
+    durationMs: 18000,
+  },
+  {
+    videoId: "M7xaenPvPU4",
+    title: "KC vs Vitality — LEC Spring 2026 Week 1",
+    context: "Spring 2026 · En cours",
+    durationMs: 14000,
+  },
+  {
+    videoId: "EfN64vP2n2o",
+    title: "Top 10 Caliste Plays — Best of 2025",
+    context: "Rookie of the Year 2025",
+    durationMs: 18000,
   },
 ];
 
@@ -62,97 +94,106 @@ export default function HomePage() {
       <AudioPlayer />
 
       {/* ═══ HERO — Full viewport with auto-playing clip rotator ═══════ */}
-      <section className="relative min-h-[85vh] flex items-center justify-center overflow-hidden">
+      <section className="relative min-h-[100vh] md:min-h-[92vh] flex items-end md:items-center overflow-hidden">
         <HeroClipBackground clips={HERO_CLIPS} posterSrc="/images/hero-bg.jpg" />
-        {/* Bottom fade to bg (lets the text breathe + fades into next section) */}
-        <div className="absolute inset-0 bg-gradient-to-b from-black/30 via-black/55 to-[var(--bg-primary)] pointer-events-none" />
-        {/* Subtle side vignettes for text legibility */}
-        <div className="absolute inset-0 bg-gradient-to-r from-black/60 via-transparent to-black/60 pointer-events-none" />
-        {/* Gold radial glow behind the title */}
-        <div
-          className="absolute inset-0 pointer-events-none"
-          style={{
-            background:
-              "radial-gradient(ellipse 50% 40% at 50% 50%, rgba(200,170,110,0.15) 0%, transparent 60%)",
-          }}
-        />
 
-        <div className="relative z-10 text-center px-4 w-full max-w-5xl">
-          <div className="flex items-center justify-center gap-3 mb-6">
-            <MacronEasterEgg />
-            <span className="rounded-full border border-[var(--gold)]/30 bg-black/40 backdrop-blur-sm px-5 py-2 text-xs font-medium text-[var(--gold)]">
-              Karmine Corp &middot; LEC
-            </span>
+        {/* Soft gradients — much lighter on desktop to let the video breathe */}
+        <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-[var(--bg-primary)] pointer-events-none" />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent pointer-events-none" />
+        <div className="absolute inset-0 bg-gradient-to-r from-black/40 via-transparent to-black/40 pointer-events-none hidden md:block" />
+
+        {/* ─── Left block: title + tagline + CTAs (desktop left-aligned) ─── */}
+        <div className="relative z-10 w-full px-6 md:px-12 lg:px-20 pb-24 md:pb-0">
+          <div className="max-w-3xl md:text-left text-center mx-auto md:mx-0">
+            {/* Tag row */}
+            <div className="inline-flex items-center gap-3 mb-5">
+              <MacronEasterEgg />
+              <span className="rounded-full border border-[var(--gold)]/30 bg-black/50 backdrop-blur-sm px-4 py-1.5 text-[11px] font-bold tracking-[0.2em] uppercase text-[var(--gold)]">
+                Karmine Corp &middot; LEC
+              </span>
+            </div>
+
+            {/* Massive title — smaller on desktop to leave space for video */}
+            <h1
+              className="font-display font-black tracking-tight leading-[0.85] text-6xl md:text-7xl lg:text-8xl"
+              style={{ textShadow: "0 4px 30px rgba(0,0,0,0.9), 0 0 60px rgba(0,0,0,0.5)" }}
+            >
+              <span className="text-shimmer">KCKILLS</span>
+            </h1>
+
+            <p
+              className="mt-4 max-w-md text-base md:text-lg text-white/85 font-medium md:mx-0 mx-auto"
+              style={{ textShadow: "0 2px 12px rgba(0,0,0,0.9)" }}
+            >
+              Every kill. Rated. Remembered.
+            </p>
+
+            {/* CTAs — more compact */}
+            <div className="mt-7 flex items-center gap-3 md:justify-start justify-center flex-wrap">
+              <Link
+                href="/scroll"
+                className="rounded-xl bg-[var(--gold)] px-8 py-4 font-display text-sm font-black uppercase tracking-widest text-[var(--bg-primary)] transition-all hover:bg-[var(--gold-bright)] hover:shadow-2xl hover:shadow-[var(--gold)]/30 hover:scale-[1.03] active:scale-95"
+              >
+                Scroll les kills
+              </Link>
+              <Link
+                href="/matches"
+                className="rounded-xl border border-[var(--border-gold)] bg-black/30 backdrop-blur-sm px-8 py-4 font-display text-sm font-bold uppercase tracking-widest text-[var(--text-secondary)] transition-all hover:border-[var(--gold)]/50 hover:text-[var(--gold)]"
+              >
+                Matchs
+              </Link>
+            </div>
           </div>
+        </div>
 
-          <h1
-            className="font-display text-7xl font-black tracking-tight md:text-9xl"
-            style={{ textShadow: "0 4px 30px rgba(0,0,0,0.9), 0 0 60px rgba(0,0,0,0.5)" }}
-          >
-            <span className="text-shimmer">KCKILLS</span>
-          </h1>
-          <p
-            className="mx-auto mt-4 max-w-md text-lg text-white/85 font-medium"
-            style={{ textShadow: "0 2px 12px rgba(0,0,0,0.9)" }}
-          >
-            Every kill. Rated. Remembered.
-          </p>
-
-          {!isEmpty && (
-            <div className="mt-10 inline-flex flex-col items-center gap-3 rounded-2xl bg-black/50 backdrop-blur-md border border-[var(--gold)]/20 px-8 py-6">
-              <p className="font-data text-[10px] uppercase tracking-[0.3em] text-[var(--gold)]/60">
+        {/* ─── Floating stats card — bottom-right on desktop, below on mobile ─── */}
+        {!isEmpty && (
+          <div className="absolute bottom-4 right-4 md:bottom-8 md:right-12 z-10 max-w-[calc(100vw-2rem)]">
+            <div className="rounded-xl bg-black/55 backdrop-blur-md border border-[var(--gold)]/20 px-5 py-3.5 md:px-6 md:py-4">
+              <p className="font-data text-[9px] uppercase tracking-[0.28em] text-[var(--gold)]/60 mb-1.5">
                 Carri&egrave;re LEC &middot; 2024 &rarr; 2026
               </p>
-              <div className="inline-flex items-baseline gap-3">
+              <div className="flex items-baseline gap-2 mb-2">
                 <AnimatedNumber
                   value={stats.totalKills}
                   duration={2}
-                  className="font-data text-6xl font-black text-[var(--gold)] md:text-7xl tabular-nums leading-none"
+                  className="font-data text-4xl md:text-5xl font-black text-[var(--gold)] tabular-nums leading-none"
                 />
-                <span className="text-base text-white/60 uppercase tracking-widest font-medium">kills</span>
+                <span className="text-xs text-white/50 uppercase tracking-widest font-semibold">kills</span>
               </div>
-              <div className="flex items-center gap-5 text-sm font-data mt-1">
-                <span className="flex items-baseline gap-1.5">
-                  <AnimatedNumber value={stats.wins} duration={1.6} className="text-[var(--green)] font-bold text-xl" />
-                  <span className="text-[10px] uppercase tracking-wider text-white/40">Victoires</span>
+              <div className="flex items-center gap-3 text-xs font-data">
+                <span className="flex items-baseline gap-1">
+                  <AnimatedNumber value={stats.wins} duration={1.6} className="text-[var(--green)] font-bold text-base" />
+                  <span className="text-[9px] uppercase tracking-wider text-white/40">W</span>
                 </span>
                 <span className="text-white/15">&bull;</span>
-                <span className="flex items-baseline gap-1.5">
-                  <AnimatedNumber value={stats.losses} duration={1.6} className="text-[var(--red)] font-bold text-xl" />
-                  <span className="text-[10px] uppercase tracking-wider text-white/40">D&eacute;faites</span>
+                <span className="flex items-baseline gap-1">
+                  <AnimatedNumber value={stats.losses} duration={1.6} className="text-[var(--red)] font-bold text-base" />
+                  <span className="text-[9px] uppercase tracking-wider text-white/40">L</span>
                 </span>
                 <span className="text-white/15">&bull;</span>
-                <span className="flex items-baseline gap-1.5">
-                  <AnimatedNumber value={stats.totalGames} duration={1.6} className="font-bold text-xl text-white" />
-                  <span className="text-[10px] uppercase tracking-wider text-white/40">Games</span>
+                <span className="flex items-baseline gap-1">
+                  <AnimatedNumber value={stats.totalGames} duration={1.6} className="font-bold text-base text-white" />
+                  <span className="text-[9px] uppercase tracking-wider text-white/40">G</span>
                 </span>
                 <span className="text-white/15">&bull;</span>
-                <span className="flex items-baseline gap-1.5">
+                <span className="flex items-baseline gap-1">
                   <AnimatedNumber
                     value={(stats.wins / (stats.wins + stats.losses)) * 100}
                     duration={1.8}
                     format="percent1"
-                    className="text-[var(--gold)] font-bold text-xl"
+                    className="text-[var(--gold)] font-bold text-base"
                   />
-                  <span className="text-[10px] uppercase tracking-wider text-white/40">Winrate</span>
+                  <span className="text-[9px] uppercase tracking-wider text-white/40">WR</span>
                 </span>
               </div>
             </div>
-          )}
-
-          <div className="mt-10 flex items-center justify-center gap-4">
-            <Link href="/scroll" className="rounded-xl bg-[var(--gold)] px-10 py-5 text-lg font-bold text-[var(--bg-primary)] transition-all hover:bg-[var(--gold-bright)] hover:shadow-2xl hover:shadow-[var(--gold)]/25 hover:scale-105 active:scale-95">
-              Scroll les kills
-            </Link>
-            <Link href="/matches" className="rounded-xl border border-[var(--border-gold)] px-10 py-5 text-lg font-medium text-[var(--text-secondary)] transition-all hover:border-[var(--gold)]/40 hover:text-[var(--gold)]">
-              Matchs
-            </Link>
           </div>
-        </div>
+        )}
 
-        {/* Scroll indicator */}
-        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 animate-bounce">
-          <svg className="h-6 w-6 text-[var(--gold)]/40" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        {/* Scroll indicator — tiny, discrete */}
+        <div className="absolute bottom-3 left-1/2 -translate-x-1/2 animate-bounce z-10">
+          <svg className="h-5 w-5 text-white/30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
           </svg>
         </div>
