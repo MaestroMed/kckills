@@ -45,8 +45,8 @@ export function HomeClipsShowcase() {
   if (clips.length === 0) return null;
 
   return (
-    <section className="relative overflow-hidden py-16">
-      <div className="max-w-7xl mx-auto px-4">
+    <section id="highlights" className="relative overflow-hidden py-16">
+      <div className="max-w-[1920px] mx-auto px-6 md:px-10 lg:px-16">
         {/* Section header */}
         <div className="flex items-center gap-3 mb-3">
           <div className="h-px flex-1 bg-gradient-to-r from-transparent via-[var(--gold)]/20 to-transparent" />
@@ -59,8 +59,8 @@ export function HomeClipsShowcase() {
           {clips.length} clips officiels &middot; cliquez pour regarder
         </p>
 
-        {/* Clips grid */}
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+        {/* Clips grid — exploits full width up to 6 columns on ultrawide */}
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
           {clips.map((clip, i) => (
             <ClipThumbnail
               key={`${clip.era.id}-${clip.videoId}-${i}`}

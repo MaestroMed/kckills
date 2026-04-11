@@ -68,7 +68,7 @@ export function HeroClipBackground({ clips, posterSrc = "/images/hero-bg.jpg" }:
         src={posterSrc}
         alt=""
         className="absolute inset-0 w-full h-full object-cover"
-        style={{ opacity: 0.85 }}
+        style={{ opacity: 1 }}
       />
     );
   }
@@ -77,22 +77,26 @@ export function HeroClipBackground({ clips, posterSrc = "/images/hero-bg.jpg" }:
 
   return (
     <>
-      {/* Poster always rendered underneath for instant paint */}
+      {/* Poster stays at full opacity underneath the iframe so the Sacre
+          celebration photo is always visible through the video overlay.
+          The video rotator is layered on top at 0.92 opacity. */}
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         src={posterSrc}
         alt=""
         className="absolute inset-0 w-full h-full object-cover"
-        style={{ opacity: 0.85 }}
+        style={{ opacity: 1 }}
       />
 
-      {/* Stacked iframes crossfading — full opacity so the background feels alive */}
+      {/* Stacked iframes crossfading — tuned so the clip feels alive but the
+          poster celebration photo underneath still bleeds through around
+          the edges and during transitions. */}
       <AnimatePresence mode="sync">
         <motion.div
           key={`${current.videoId}-${index}`}
           className="absolute inset-0 overflow-hidden pointer-events-none"
           initial={{ opacity: 0, scale: 1.02 }}
-          animate={{ opacity: 0.92, scale: 1 }}
+          animate={{ opacity: 0.85, scale: 1 }}
           exit={{ opacity: 0, scale: 1.02 }}
           transition={{ duration: 1.4, ease: [0.16, 1, 0.3, 1] }}
         >

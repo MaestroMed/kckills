@@ -11,68 +11,80 @@ import { MacronEasterEgg } from "@/components/MacronEasterEgg";
 import { HeroClipBackground } from "@/components/HeroClipBackground";
 
 /** Iconic clips that play in the hero background, one after the other.
- *  Mixed variety: highlights, pentakills, voicecomms, reactions, comebacks.
+ *
+ *  CURATED for maximum impact — only the best outplays and highest-emotion
+ *  moments make the cut. Ordered to tell a story: highlights first, then
+ *  reactions, then individual plays.
+ *
+ *  Minimum duration is 22s per clip so short clips (like the 34s Rekkles
+ *  pentakill) play through their entirety before rotating.
+ *
+ *  To add more clips, paste the full YouTube watch URL in the list — the
+ *  extractYouTubeId helper handles it. Curation is manual on purpose so
+ *  we never show a random clip on the hero.
+ *
+ *  TODO (user request): admin backoffice to edit this list without a deploy
  */
 const HERO_CLIPS = [
+  // --- Team highlights (cinematic ALL GAMES reels) ---
   {
     videoId: "bqBVNEm52A0",
     title: "KC 3-0 G2 — ALL GAMES HIGHLIGHTS",
     context: "Le Sacre · Winter 2025",
-    durationMs: 18000,
+    durationMs: 25000,
+    start: 20, // skip LEC intro
   },
   {
-    videoId: "AelCWTFNOZQ",
-    title: "« WE ARE THE CHAMPIONS ! » — KC VoiceComms",
-    context: "Le Sacre · Backstage",
-    durationMs: 15000,
+    videoId: "42lv5jASq9I",
+    title: "KC vs G2 — LEC 2026 Grand Final highlights",
+    context: "Le Renouveau · Versus 2026",
+    durationMs: 25000,
+    start: 30,
+  },
+  // --- Individual outplays (the real killers) ---
+  {
+    videoId: "pMSFp7wku5Y",
+    title: "Vladi Viktor 10/1/7 — Game 3 MVP run",
+    context: "Le Sacre · Vladi MVP",
+    durationMs: 30000,
+    start: 15,
   },
   {
     videoId: "j9JlExfa9mY",
     title: "REKKLES PENTAKILL JINX vs GameWard",
     context: "L'Ere Rekkles · LFL 2022",
-    durationMs: 14000,
+    durationMs: 34000, // clip is only 36s total, play nearly full
+    start: 3,
   },
   {
-    videoId: "9aM1SIsGWDk",
-    title: "KC vs G2 — ALL GAMES HIGHLIGHTS",
-    context: "LEC Versus 2026 · Final",
-    durationMs: 16000,
+    videoId: "EfN64vP2n2o",
+    title: "Top 10 Caliste Plays — Best of 2025",
+    context: "Caliste · Rookie of the Year",
+    durationMs: 28000,
+    start: 5,
+  },
+  // --- Emotional moments / backstage ---
+  {
+    videoId: "AelCWTFNOZQ",
+    title: "« WE ARE THE CHAMPIONS ! » — KC VoiceComms",
+    context: "Le Sacre · Backstage",
+    durationMs: 25000,
+    start: 5,
   },
   {
     videoId: "VXdc0Q2HdCg",
     title: "Le discours de Kameto apres la finale",
     context: "Le Sacre · Post-match",
-    durationMs: 18000,
+    durationMs: 25000,
+    start: 10,
   },
-  {
-    videoId: "pMSFp7wku5Y",
-    title: "KC vs G2 Game 3 — Vladi Viktor 10/1/7",
-    context: "Le Sacre · Game 3 MVP",
-    durationMs: 18000,
-  },
-  {
-    videoId: "42lv5jASq9I",
-    title: "KC vs G2 ALL GAMES — LEC 2026 Grand Final",
-    context: "Le Renouveau · Versus 2026",
-    durationMs: 16000,
-  },
+  // --- Comebacks ---
   {
     videoId: "8AJP6HleZh8",
     title: "KC vs CFO — Un match dans la legende",
     context: "First Stand · Seoul 2025",
-    durationMs: 18000,
-  },
-  {
-    videoId: "M7xaenPvPU4",
-    title: "KC vs Vitality — LEC Spring 2026 Week 1",
-    context: "Spring 2026 · En cours",
-    durationMs: 14000,
-  },
-  {
-    videoId: "EfN64vP2n2o",
-    title: "Top 10 Caliste Plays — Best of 2025",
-    context: "Rookie of the Year 2025",
-    durationMs: 18000,
+    durationMs: 25000,
+    start: 60,
   },
 ];
 
@@ -129,12 +141,25 @@ export default function HomePage() {
               </span>
             </div>
 
-            <h1
-              className="font-display font-black tracking-tight leading-[0.82] text-6xl md:text-7xl lg:text-[9rem]"
-              style={{ textShadow: "0 4px 30px rgba(0,0,0,0.9), 0 0 60px rgba(0,0,0,0.5)" }}
-            >
-              <span className="text-shimmer">KCKILLS</span>
-            </h1>
+            {/* Title with a subtle dark backdrop blur pad for legibility
+                on top of the clip rotator. Keeps the video visible but
+                guarantees contrast for the wordmark. */}
+            <div className="relative inline-block">
+              <div
+                className="absolute -inset-x-6 -inset-y-3 rounded-2xl bg-black/35 backdrop-blur-[2px] -z-10"
+                aria-hidden="true"
+              />
+              <h1
+                className="relative font-display font-black tracking-tight leading-[0.82] text-6xl md:text-7xl lg:text-[9rem]"
+                style={{
+                  textShadow:
+                    "0 4px 40px rgba(0,0,0,1), 0 2px 20px rgba(0,0,0,0.95), 0 0 80px rgba(200,170,110,0.3)",
+                  WebkitTextStroke: "1px rgba(0,0,0,0.3)",
+                }}
+              >
+                <span className="text-shimmer">KCKILLS</span>
+              </h1>
+            </div>
 
             <p
               className="mt-5 max-w-md text-base md:text-lg lg:text-xl text-white/85 font-medium"

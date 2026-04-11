@@ -243,7 +243,11 @@ export function KCTimeline() {
                 scale: isHovered ? 1.08 : anyHovered ? 0.94 : 1,
                 y: isHovered ? -18 : 0,
                 rotate: isHovered ? 0 : rotation,
-                filter: isDimmed ? "grayscale(80%) brightness(0.4) blur(1px)" : "none",
+                // NOTE: removed `filter: blur(1px)` from the dimmed state —
+                // CSS blur is GPU-expensive and with 16 cards animating in
+                // parallel on hover changes, it was causing a visible freeze
+                // even on fast PCs. Using opacity instead is virtually free.
+                opacity: isDimmed ? 0.35 : 1,
                 zIndex: hoverZ,
               }}
               transition={{ type: "spring", stiffness: 220, damping: 22 }}
@@ -257,6 +261,10 @@ export function KCTimeline() {
                 height: "460px",
                 marginLeft: i === 0 ? 0 : `${baseOffset}px`,
                 transformOrigin: "center center",
+                // GPU hint so the browser upgrades the card to its own compositing
+                // layer — dramatically cheaper than re-painting on every frame.
+                willChange: "transform, opacity",
+                backfaceVisibility: "hidden",
               }}
             >
               {era.image && (
