@@ -93,43 +93,45 @@ export default function HomePage() {
     <div className="-mx-4 -mt-6">
       <AudioPlayer />
 
-      {/* ═══ HERO — Full viewport with auto-playing clip rotator ═══════ */}
-      <section className="relative min-h-[100vh] md:min-h-[92vh] flex items-end md:items-center overflow-hidden">
+      {/* ═══ HERO — Full viewport 2-col layout with clip rotator ═══════ */}
+      <section className="relative min-h-[100vh] md:min-h-[92vh] overflow-hidden">
         <HeroClipBackground clips={HERO_CLIPS} posterSrc="/images/hero-bg.jpg" />
 
-        {/* Soft gradients — much lighter on desktop to let the video breathe */}
+        {/* Gradients tuned to keep the video visible while still giving text
+            legibility on both sides */}
         <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-[var(--bg-primary)] pointer-events-none" />
-        <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent pointer-events-none" />
-        <div className="absolute inset-0 bg-gradient-to-r from-black/40 via-transparent to-black/40 pointer-events-none hidden md:block" />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent pointer-events-none" />
+        <div className="absolute inset-0 bg-gradient-to-r from-black/65 via-transparent to-black/55 pointer-events-none hidden md:block" />
 
-        {/* ─── Left block: title + tagline + CTAs (desktop left-aligned) ─── */}
-        <div className="relative z-10 w-full px-6 md:px-12 lg:px-20 pb-24 md:pb-0">
-          <div className="max-w-3xl md:text-left text-center mx-auto md:mx-0">
+        {/* ─── Full-width 2-column grid on desktop ─── */}
+        <div className="relative z-10 min-h-[100vh] md:min-h-[92vh] max-w-[1920px] mx-auto px-6 md:px-10 lg:px-16 py-24 md:py-0 flex flex-col md:grid md:grid-cols-12 md:items-center gap-8">
+
+          {/* ─── LEFT : title + tagline + CTAs ─── */}
+          <div className="md:col-span-7 lg:col-span-6 flex flex-col items-center md:items-start text-center md:text-left">
             {/* Tag row */}
-            <div className="inline-flex items-center gap-3 mb-5">
+            <div className="inline-flex items-center gap-3 mb-6">
               <MacronEasterEgg />
               <span className="rounded-full border border-[var(--gold)]/30 bg-black/50 backdrop-blur-sm px-4 py-1.5 text-[11px] font-bold tracking-[0.2em] uppercase text-[var(--gold)]">
                 Karmine Corp &middot; LEC
               </span>
             </div>
 
-            {/* Massive title — smaller on desktop to leave space for video */}
             <h1
-              className="font-display font-black tracking-tight leading-[0.85] text-6xl md:text-7xl lg:text-8xl"
+              className="font-display font-black tracking-tight leading-[0.82] text-6xl md:text-7xl lg:text-[9rem]"
               style={{ textShadow: "0 4px 30px rgba(0,0,0,0.9), 0 0 60px rgba(0,0,0,0.5)" }}
             >
               <span className="text-shimmer">KCKILLS</span>
             </h1>
 
             <p
-              className="mt-4 max-w-md text-base md:text-lg text-white/85 font-medium md:mx-0 mx-auto"
+              className="mt-5 max-w-md text-base md:text-lg lg:text-xl text-white/85 font-medium"
               style={{ textShadow: "0 2px 12px rgba(0,0,0,0.9)" }}
             >
               Every kill. Rated. Remembered.
             </p>
 
-            {/* CTAs — more compact */}
-            <div className="mt-7 flex items-center gap-3 md:justify-start justify-center flex-wrap">
+            {/* CTAs */}
+            <div className="mt-8 flex items-center gap-3 md:justify-start justify-center flex-wrap">
               <Link
                 href="/scroll"
                 className="rounded-xl bg-[var(--gold)] px-8 py-4 font-display text-sm font-black uppercase tracking-widest text-[var(--bg-primary)] transition-all hover:bg-[var(--gold-bright)] hover:shadow-2xl hover:shadow-[var(--gold)]/30 hover:scale-[1.03] active:scale-95"
@@ -142,57 +144,193 @@ export default function HomePage() {
               >
                 Matchs
               </Link>
+              <Link
+                href="/#highlights"
+                className="rounded-xl border border-white/15 bg-black/20 backdrop-blur-sm px-6 py-4 font-display text-sm font-bold uppercase tracking-widest text-white/70 transition-all hover:border-white/40 hover:text-white"
+              >
+                <span className="inline-flex items-center gap-2">
+                  <span className="text-red-500">&#9654;</span>
+                  Clips YouTube
+                </span>
+              </Link>
             </div>
+
+            {/* Small roster pill row — shows active LEC 2026 roster */}
+            {roster.length > 0 && (
+              <div className="mt-10 hidden md:flex items-center gap-3">
+                <span className="font-data text-[9px] uppercase tracking-[0.25em] text-white/40">
+                  Roster Spring 2026
+                </span>
+                <div className="flex -space-x-2">
+                  {roster.slice(0, 5).map((p) => {
+                    const photo = PLAYER_PHOTOS[p.name];
+                    return photo ? (
+                      <Link
+                        key={p.name}
+                        href={`/player/${encodeURIComponent(p.name)}`}
+                        className="relative h-9 w-9 rounded-full border-2 border-[var(--gold)]/40 bg-[var(--bg-surface)] overflow-hidden hover:scale-110 hover:z-10 hover:border-[var(--gold)] transition-all"
+                        title={p.name}
+                      >
+                        <Image
+                          src={photo}
+                          alt={p.name}
+                          width={36}
+                          height={36}
+                          className="object-cover object-top"
+                        />
+                      </Link>
+                    ) : null;
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* ─── RIGHT : vertical stack of info cards ─── */}
+          <div className="md:col-span-5 lg:col-span-6 flex flex-col gap-3 md:max-w-sm md:ml-auto">
+            {/* Next / last match card */}
+            {allMatches.length > 0 && (() => {
+              const lastMatch = allMatches[0];
+              const oppLogo = TEAM_LOGOS[lastMatch.opponent.code];
+              const date = new Date(lastMatch.date);
+              return (
+                <Link
+                  href={`/match/${lastMatch.id}`}
+                  className="group rounded-xl bg-black/55 backdrop-blur-md border border-[var(--gold)]/20 px-5 py-4 transition-all hover:border-[var(--gold)]/50 hover:bg-black/70"
+                >
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="font-data text-[9px] uppercase tracking-[0.25em] text-[var(--gold)]/60">
+                      Dernier match
+                    </span>
+                    <span className="text-[9px] text-white/40 font-data">
+                      {date.toLocaleDateString("fr-FR", { day: "numeric", month: "short" })}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3 flex-1 min-w-0">
+                      <Image src={KC_LOGO} alt="KC" width={32} height={32} className="rounded-md flex-shrink-0" />
+                      <div className="font-data text-2xl font-black tabular-nums">
+                        <span className={lastMatch.kc_won ? "text-[var(--green)]" : "text-white/50"}>
+                          {lastMatch.kc_score}
+                        </span>
+                        <span className="text-white/20 mx-1.5">-</span>
+                        <span className={!lastMatch.kc_won ? "text-[var(--red)]" : "text-white/50"}>
+                          {lastMatch.opp_score}
+                        </span>
+                      </div>
+                      {oppLogo ? (
+                        <Image src={oppLogo} alt={lastMatch.opponent.code} width={32} height={32} className="rounded-md flex-shrink-0" />
+                      ) : (
+                        <div className="flex h-8 w-8 items-center justify-center rounded-md bg-[var(--bg-elevated)] text-xs font-bold flex-shrink-0">
+                          {lastMatch.opponent.code}
+                        </div>
+                      )}
+                    </div>
+                    <span
+                      className={`ml-3 rounded-md px-2 py-0.5 text-[9px] font-black uppercase tracking-widest border ${
+                        lastMatch.kc_won
+                          ? "bg-[var(--green)]/15 border-[var(--green)]/40 text-[var(--green)]"
+                          : "bg-[var(--red)]/15 border-[var(--red)]/40 text-[var(--red)]"
+                      }`}
+                    >
+                      {lastMatch.kc_won ? "W" : "L"}
+                    </span>
+                  </div>
+                  <p className="mt-2 text-[10px] text-white/40 uppercase tracking-wider">
+                    {lastMatch.stage} &middot; Bo{lastMatch.best_of} &middot; Voir le d&eacute;tail &rarr;
+                  </p>
+                </Link>
+              );
+            })()}
+
+            {/* Career stats card */}
+            {!isEmpty && (
+              <div className="rounded-xl bg-black/55 backdrop-blur-md border border-[var(--gold)]/20 px-5 py-4">
+                <p className="font-data text-[9px] uppercase tracking-[0.25em] text-[var(--gold)]/60 mb-2">
+                  Carri&egrave;re LEC &middot; 2024 &rarr; 2026
+                </p>
+                <div className="flex items-baseline gap-2 mb-2">
+                  <AnimatedNumber
+                    value={stats.totalKills}
+                    duration={2}
+                    className="font-data text-5xl lg:text-6xl font-black text-[var(--gold)] tabular-nums leading-none"
+                  />
+                  <span className="text-xs text-white/50 uppercase tracking-widest font-semibold">kills</span>
+                </div>
+                <div className="flex items-center gap-3 text-xs font-data">
+                  <span className="flex items-baseline gap-1">
+                    <AnimatedNumber value={stats.wins} duration={1.6} className="text-[var(--green)] font-bold text-lg" />
+                    <span className="text-[9px] uppercase tracking-wider text-white/40">W</span>
+                  </span>
+                  <span className="text-white/15">&bull;</span>
+                  <span className="flex items-baseline gap-1">
+                    <AnimatedNumber value={stats.losses} duration={1.6} className="text-[var(--red)] font-bold text-lg" />
+                    <span className="text-[9px] uppercase tracking-wider text-white/40">L</span>
+                  </span>
+                  <span className="text-white/15">&bull;</span>
+                  <span className="flex items-baseline gap-1">
+                    <AnimatedNumber value={stats.totalGames} duration={1.6} className="font-bold text-lg text-white" />
+                    <span className="text-[9px] uppercase tracking-wider text-white/40">G</span>
+                  </span>
+                  <span className="text-white/15">&bull;</span>
+                  <span className="flex items-baseline gap-1">
+                    <AnimatedNumber
+                      value={(stats.wins / (stats.wins + stats.losses)) * 100}
+                      duration={1.8}
+                      format="percent1"
+                      className="text-[var(--gold)] font-bold text-lg"
+                    />
+                    <span className="text-[9px] uppercase tracking-wider text-white/40">WR</span>
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {/* Top scorer of current split */}
+            {topPlayer && (
+              <Link
+                href={`/player/${encodeURIComponent(topPlayer.name)}`}
+                className="group rounded-xl bg-black/55 backdrop-blur-md border border-[var(--gold)]/20 px-5 py-4 transition-all hover:border-[var(--gold)]/50 hover:bg-black/70"
+              >
+                <p className="font-data text-[9px] uppercase tracking-[0.25em] text-[var(--gold)]/60 mb-2">
+                  Top scorer carri&egrave;re
+                </p>
+                <div className="flex items-center gap-3">
+                  {PLAYER_PHOTOS[topPlayer.name] ? (
+                    <Image
+                      src={PLAYER_PHOTOS[topPlayer.name]}
+                      alt={topPlayer.name}
+                      width={44}
+                      height={44}
+                      className="rounded-full border border-[var(--gold)]/40 object-cover object-top"
+                    />
+                  ) : (
+                    <div className="h-11 w-11 rounded-full bg-[var(--gold)]/20 flex items-center justify-center font-display font-black text-[var(--gold)]">
+                      {topPlayer.name[0]}
+                    </div>
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <p className="font-display text-lg font-black text-white truncate group-hover:text-[var(--gold)] transition-colors">
+                      {topPlayer.name}
+                    </p>
+                    <p className="text-[10px] text-white/50 font-data uppercase tracking-wider">
+                      {displayRole(topPlayer.role)} &middot; {topPlayer.gamesPlayed} games
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <p className="font-data text-2xl font-black text-[var(--gold)] tabular-nums leading-none">
+                      {topPlayer.totalKills}
+                    </p>
+                    <p className="text-[9px] text-white/40 uppercase tracking-wider mt-1">kills</p>
+                  </div>
+                </div>
+              </Link>
+            )}
           </div>
         </div>
 
-        {/* ─── Floating stats card — bottom-right on desktop, below on mobile ─── */}
-        {!isEmpty && (
-          <div className="absolute bottom-4 right-4 md:bottom-8 md:right-12 z-10 max-w-[calc(100vw-2rem)]">
-            <div className="rounded-xl bg-black/55 backdrop-blur-md border border-[var(--gold)]/20 px-5 py-3.5 md:px-6 md:py-4">
-              <p className="font-data text-[9px] uppercase tracking-[0.28em] text-[var(--gold)]/60 mb-1.5">
-                Carri&egrave;re LEC &middot; 2024 &rarr; 2026
-              </p>
-              <div className="flex items-baseline gap-2 mb-2">
-                <AnimatedNumber
-                  value={stats.totalKills}
-                  duration={2}
-                  className="font-data text-4xl md:text-5xl font-black text-[var(--gold)] tabular-nums leading-none"
-                />
-                <span className="text-xs text-white/50 uppercase tracking-widest font-semibold">kills</span>
-              </div>
-              <div className="flex items-center gap-3 text-xs font-data">
-                <span className="flex items-baseline gap-1">
-                  <AnimatedNumber value={stats.wins} duration={1.6} className="text-[var(--green)] font-bold text-base" />
-                  <span className="text-[9px] uppercase tracking-wider text-white/40">W</span>
-                </span>
-                <span className="text-white/15">&bull;</span>
-                <span className="flex items-baseline gap-1">
-                  <AnimatedNumber value={stats.losses} duration={1.6} className="text-[var(--red)] font-bold text-base" />
-                  <span className="text-[9px] uppercase tracking-wider text-white/40">L</span>
-                </span>
-                <span className="text-white/15">&bull;</span>
-                <span className="flex items-baseline gap-1">
-                  <AnimatedNumber value={stats.totalGames} duration={1.6} className="font-bold text-base text-white" />
-                  <span className="text-[9px] uppercase tracking-wider text-white/40">G</span>
-                </span>
-                <span className="text-white/15">&bull;</span>
-                <span className="flex items-baseline gap-1">
-                  <AnimatedNumber
-                    value={(stats.wins / (stats.wins + stats.losses)) * 100}
-                    duration={1.8}
-                    format="percent1"
-                    className="text-[var(--gold)] font-bold text-base"
-                  />
-                  <span className="text-[9px] uppercase tracking-wider text-white/40">WR</span>
-                </span>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Scroll indicator — tiny, discrete */}
-        <div className="absolute bottom-3 left-1/2 -translate-x-1/2 animate-bounce z-10">
+        {/* Scroll indicator — tiny, bottom center */}
+        <div className="absolute bottom-3 left-1/2 -translate-x-1/2 animate-bounce z-10 hidden md:block">
           <svg className="h-5 w-5 text-white/30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
           </svg>
