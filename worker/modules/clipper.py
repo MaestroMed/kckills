@@ -195,7 +195,9 @@ async def clip_kill(
                 "-ss", str(clip_start),
                 "-i", local_vod_path,
                 "-t", str(clip_duration),
-                "-c", "copy",
+                "-c:v", "libx264", "-preset", "ultrafast", "-crf", "18",
+                "-c:a", "aac", "-b:a", "128k",
+                "-movflags", "+faststart",
                 "-y", raw_path,
             ]):
                 log.error("clip_extract_failed", kill_id=kill_id)
