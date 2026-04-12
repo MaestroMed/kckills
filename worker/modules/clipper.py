@@ -47,27 +47,31 @@ def _build_overlay_filter(
     - Hook text (0-3s): "KILLER → VICTIM" in gold, centered top
     - Context bar (permanent): match info at bottom
     """
-    # Escape ffmpeg special chars
+    # Escape for ffmpeg drawtext on Windows: no single quotes, escape colons
     def esc(s: str) -> str:
-        return s.replace("'", "").replace(":", "\\:").replace("\\", "\\\\")
+        return (
+            s.replace("\\", "\\\\\\\\")
+            .replace(":", "\\\\:")
+            .replace("'", "\u2019")  # replace ' with typographic apostrophe
+            .replace(";", "\\\\;")
+        )
 
     hook = esc(f"{killer}  >  {victim}")
     ctx = esc(context) if context else ""
 
-    # Font sizes adapt to vertical vs horizontal
     hook_size = 38 if is_vertical else 32
     ctx_size = 18 if is_vertical else 16
     y_hook = "h*0.06" if is_vertical else "h*0.08"
     y_ctx = "h*0.94" if is_vertical else "h*0.92"
 
     parts = [
-        f"drawtext=text='{hook}':fontsize={hook_size}:fontcolor=#C8AA6E"
+        f"drawtext=text={hook}:fontsize={hook_size}:fontcolor=#C8AA6E"
         f":borderw=3:bordercolor=black:x=(w-tw)/2:y={y_hook}"
-        f":enable='between(t,0,3)'"
+        f":enable=between(t\\,0\\,3)"
     ]
     if ctx:
         parts.append(
-            f"drawtext=text='{ctx}':fontsize={ctx_size}:fontcolor=white"
+            f"drawtext=text={ctx}:fontsize={ctx_size}:fontcolor=white"
             f":borderw=2:bordercolor=black:x=(w-tw)/2:y={y_ctx}"
         )
 
