@@ -35,3 +35,4 @@ Thumbs.db
 worker/local_cache.db
 worker/state.json
 worker/logs/
+worker/.backfill_state.json

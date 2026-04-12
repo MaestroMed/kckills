@@ -1,7 +1,11 @@
 import { notFound } from "next/navigation";
-import { loadRealData, getPlayerStats } from "@/lib/real-data";
+import { loadRealData, getPlayerStats, type RealData } from "@/lib/real-data";
 import { championSplashUrl, championLoadingUrl, championIconUrl } from "@/lib/constants";
 import { PLAYER_PHOTOS } from "@/lib/kc-assets";
+import {
+  getKillsByKillerChampion,
+  type PublishedKillRow,
+} from "@/lib/supabase/kills";
 import Image from "next/image";
 import Link from "next/link";
 import type { Metadata } from "next";
@@ -11,6 +15,63 @@ export const dynamic = "force-dynamic";
 
 interface Props {
   params: Promise<{ slug: string }>;
+}
+
+/**
+ * Fetch the real published kills that belong to this player.
+ *
+ * We don't have a `killer_player_id` FK populated on kills yet, so we use
+ * a proxy: for each of the player's top champions, pull Supabase kills on
+ * that champion, then filter to only keep rows where the match+game in our
+ * static JSON shows THIS player playing THAT champion. This is tight enough
+ * for KC players in 2025-2026 where each role rarely shares champions.
+ */
+async function getRealKillsForPlayer(
+  playerCleanName: string,
+  topChampions: { name: string }[],
+  data: RealData,
+): Promise<PublishedKillRow[]> {
+  if (topChampions.length === 0) return [];
+
+  // Pull candidate rows for each champion (max 5 champions to keep egress light)
+  const championNames = topChampions.slice(0, 5).map((c) => c.name);
+  const perChampion = await Promise.all(
+    championNames.map((c) => getKillsByKillerChampion(c, 20)),
+  );
+
+  // Dedupe by kill id
+  const seen = new Set<string>();
+  const candidates: PublishedKillRow[] = [];
+  for (const batch of perChampion) {
+    for (const k of batch) {
+      if (seen.has(k.id)) continue;
+      seen.add(k.id);
+      candidates.push(k);
+    }
+  }
+
+  // Tight filter: same match + same game + same champion picked by this player
+  return candidates.filter((k) => {
+    const matchExtId = k.games?.matches?.external_id ?? "";
+    if (!matchExtId) return false;
+    const match = data.matches.find((m) => m.id === matchExtId);
+    if (!match) return false;
+    const gameNumber = k.games?.game_number ?? 1;
+    const game = match.games.find((g) => g.number === gameNumber);
+    if (!game) return false;
+    return game.kc_players.some(
+      (p) =>
+        p.champion === k.killer_champion &&
+        p.name.replace("KC ", "") === playerCleanName,
+    );
+  });
+}
+
+function formatGameTime(seconds: number | null): string {
+  if (seconds == null) return "??:??";
+  const mm = Math.floor(seconds / 60);
+  const ss = seconds % 60;
+  return `${mm.toString().padStart(2, "0")}:${ss.toString().padStart(2, "0")}`;
 }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
@@ -61,6 +122,9 @@ export default async function PlayerPage({ params }: Props) {
   const photo = PLAYER_PHOTOS[name];
   const signatureChamp = stats.champions[0]?.name ?? "Jhin";
   const topChampions = stats.champions.slice(0, 8);
+
+  // Real kills from Supabase pipeline
+  const realKills = await getRealKillsForPlayer(name, stats.champions, data);
 
   // Best clips = highest KDA games
   const bestClips = [...stats.matchHistory]
@@ -268,6 +332,130 @@ export default async function PlayerPage({ params }: Props) {
           </svg>
         </div>
       </section>
+
+      {/* ═══ REAL KILL CLIPS (from Supabase pipeline) ═══ */}
+      {realKills.length > 0 && (
+        <section className="relative max-w-7xl mx-auto px-6 py-20">
+          <div className="flex items-center justify-between mb-8 flex-wrap gap-4">
+            <div className="flex items-center gap-3">
+              <span className="h-2 w-2 rounded-full bg-[var(--gold)] animate-pulse" />
+              <span className="font-data text-[10px] uppercase tracking-[0.3em] font-bold text-[var(--gold)]">
+                {realKills.length} clips vid&eacute;o
+              </span>
+            </div>
+            <p className="text-sm text-[var(--text-muted)]">
+              G&eacute;n&eacute;r&eacute;s par le pipeline automatique &middot; vrais highlights
+            </p>
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {realKills.slice(0, 6).map((k) => {
+              const isKcKill = k.tracked_team_involvement === "team_killer";
+              return (
+                <Link
+                  key={k.id}
+                  href={`/kill/${k.id}`}
+                  className="group relative overflow-hidden rounded-2xl border border-[var(--border-gold)] bg-black transition-all hover:border-[var(--gold)]/60 hover:scale-[1.02] hover:-translate-y-1 hover:shadow-2xl hover:shadow-[var(--gold)]/20"
+                  style={{ aspectRatio: "16/10" }}
+                >
+                  {k.thumbnail_url ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={k.thumbnail_url}
+                      alt={`${k.killer_champion} vs ${k.victim_champion}`}
+                      className="absolute inset-0 w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
+                    />
+                  ) : (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={championSplashUrl(k.killer_champion ?? "Aatrox")}
+                      alt=""
+                      className="absolute inset-0 w-full h-full object-cover opacity-40"
+                    />
+                  )}
+                  <div className="absolute inset-0 bg-gradient-to-t from-black via-black/30 to-transparent" />
+
+                  {/* Badges */}
+                  <div className="absolute top-3 left-3 z-10 flex items-center gap-2">
+                    {k.highlight_score != null && (
+                      <span className="rounded-md bg-[var(--gold)]/20 backdrop-blur-sm border border-[var(--gold)]/40 px-2 py-0.5 text-[10px] font-data font-bold text-[var(--gold)]">
+                        {k.highlight_score.toFixed(1)}/10
+                      </span>
+                    )}
+                    {k.is_first_blood && (
+                      <span className="rounded-md bg-[var(--red)]/20 border border-[var(--red)]/40 px-2 py-0.5 text-[10px] font-black text-[var(--red)]">
+                        FB
+                      </span>
+                    )}
+                    {k.multi_kill && (
+                      <span className="rounded-md bg-[var(--gold)]/20 border border-[var(--gold)]/40 px-2 py-0.5 text-[10px] font-black text-[var(--gold)] uppercase">
+                        {k.multi_kill}
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="absolute bottom-0 left-0 right-0 p-4 z-10">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Image
+                        src={championIconUrl(k.killer_champion ?? "Aatrox")}
+                        alt={k.killer_champion ?? "?"}
+                        width={28}
+                        height={28}
+                        className="rounded-full border border-[var(--gold)]/30"
+                      />
+                      <span className={`font-display text-lg font-black ${isKcKill ? "text-[var(--gold)]" : "text-white"}`}>
+                        {k.killer_champion}
+                      </span>
+                      <span className="text-[var(--gold)] text-sm">&rarr;</span>
+                      <Image
+                        src={championIconUrl(k.victim_champion ?? "Aatrox")}
+                        alt={k.victim_champion ?? "?"}
+                        width={28}
+                        height={28}
+                        className="rounded-full border border-[var(--red)]/30"
+                      />
+                      <span className="font-display text-lg font-black text-white/80">
+                        {k.victim_champion}
+                      </span>
+                    </div>
+                    {k.ai_description && (
+                      <p className="text-[11px] text-white/80 italic line-clamp-2">
+                        &laquo; {k.ai_description} &raquo;
+                      </p>
+                    )}
+                    <p className="text-[9px] text-[var(--text-muted)] mt-1.5">
+                      T+{formatGameTime(k.game_time_seconds)} &middot; Game {k.games?.game_number ?? "?"}
+                    </p>
+                  </div>
+
+                  {/* Hover play */}
+                  <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-all duration-300 pointer-events-none">
+                    <div className="h-14 w-14 rounded-full bg-[var(--gold)]/20 backdrop-blur-md border border-[var(--gold)]/50 flex items-center justify-center">
+                      <svg className="h-5 w-5 text-[var(--gold)] translate-x-0.5" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M8 5v14l11-7z" />
+                      </svg>
+                    </div>
+                  </div>
+                </Link>
+              );
+            })}
+          </div>
+
+          {realKills.length > 6 && (
+            <div className="text-center mt-6">
+              <Link
+                href="/scroll"
+                className="inline-flex items-center gap-2 rounded-xl border border-[var(--gold)]/30 bg-[var(--gold)]/10 px-5 py-2.5 text-xs font-display font-bold uppercase tracking-widest text-[var(--gold)] hover:bg-[var(--gold)]/20 transition-colors"
+              >
+                Voir les {realKills.length - 6} autres dans le scroll
+                <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M9 5l7 7-7 7" />
+                </svg>
+              </Link>
+            </div>
+          )}
+        </section>
+      )}
 
       {/* ═══ BEST CLIPS — massive cinematic grid ═══ */}
       {bestClips.length > 0 && (
