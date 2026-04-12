@@ -33,7 +33,9 @@ export default async function ScrollPage() {
       if (k.multi_kill === "penta") score *= 2.0;
       else if (k.multi_kill === "quadra") score *= 1.5;
       else if (k.multi_kill === "triple") score *= 1.2;
-      if (k.is_first_blood) score *= 1.1;
+      // KC kills are the hero content — deaths are context but shouldn't dominate the feed
+      if (k.tracked_team_involvement === "team_killer") score *= 2.0;
+      else if (k.tracked_team_involvement === "team_victim") score *= 0.3;
       // Boost video items so real clips always outrank aggregate items at equal base
       score *= 10;
       return {

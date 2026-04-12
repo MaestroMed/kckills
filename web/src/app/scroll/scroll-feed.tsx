@@ -174,8 +174,17 @@ function VideoScrollItem({ item, index, total }: { item: VideoFeedItem; index: n
   const [rating, setRating] = useState(0);
   const [showRating, setShowRating] = useState(false);
   const [showDoubleTapHeart, setShowDoubleTapHeart] = useState(false);
+  const [isDesktop, setIsDesktop] = useState(false);
   const toast = useToast();
   const lastTap = useRef(0);
+
+  // Desktop detection — use horizontal 16:9 clip on wide viewports
+  useEffect(() => {
+    const check = () => setIsDesktop(window.innerWidth >= 768);
+    check();
+    window.addEventListener("resize", check);
+    return () => window.removeEventListener("resize", check);
+  }, []);
 
   const handleDoubleTap = () => {
     const now = Date.now();
@@ -229,7 +238,7 @@ function VideoScrollItem({ item, index, total }: { item: VideoFeedItem; index: n
       <video
         ref={videoRef}
         className="absolute inset-0 h-full w-full object-cover"
-        src={item.clipVertical}
+        src={isDesktop && item.clipHorizontal ? item.clipHorizontal : item.clipVertical}
         poster={item.thumbnail ?? undefined}
         muted
         loop
