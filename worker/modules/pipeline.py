@@ -255,12 +255,21 @@ async def run_for_match(match_external_id: str) -> dict:
 
         # Clipper — serialised to respect yt-dlp rate limits
         for kill_row in inserted_kill_rows:
+            # Build match context string for text overlay
+            gt = int(kill_row.get("game_time_seconds") or 0)
+            gt_str = f"T+{gt // 60:02d}:{gt % 60:02d}"
+            game_num = game_row.get("game_number", "?")
+            overlay_ctx = f"Game {game_num}  {gt_str}"
+
             urls = await clipper.clip_kill(
                 kill_id=kill_row["id"],
                 youtube_id=yt_id,
                 vod_offset_seconds=vod_offset,
-                game_time_seconds=int(kill_row.get("game_time_seconds") or 0),
+                game_time_seconds=gt,
                 multi_kill=kill_row.get("multi_kill"),
+                killer_champion=kill_row.get("killer_champion"),
+                victim_champion=kill_row.get("victim_champion"),
+                match_context=overlay_ctx,
             )
             if urls and urls.get("clip_url_horizontal"):
                 safe_update("kills", {**urls, "status": "clipped"}, "id", kill_row["id"])

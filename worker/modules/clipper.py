@@ -36,12 +36,53 @@ FFMPEG_TIMEOUT = 180  # seconds per ffmpeg invocation
 YTDLP_TIMEOUT = 180   # seconds for a single segment download
 
 
+def _build_overlay_filter(
+    killer: str,
+    victim: str,
+    context: str = "",
+    is_vertical: bool = True,
+) -> str:
+    """Build ffmpeg drawtext filter chain for text overlays on clips.
+
+    - Hook text (0-3s): "KILLER → VICTIM" in gold, centered top
+    - Context bar (permanent): match info at bottom
+    """
+    # Escape ffmpeg special chars
+    def esc(s: str) -> str:
+        return s.replace("'", "").replace(":", "\\:").replace("\\", "\\\\")
+
+    hook = esc(f"{killer}  >  {victim}")
+    ctx = esc(context) if context else ""
+
+    # Font sizes adapt to vertical vs horizontal
+    hook_size = 38 if is_vertical else 32
+    ctx_size = 18 if is_vertical else 16
+    y_hook = "h*0.06" if is_vertical else "h*0.08"
+    y_ctx = "h*0.94" if is_vertical else "h*0.92"
+
+    parts = [
+        f"drawtext=text='{hook}':fontsize={hook_size}:fontcolor=#C8AA6E"
+        f":borderw=3:bordercolor=black:x=(w-tw)/2:y={y_hook}"
+        f":enable='between(t,0,3)'"
+    ]
+    if ctx:
+        parts.append(
+            f"drawtext=text='{ctx}':fontsize={ctx_size}:fontcolor=white"
+            f":borderw=2:bordercolor=black:x=(w-tw)/2:y={y_ctx}"
+        )
+
+    return ",".join(parts)
+
+
 async def clip_kill(
     kill_id: str,
     youtube_id: str,
     vod_offset_seconds: int,
     game_time_seconds: int,
     multi_kill: str | None = None,
+    killer_champion: str | None = None,
+    victim_champion: str | None = None,
+    match_context: str | None = None,
 ) -> dict | None:
     """Download, encode and upload a single kill. Returns dict of R2 URLs or None."""
     os.makedirs(config.CLIPS_DIR, exist_ok=True)
@@ -92,11 +133,22 @@ async def clip_kill(
             log.error("ffmpeg_horizontal_failed", kill_id=kill_id)
             return None
 
-        # ─── 3. Encode vertical 9:16 HQ ─────────────────────────────
+        # ─── 3. Encode vertical 9:16 HQ + text overlays ─────────────
+        v_crop = "crop=ih*9/16:ih:iw/2-ih*9/32:0,scale=720:1280"
+        if killer_champion and victim_champion:
+            overlay = _build_overlay_filter(
+                killer_champion, victim_champion,
+                context=match_context or "",
+                is_vertical=True,
+            )
+            v_filter = f"{v_crop},{overlay}"
+        else:
+            v_filter = v_crop
+
         await scheduler.wait_for("ffmpeg_cooldown")
         if not await _ffmpeg([
             "-i", raw_path,
-            "-vf", "crop=ih*9/16:ih:iw/2-ih*9/32:0,scale=720:1280",
+            "-vf", v_filter,
             "-c:v", "libx264", "-preset", "fast", "-crf", "23",
             "-profile:v", "main", "-level", "3.1",
             "-maxrate", "2M", "-bufsize", "4M",
@@ -107,7 +159,7 @@ async def clip_kill(
             log.error("ffmpeg_vertical_failed", kill_id=kill_id)
             return None
 
-        # ─── 4. Encode vertical 9:16 low (360p baseline) ────────────
+        # ─── 4. Encode vertical 9:16 low (360p, no overlay for perf) ──
         await scheduler.wait_for("ffmpeg_cooldown")
         if not await _ffmpeg([
             "-i", raw_path,
