@@ -7,6 +7,7 @@ import { getPublishedKills } from "@/lib/supabase/kills";
 import { AudioPlayer } from "@/components/AudioPlayer";
 import { HomeFilteredContent } from "@/components/HomeFilteredContent";
 import { HomeClipsShowcase } from "@/components/HomeClipsShowcase";
+import { KillOfTheWeek } from "@/components/KillOfTheWeek";
 import { AnimatedNumber } from "@/components/AnimatedNumber";
 import { MacronEasterEgg } from "@/components/MacronEasterEgg";
 import { HeroClipBackground } from "@/components/HeroClipBackground";
@@ -452,6 +453,9 @@ export default async function HomePage() {
           </div>
         </section>
       )}
+
+      {/* ═══ KILL OF THE WEEK ═══════════════════════════════════════════ */}
+      <KillOfTheWeek />
 
       {/* ═══ HIGHLIGHTS CLIPS SHOWCASE (real YouTube clips) ═══════════════ */}
       <HomeClipsShowcase />
