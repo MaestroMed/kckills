@@ -163,6 +163,38 @@ button:focus-visible {
   outline-offset: 2px;
 }
 
+/* ─── Glassmorphism badges (γ6) ──────────────────── */
+.badge-glass {
+  background: rgba(200, 170, 110, 0.12);
+  backdrop-filter: blur(12px) saturate(1.5);
+  -webkit-backdrop-filter: blur(12px) saturate(1.5);
+  border: 1px solid rgba(200, 170, 110, 0.25);
+  box-shadow:
+    0 4px 16px rgba(0, 0, 0, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+.badge-glass-penta {
+  background: linear-gradient(135deg, rgba(200, 170, 110, 0.25), rgba(255, 215, 0, 0.15));
+  backdrop-filter: blur(16px) saturate(2);
+  -webkit-backdrop-filter: blur(16px) saturate(2);
+  border: 1px solid rgba(255, 215, 0, 0.4);
+  box-shadow:
+    0 4px 20px rgba(200, 170, 110, 0.3),
+    0 0 40px rgba(200, 170, 110, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.15);
+  animation: pentaGlow 2s ease-in-out infinite;
+}
+@keyframes pentaGlow {
+  0%, 100% { box-shadow: 0 4px 20px rgba(200,170,110,0.3), 0 0 40px rgba(200,170,110,0.1); }
+  50% { box-shadow: 0 4px 30px rgba(200,170,110,0.5), 0 0 60px rgba(200,170,110,0.2); }
+}
+.badge-glass-red {
+  background: rgba(232, 64, 87, 0.15);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(232, 64, 87, 0.3);
+}
+
 /* ─── KC Loading Spinner (γ9) ────────────────────── */
 /* Hextech diamond spinner — replaces generic circles */
 .kc-spinner {

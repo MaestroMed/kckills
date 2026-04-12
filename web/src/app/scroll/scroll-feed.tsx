@@ -93,6 +93,30 @@ function formatGameTime(seconds: number): string {
 // ─── Top-level feed ────────────────────────────────────────────────────
 
 export function ScrollFeed({ items, videoCount = 0 }: { items: FeedItem[]; videoCount?: number }) {
+  const [showSwipeHint, setShowSwipeHint] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return !localStorage.getItem("kc-scroll-seen");
+  });
+
+  useEffect(() => {
+    if (!showSwipeHint) return;
+    const timer = setTimeout(() => {
+      setShowSwipeHint(false);
+      localStorage.setItem("kc-scroll-seen", "1");
+    }, 4000);
+    const handler = () => {
+      setShowSwipeHint(false);
+      localStorage.setItem("kc-scroll-seen", "1");
+    };
+    window.addEventListener("scroll", handler, { once: true, capture: true });
+    window.addEventListener("touchmove", handler, { once: true });
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener("scroll", handler);
+      window.removeEventListener("touchmove", handler);
+    };
+  }, [showSwipeHint]);
+
   return (
     <div className="scroll-container fixed inset-0 z-[60] bg-black">
       {/* Top bar */}
@@ -135,6 +159,18 @@ export function ScrollFeed({ items, videoCount = 0 }: { items: FeedItem[]; video
         ) : (
           <AggregateScrollItem key={`a-${item.id}-${i}`} item={item} index={i} total={items.length} />
         )
+      )}
+
+      {/* Swipe hint for first-time visitors */}
+      {showSwipeHint && items.length > 0 && (
+        <div className="fixed bottom-20 left-1/2 -translate-x-1/2 z-[65] pointer-events-none animate-[fadeIn_0.5s_ease-out]">
+          <div className="flex flex-col items-center gap-2 text-white/60">
+            <svg className="h-6 w-6 animate-bounce" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+            </svg>
+            <span className="text-xs font-data uppercase tracking-widest">Swipe up</span>
+          </div>
+        </div>
       )}
 
       {items.length === 0 && (
@@ -303,11 +339,11 @@ function VideoScrollItem({ item, index, total }: { item: VideoFeedItem; index: n
           {/* Badges row */}
           <div className="flex flex-wrap items-center gap-2">
             {isKcKill ? (
-              <span className="rounded-md bg-[var(--gold)]/15 border border-[var(--gold)]/30 px-2.5 py-1 text-[10px] font-black text-[var(--gold)] uppercase tracking-[0.15em]">
+              <span className="badge-glass rounded-md px-2.5 py-1 text-[10px] font-black text-[var(--gold)] uppercase tracking-[0.15em]">
                 KC Kill
               </span>
             ) : (
-              <span className="rounded-md bg-[var(--red)]/15 border border-[var(--red)]/30 px-2.5 py-1 text-[10px] font-black text-[var(--red)] uppercase tracking-[0.15em]">
+              <span className="badge-glass-red rounded-md px-2.5 py-1 text-[10px] font-black text-[var(--red)] uppercase tracking-[0.15em]">
                 KC Death
               </span>
             )}
@@ -318,10 +354,10 @@ function VideoScrollItem({ item, index, total }: { item: VideoFeedItem; index: n
             )}
             {item.multiKill && (
               <span className={`rounded-md px-2.5 py-1 text-[10px] font-black uppercase tracking-wider ${
-                item.multiKill === "penta" ? "badge-penta bg-[var(--gold)]/20 border border-[var(--gold)]/40" :
-                item.multiKill === "quadra" ? "text-[var(--orange)] bg-[var(--orange)]/15 border border-[var(--orange)]/30" :
-                item.multiKill === "triple" ? "text-[var(--orange)] bg-[var(--orange)]/10 border border-[var(--orange)]/20" :
-                "text-[var(--text-secondary)] bg-white/5 border border-white/10"
+                item.multiKill === "penta" ? "badge-glass-penta text-[var(--gold)]" :
+                item.multiKill === "quadra" ? "badge-glass text-[var(--orange)]" :
+                item.multiKill === "triple" ? "badge-glass text-[var(--orange)]" :
+                "badge-glass text-[var(--text-secondary)]"
               }`}>
                 {item.multiKill} kill
               </span>
@@ -508,20 +544,20 @@ function AggregateScrollItem({ item, index, total }: { item: AggregateFeedItem; 
         <div className={`space-y-3 transition-all duration-500 delay-100 ${visible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-6"}`}>
           <div className="flex items-center gap-2">
             {item.isKcKiller ? (
-              <span className="rounded-md bg-[var(--gold)]/15 border border-[var(--gold)]/30 px-2.5 py-1 text-[10px] font-black text-[var(--gold)] uppercase tracking-[0.15em]">
+              <span className="badge-glass rounded-md px-2.5 py-1 text-[10px] font-black text-[var(--gold)] uppercase tracking-[0.15em]">
                 KC Kill
               </span>
             ) : (
-              <span className="rounded-md bg-[var(--red)]/15 border border-[var(--red)]/30 px-2.5 py-1 text-[10px] font-black text-[var(--red)] uppercase tracking-[0.15em]">
+              <span className="badge-glass-red rounded-md px-2.5 py-1 text-[10px] font-black text-[var(--red)] uppercase tracking-[0.15em]">
                 KC Death
               </span>
             )}
             {item.multiKill && (
               <span className={`rounded-md px-2.5 py-1 text-[10px] font-black uppercase tracking-wider ${
-                item.multiKill === "penta" ? "badge-penta bg-[var(--gold)]/20 border border-[var(--gold)]/40" :
-                item.multiKill === "quadra" ? "text-[var(--orange)] bg-[var(--orange)]/15 border border-[var(--orange)]/30" :
-                item.multiKill === "triple" ? "text-[var(--orange)] bg-[var(--orange)]/10 border border-[var(--orange)]/20" :
-                "text-[var(--text-secondary)] bg-white/5 border border-white/10"
+                item.multiKill === "penta" ? "badge-glass-penta text-[var(--gold)]" :
+                item.multiKill === "quadra" ? "badge-glass text-[var(--orange)]" :
+                item.multiKill === "triple" ? "badge-glass text-[var(--orange)]" :
+                "badge-glass text-[var(--text-secondary)]"
               }`}>
                 {item.multiKill} kill
               </span>
