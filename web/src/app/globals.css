@@ -163,6 +163,35 @@ button:focus-visible {
   outline-offset: 2px;
 }
 
+/* ─── KC Loading Spinner (γ9) ────────────────────── */
+/* Hextech diamond spinner — replaces generic circles */
+.kc-spinner {
+  display: inline-block;
+  width: 24px;
+  height: 24px;
+  border: 2px solid var(--gold);
+  transform: rotate(45deg);
+  animation: kcSpin 1.2s cubic-bezier(0.5, 0, 0.5, 1) infinite;
+}
+.kc-spinner::after {
+  content: '';
+  display: block;
+  width: 8px;
+  height: 8px;
+  margin: 6px auto;
+  background: var(--gold);
+  animation: kcPulse 1.2s ease-in-out infinite;
+}
+@keyframes kcSpin {
+  0% { transform: rotate(45deg) scale(1); }
+  50% { transform: rotate(225deg) scale(0.85); }
+  100% { transform: rotate(405deg) scale(1); }
+}
+@keyframes kcPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+
 /* ─── Hero — cinematic ───────────────────────────── */
 .hero-gradient {
   background:
