@@ -229,6 +229,90 @@ export const ALUMNI: Alumni[] = [
       },
     ],
   },
+  // ─── Saken ────────────────────────────────────────────────────────────
+  {
+    slug: "saken",
+    name: "Saken",
+    realName: "Alexandre Mege-Music",
+    nationality: "FR",
+    role: "mid",
+    period: "2021-2022",
+    subtitle: "Le premier mid laner de KC, pilier LFL et EU Masters",
+    tag: "MID LANER OG",
+    signatureChampion: "Akali",
+    eras: ["lfl-2021-spring", "lfl-2021-summer", "lfl-2021-showmatch", "lfl-2022"],
+    accentColor: "#2196F3",
+    bio: "Saken est la dans le roster d'origine de la Karmine Corp en LFL, le mid laner qui a pose les bases du style agressif KC. Pilier du premier titre LFL et des EU Masters 2021, il evolue aux cotes de Rekkles lors de la saison mythique 2022. Son style est marque par une presence en lane dominante et une capacite a creer des avantages en solo. Il quitte KC apres la saison 2022 pour poursuivre en LFL avec d'autres equipes.",
+    stats: [
+      { label: "Role", value: "MID", hint: "Mid laner" },
+      { label: "Periode", value: "2021-22", hint: "2 saisons" },
+      { label: "Titres", value: "2 LFL", hint: "+ 2 EU Masters" },
+      { label: "Origine", value: "FR", hint: "Mid francais OG" },
+    ],
+    links: [
+      {
+        label: "Liquipedia \u2014 Saken",
+        url: "https://liquipedia.net/leagueoflegends/Saken",
+        type: "wiki",
+      },
+    ],
+  },
+  // ─── Cinkrof ──────────────────────────────────────────────────────────
+  {
+    slug: "cinkrof",
+    name: "Cinkrof",
+    realName: "Jakub Rokicki",
+    nationality: "PL",
+    role: "jungle",
+    period: "2021",
+    subtitle: "Le jungler fondateur, leadership et experience",
+    tag: "JUNGLER FONDATEUR",
+    signatureChampion: "LeeSin",
+    eras: ["lfl-2021-spring", "lfl-2021-summer", "lfl-2021-showmatch"],
+    accentColor: "#4CAF50",
+    bio: "Cinkrof est le jungler de la toute premiere equipe Karmine Corp en League of Legends, celle qui a conquis la LFL et les EU Masters en 2021. Joueur polonais experimente, il apporte du leadership et une lecture de jeu mature a un roster jeune et fougueux. Sa coordination avec Saken en mid et la botlane est la base du style KC early-game agressif qui deviendra la marque de fabrique de l'equipe. Il quitte KC fin 2021 pour laisser place a la rotation de l'ere Rekkles.",
+    stats: [
+      { label: "Role", value: "JGL", hint: "Jungler" },
+      { label: "Periode", value: "2021", hint: "1 saison fondatrice" },
+      { label: "Titres", value: "2 LFL", hint: "+ 2 EU Masters" },
+      { label: "Origine", value: "PL", hint: "Experience d'Eastern EU" },
+    ],
+    links: [
+      {
+        label: "Liquipedia \u2014 Cinkrof",
+        url: "https://liquipedia.net/leagueoflegends/Cinkrof",
+        type: "wiki",
+      },
+    ],
+  },
+  // ─── 113 ──────────────────────────────────────────────────────────────
+  {
+    slug: "113",
+    name: "113",
+    realName: "Mathieu Augereau",
+    nationality: "FR",
+    role: "top",
+    period: "2021",
+    subtitle: "Le top laner de la genese, double champion LFL",
+    tag: "TOP LANER GENESE",
+    signatureChampion: "Renekton",
+    eras: ["lfl-2021-spring", "lfl-2021-summer", "lfl-2021-showmatch"],
+    accentColor: "#FF5722",
+    bio: "113 est le top laner du roster original de KC en LFL 2021, celui qui a tout lance. Francais, combattif, il forme avec Cinkrof, Saken, xMatty et Targamas la premiere equipe qui mettra la Karmine Corp sur la carte du LoL competitif. Double champion LFL, double EU Masters, 113 incarne le spirit combatif de la Blue Wall premiere generation. Son nom de scene numerique est devenu culte dans la communaute KC.",
+    stats: [
+      { label: "Role", value: "TOP", hint: "Top laner" },
+      { label: "Periode", value: "2021", hint: "La genese" },
+      { label: "Titres", value: "2 LFL", hint: "+ 2 EU Masters" },
+      { label: "Origine", value: "FR", hint: "Top francais OG" },
+    ],
+    links: [
+      {
+        label: "Liquipedia \u2014 113",
+        url: "https://liquipedia.net/leagueoflegends/113",
+        type: "wiki",
+      },
+    ],
+  },
 ];
 
 export function getAlumniBySlug(slug: string): Alumni | undefined {
