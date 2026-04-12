@@ -162,6 +162,7 @@ export default function RootLayout({
                 <a href="/matches" className="hover:text-[var(--gold)]">Matchs</a>
                 <a href="/top" className="hover:text-[var(--gold)]">Top</a>
                 <a href="/community" className="hover:text-[var(--gold)]">Community</a>
+                <a href="/privacy" className="hover:text-[var(--gold)]">Confidentialit&eacute;</a>
               </div>
               {/* Discord */}
               <a href="/login" className="inline-flex items-center gap-2 rounded-lg border border-[#5865F2]/20 bg-[#5865F2]/5 px-3 py-1.5 text-xs text-[#8B9DFF] hover:bg-[#5865F2]/10">
