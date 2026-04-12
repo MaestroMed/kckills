@@ -280,21 +280,32 @@ async def run_for_match(match_external_id: str) -> dict:
                 match_context=overlay_ctx,
             )
             if urls and urls.get("clip_url_horizontal"):
+                # Store local path for Gemini video analysis later
+                kill_row["_local_h_path"] = urls.pop("_local_h_path", None)
                 safe_update("kills", {**urls, "status": "clipped"}, "id", kill_row["id"])
                 report["kills_clipped"] += 1
             else:
                 safe_update("kills", {"status": "clip_error"}, "id", kill_row["id"])
                 report["errors"].append(f"clip_error kill={kill_row['id']}")
 
+        # Build a lookup of local clip paths from the inserted rows
+        local_paths: dict[str, str | None] = {
+            k["id"]: k.get("_local_h_path")
+            for k in inserted_kill_rows
+            if k.get("_local_h_path")
+        }
+
         # Analyzer — only on successfully clipped kills
         clipped = safe_select(
             "kills",
-            "id, killer_champion, victim_champion, is_first_blood, multi_kill, tracked_team_involvement, highlight_score",
+            "id, killer_champion, victim_champion, is_first_blood, multi_kill, tracked_team_involvement, highlight_score, confidence, assistants",
             status="clipped",
             game_id=game_db_id,
         )
         for kill in clipped:
-            result = await analyzer.analyze_kill_row(kill)
+            # Pass local clip path to Gemini for VIDEO analysis (not text-only)
+            clip_path = local_paths.get(kill["id"])
+            result = await analyzer.analyze_kill_row(kill, clip_path=clip_path)
             if not result:
                 # No Gemini result — keep the structured base score, still promote
                 safe_update(
@@ -323,6 +334,11 @@ async def run_for_match(match_external_id: str) -> dict:
                 kill["id"],
             )
             report["kills_analysed"] += 1
+
+        # Clean up local clip files now that analysis is done
+        for path in local_paths.values():
+            if path:
+                clipper.cleanup_local_clip(path)
 
         # OG — on analysed kills
         analysed = safe_select(

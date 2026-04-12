@@ -134,7 +134,11 @@ async def clip_kill(
             return None
 
         # ─── 3. Encode vertical 9:16 HQ + text overlays ─────────────
-        v_crop = "crop=ih*9/16:ih:iw/2-ih*9/32:0,scale=720:1280"
+        # Smart crop: shift 8% right of center to capture kill feed + action.
+        # The LoL broadcast camera tracks action slightly right-of-center,
+        # and the kill feed is in the top-right quadrant.
+        # Standard center: iw/2 - ih*9/32. Shifted right: + iw*0.08
+        v_crop = "crop=ih*9/16:ih:iw/2-ih*9/32+iw*0.08:0,scale=720:1280"
         if killer_champion and victim_champion:
             overlay = _build_overlay_filter(
                 killer_champion, victim_champion,
@@ -201,14 +205,25 @@ async def clip_kill(
             "clip_url_vertical": v_url,
             "clip_url_vertical_low": vl_url,
             "thumbnail_url": thumb_url,
+            # Local path kept alive for Gemini video analysis —
+            # caller is responsible for cleanup via cleanup_local_files()
+            "_local_h_path": h_path if os.path.exists(h_path) else None,
         }
 
     except Exception as e:
         log.error("clip_error", kill_id=kill_id, error=str(e))
         return None
     finally:
-        for p in (raw_path, h_path, v_path, vl_path, thumb_path):
+        # Clean up raw + vertical + thumbnail (not needed after R2 upload)
+        # Keep h_path alive for Gemini analysis — pipeline cleans it later
+        for p in (raw_path, v_path, vl_path, thumb_path):
             _safe_remove(p)
+
+
+def cleanup_local_clip(local_path: str | None):
+    """Remove a local clip file after Gemini analysis is done."""
+    if local_path:
+        _safe_remove(local_path)
 
 
 def _cookies_args() -> list[str]:

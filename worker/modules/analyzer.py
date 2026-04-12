@@ -126,7 +126,7 @@ def _strip_code_fence(text: str) -> str:
     return text
 
 
-async def analyze_kill_row(kill: dict) -> dict | None:
+async def analyze_kill_row(kill: dict, clip_path: str | None = None) -> dict | None:
     """Build rich factual context from a DB kill row and call analyze_kill."""
     parts: list[str] = []
 
@@ -176,6 +176,7 @@ async def analyze_kill_row(kill: dict) -> dict | None:
         victim_name=kill.get("_victim_name_hint") or kill.get("victim_name") or "opponent",
         victim_champion=kill.get("victim_champion") or "?",
         context=". ".join(parts),
+        clip_path=clip_path,
     )
 
 
