@@ -142,19 +142,20 @@ async def calibrate_game_offset(
         qc = await validate_clip(probe_path, probe_game_time)
 
         if qc.is_gameplay and qc.actual_game_time is not None:
-            # We know at vod_time the game is at qc.actual_game_time.
-            # We wanted it to be at probe_game_time.
-            # correction = (actual - expected) seconds: how much the VOD is "ahead"
-            # of what we computed. We need to shift the offset forward.
-            correction = qc.drift_seconds
-            corrected_offset = current_offset + correction
+            # At VOD second `vod_time`, the in-game clock reads `actual_game_time`.
+            # So game_start_in_vod = vod_time - actual_game_time.
+            # The clipper computes: clip_vod_time = vod_offset + game_time_seconds.
+            # Therefore the correct vod_offset = game_start_in_vod.
+            game_start_in_vod = vod_time - qc.actual_game_time
+            corrected_offset = game_start_in_vod
 
             log.info(
                 "qc_calibrate_done",
-                correction=correction,
+                game_start_in_vod=game_start_in_vod,
                 old_offset=current_offset,
                 new_offset=corrected_offset,
                 timer=qc.timer_reading,
+                actual_gt=qc.actual_game_time,
             )
             return corrected_offset
 
@@ -168,19 +169,18 @@ async def calibrate_game_offset(
                 continue
             qc = await validate_clip(probe_path, probe_game_time + extra)
             if qc.is_gameplay and qc.actual_game_time is not None:
-                # Found gameplay at scan_start. The game timer reads qc.actual_game_time.
-                # Real game start in VOD = scan_start - qc.actual_game_time
-                real_game_start = scan_start - qc.actual_game_time
-                corrected_offset = real_game_start
+                # Found gameplay at scan_start. The game timer reads actual_game_time.
+                # Real game start in VOD = scan_start - actual_game_time
+                game_start_in_vod = scan_start - qc.actual_game_time
                 log.info(
                     "qc_calibrate_scanned",
                     scanned_to=scan_start,
                     timer=qc.timer_reading,
-                    real_game_start=real_game_start,
+                    game_start_in_vod=game_start_in_vod,
                     old_offset=current_offset,
-                    new_offset=corrected_offset,
+                    new_offset=game_start_in_vod,
                 )
-                return corrected_offset
+                return game_start_in_vod
 
         log.warn("qc_calibrate_failed", youtube_id=youtube_id)
         return current_offset

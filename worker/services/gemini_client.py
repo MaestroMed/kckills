@@ -1,11 +1,31 @@
 """Gemini 2.5 Flash-Lite client — video/text analysis."""
 
 import json
+import time
 import structlog
 from config import config
 from scheduler import scheduler
 
 log = structlog.get_logger()
+
+
+def _wait_for_file_active(genai_module, file_ref, timeout: int = 60) -> bool:
+    """Poll until an uploaded file reaches ACTIVE state."""
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        f = genai_module.get_file(file_ref.name)
+        state = getattr(f, "state", None)
+        if state is None:
+            return True  # older SDK without state tracking
+        state_name = state.name if hasattr(state, "name") else str(state)
+        if state_name == "ACTIVE":
+            return True
+        if state_name == "FAILED":
+            log.warn("gemini_file_failed", name=file_ref.name)
+            return False
+        time.sleep(2)
+    log.warn("gemini_file_timeout", name=file_ref.name)
+    return False
 
 
 async def analyze(prompt: str, video_path: str | None = None) -> dict | None:
@@ -19,12 +39,16 @@ async def analyze(prompt: str, video_path: str | None = None) -> dict | None:
         return None
 
     try:
-        import google.generativeai as genai
+        import google.generativeai as genai  # type: ignore
         genai.configure(api_key=config.GEMINI_API_KEY)
         model = genai.GenerativeModel("gemini-2.5-flash-lite")
 
         if video_path:
             video_file = genai.upload_file(video_path)
+            # Wait for the file to become ACTIVE — Gemini processes uploads
+            # asynchronously and returns 400 if we query before it's ready.
+            if not _wait_for_file_active(genai, video_file):
+                return None
             response = model.generate_content([prompt, video_file])
         else:
             response = model.generate_content(prompt)

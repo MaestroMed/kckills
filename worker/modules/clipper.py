@@ -153,10 +153,25 @@ async def clip_kill(
             _safe_remove(p)
 
 
+def _cookies_args() -> list[str]:
+    """Return yt-dlp cookie args if a cookies.txt exists, empty list otherwise.
+
+    We intentionally do NOT use --cookies-from-browser because Chrome's DPAPI
+    encryption fails when running from non-interactive shells (Claude Code,
+    systemd, Task Scheduler). Instead, the user can manually export a
+    cookies.txt via a browser extension if YouTube starts throttling.
+    """
+    cookies_file = os.path.join(os.path.dirname(__file__), "..", "cookies.txt")
+    if os.path.exists(cookies_file):
+        return ["--cookies", cookies_file]
+    return []
+
+
 async def _run_ytdlp(url: str, output_path: str, start: float, end: float) -> bool:
     """Run yt-dlp via `python -m yt_dlp` to stay cross-platform and venv-safe."""
     cmd = [
         sys.executable, "-m", "yt_dlp",
+        *_cookies_args(),
         "--download-sections", f"*{start}-{end}",
         "--force-keyframes-at-cuts",
         "-f", "bestvideo[height<=720]+bestaudio/best[height<=720]",
