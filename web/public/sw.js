@@ -1,7 +1,7 @@
 // LoLTok Service Worker — PWA + Push Notifications
 
-const CACHE_NAME = "loltok-v1";
-const PRECACHE = ["/scroll", "/", "/manifest.json"];
+const CACHE_NAME = "loltok-v2";
+const PRECACHE = ["/scroll", "/", "/manifest.json", "/offline.html"];
 
 // Install: precache shell
 self.addEventListener("install", (event) => {
@@ -31,7 +31,16 @@ self.addEventListener("fetch", (event) => {
         caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
         return response;
       })
-      .catch(() => caches.match(event.request))
+      .catch(() =>
+        caches.match(event.request).then((cached) => {
+          if (cached) return cached;
+          // For navigation requests, show the offline page
+          if (event.request.mode === "navigate") {
+            return caches.match("/offline.html");
+          }
+          return cached;
+        })
+      )
   );
 });
 
