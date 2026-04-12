@@ -74,6 +74,70 @@ def _build_overlay_filter(
     return ",".join(parts)
 
 
+VODS_DIR = os.path.join(os.path.dirname(__file__), "..", "vods")
+
+
+async def download_full_vod(youtube_id: str) -> str | None:
+    """Download the full VOD once. Returns local path or None.
+
+    This is the KEY fix for YouTube throttling: 1 download per VOD instead
+    of N downloads per kill. The VOD is cached in worker/vods/ and reused
+    for all kills in all games of the match.
+    """
+    os.makedirs(VODS_DIR, exist_ok=True)
+    vod_path = os.path.join(VODS_DIR, f"{youtube_id}.mp4")
+
+    if os.path.exists(vod_path):
+        size_mb = os.path.getsize(vod_path) / (1024 * 1024)
+        if size_mb > 10:  # valid VOD, not a truncated file
+            log.info("vod_cache_hit", youtube_id=youtube_id, size_mb=round(size_mb))
+            return vod_path
+
+    can_dl = await scheduler.wait_for("ytdlp")
+    if not can_dl:
+        return None
+
+    log.info("vod_download_start", youtube_id=youtube_id)
+    vod_url = f"https://www.youtube.com/watch?v={youtube_id}"
+    cmd = [
+        sys.executable, "-m", "yt_dlp",
+        *_cookies_args(),
+        "-f", "bestvideo[height<=720]+bestaudio/best[height<=720]",
+        "--merge-output-format", "mp4",
+        "-o", vod_path,
+        "--no-playlist",
+        "--quiet", "--no-warnings",
+        vod_url,
+    ]
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        try:
+            _, stderr = await asyncio.wait_for(proc.communicate(), timeout=600)
+        except asyncio.TimeoutError:
+            proc.kill()
+            await proc.wait()
+            log.error("vod_download_timeout", youtube_id=youtube_id)
+            return None
+        if proc.returncode != 0:
+            err = (stderr or b"")[:300].decode("utf-8", "ignore")
+            log.error("vod_download_failed", youtube_id=youtube_id, stderr=err)
+            _safe_remove(vod_path)
+            return None
+    except FileNotFoundError:
+        log.error("ytdlp_not_installed")
+        return None
+
+    if os.path.exists(vod_path):
+        size_mb = os.path.getsize(vod_path) / (1024 * 1024)
+        log.info("vod_download_done", youtube_id=youtube_id, size_mb=round(size_mb))
+        return vod_path
+    return None
+
+
 async def clip_kill(
     kill_id: str,
     youtube_id: str,
@@ -83,8 +147,14 @@ async def clip_kill(
     killer_champion: str | None = None,
     victim_champion: str | None = None,
     match_context: str | None = None,
+    local_vod_path: str | None = None,
 ) -> dict | None:
-    """Download, encode and upload a single kill. Returns dict of R2 URLs or None."""
+    """Encode and upload a single kill clip. Returns dict of R2 URLs or None.
+
+    If `local_vod_path` is provided (full VOD already downloaded), extracts
+    the segment with ffmpeg directly — ZERO yt-dlp calls, ZERO throttle risk.
+    Falls back to per-kill yt-dlp download if no local VOD.
+    """
     os.makedirs(config.CLIPS_DIR, exist_ok=True)
     os.makedirs(config.THUMBNAILS_DIR, exist_ok=True)
 
@@ -96,6 +166,7 @@ async def clip_kill(
     vod_time = int(vod_offset_seconds or 0) + int(game_time_seconds or 0)
     clip_start = max(0, vod_time - before)
     clip_end = vod_time + after
+    clip_duration = clip_end - clip_start
 
     raw_path = os.path.join(config.CLIPS_DIR, f"raw_{kill_id}.mp4")
     h_path = os.path.join(config.CLIPS_DIR, f"{kill_id}_h.mp4")
@@ -112,11 +183,30 @@ async def clip_kill(
             log.warn("ytdlp_quota_exceeded", kill_id=kill_id)
             return None
 
-        log.info("clip_download", kill_id=kill_id, start=clip_start, end=clip_end)
-        ok = await _run_ytdlp(vod_url, raw_path, clip_start, clip_end)
-        if not ok or not os.path.exists(raw_path):
-            log.error("clip_download_failed", kill_id=kill_id)
-            return None
+        if local_vod_path and os.path.exists(local_vod_path):
+            # ─── Fast path: extract segment from local VOD via ffmpeg ──
+            # ZERO YouTube calls. No throttle risk. Instant.
+            log.info("clip_extract_local", kill_id=kill_id, start=clip_start, duration=clip_duration)
+            if not await _ffmpeg([
+                "-ss", str(clip_start),
+                "-i", local_vod_path,
+                "-t", str(clip_duration),
+                "-c", "copy",
+                "-y", raw_path,
+            ]):
+                log.error("clip_extract_failed", kill_id=kill_id)
+                return None
+        else:
+            # ─── Slow path: download segment from YouTube (throttle risk) ──
+            can_dl = await scheduler.wait_for("ytdlp")
+            if not can_dl:
+                log.warn("ytdlp_quota_exceeded", kill_id=kill_id)
+                return None
+            log.info("clip_download", kill_id=kill_id, start=clip_start, end=clip_end)
+            ok = await _run_ytdlp(vod_url, raw_path, clip_start, clip_end)
+            if not ok or not os.path.exists(raw_path):
+                log.error("clip_download_failed", kill_id=kill_id)
+                return None
 
         # ─── 2. Encode horizontal 16:9 ──────────────────────────────
         await scheduler.wait_for("ffmpeg_cooldown")

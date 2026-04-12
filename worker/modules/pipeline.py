@@ -169,6 +169,19 @@ async def run_for_match(match_external_id: str) -> dict:
                     offset_seconds=derived_offset,
                 )
 
+    # ─── 3c. Download full VOD once — prevents YouTube throttle ────────
+    # All games in a match usually share the same VOD (one long broadcast).
+    # We download it ONCE and extract all clips locally via ffmpeg.
+    vod_ids_seen: set[str] = set()
+    local_vod_paths: dict[str, str] = {}
+    for g in sorted_games:
+        vid = g.get("vod_youtube_id")
+        if vid and vid not in vod_ids_seen:
+            vod_ids_seen.add(vid)
+            local = await clipper.download_full_vod(vid)
+            if local:
+                local_vod_paths[vid] = local
+
     # ─── 4. For each game: harvest → clip → analyse → OG ──────────────
     for game_row in sorted_games:
         game_ext_id = game_row.get("external_id")
@@ -278,6 +291,7 @@ async def run_for_match(match_external_id: str) -> dict:
                 killer_champion=kill_row.get("killer_champion"),
                 victim_champion=kill_row.get("victim_champion"),
                 match_context=overlay_ctx,
+                local_vod_path=local_vod_paths.get(yt_id),
             )
             if urls and urls.get("clip_url_horizontal"):
                 # Store local path for Gemini video analysis later
@@ -392,6 +406,15 @@ async def run_for_match(match_external_id: str) -> dict:
                 )
         except Exception:
             pass  # never let Discord notification crash the pipeline
+
+    # ─── Cleanup: remove downloaded VODs to free disk space ────────────
+    for vod_path in local_vod_paths.values():
+        try:
+            if os.path.exists(vod_path):
+                os.remove(vod_path)
+                log.info("vod_cleaned", path=vod_path)
+        except Exception:
+            pass
 
     log.info("pipeline_done", **{k: v for k, v in report.items() if k != "errors"})
     return report
