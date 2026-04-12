@@ -1,17 +1,58 @@
 "use client";
 
 import Link from "next/link";
+import { useState, useCallback } from "react";
 
 export default function SettingsPage() {
+  const [exportStatus, setExportStatus] = useState<"idle" | "loading" | "done" | "error" | "auth">("idle");
+  const [deleteStatus, setDeleteStatus] = useState<"idle" | "confirming" | "deleting" | "done" | "error" | "auth">("idle");
+
+  const handleExport = useCallback(async () => {
+    setExportStatus("loading");
+    try {
+      const res = await fetch("/api/me");
+      if (res.status === 401) { setExportStatus("auth"); return; }
+      if (!res.ok) { setExportStatus("error"); return; }
+      const data = await res.json();
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `kckills-export-${new Date().toISOString().slice(0, 10)}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+      setExportStatus("done");
+    } catch {
+      setExportStatus("error");
+    }
+  }, []);
+
+  const handleDelete = useCallback(async () => {
+    if (deleteStatus !== "confirming") {
+      setDeleteStatus("confirming");
+      return;
+    }
+    setDeleteStatus("deleting");
+    try {
+      const res = await fetch("/api/me", { method: "DELETE" });
+      if (res.status === 401) { setDeleteStatus("auth"); return; }
+      if (!res.ok) { setDeleteStatus("error"); return; }
+      setDeleteStatus("done");
+      setTimeout(() => { window.location.href = "/"; }, 2000);
+    } catch {
+      setDeleteStatus("error");
+    }
+  }, [deleteStatus]);
+
   return (
     <div className="mx-auto max-w-lg space-y-8 py-8">
       <nav className="flex items-center gap-2 text-sm text-[var(--text-muted)]">
         <Link href="/" className="hover:text-[var(--gold)]">Accueil</Link>
         <span className="text-[var(--gold)]/30">{"\u25C6"}</span>
-        <span>Parametres</span>
+        <span>Param&egrave;tres</span>
       </nav>
 
-      <h1 className="font-display text-2xl font-bold">Parametres</h1>
+      <h1 className="font-display text-2xl font-bold">Param&egrave;tres</h1>
 
       {/* Profile */}
       <section className="rounded-xl border border-[var(--border-gold)] bg-[var(--bg-surface)] p-5 space-y-3">
@@ -21,8 +62,11 @@ export default function SettingsPage() {
         </p>
         <Link
           href="/login"
-          className="inline-block rounded-lg bg-[#5865F2] px-4 py-2 text-sm font-semibold text-white"
+          className="inline-flex items-center gap-2 rounded-lg bg-[#5865F2] px-4 py-2 text-sm font-semibold text-white hover:bg-[#4752C4] transition-colors"
         >
+          <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 24 24">
+            <path d="M20.317 4.37a19.791 19.791 0 00-4.885-1.515.074.074 0 00-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 00-5.487 0 12.64 12.64 0 00-.617-1.25.077.077 0 00-.079-.037A19.736 19.736 0 003.677 4.37a.07.07 0 00-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 00.031.057 19.9 19.9 0 005.993 3.03.078.078 0 00.084-.028c.462-.63.874-1.295 1.226-1.994a.076.076 0 00-.041-.106 13.107 13.107 0 01-1.872-.892.077.077 0 01-.008-.128 10.2 10.2 0 00.372-.292.074.074 0 01.077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 01.078.01c.12.098.246.198.373.292a.077.077 0 01-.006.127 12.299 12.299 0 01-1.873.892.077.077 0 00-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 00.084.028 19.839 19.839 0 006.002-3.03.077.077 0 00.032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 00-.031-.03z" />
+          </svg>
           Se connecter avec Discord
         </Link>
       </section>
@@ -37,42 +81,72 @@ export default function SettingsPage() {
           className="rounded-lg border border-[var(--border-gold)] px-4 py-2 text-sm text-[var(--text-muted)] opacity-50 cursor-not-allowed"
           disabled
         >
-          Bientot disponible
+          Bient&ocirc;t disponible
         </button>
       </section>
 
-      {/* Data export */}
+      {/* Data export (RGPD) */}
       <section className="rounded-xl border border-[var(--border-gold)] bg-[var(--bg-surface)] p-5 space-y-3">
-        <h2 className="font-display font-semibold">Mes donnees</h2>
+        <h2 className="font-display font-semibold">Mes donn&eacute;es</h2>
         <p className="text-sm text-[var(--text-muted)]">
-          Exporte toutes tes donnees (votes, commentaires, profil) en JSON.
+          Exporte toutes tes donn&eacute;es (votes, commentaires, profil) en JSON.
         </p>
         <button
-          className="rounded-lg border border-[var(--border-gold)] px-4 py-2 text-sm text-[var(--text-secondary)] hover:border-[var(--gold)]/40"
-          onClick={() => alert("Export sera disponible quand Supabase est connecte")}
+          onClick={handleExport}
+          disabled={exportStatus === "loading"}
+          className="rounded-lg border border-[var(--border-gold)] px-4 py-2 text-sm text-[var(--text-secondary)] hover:border-[var(--gold)]/40 disabled:opacity-50 transition-colors"
         >
-          Exporter mes donnees
+          {exportStatus === "loading" ? "Export en cours..." :
+           exportStatus === "done" ? "Export t\u00e9l\u00e9charg\u00e9 !" :
+           exportStatus === "auth" ? "Connecte-toi d'abord" :
+           exportStatus === "error" ? "Erreur, r\u00e9essaie" :
+           "Exporter mes donn\u00e9es"}
         </button>
       </section>
 
-      {/* Delete account */}
+      {/* Delete account (RGPD) */}
       <section className="rounded-xl border border-[var(--red)]/30 bg-[var(--bg-surface)] p-5 space-y-3">
         <h2 className="font-display font-semibold text-[var(--red)]">Zone dangereuse</h2>
         <p className="text-sm text-[var(--text-muted)]">
           Supprimer ton compte efface ton profil, anonymise tes votes et supprime tes commentaires.
-          Cette action est irreversible.
+          Cette action est irr&eacute;versible.
         </p>
-        <button
-          className="rounded-lg bg-[var(--red)]/10 border border-[var(--red)]/30 px-4 py-2 text-sm text-[var(--red)] hover:bg-[var(--red)]/20"
-          onClick={() => {
-            if (confirm("Es-tu sur de vouloir supprimer ton compte ? Cette action est irreversible.")) {
-              alert("Suppression sera disponible quand Supabase est connecte");
-            }
-          }}
-        >
-          Supprimer mon compte
-        </button>
+        {deleteStatus === "done" ? (
+          <p className="text-sm text-[var(--green)]">
+            Compte supprim&eacute;. Redirection...
+          </p>
+        ) : deleteStatus === "auth" ? (
+          <p className="text-sm text-[var(--text-muted)]">
+            Connecte-toi pour supprimer ton compte.
+          </p>
+        ) : (
+          <button
+            onClick={handleDelete}
+            disabled={deleteStatus === "deleting"}
+            className="rounded-lg bg-[var(--red)]/10 border border-[var(--red)]/30 px-4 py-2 text-sm text-[var(--red)] hover:bg-[var(--red)]/20 disabled:opacity-50 transition-colors"
+          >
+            {deleteStatus === "confirming" ? "Confirmer la suppression ?" :
+             deleteStatus === "deleting" ? "Suppression..." :
+             deleteStatus === "error" ? "Erreur, r\u00e9essaie" :
+             "Supprimer mon compte"}
+          </button>
+        )}
+        {deleteStatus === "confirming" && (
+          <button
+            onClick={() => setDeleteStatus("idle")}
+            className="ml-2 text-xs text-[var(--text-muted)] hover:text-white"
+          >
+            Annuler
+          </button>
+        )}
       </section>
+
+      {/* Link to privacy */}
+      <p className="text-center text-xs text-[var(--text-muted)]">
+        <Link href="/privacy" className="underline hover:text-[var(--gold)]">
+          Politique de confidentialit&eacute;
+        </Link>
+      </p>
     </div>
   );
 }
