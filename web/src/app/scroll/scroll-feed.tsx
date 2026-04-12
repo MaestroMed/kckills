@@ -53,6 +53,7 @@ export interface VideoFeedItem {
   matchStage: string;
   matchDate: string;
   opponentCode: string;
+  kcWon: boolean | null;
 }
 
 export type FeedItem = AggregateFeedItem | VideoFeedItem;
@@ -400,7 +401,13 @@ function VideoScrollItem({ item, index, total }: { item: VideoFeedItem; index: n
 
           {/* Match context */}
           <p className="text-xs text-[var(--text-muted)]">
-            KC vs {opponentLabel} &middot; {item.matchStage} &middot; Game {item.gameNumber} &middot;{" "}
+            KC vs {opponentLabel}
+            {item.kcWon !== null && (
+              <span className={`ml-1.5 font-bold ${item.kcWon ? "text-[var(--green)]" : "text-[var(--red)]"}`}>
+                {item.kcWon ? "W" : "L"}
+              </span>
+            )}
+            {" "}&middot; {item.matchStage} &middot; Game {item.gameNumber} &middot;{" "}
             <span className="font-data text-[var(--text-secondary)]">
               T+{formatGameTime(item.gameTimeSeconds)}
             </span>

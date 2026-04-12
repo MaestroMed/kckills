@@ -22,7 +22,9 @@ export default async function ScrollPage() {
     .filter((k) => k.clip_url_vertical) // defensive — already filtered server-side
     .map((k) => {
       const matchMeta = k.games?.matches;
-      const opponentCode = inferOpponent(matchMeta?.external_id ?? "", data);
+      const matchJson = data.matches.find((m) => m.id === (matchMeta?.external_id ?? ""));
+      const opponentCode = matchJson?.opponent.code ?? "LEC";
+      const kcWon = matchJson?.kc_won ?? null;
       // Wilson-ish score: (0.6 × highlight/10) + (0.3 × rating/5) + (0.1 × engagement cap)
       const hl = (k.highlight_score ?? 5) / 10;
       const rt = k.rating_count > 0 ? (k.avg_rating ?? 0) / 5 : 0;
@@ -62,6 +64,7 @@ export default async function ScrollPage() {
         matchStage: matchMeta?.stage ?? "LEC",
         matchDate: matchMeta?.scheduled_at ?? k.created_at,
         opponentCode,
+        kcWon,
       };
     });
 
@@ -131,17 +134,4 @@ export default async function ScrollPage() {
   return <ScrollFeed items={items} videoCount={videoItems.length} />;
 }
 
-/**
- * Best-effort opponent lookup: the Supabase match row stores only the
- * external_id, not the team name. We cross-reference with the static JSON
- * data (which has all 83 matches with opponent codes). Falls back to a
- * generic label when the match predates the JSON snapshot.
- */
-function inferOpponent(
-  matchExternalId: string,
-  data: ReturnType<typeof loadRealData>
-): string {
-  if (!matchExternalId) return "LEC";
-  const hit = data.matches.find((m) => m.id === matchExternalId);
-  return hit?.opponent.code ?? "LEC";
-}
+// inferOpponent removed — lookup now inline in the map (includes kcWon)
