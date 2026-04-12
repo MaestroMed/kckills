@@ -226,16 +226,24 @@ async def run_for_match(match_external_id: str) -> dict:
         # If the in-game timer doesn't match, auto-correct the offset for
         # ALL kills in this game before proceeding.
         if inserted_kill_rows:
-            probe_kill = min(
+            # Multi-probe: pick 3 kills spread across the game for robust calibration
+            sorted_by_time = sorted(
                 inserted_kill_rows,
                 key=lambda k: int(k.get("game_time_seconds") or 0),
             )
-            probe_gt = int(probe_kill.get("game_time_seconds") or 60)
-            if probe_gt > 30:  # need at least 30s of game time for a meaningful timer reading
+            valid_kills = [k for k in sorted_by_time if int(k.get("game_time_seconds") or 0) > 60]
+            if valid_kills:
+                # Pick early, mid, late kills for 3-point calibration
+                n = len(valid_kills)
+                probe_indices = [0, n // 2, n - 1] if n >= 3 else list(range(n))
+                probe_game_times = [
+                    int(valid_kills[i].get("game_time_seconds") or 0)
+                    for i in probe_indices
+                ]
                 calibrated_offset = await qc.calibrate_game_offset(
                     youtube_id=yt_id,
                     current_offset=vod_offset,
-                    probe_game_time=probe_gt,
+                    probe_game_times=probe_game_times,
                 )
                 if calibrated_offset != vod_offset:
                     log.info(

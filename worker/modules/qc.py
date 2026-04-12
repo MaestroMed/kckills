@@ -99,86 +99,109 @@ async def validate_clip(
 async def calibrate_game_offset(
     youtube_id: str,
     current_offset: int,
-    probe_game_time: int,
+    probe_game_times: list[int] | int = 0,
     max_scan_minutes: int = 10,
 ) -> int:
-    """Calibrate the VOD offset for a game by probing with Gemini.
+    """Calibrate the VOD offset for a game using MULTI-PROBE median strategy.
 
-    Downloads a short clip at the expected position, asks Gemini to read
-    the in-game timer, and computes how many seconds the offset needs to
-    shift. Returns the CORRECTED offset (not just the delta).
+    Takes up to 3 probe positions (different game_time_seconds), reads the
+    in-game timer at each via Gemini, computes `game_start_in_vod` for each,
+    and returns the MEDIAN. This eliminates Gemini misreads which caused
+    offset errors of several minutes on single-probe runs.
+
+    If only one probe_game_time is provided (or int), falls back to single
+    probe. If none of the probes yield gameplay, scans forward in 60s steps.
 
     Args:
         youtube_id: YouTube video ID of the VOD.
         current_offset: Current computed vod_offset_seconds for this game.
-        probe_game_time: game_time_seconds of the kill to use as probe.
-        max_scan_minutes: If the first probe isn't gameplay, scan forward
-            this many minutes in 60s steps looking for gameplay.
+        probe_game_times: List of game_time_seconds to probe (up to 3),
+            or a single int for backward compat. Spread them across
+            early/mid/late game for robustness.
+        max_scan_minutes: Forward scan range if no probe finds gameplay.
     """
+    if isinstance(probe_game_times, int):
+        probe_game_times = [probe_game_times]
+
     vod_url = f"https://www.youtube.com/watch?v={youtube_id}"
     probe_path = os.path.join(
         os.path.dirname(__file__), "..", "clips", f"qc_probe_{youtube_id}.mp4"
     )
     os.makedirs(os.path.dirname(probe_path), exist_ok=True)
 
-    vod_time = current_offset + probe_game_time
-    clip_start = max(0, vod_time - 5)
-    clip_end = vod_time + 7
-
     log.info(
         "qc_calibrate_start",
         youtube_id=youtube_id,
         current_offset=current_offset,
-        probe_game_time=probe_game_time,
-        vod_probe_at=clip_start,
+        probe_count=len(probe_game_times),
+        probes=probe_game_times,
     )
 
+    # ─── Multi-probe: read timer at each position, compute game_start ──
+    game_start_estimates: list[int] = []
+
     try:
-        ok = await _run_ytdlp(vod_url, probe_path, clip_start, clip_end)
-        if not ok or not os.path.exists(probe_path):
-            log.warn("qc_probe_download_failed")
-            return current_offset
+        for probe_gt in probe_game_times:
+            if probe_gt < 60:
+                continue  # too early, timer hard to read
 
-        qc = await validate_clip(probe_path, probe_game_time)
+            vod_time = current_offset + probe_gt
+            clip_start = max(0, vod_time - 5)
+            clip_end = vod_time + 7
 
-        if qc.is_gameplay and qc.actual_game_time is not None:
-            # At VOD second `vod_time`, the in-game clock reads `actual_game_time`.
-            # So game_start_in_vod = vod_time - actual_game_time.
-            # The clipper computes: clip_vod_time = vod_offset + game_time_seconds.
-            # Therefore the correct vod_offset = game_start_in_vod.
-            game_start_in_vod = vod_time - qc.actual_game_time
-            corrected_offset = game_start_in_vod
+            _safe_remove(probe_path)
+            ok = await _run_ytdlp(vod_url, probe_path, clip_start, clip_end)
+            if not ok or not os.path.exists(probe_path):
+                log.warn("qc_probe_download_failed", probe_gt=probe_gt)
+                continue
+
+            qc = await validate_clip(probe_path, probe_gt)
+
+            if qc.is_gameplay and qc.actual_game_time is not None:
+                estimate = vod_time - qc.actual_game_time
+                game_start_estimates.append(estimate)
+                log.info(
+                    "qc_probe_reading",
+                    probe_gt=probe_gt,
+                    timer=qc.timer_reading,
+                    actual_gt=qc.actual_game_time,
+                    estimated_start=estimate,
+                )
+
+        # ─── Compute median of all estimates ──────────────────────────
+        if game_start_estimates:
+            game_start_estimates.sort()
+            median_idx = len(game_start_estimates) // 2
+            corrected_offset = game_start_estimates[median_idx]
 
             log.info(
                 "qc_calibrate_done",
-                game_start_in_vod=game_start_in_vod,
+                estimates=game_start_estimates,
+                median=corrected_offset,
                 old_offset=current_offset,
                 new_offset=corrected_offset,
-                timer=qc.timer_reading,
-                actual_gt=qc.actual_game_time,
+                probe_count=len(game_start_estimates),
             )
             return corrected_offset
 
-        # Not gameplay at expected position — scan forward
-        log.info("qc_probe_not_gameplay", vod_time=vod_time)
+        # ─── No gameplay found at any probe — scan forward ────────────
+        log.info("qc_all_probes_failed_scanning_forward")
+        base_vod_time = current_offset + (probe_game_times[0] if probe_game_times else 300)
         for extra in range(60, max_scan_minutes * 60 + 1, 60):
             _safe_remove(probe_path)
-            scan_start = vod_time + extra
+            scan_start = base_vod_time + extra
             ok = await _run_ytdlp(vod_url, probe_path, scan_start, scan_start + 7)
             if not ok or not os.path.exists(probe_path):
                 continue
-            qc = await validate_clip(probe_path, probe_game_time + extra)
+            probe_gt = (probe_game_times[0] if probe_game_times else 300) + extra
+            qc = await validate_clip(probe_path, probe_gt)
             if qc.is_gameplay and qc.actual_game_time is not None:
-                # Found gameplay at scan_start. The game timer reads actual_game_time.
-                # Real game start in VOD = scan_start - actual_game_time
                 game_start_in_vod = scan_start - qc.actual_game_time
                 log.info(
                     "qc_calibrate_scanned",
                     scanned_to=scan_start,
                     timer=qc.timer_reading,
                     game_start_in_vod=game_start_in_vod,
-                    old_offset=current_offset,
-                    new_offset=game_start_in_vod,
                 )
                 return game_start_in_vod
 
