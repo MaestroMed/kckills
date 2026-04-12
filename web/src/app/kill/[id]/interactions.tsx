@@ -10,6 +10,7 @@ interface Comment {
   avatar?: string;
   text: string;
   time: string;
+  replies?: Comment[];
 }
 
 export function KillInteractions({ killId }: { killId: string }) {
@@ -41,7 +42,7 @@ export function KillInteractions({ killId }: { killId: string }) {
         }
         const data = await res.json();
         if (cancelled) return;
-        const mapped: Comment[] = (Array.isArray(data) ? data : []).map((c: Record<string, unknown>) => ({
+        const mapComment = (c: Record<string, unknown>): Comment => ({
           id: String(c.id ?? ""),
           user: String((c.profile as Record<string, unknown>)?.discord_username ?? (c.profile as Record<string, unknown>)?.username ?? "Anonyme"),
           avatar: ((c.profile as Record<string, unknown>)?.discord_avatar_url as string | undefined) ?? undefined,
@@ -49,7 +50,11 @@ export function KillInteractions({ killId }: { killId: string }) {
           time: c.created_at
             ? new Date(c.created_at as string).toLocaleDateString("fr-FR", { day: "numeric", month: "short" })
             : "",
-        }));
+          replies: Array.isArray(c.replies)
+            ? (c.replies as Record<string, unknown>[]).map(mapComment)
+            : undefined,
+        });
+        const mapped = (Array.isArray(data) ? data : []).map(mapComment);
         setComments(mapped);
       } catch {
         // Supabase/schema error — degrade gracefully
@@ -210,23 +215,48 @@ export function KillInteractions({ killId }: { killId: string }) {
         )}
 
         {comments.map((c) => (
-          <div key={c.id} className="rounded-lg bg-[var(--bg-primary)] border border-[var(--border-subtle)] p-3">
-            <div className="flex items-center gap-2 mb-1">
-              {c.avatar ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={c.avatar} alt="" className="h-6 w-6 rounded-full" />
-              ) : (
-                <div className="flex h-6 w-6 items-center justify-center rounded-full bg-[var(--bg-elevated)] text-[10px] font-bold text-[var(--gold)]">
-                  {c.user[0]?.toUpperCase() ?? "?"}
-                </div>
-              )}
-              <span className="text-sm font-medium">{c.user}</span>
-              <span className="text-[10px] text-[var(--text-disabled)]">{c.time}</span>
-            </div>
-            <p className="text-sm text-[var(--text-secondary)] pl-8">{c.text}</p>
-          </div>
+          <CommentThread key={c.id} comment={c} depth={0} />
         ))}
       </div>
+    </div>
+  );
+}
+
+function CommentThread({ comment: c, depth }: { comment: Comment; depth: number }) {
+  const maxDepth = 3;
+  const indent = Math.min(depth, maxDepth);
+
+  return (
+    <div style={{ marginLeft: indent > 0 ? `${indent * 16}px` : 0 }}>
+      <div className={`rounded-lg bg-[var(--bg-primary)] border p-3 ${
+        depth === 0 ? "border-[var(--border-subtle)]" : "border-[var(--border-gold)]/20"
+      }`}>
+        <div className="flex items-center gap-2 mb-1">
+          {c.avatar ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={c.avatar} alt="" className="h-6 w-6 rounded-full" />
+          ) : (
+            <div className="flex h-6 w-6 items-center justify-center rounded-full bg-[var(--bg-elevated)] text-[10px] font-bold text-[var(--gold)]">
+              {c.user[0]?.toUpperCase() ?? "?"}
+            </div>
+          )}
+          <span className="text-sm font-medium">{c.user}</span>
+          <span className="text-[10px] text-[var(--text-disabled)]">{c.time}</span>
+          {depth > 0 && (
+            <span className="text-[9px] text-[var(--text-disabled)]">&middot; r&eacute;ponse</span>
+          )}
+        </div>
+        <p className="text-sm text-[var(--text-secondary)] pl-8">{c.text}</p>
+      </div>
+
+      {/* Nested replies */}
+      {c.replies && c.replies.length > 0 && (
+        <div className="mt-2 space-y-2 border-l-2 border-[var(--gold)]/10 pl-2">
+          {c.replies.map((reply) => (
+            <CommentThread key={reply.id} comment={reply} depth={depth + 1} />
+          ))}
+        </div>
+      )}
     </div>
   );
 }
