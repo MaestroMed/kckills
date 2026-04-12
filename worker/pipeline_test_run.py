@@ -46,7 +46,7 @@ async def main():
     match_id = sys.argv[1] if len(sys.argv) > 1 else "115548668059523724"
     print(f"\n[test] running pipeline.run_for_match({match_id!r})")
     print("[test] scheduler delays patched: livestats=0.3, lolesports=0.5, ytdlp=5")
-    print("[test] harvester max_game_minutes=15 (early-mid game only)\n")
+    print("[test] harvester max_game_minutes=65 (full game coverage)\n")
     report = await pipeline.run_for_match(match_id)
     pipeline.print_report(report)
 
