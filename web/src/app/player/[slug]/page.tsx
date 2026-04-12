@@ -10,6 +10,11 @@ import Image from "next/image";
 import Link from "next/link";
 import type { Metadata } from "next";
 import { MatchHistory } from "./match-history";
+import {
+  PlayerRadar,
+  ChampionPerformanceChart,
+  RecentFormChart,
+} from "@/components/PlayerCharts";
 
 export const dynamic = "force-dynamic";
 
@@ -326,10 +331,55 @@ export default async function PlayerPage({ params }: Props) {
 
         {/* Scroll hint */}
         <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-20 flex flex-col items-center gap-2 text-white/30">
-          <span className="text-[10px] uppercase tracking-[0.3em]">Clips</span>
+          <span className="text-[10px] uppercase tracking-[0.3em]">Analytics</span>
           <svg className="h-4 w-4 animate-bounce" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
           </svg>
+        </div>
+      </section>
+
+      {/* ═══ ANALYTICS CHARTS ═══ */}
+      <section className="relative max-w-7xl mx-auto px-6 py-16">
+        <div className="flex items-center gap-3 mb-8">
+          <span className="h-px w-12 bg-[var(--gold)]" />
+          <span className="font-data text-[10px] uppercase tracking-[0.3em] font-bold text-[var(--gold)]">
+            Analytics
+          </span>
+        </div>
+
+        <div className="grid gap-6 md:grid-cols-3">
+          {/* Radar — player strengths */}
+          <div className="rounded-2xl border border-[var(--border-gold)] bg-[var(--bg-surface)] p-5">
+            <h3 className="font-display text-sm font-bold mb-4 text-[var(--text-secondary)]">
+              Profil de jeu
+            </h3>
+            <div className="flex justify-center">
+              <PlayerRadar
+                avgKills={parseFloat(stats.avgKills)}
+                avgDeaths={parseFloat(stats.avgDeaths)}
+                avgAssists={parseFloat(stats.avgAssists)}
+                gamesPlayed={stats.gamesPlayed}
+                totalGold={stats.totalGold}
+                totalCS={stats.totalCS}
+              />
+            </div>
+          </div>
+
+          {/* Champion performance */}
+          <div className="rounded-2xl border border-[var(--border-gold)] bg-[var(--bg-surface)] p-5">
+            <h3 className="font-display text-sm font-bold mb-4 text-[var(--text-secondary)]">
+              Champions &middot; games jou&eacute;es
+            </h3>
+            <ChampionPerformanceChart champions={stats.champions} />
+          </div>
+
+          {/* Recent form */}
+          <div className="rounded-2xl border border-[var(--border-gold)] bg-[var(--bg-surface)] p-5">
+            <h3 className="font-display text-sm font-bold mb-4 text-[var(--text-secondary)]">
+              Forme r&eacute;cente &middot; KDA par match
+            </h3>
+            <RecentFormChart history={stats.matchHistory} />
+          </div>
         </div>
       </section>
 

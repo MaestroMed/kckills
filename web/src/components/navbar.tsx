@@ -12,6 +12,7 @@ const NAV_LINKS = [
   { href: "/matches", label: "Matchs" },
   { href: "/hall-of-fame", label: "Hall of Fame" },
   { href: "/records", label: "Records" },
+  { href: "/compare", label: "Comparateur" },
 ];
 
 export function Navbar() {
