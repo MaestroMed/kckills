@@ -327,6 +327,7 @@ export default async function HomePage() {
                     />
                     <span className="text-[9px] uppercase tracking-wider text-white/40">WR</span>
                   </span>
+                  {/* Clip count will show once we have published kills */}
                 </div>
               </div>
             )}
