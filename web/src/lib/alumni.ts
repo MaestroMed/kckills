@@ -397,6 +397,34 @@ export const ALUMNI: Alumni[] = [
       },
     ],
   },
+  // ─── Upset ────────────────────────────────────────────────────────
+  {
+    slug: "upset",
+    name: "Upset",
+    realName: "Elias Lipp",
+    nationality: "DE",
+    role: "adc",
+    period: "2024",
+    subtitle: "L'ADC allemand veteran, ex-Fnatic, l'ere sombre LEC",
+    tag: "ADC WORLDS VETERAN",
+    signatureChampion: "Aphelios",
+    eras: ["lec-2024-winter", "lec-2024-spring"],
+    accentColor: "#FF9800",
+    bio: "Upset rejoint KC en janvier 2024 pour la premiere saison LEC du club. ADC allemand de classe mondiale, multiple fois aux Worlds avec Fnatic, il represente le plus gros investissement KC en termes de pedigree international. Sa lane avec Targamas en support est censee etre le moteur de l'equipe. Mais la realite du premier split est cruelle : 10e LEC Winter, 10e LEC Spring, deux derniers rangs consecutifs. Le reverse sweep G2 au Game 5 du Spring restera le moment le plus douloureux. Upset quitte KC a la fin de la saison 2024 quand la reconstruction totale est annoncee par Kameto.",
+    stats: [
+      { label: "Role", value: "ADC", hint: "AD Carry" },
+      { label: "Periode", value: "2024", hint: "L'ere sombre LEC" },
+      { label: "Avant KC", value: "Fnatic", hint: "Multiple Worlds" },
+      { label: "Resultat", value: "10e x2", hint: "Deux derniers rangs consecutifs" },
+    ],
+    links: [
+      {
+        label: "Liquipedia \u2014 Upset",
+        url: "https://liquipedia.net/leagueoflegends/Upset",
+        type: "wiki",
+      },
+    ],
+  },
 ];
 
 export function getAlumniBySlug(slug: string): Alumni | undefined {
