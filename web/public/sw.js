@@ -21,24 +21,39 @@ self.addEventListener("activate", (event) => {
   self.clients.claim();
 });
 
-// Fetch: network-first, fallback to cache
+// Fetch: network-first for same-origin only.
+// Cross-origin requests (CDN images, fonts, APIs) are NOT intercepted
+// to avoid CSP connect-src conflicts and cache-put errors.
 self.addEventListener("fetch", (event) => {
   if (event.request.method !== "GET") return;
+
+  const url = new URL(event.request.url);
+
+  // Only cache same-origin requests — let cross-origin go through normally
+  if (url.origin !== self.location.origin) return;
+
+  // Skip chrome-extension and other non-http schemes
+  if (!url.protocol.startsWith("http")) return;
+
   event.respondWith(
     fetch(event.request)
       .then((response) => {
-        const clone = response.clone();
-        caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
+        // Only cache successful responses
+        if (response.status === 200) {
+          const clone = response.clone();
+          caches.open(CACHE_NAME).then((cache) => {
+            try { cache.put(event.request, clone); } catch { /* ignore */ }
+          });
+        }
         return response;
       })
       .catch(() =>
         caches.match(event.request).then((cached) => {
           if (cached) return cached;
-          // For navigation requests, show the offline page
           if (event.request.mode === "navigate") {
             return caches.match("/offline.html");
           }
-          return cached;
+          return new Response("Offline", { status: 503 });
         })
       )
   );
