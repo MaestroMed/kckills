@@ -1,6 +1,7 @@
 """Gemini 2.5 Flash-Lite client — video/text analysis."""
 
 import json
+import os
 import time
 import structlog
 from config import config
@@ -41,7 +42,8 @@ async def analyze(prompt: str, video_path: str | None = None) -> dict | None:
     try:
         import google.generativeai as genai  # type: ignore
         genai.configure(api_key=config.GEMINI_API_KEY)
-        model = genai.GenerativeModel("gemini-2.5-flash-lite")
+        model_name = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash-lite")
+        model = genai.GenerativeModel(model_name)
 
         if video_path:
             video_file = genai.upload_file(video_path)
