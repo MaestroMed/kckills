@@ -41,6 +41,32 @@ async def notify_kills_processed(match_info: str, count: int):
     })
 
 
+async def notify_kill_published(
+    killer_champion: str,
+    victim_champion: str,
+    description: str,
+    highlight_score: float | None,
+    thumbnail_url: str | None,
+    kill_id: str,
+    match_info: str = "",
+):
+    """Post a new kill clip to the #kc-kills channel with rich embed."""
+    is_kc_kill = True  # only called for published kills which are KC-involved
+    embed: dict = {
+        "title": f"{killer_champion} \u2192 {victim_champion}",
+        "description": description[:200] if description else "Nouveau kill KC",
+        "color": 0xC8AA6E if is_kc_kill else 0xE84057,
+        "url": f"https://kckills.com/kill/{kill_id}",
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "footer": {"text": match_info or "KCKILLS"},
+    }
+    if highlight_score is not None:
+        embed["fields"] = [{"name": "Score", "value": f"{highlight_score:.1f}/10", "inline": True}]
+    if thumbnail_url:
+        embed["thumbnail"] = {"url": thumbnail_url}
+    await send(embed=embed)
+
+
 async def notify_error(module: str, message: str):
     await send(embed={
         "title": f"Erreur — {module}",

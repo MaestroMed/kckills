@@ -338,6 +338,28 @@ async def run_for_match(match_external_id: str) -> dict:
             safe_update("kills", patch, "id", kill["id"])
             report["kills_published"] += 1
 
+    # ─── Discord: post top 3 kills from this match to #kc-kills ────────
+    if report["kills_published"] > 0:
+        try:
+            top_kills = safe_select(
+                "kills",
+                "id, killer_champion, victim_champion, ai_description, highlight_score, thumbnail_url",
+                status="published",
+            )
+            top_kills.sort(key=lambda k: float(k.get("highlight_score") or 0), reverse=True)
+            for k in top_kills[:3]:
+                await discord_webhook.notify_kill_published(
+                    killer_champion=k.get("killer_champion") or "?",
+                    victim_champion=k.get("victim_champion") or "?",
+                    description=k.get("ai_description") or "",
+                    highlight_score=float(k["highlight_score"]) if k.get("highlight_score") else None,
+                    thumbnail_url=k.get("thumbnail_url"),
+                    kill_id=k["id"],
+                    match_info=f"Match {match_external_id}",
+                )
+        except Exception:
+            pass  # never let Discord notification crash the pipeline
+
     log.info("pipeline_done", **{k: v for k, v in report.items() if k != "errors"})
     return report
 
