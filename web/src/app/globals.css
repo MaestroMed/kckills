@@ -140,6 +140,29 @@ main > * > *:nth-child(6) { animation-delay: 0.28s; }
 .hextech-glow { box-shadow: 0 0 15px rgba(10,200,185,0.1), 0 0 40px rgba(10,200,185,0.05); }
 .gold-glow { box-shadow: 0 0 20px rgba(200,170,110,0.15), 0 0 60px rgba(200,170,110,0.05); }
 
+/* ─── Micro-interactions (γ5) ────────────────────── */
+/* Stat cards: subtle lift on hover */
+.stat-card {
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s ease;
+}
+.stat-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 20px rgba(200,170,110,0.1);
+}
+
+/* Interactive links/cards: scale press feedback */
+a[class*="rounded-xl"]:active,
+button:active {
+  transform: scale(0.98);
+}
+
+/* Gold border glow on focus for interactive cards */
+a[class*="border-"]:focus-visible,
+button:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
+}
+
 /* ─── Hero — cinematic ───────────────────────────── */
 .hero-gradient {
   background:
