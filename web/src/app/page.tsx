@@ -8,6 +8,7 @@ import { AudioPlayer } from "@/components/AudioPlayer";
 import { HomeFilteredContent } from "@/components/HomeFilteredContent";
 import { HomeClipsShowcase } from "@/components/HomeClipsShowcase";
 import { KillOfTheWeek } from "@/components/KillOfTheWeek";
+import { EraComparisonChart } from "@/components/EraComparison";
 import { AnimatedNumber } from "@/components/AnimatedNumber";
 import { MacronEasterEgg } from "@/components/MacronEasterEgg";
 import { HeroClipBackground } from "@/components/HeroClipBackground";
@@ -459,6 +460,55 @@ export default async function HomePage() {
 
       {/* ═══ HIGHLIGHTS CLIPS SHOWCASE (real YouTube clips) ═══════════════ */}
       <HomeClipsShowcase />
+
+      {/* ═══ ERA COMPARISON CHARTS ═══════════════════════════════════════ */}
+      {(() => {
+        // Group matches by year-split to build era stats
+        const eraPeriods = [
+          { key: "2024 W", filter: (d: string) => d >= "2024-01-01" && d < "2024-04-01" },
+          { key: "2024 Sp", filter: (d: string) => d >= "2024-03-01" && d < "2024-06-01" },
+          { key: "2024 Su", filter: (d: string) => d >= "2024-06-01" && d < "2024-10-01" },
+          { key: "2025 W", filter: (d: string) => d >= "2025-01-01" && d < "2025-04-01" },
+          { key: "2025 Sp", filter: (d: string) => d >= "2025-03-01" && d < "2025-06-01" },
+          { key: "2025 Su", filter: (d: string) => d >= "2025-06-01" && d < "2025-10-01" },
+          { key: "2026 V", filter: (d: string) => d >= "2026-01-01" && d < "2026-03-01" },
+          { key: "2026 Sp", filter: (d: string) => d >= "2026-03-01" && d < "2026-07-01" },
+        ];
+        const eraData = eraPeriods
+          .map((era) => {
+            const matches = allMatches.filter((m) => era.filter(m.date));
+            if (matches.length === 0) return null;
+            const wins = matches.filter((m) => m.kc_won).length;
+            const totalGames = matches.reduce((a, m) => a + m.games.length, 0);
+            const kcKills = matches.reduce((a, m) => a + m.games.reduce((b, g) => b + g.kc_kills, 0), 0);
+            const oppKills = matches.reduce((a, m) => a + m.games.reduce((b, g) => b + g.opp_kills, 0), 0);
+            return {
+              era: era.key,
+              period: era.key,
+              matches: matches.length,
+              wins,
+              losses: matches.length - wins,
+              winRate: Math.round((wins / matches.length) * 100),
+              avgKcKills: totalGames > 0 ? +(kcKills / totalGames).toFixed(1) : 0,
+              avgOppKills: totalGames > 0 ? +(oppKills / totalGames).toFixed(1) : 0,
+            };
+          })
+          .filter(Boolean) as { era: string; period: string; matches: number; wins: number; losses: number; winRate: number; avgKcKills: number; avgOppKills: number }[];
+
+        if (eraData.length < 2) return null;
+        return (
+          <section>
+            <div className="flex items-center gap-3 mb-6">
+              <span className="h-px flex-1 bg-[var(--border-gold)]" />
+              <span className="font-data text-[10px] uppercase tracking-[0.3em] font-bold text-[var(--gold)]">
+                Evolution KC par ere
+              </span>
+              <span className="h-px flex-1 bg-[var(--border-gold)]" />
+            </div>
+            <EraComparisonChart data={eraData} />
+          </section>
+        );
+      })()}
 
       {/* ═══ TIMELINE + MATCHES (filtered) ═══════════════════════════════ */}
       <HomeFilteredContent allMatches={allMatches} />
