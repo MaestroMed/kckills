@@ -1,3 +1,4 @@
+import { notFound } from "next/navigation";
 import Link from "next/link";
 import type { Metadata } from "next";
 
@@ -8,6 +9,10 @@ export const metadata: Metadata = {
 };
 
 export default function GameLobbyPage() {
+  // Feature flag — game is hidden until explicitly enabled
+  if (process.env.NEXT_PUBLIC_GAME_ENABLED !== "true") {
+    notFound();
+  }
   return (
     <div className="mx-auto max-w-2xl py-16 text-center space-y-8">
       {/* Hero */}

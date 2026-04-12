@@ -2,6 +2,7 @@
 
 import dynamic from "next/dynamic";
 import Link from "next/link";
+import { notFound } from "next/navigation";
 
 // Dynamic import to avoid SSR issues with Matter.js (needs window/canvas)
 const GameCanvas = dynamic(
@@ -25,6 +26,11 @@ const GameCanvas = dynamic(
 );
 
 export default function GameSoloPage() {
+  // Feature flag — game hidden until enabled
+  if (process.env.NEXT_PUBLIC_GAME_ENABLED !== "true") {
+    notFound();
+  }
+
   return (
     <>
       <GameCanvas />

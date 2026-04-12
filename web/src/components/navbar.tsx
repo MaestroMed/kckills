@@ -13,7 +13,10 @@ const NAV_LINKS = [
   { href: "/hall-of-fame", label: "Hall of Fame" },
   { href: "/records", label: "Records" },
   { href: "/compare", label: "Comparateur" },
-  { href: "/game", label: "Blue Wall \uD83E\uDDF1" },
+  // Game link only shown when NEXT_PUBLIC_GAME_ENABLED=true
+  ...(process.env.NEXT_PUBLIC_GAME_ENABLED === "true"
+    ? [{ href: "/game", label: "Blue Wall \uD83E\uDDF1" }]
+    : []),
 ];
 
 export function Navbar() {
