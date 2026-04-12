@@ -4,8 +4,11 @@ import { useEffect, useRef, useState } from "react";
 import { m, AnimatePresence } from "framer-motion";
 
 interface ClipEntry {
-  /** YouTube 11-char videoId (not the full URL) */
-  videoId: string;
+  /** YouTube 11-char videoId. Omit if using mp4Url instead. */
+  videoId?: string;
+  /** Direct MP4 URL (e.g. R2 clips.kckills.com). Preferred over videoId
+   *  when both are set — no CAPTCHA, no YouTube dependency, CDN-cached. */
+  mp4Url?: string;
   /** Short title shown in the bottom-left overlay */
   title: string;
   /** Context line: "Le Sacre · Game 3" */
@@ -100,21 +103,34 @@ export function HeroClipBackground({ clips, posterSrc = "/images/hero-bg.jpg" }:
           exit={{ opacity: 0, scale: 1.02 }}
           transition={{ duration: 1.4, ease: [0.16, 1, 0.3, 1] }}
         >
-          {/* 16:9 iframe scaled to cover: the CSS trick keeps the aspect ratio
-              correct regardless of viewport — 177.77vh = 100vh * 16/9 */}
-          <iframe
-            title={current.title}
-            className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none"
-            style={{
-              width: "max(100vw, 177.77vh)",
-              height: "max(56.25vw, 100vh)",
-              border: 0,
-            }}
-            src={`https://www.youtube-nocookie.com/embed/${current.videoId}?autoplay=1&mute=1&loop=1&playlist=${current.videoId}&controls=0&showinfo=0&rel=0&modestbranding=1&playsinline=1&iv_load_policy=3&disablekb=1&fs=0&start=${current.start ?? 0}`}
-            allow="autoplay; encrypted-media; picture-in-picture"
-            allowFullScreen={false}
-            loading="lazy"
-          />
+          {current.mp4Url ? (
+            /* Direct MP4 from R2 — no CAPTCHA, instant CDN-cached playback */
+            <video
+              key={current.mp4Url}
+              className="absolute inset-0 w-full h-full object-cover pointer-events-none"
+              src={current.mp4Url}
+              autoPlay
+              muted
+              loop
+              playsInline
+              preload="auto"
+            />
+          ) : current.videoId ? (
+            /* YouTube iframe fallback (may trigger CAPTCHA on low-traffic domains) */
+            <iframe
+              title={current.title}
+              className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none"
+              style={{
+                width: "max(100vw, 177.77vh)",
+                height: "max(56.25vw, 100vh)",
+                border: 0,
+              }}
+              src={`https://www.youtube-nocookie.com/embed/${current.videoId}?autoplay=1&mute=1&loop=1&playlist=${current.videoId}&controls=0&showinfo=0&rel=0&modestbranding=1&playsinline=1&iv_load_policy=3&disablekb=1&fs=0&start=${current.start ?? 0}`}
+              allow="autoplay; encrypted-media; picture-in-picture"
+              allowFullScreen={false}
+              loading="lazy"
+            />
+          ) : null}
         </m.div>
       </AnimatePresence>
 

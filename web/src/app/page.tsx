@@ -3,6 +3,7 @@ import Image from "next/image";
 import { loadRealData, getCurrentRoster, getTeamStats, getMatchesSorted, displayRole } from "@/lib/real-data";
 import { championIconUrl, championSplashUrl } from "@/lib/constants";
 import { PLAYER_PHOTOS, TEAM_LOGOS, KC_LOGO } from "@/lib/kc-assets";
+import { getPublishedKills } from "@/lib/supabase/kills";
 import { AudioPlayer } from "@/components/AudioPlayer";
 import { HomeFilteredContent } from "@/components/HomeFilteredContent";
 import { HomeClipsShowcase } from "@/components/HomeClipsShowcase";
@@ -25,22 +26,31 @@ import { HeroClipBackground } from "@/components/HeroClipBackground";
  *
  *  TODO (user request): admin backoffice to edit this list without a deploy
  */
-const HERO_CLIPS = [
-  // --- Team highlights (cinematic ALL GAMES reels) ---
-  {
-    videoId: "bqBVNEm52A0",
-    title: "KC 3-0 G2 — ALL GAMES HIGHLIGHTS",
-    context: "Le Sacre · Winter 2025",
-    durationMs: 25000,
-    start: 20, // skip LEC intro
-  },
-  {
-    videoId: "42lv5jASq9I",
-    title: "KC vs G2 — LEC 2026 Grand Final highlights",
-    context: "Le Renouveau · Versus 2026",
-    durationMs: 25000,
-    start: 30,
-  },
+/**
+ * Build the hero clips array: top-scored R2 kills first (no CAPTCHA, instant),
+ * then YouTube fallback reels for variety. Called from the server component so
+ * we can query Supabase.
+ */
+async function buildHeroClips() {
+  const topKills = await getPublishedKills(5);
+  const r2Clips = topKills
+    .filter((k) => k.clip_url_horizontal)
+    .slice(0, 3)
+    .map((k) => ({
+      mp4Url: k.clip_url_horizontal!,
+      title: k.ai_description ?? `${k.killer_champion} \u2192 ${k.victim_champion}`,
+      context: `Game ${k.games?.game_number ?? "?"} \u00b7 ${k.games?.matches?.stage ?? "LEC"}`,
+      durationMs: 15000,
+    }));
+
+  const youtubeClips = YOUTUBE_HERO_CLIPS;
+
+  // R2 clips rank first — they're instant, no CAPTCHA, CDN-cached.
+  // If pipeline hasn't run yet (0 R2 clips), we fall back to YouTube only.
+  return [...r2Clips, ...youtubeClips];
+}
+
+const YOUTUBE_HERO_CLIPS = [
   // --- Individual outplays (the real killers) ---
   {
     videoId: "pMSFp7wku5Y",
@@ -90,12 +100,13 @@ const HERO_CLIPS = [
 
 export const dynamic = "force-dynamic";
 
-export default function HomePage() {
+export default async function HomePage() {
   const data = loadRealData();
   const roster = getCurrentRoster(data);
   const stats = getTeamStats(data);
   const allMatches = getMatchesSorted(data);
   const isEmpty = data.total_matches === 0;
+  const HERO_CLIPS = await buildHeroClips();
 
   // Champion splash for the #1 player (most kills)
   const topPlayer = [...roster].sort((a, b) => b.totalKills - a.totalKills)[0];
