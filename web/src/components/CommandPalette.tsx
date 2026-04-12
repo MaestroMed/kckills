@@ -56,6 +56,7 @@ const PAGES: Entry[] = [
   { id: "page-top",     group: "page", label: "Top kills",     subtitle: "Leaderboard",      href: "/top",         searchText: "top leaderboard best meilleurs" },
   { id: "page-hof",     group: "page", label: "Hall of Fame",  subtitle: "Legendes KC",      href: "/hall-of-fame", searchText: "hall fame legendes legends" },
   { id: "page-records", group: "page", label: "Records",       subtitle: "Les chiffres",     href: "/records",     searchText: "records chiffres stats" },
+  { id: "page-compare", group: "page", label: "Comparateur",   subtitle: "Joueur vs joueur", href: "/compare",     searchText: "compare comparateur versus vs joueur duel" },
   { id: "page-community",group: "page", label: "Community",    subtitle: "Edits fans",       href: "/community",   searchText: "community communaute edits fans" },
   { id: "page-settings",group: "page", label: "Parametres",    subtitle: "Profil",           href: "/settings",    searchText: "settings parametres profil" },
 ];
