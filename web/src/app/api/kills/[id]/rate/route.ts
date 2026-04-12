@@ -40,9 +40,45 @@ export async function POST(
   // Get updated kill rating
   const { data: kill } = await supabase
     .from("kills")
-    .select("avg_rating, rating_count")
+    .select("avg_rating, rating_count, multi_kill")
     .eq("id", id)
     .single();
+
+  // ─── Badge attribution (fire-and-forget) ─────────────────────────
+  try {
+    const { count } = await supabase
+      .from("ratings")
+      .select("id", { count: "exact", head: true })
+      .eq("user_id", user.id);
+    const totalRatings = count ?? 0;
+
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("badges")
+      .eq("id", user.id)
+      .maybeSingle();
+    const currentBadges: string[] = (profile?.badges as string[]) ?? [];
+    const newBadges = [...currentBadges];
+
+    if (totalRatings >= 1 && !newBadges.includes("first_rater")) {
+      newBadges.push("first_rater");
+    }
+    if (totalRatings >= 50 && !newBadges.includes("critic")) {
+      newBadges.push("critic");
+    }
+    if (kill?.multi_kill === "penta" && !newBadges.includes("penta_witness")) {
+      newBadges.push("penta_witness");
+    }
+
+    if (newBadges.length > currentBadges.length) {
+      await supabase
+        .from("profiles")
+        .update({ badges: newBadges })
+        .eq("id", user.id);
+    }
+  } catch {
+    // Badge attribution is best-effort — never block the rating response
+  }
 
   return NextResponse.json({
     avg_rating: kill?.avg_rating ?? 0,
