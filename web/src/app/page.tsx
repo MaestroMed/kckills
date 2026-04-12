@@ -8,6 +8,8 @@ import { AudioPlayer } from "@/components/AudioPlayer";
 import { HomeFilteredContent } from "@/components/HomeFilteredContent";
 import { HomeClipsShowcase } from "@/components/HomeClipsShowcase";
 import { KillOfTheWeek } from "@/components/KillOfTheWeek";
+import { QuoteCard } from "@/components/QuoteCard";
+import { QUOTES } from "@/lib/quotes";
 import { EraComparisonChart } from "@/components/EraComparison";
 import { AnimatedNumber } from "@/components/AnimatedNumber";
 import { MacronEasterEgg } from "@/components/MacronEasterEgg";
@@ -454,6 +456,25 @@ export default async function HomePage() {
           </div>
         </section>
       )}
+
+      {/* ═══ QUOTE OF THE DAY ═══════════════════════════════════════════ */}
+      {(() => {
+        // Deterministic "random" based on day of year so it changes daily
+        const dayOfYear = Math.floor((Date.now() - new Date(new Date().getFullYear(), 0, 0).getTime()) / 86400000);
+        const quote = QUOTES[dayOfYear % QUOTES.length];
+        return (
+          <section>
+            <div className="flex items-center gap-3 mb-4">
+              <span className="h-px flex-1 bg-[var(--border-gold)]" />
+              <span className="font-data text-[9px] uppercase tracking-[0.3em] text-[var(--text-muted)]">
+                Citation du jour
+              </span>
+              <span className="h-px flex-1 bg-[var(--border-gold)]" />
+            </div>
+            <QuoteCard quote={quote} />
+          </section>
+        );
+      })()}
 
       {/* ═══ KILL OF THE WEEK ═══════════════════════════════════════════ */}
       <KillOfTheWeek />
