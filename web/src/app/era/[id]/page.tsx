@@ -7,6 +7,8 @@ import { loadRealData, type RealMatch } from "@/lib/real-data";
 import { championSplashUrl } from "@/lib/constants";
 import { KC_LOGO, TEAM_LOGOS } from "@/lib/kc-assets";
 import { EraClipsSection } from "./era-clips";
+import { getQuotesByEra } from "@/lib/quotes";
+import { QuoteRow } from "@/components/QuoteCard";
 
 export const dynamic = "force-dynamic";
 
@@ -320,6 +322,26 @@ export default async function EraPage({ params }: Props) {
           </div>
         </section>
       )}
+
+      {/* ═══ QUOTES ═══ */}
+      {(() => {
+        const quotes = getQuotesByEra(era.id);
+        if (quotes.length === 0) return null;
+        return (
+          <section className="relative max-w-5xl mx-auto px-6 py-16">
+            <div className="flex items-center gap-3 mb-6">
+              <span className="h-px w-12" style={{ backgroundColor: era.color }} />
+              <span
+                className="font-data text-[10px] uppercase tracking-[0.3em] font-bold"
+                style={{ color: era.color }}
+              >
+                Citations
+              </span>
+            </div>
+            <QuoteRow quotes={quotes} />
+          </section>
+        );
+      })()}
 
       {/* ═══ ROSTER ═══ */}
       {era.roster && (
