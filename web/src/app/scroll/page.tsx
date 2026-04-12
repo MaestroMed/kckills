@@ -6,7 +6,17 @@ import { ScrollFeed, type FeedItem, type AggregateFeedItem, type VideoFeedItem }
 export const dynamic = "force-dynamic";
 export const metadata = {
   title: "Scroll \u2014 KCKILLS",
-  description: "Scroll les kills KC comme sur TikTok.",
+  description: "Scroll les kills KC comme sur TikTok. Vrais clips vid\u00e9o des matchs LEC, g\u00e9n\u00e9r\u00e9s automatiquement.",
+  openGraph: {
+    title: "KC Kills \u2014 Le TikTok des kills LoL",
+    description: "Scroll, rate et partage chaque kill Karmine Corp de la LEC. Clips vid\u00e9o autoplay + descriptions AI.",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "KC Kills \u2014 Le TikTok des kills LoL",
+    description: "Scroll les kills KC comme sur TikTok.",
+  },
 };
 
 export default async function ScrollPage() {

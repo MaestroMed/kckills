@@ -397,6 +397,34 @@ export const ALUMNI: Alumni[] = [
       },
     ],
   },
+  // ─── Vladi ────────────────────────────────────────────────────────
+  {
+    slug: "vladi",
+    name: "Vladi",
+    realName: "Vladimir Naumov",
+    nationality: "BG",
+    role: "mid",
+    period: "2025",
+    subtitle: "Le mid laner du Sacre, MVP des finales LEC",
+    tag: "MID LANE CHAMPION",
+    signatureChampion: "Viktor",
+    eras: ["lec-2025-winter", "lec-2025-spring", "lec-2025-summer"],
+    accentColor: "#C8AA6E",
+    bio: "Vladi est le mid laner qui a accompli le reve KC : gagner un titre LEC. Joueur bulgare recrute pour le roster 2025, il forme avec Canna et Caliste le trio offensif qui defonce la LEC Winter 2025. Son Viktor 10/1/7 en Game 3 de la Grande Finale 3-0 contre G2 est l'un des moments les plus emblematiques de l'histoire KC. Son jeu en teamfight, sa gestion des waves et sa capacite a carry les fins de game tardives font de lui un joueur complet. Il quitte KC a la fin de la saison 2025 quand le club recrute kyeahoo et Busio pour construire la generation suivante.",
+    stats: [
+      { label: "Role", value: "MID", hint: "Mid laner" },
+      { label: "Periode", value: "2025", hint: "L'annee du Sacre" },
+      { label: "Titre", value: "LEC Winter", hint: "3-0 vs G2 en finale" },
+      { label: "Moment cle", value: "Viktor 10/1/7", hint: "Game 3 Grande Finale" },
+    ],
+    links: [
+      {
+        label: "Liquipedia \u2014 Vladi",
+        url: "https://liquipedia.net/leagueoflegends/Vladi",
+        type: "wiki",
+      },
+    ],
+  },
   // ─── Upset ────────────────────────────────────────────────────────
   {
     slug: "upset",
