@@ -1,11 +1,28 @@
 "use client";
 
 import Link from "next/link";
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
+import { BadgeRow } from "@/components/BadgeChip";
 
 export default function SettingsPage() {
   const [exportStatus, setExportStatus] = useState<"idle" | "loading" | "done" | "error" | "auth">("idle");
   const [deleteStatus, setDeleteStatus] = useState<"idle" | "confirming" | "deleting" | "done" | "error" | "auth">("idle");
+  const [userBadges, setUserBadges] = useState<string[]>([]);
+  const [userName, setUserName] = useState<string | null>(null);
+
+  // Fetch user profile on mount
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch("/api/me");
+        if (res.ok) {
+          const data = await res.json();
+          setUserBadges((data.profile?.badges as string[]) ?? []);
+          setUserName(data.profile?.discord_username ?? null);
+        }
+      } catch { /* not logged in */ }
+    })();
+  }, []);
 
   const handleExport = useCallback(async () => {
     setExportStatus("loading");
@@ -57,9 +74,21 @@ export default function SettingsPage() {
       {/* Profile */}
       <section className="rounded-xl border border-[var(--border-gold)] bg-[var(--bg-surface)] p-5 space-y-3">
         <h2 className="font-display font-semibold">Profil</h2>
-        <p className="text-sm text-[var(--text-muted)]">
-          Connecte-toi avec Discord pour voir ton profil.
-        </p>
+        {userName ? (
+          <div className="space-y-3">
+            <p className="text-sm text-[var(--gold)] font-bold">{userName}</p>
+            {userBadges.length > 0 && (
+              <div>
+                <p className="text-[10px] text-[var(--text-muted)] uppercase tracking-wider mb-1.5">Badges</p>
+                <BadgeRow slugs={userBadges} />
+              </div>
+            )}
+          </div>
+        ) : (
+          <p className="text-sm text-[var(--text-muted)]">
+            Connecte-toi avec Discord pour voir ton profil.
+          </p>
+        )}
         <Link
           href="/login"
           className="inline-flex items-center gap-2 rounded-lg bg-[#5865F2] px-4 py-2 text-sm font-semibold text-white hover:bg-[#4752C4] transition-colors"
