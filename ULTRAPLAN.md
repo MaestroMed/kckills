@@ -409,58 +409,94 @@ videos dans /scroll et on reste au stade "site avec liens YouTube".
 
 ---
 
-## RECAP TOTAL (mise a jour)
+## PHASE nu — CLIP QUALITY (audit v2, 12 avril 2026)
 
-| Phase | Nom | Effort restant [CC/CC+K] | Effort [USER] |
-|-------|-----|--------------------------|----------------|
-| α | Polish | 1.5 jh | 0 |
-| β | SEO | 0.5 jh | 0.2 jh (GSC) |
-| γ | Motion | 3.5 jh | 0 |
-| δ | Content | 5 jh | 0 |
-| ε | Infra | 1 jh | 0.3 jh (Sentry) |
-| **ζ** | **Worker pipeline** | **12 jh** | **0.5 jh (systemd)** |
-| η | Community | 5 jh | 0 |
-| θ | PWA | 2 jh | 0 |
-| ι | i18n | 3 jh | 0 |
-| κ | Tests | 4 jh | 0 |
-| λ | API publique | 3 jh | 0 |
-| μ | State of the art | 6 jh | 0 |
-| **Total** | | **~46 jh** | **~1 jh** |
+Source: audit externe "KC Kills: Full site audit and automated clip generation
+blueprint". Part 2 contient un blueprint detaille pour un pipeline de clips
+world-class. Integre ici par ordre d'impact sur la qualite percue des clips.
 
----
+| # | Tache | Effort | Impact | Status |
+|---|-------|--------|--------|--------|
+| ν1 | **QC pipeline Gemini timer-read** — calibre l'offset VOD par game en lisant le timer in-game | S | Critical | ✅ fait 12 avril |
+| ν2 | **Variable clip duration** — penta=25s, triple=16s, single=10s, baron steal=25s au lieu de 18s fixe | S | Eleve | ⏳ |
+| ν3 | **Hype score structure** — scoring par multi_kill + context + shutdown_bounty + gold_diff + solo_play au lieu de Gemini subjectif | M | Eleve | ⏳ |
+| ν4 | **Audio analysis caster** — librosa RMS + pYIN pitch tracking, multiplicateur hype 1.0-2.0x | L | Eleve | ⏳ |
+| ν5 | **Replay detection** — OCR "REPLAY" + frame rate analysis, preferer le replay broadcast | M | Moyen | ⏳ |
+| ν6 | **Smart vertical crop** — YOLO champion tracking center au lieu de crop fixe | M | Moyen | ⏳ |
+| ν7 | **Text overlays ffmpeg** — hook text bold (3s), context text, kill counter anime | M | Moyen | ⏳ |
+| ν8 | **Caster keyword detection** — Whisper ASR pour "PENTAKILL", "UNBELIEVABLE", bonus hype | L | Moyen | ⏳ |
+| ν9 | **HLS/DASH transcoding** — adaptive bitrate pour mobile lent | L | Moyen | ⏳ |
+| ν10 | **Context classification structuree** — teamfight/solo_kill/tower_dive/baron_steal via position data | M | Moyen | ⏳ |
 
-## ORDRE D'EXECUTION RECOMMANDE POUR LES 3 PROCHAINES SEMAINES
-
-### Semaine 1 : Core product complet
-- Fix data fetcher BO3/BO5 completeness ✅ batch 11
-- **Zeta.1-4 : Sentinel + Harvester + VOD Hunter + Clipper** sur 1 match test
-- Verification end-to-end : 1 match -> N clips -> R2 -> Supabase -> /scroll
-- Alpha2 : loading skeletons
-- Alpha6 : alt text audit
-- Delta11 : Blue Wall 257 + KCX growth + Dark Era narratives
-
-### Semaine 2 : Scale + polish
-- **Zeta.12 : Backfill 83 matchs en week-end** (objectif : ~1500 kills clippes)
-- Verification : /scroll rempli de vrais clips MP4 playables
-- Zeta.5 : Gemini analyzer en batch
-- Zeta.6 : OG generator en batch
-- Zeta.13 : systemd auto-restart
-- Gamma3 : AnimatePresence route transitions
-- Mu2 : Cmd+K search
-- Epsilon9 : Sentry
-- Delta5 : pages alumni (Rekkles, Vladi, Cabochard, xMatty, Saken, Targamas, Upset, Bo, 113, Cinkrof, Hantera, Caps... non wait Caps is G2)
-
-### Semaine 3 : Community + launch
-- Eta1-2 : Rate + comments
-- Eta4 : Fan edits section
-- Eta9 : Push notifications
-- Mu9 : Konami easter egg
-- Mu10 : Hidden darkness page
-- Iota : i18n EN version
-- **Stream chez Eto / Kameto**
+Effort total ν : ~8-10 jh. Priorite : ν2 + ν3 d'abord (quick wins), ν4 ensuite
+(biggest quality uplift), le reste iteratif.
 
 ---
 
-*Le but de cette v2 est d'etre la boussole quotidienne jusqu'au stream.
-Chaque batch pushed doit mettre a jour une case de status. Chaque phase
-terminee doit etre annoncee dans le CHANGELOG Discord.*
+## RECAP TOTAL (mise a jour 12 avril 2026, post-session)
+
+### CE QUI A ETE FAIT DANS LA SESSION DU 12 AVRIL
+
+- ✅ ζ.1-10 : Pipeline end-to-end valide (66 kills published, 1er run)
+- ✅ ζ.11 : Test end-to-end KC vs VIT W1 (3 games, 66 clips R2)
+- ✅ QC calibration Gemini timer-read (offset +374s broadcast intro)
+- ✅ Frontend ↔ Supabase : /scroll, /kill/[id], /match/[slug], /player/[slug]
+- ✅ Ratings + comments cables aux API endpoints
+- ✅ Desktop 16:9 + KC kills >> deaths dans le scoring
+- ✅ Hero MP4 R2 au lieu de YouTube embed (bye CAPTCHA)
+- ✅ Fix yt-dlp venv (python -m), Gemini file-wait, cookies fallback
+- ✅ α2 : Hextech skeletons
+- ✅ γ11 : LazyMotion migration (-28 KB)
+- ✅ δ5 : 5 alumni pages
+- ✅ δ11 : Dark Era + Blue Wall narratives
+- ✅ μ2 : Cmd+K global search
+- ✅ μ10 : /era/darkness easter egg
+
+### EFFORT RESTANT
+
+| Phase | Nom | Effort restant | Notes |
+|-------|-----|----------------|-------|
+| α | Polish | 0.5 jh | alt text + blur placeholders |
+| β | SEO | 0.5 jh | JSON-LD par kill |
+| γ | Motion | 3 jh | AnimatePresence, GSAP, micro-interactions |
+| δ | Content | 4 jh | plus d'alumni, stats avancees, recharts |
+| ε | Infra | 1 jh | Sentry, analytics, CSP |
+| **ζ** | **Worker pipeline** | **3 jh** | backfill 83 matchs, daemon 24/7, YouTube throttle mgmt |
+| η | Community | 4 jh | ratings UX, comments threads, Discord bot |
+| θ | PWA | 2 jh | install prompt, offline, push notifs |
+| ι | i18n | 3 jh | FR/EN |
+| κ | Tests | 4 jh | Vitest, Playwright, fixtures |
+| λ | API publique | 3 jh | REST endpoints, docs |
+| μ | State of the art | 4 jh | Three.js, Konami, AI chat |
+| **ν** | **Clip quality** | **8 jh** | variable duration, hype score, audio, overlays |
+| **Total** | | **~40 jh** | |
+
+---
+
+## ORDRE D'EXECUTION MIS A JOUR
+
+### Maintenant (12-13 avril)
+- ✅ Pipeline QC avec offset calibre (+374s)
+- ⏳ Attendre fin du pipeline re-run → kills publiees → /scroll repeupled
+- Backfill 5-10 matchs recents avec QC (cookies.txt si YouTube re-throttle)
+- ν2 : Variable clip duration
+- ν3 : Hype score structure
+
+### Semaine prochaine
+- ζ.12 : Backfill massif 83 matchs (week-end, ~21h CPU)
+- ζ.13 : Daemon 24/7 (systemd / Task Scheduler)
+- η1-2 : Ratings + comments polish
+- ε9 : Sentry
+- ν4 : Audio analysis caster (librosa, biggest quality uplift)
+- δ5 suite : plus d'alumni
+
+### Semaine d'apres
+- ν5-7 : Replay detection + smart crop + text overlays
+- γ3 : AnimatePresence route transitions
+- ι : i18n EN
+- **Stream chez Eto / Kameto** 🚀
+
+---
+
+*ULTRAPLAN v3 — 12 avril 2026. Mise a jour post-audit v2 et session pipeline.*
+*Le site est LIVE sur kckills.com avec de vrais clips MP4 auto-generes.*
