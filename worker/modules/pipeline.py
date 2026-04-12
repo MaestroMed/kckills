@@ -260,6 +260,7 @@ async def run_for_match(match_external_id: str) -> dict:
                 youtube_id=yt_id,
                 vod_offset_seconds=vod_offset,
                 game_time_seconds=int(kill_row.get("game_time_seconds") or 0),
+                multi_kill=kill_row.get("multi_kill"),
             )
             if urls and urls.get("clip_url_horizontal"):
                 safe_update("kills", {**urls, "status": "clipped"}, "id", kill_row["id"])

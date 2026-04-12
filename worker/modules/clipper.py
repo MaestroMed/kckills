@@ -41,14 +41,20 @@ async def clip_kill(
     youtube_id: str,
     vod_offset_seconds: int,
     game_time_seconds: int,
+    multi_kill: str | None = None,
 ) -> dict | None:
     """Download, encode and upload a single kill. Returns dict of R2 URLs or None."""
     os.makedirs(config.CLIPS_DIR, exist_ok=True)
     os.makedirs(config.THUMBNAILS_DIR, exist_ok=True)
 
+    # Variable clip duration based on kill context (audit v2 blueprint)
+    timing = config.CLIP_TIMING.get(multi_kill or "", config.CLIP_TIMING["default"])
+    before = timing["before"]
+    after = timing["after"]
+
     vod_time = int(vod_offset_seconds or 0) + int(game_time_seconds or 0)
-    clip_start = max(0, vod_time - config.CLIP_BEFORE_SECONDS)
-    clip_end = vod_time + config.CLIP_AFTER_SECONDS
+    clip_start = max(0, vod_time - before)
+    clip_end = vod_time + after
 
     raw_path = os.path.join(config.CLIPS_DIR, f"raw_{kill_id}.mp4")
     h_path = os.path.join(config.CLIPS_DIR, f"{kill_id}_h.mp4")
@@ -117,7 +123,7 @@ async def clip_kill(
 
         # ─── 5. Extract thumbnail at kill moment ────────────────────
         await _ffmpeg([
-            "-ss", str(config.CLIP_BEFORE_SECONDS),
+            "-ss", str(before),
             "-i", v_path,
             "-vframes", "1",
             "-q:v", "2",

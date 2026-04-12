@@ -37,8 +37,21 @@ class Config:
 
     # ─── Worker ──────────────────────────────────────────────
     KC_TEAM_NAME = "Karmine Corp"
-    CLIP_BEFORE_SECONDS = 10
-    CLIP_AFTER_SECONDS = 8
+    # Default clip padding (used when multi_kill not known at clip time)
+    CLIP_BEFORE_SECONDS = 5
+    CLIP_AFTER_SECONDS = 5
+
+    # Variable clip timing by context (from audit v2 blueprint)
+    CLIP_TIMING = {
+        "penta":        {"before": 8, "after": 6, "total": 25},
+        "quadra":       {"before": 6, "after": 4, "total": 18},
+        "triple":       {"before": 5, "after": 4, "total": 16},
+        "double":       {"before": 4, "after": 3, "total": 14},
+        "baron_steal":  {"before": 10, "after": 6, "total": 25},
+        "dragon_steal": {"before": 8, "after": 5, "total": 20},
+        "solo_kill":    {"before": 4, "after": 3, "total": 10},
+        "default":      {"before": 5, "after": 5, "total": 12},
+    }
 
     # ─── Paths ───────────────────────────────────────────────
     CLIPS_DIR = os.path.join(os.path.dirname(__file__), "clips")
