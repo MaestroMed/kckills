@@ -246,9 +246,10 @@ function VideoScrollItem({ item, index, total }: { item: VideoFeedItem; index: n
         preload={index < 3 ? "auto" : "metadata"}
       />
 
-      {/* Cinematic gradients — kept lighter than splash mode so the video stays visible */}
-      <div className="absolute inset-0 bg-gradient-to-t from-black via-black/30 to-black/40 pointer-events-none" />
-      <div className="absolute inset-0 bg-gradient-to-r from-black/30 via-transparent to-black/30 pointer-events-none" />
+      {/* Minimal gradient — only darken the bottom where text overlay sits.
+          The video should fill the screen and breathe on desktop. */}
+      <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-transparent to-transparent pointer-events-none" />
+      <div className="absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-black/50 to-transparent pointer-events-none" />
 
       <div className="relative z-10 flex h-full flex-col justify-end px-5 pb-8 pt-20">
         {/* Kill ID link */}

@@ -26,9 +26,17 @@ from services.supabase_client import safe_select, safe_update
 log = structlog.get_logger()
 
 
-ANALYSIS_PROMPT = """<role>Analyste esport LoL specialise highlights.</role>
-<task>Analyse ce kill de match pro LoL. Le killer {killer_champion} ({killer_name}) a elimine {victim_champion} ({victim_name}).
-Context: {context}
+ANALYSIS_PROMPT = """<role>Analyste esport LoL specialise highlights. Tu commentes avec precision factuelle.</role>
+<task>Decris ce kill de match pro LoL en 1 phrase percutante.
+Killer: {killer_champion} ({killer_name})
+Victime: {victim_champion} ({victim_name})
+Donnees factuelles: {context}
+
+IMPORTANT: base ta description UNIQUEMENT sur les donnees factuelles ci-dessus.
+- Si des assistants sont mentionnes, c'est un fight a plusieurs, PAS un solo kill.
+- Ne dis pas "esquive" ou "outplay" si tu n'as pas de preuve factuelle.
+- Ne dis pas "solo kill" s'il y a des assistants.
+- Garde le style hype commentateur mais reste FACTUEL.
 Reponds UNIQUEMENT en JSON valide.</task>
 <output_format>
 {{
@@ -37,14 +45,15 @@ Reponds UNIQUEMENT en JSON valide.</task>
               "baron_fight","dragon_fight","flash_predict","1v2","1v3",
               "clutch","clean","mechanical","shutdown","comeback",
               "engage","peel","snipe","steal">],
-    "description_fr": "<max 120 chars, style commentateur hype>",
+    "description_fr": "<max 120 chars, style commentateur hype mais FACTUEL>",
     "kill_visible_on_screen": true,
     "caster_hype_level": <int 1-5>
 }}
 </output_format>
 <rules>
 - 1-3=routine, 4-6=interessant, 7-8=tres bon, 9-10=exceptionnel
-- description_fr: percutante, titre de clip viral
+- description_fr: percutante mais FACTUELLE — pas d'invention
+- Si assistants present: mentionne-les dans la description (ex: "avec l'assist de Xin Zhao")
 - JSON VALIDE uniquement, pas de texte avant/apres
 </rules>"""
 
@@ -118,24 +127,55 @@ def _strip_code_fence(text: str) -> str:
 
 
 async def analyze_kill_row(kill: dict) -> dict | None:
-    """Build context from a DB kill row and call analyze_kill."""
+    """Build rich factual context from a DB kill row and call analyze_kill."""
     parts: list[str] = []
+
+    # Kill type
     if kill.get("is_first_blood"):
-        parts.append("First Blood")
+        parts.append("FIRST BLOOD")
     if kill.get("multi_kill"):
-        parts.append(f"{str(kill['multi_kill']).capitalize()} Kill")
+        parts.append(f"{str(kill['multi_kill']).upper()} KILL")
+
+    # KC involvement
     involvement = kill.get("tracked_team_involvement") or ""
     if involvement == "team_killer":
         parts.append("KC scores the kill")
     elif involvement == "team_victim":
         parts.append("KC player eliminated")
 
+    # Assistants — critical for factual accuracy
+    assistants = kill.get("assistants") or []
+    if isinstance(assistants, list) and len(assistants) > 0:
+        assist_names = [
+            a.get("champion") or a.get("name") or "?"
+            for a in assistants
+            if isinstance(a, dict)
+        ]
+        if assist_names:
+            parts.append(f"Assistants: {', '.join(assist_names)} ({len(assist_names)} assist(s) = PAS un solo kill)")
+        else:
+            parts.append(f"{len(assistants)} assistant(s) = PAS un solo kill")
+    else:
+        parts.append("ZERO assist = vrai solo kill")
+
+    # Shutdown bounty
+    bounty = kill.get("shutdown_bounty") or 0
+    if bounty >= 400:
+        parts.append(f"Shutdown bounty: {bounty}g")
+
+    # Confidence as proxy for fight type
+    confidence = kill.get("confidence") or "high"
+    if confidence == "medium":
+        parts.append("Confidence medium = probablement un teamfight ou skirmish, PAS un solo")
+    elif confidence == "high" and not (isinstance(assistants, list) and len(assistants) > 0):
+        parts.append("Confidence high + zero assists = 1v1 propre")
+
     return await analyze_kill(
-        killer_name=kill.get("killer_name") or "KC player",
+        killer_name=kill.get("_killer_name_hint") or kill.get("killer_name") or "KC player",
         killer_champion=kill.get("killer_champion") or "?",
-        victim_name=kill.get("victim_name") or "opponent",
+        victim_name=kill.get("_victim_name_hint") or kill.get("victim_name") or "opponent",
         victim_champion=kill.get("victim_champion") or "?",
-        context=", ".join(parts),
+        context=". ".join(parts),
     )
 
 
