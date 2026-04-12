@@ -251,7 +251,7 @@ function VideoScrollItem({ item, index, total }: { item: VideoFeedItem; index: n
       <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-transparent to-transparent pointer-events-none" />
       <div className="absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-black/50 to-transparent pointer-events-none" />
 
-      <div className="relative z-10 flex h-full flex-col justify-end px-5 pb-8 pt-20">
+      <div className="relative z-10 flex h-full flex-col justify-end px-4 md:px-6 pt-20" style={{ paddingBottom: "max(2rem, env(safe-area-inset-bottom, 2rem))" }}>
         {/* Kill ID link */}
         <Link
           href={`/kill/${item.id}`}
@@ -260,7 +260,7 @@ function VideoScrollItem({ item, index, total }: { item: VideoFeedItem; index: n
           #{index + 1} / {total}
         </Link>
 
-        {/* ═══ BOTTOM INFO (minimal, let the video breathe) ═══ */}
+        {/* ═══ BOTTOM INFO — compact on mobile, spacious on desktop ═══ */}
         <div className={`space-y-3 transition-all duration-500 ${visible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-6"}`}>
           {/* Badges row */}
           <div className="flex flex-wrap items-center gap-2">
@@ -306,13 +306,13 @@ function VideoScrollItem({ item, index, total }: { item: VideoFeedItem; index: n
             </div>
           )}
 
-          {/* Champion matchup */}
+          {/* Champion matchup — responsive text sizing */}
           <div>
-            <span className={`font-display text-2xl font-black ${isKcKill ? "text-[var(--gold)]" : "text-white"}`}>
+            <span className={`font-display text-xl md:text-2xl font-black ${isKcKill ? "text-[var(--gold)]" : "text-white"}`}>
               {item.killerChampion}
             </span>
-            <span className="text-[var(--gold)] mx-2 text-lg">&rarr;</span>
-            <span className={`font-display text-2xl font-black ${!isKcKill ? "text-[var(--gold)]" : "text-white/80"}`}>
+            <span className="text-[var(--gold)] mx-1.5 md:mx-2 text-base md:text-lg">&rarr;</span>
+            <span className={`font-display text-xl md:text-2xl font-black ${!isKcKill ? "text-[var(--gold)]" : "text-white/80"}`}>
               {item.victimChampion}
             </span>
           </div>
@@ -585,7 +585,7 @@ function RightSidebar({
   visible: boolean;
 }) {
   return (
-    <div className={`absolute right-4 bottom-44 z-10 flex flex-col items-center gap-6 transition-all duration-500 delay-200 ${visible ? "opacity-100 translate-x-0" : "opacity-0 translate-x-4"}`}>
+    <div className={`absolute right-3 md:right-4 bottom-36 md:bottom-44 z-10 flex flex-col items-center gap-5 md:gap-6 transition-all duration-500 delay-200 ${visible ? "opacity-100 translate-x-0" : "opacity-0 translate-x-4"}`}>
       <button
         className="flex flex-col items-center gap-1.5"
         onClick={onRateClick}
