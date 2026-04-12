@@ -162,6 +162,7 @@ export default function RootLayout({
                 <a href="/matches" className="hover:text-[var(--gold)]">Matchs</a>
                 <a href="/top" className="hover:text-[var(--gold)]">Top</a>
                 <a href="/community" className="hover:text-[var(--gold)]">Community</a>
+                <a href="/api-docs" className="hover:text-[var(--gold)]">API</a>
                 <a href="/privacy" className="hover:text-[var(--gold)]">Confidentialit&eacute;</a>
               </div>
               {/* Discord */}
