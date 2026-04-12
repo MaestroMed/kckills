@@ -313,6 +313,90 @@ export const ALUMNI: Alumni[] = [
       },
     ],
   },
+  // ─── Hantera ───────────────────────────────────────────────────────
+  {
+    slug: "hantera",
+    name: "Hantera",
+    realName: "Antoine Barbe",
+    nationality: "FR",
+    role: "support",
+    period: "2022",
+    subtitle: "Le support francais de l'ere Rekkles",
+    tag: "SUPPORT LFL",
+    signatureChampion: "Nautilus",
+    eras: ["lfl-2022"],
+    accentColor: "#00BCD4",
+    bio: "Hantera rejoint KC en 2022 comme support aux cotes de Rekkles en botlane. Joueur francais forme en LFL, il apporte une vision de jeu aggressive et une communication native avec le roster francophone. Sa synergie avec Rekkles en lane est l'une des forces du roster qui decroche le triple EU Masters. Il quitte KC a la fin de la saison 2022 quand le club prepare sa transition vers la LEC.",
+    stats: [
+      { label: "Role", value: "SUP", hint: "Support" },
+      { label: "Periode", value: "2022", hint: "Ere Rekkles" },
+      { label: "Titres", value: "3 EUM", hint: "Triple EU Masters" },
+      { label: "Origine", value: "FR", hint: "Forme en LFL" },
+    ],
+    links: [
+      {
+        label: "Liquipedia \u2014 Hantera",
+        url: "https://liquipedia.net/leagueoflegends/Hantera",
+        type: "wiki",
+      },
+    ],
+  },
+  // ─── Adam ─────────────────────────────────────────────────────────
+  {
+    slug: "adam",
+    name: "Adam",
+    realName: "Adam Maanane",
+    nationality: "FR",
+    role: "top",
+    period: "2022-2023",
+    subtitle: "Le top laner francais, ex-Fnatic, showman de la LFL",
+    tag: "TOP LANE SHOWMAN",
+    signatureChampion: "Darius",
+    eras: ["lfl-2022", "lfl-2023"],
+    accentColor: "#FF5722",
+    bio: "Adam rejoint KC en 2022 apres son passage eclaire chez Fnatic en LEC. Joueur francais au style ultra-agressif, il est connu pour ses picks non-meta en top lane (Darius, Olaf) qui electrisent le public de la LFL. Sa personnalite forte et son style de jeu spectaculaire en font un favori de la Blue Wall. Il participe a la transition vers la LEC avec KC avant de quitter le club en 2023.",
+    stats: [
+      { label: "Role", value: "TOP", hint: "Top laner" },
+      { label: "Periode", value: "2022-23", hint: "LFL puis transition LEC" },
+      { label: "Avant KC", value: "Fnatic", hint: "LEC Summer 2021" },
+      { label: "Origine", value: "FR", hint: "Top francais agressif" },
+    ],
+    links: [
+      {
+        label: "Liquipedia \u2014 Adam",
+        url: "https://liquipedia.net/leagueoflegends/Adam_(French_Player)",
+        type: "wiki",
+      },
+    ],
+  },
+  // ─── Closer ───────────────────────────────────────────────────────
+  {
+    slug: "closer",
+    name: "Closer",
+    realName: "Can Celik",
+    nationality: "TR",
+    role: "jungle",
+    period: "2024",
+    subtitle: "Le jungler turc veteran, ex-100 Thieves",
+    tag: "VETERAN LCS-LEC",
+    signatureChampion: "Viego",
+    eras: ["lec-2024-summer"],
+    accentColor: "#9C27B0",
+    bio: "Closer rejoint KC a l'ete 2024 dans le cadre de la reconstruction post-ere sombre. Jungler turc experimente, il apporte son experience de la LCS (100 Thieves) et du circuit international. Son style proactif en early-game et sa communication en anglais aident KC a sortir de la spirale negative. Bien que les resultats restent modestes (pas de playoffs), son professionnalisme pose les bases de la future reconstruction avec Canna et Yike.",
+    stats: [
+      { label: "Role", value: "JGL", hint: "Jungler" },
+      { label: "Periode", value: "2024 Su", hint: "Ete 2024" },
+      { label: "Avant KC", value: "100T", hint: "LCS, Worlds" },
+      { label: "Origine", value: "TR", hint: "Veteran international" },
+    ],
+    links: [
+      {
+        label: "Liquipedia \u2014 Closer",
+        url: "https://liquipedia.net/leagueoflegends/Closer",
+        type: "wiki",
+      },
+    ],
+  },
 ];
 
 export function getAlumniBySlug(slug: string): Alumni | undefined {

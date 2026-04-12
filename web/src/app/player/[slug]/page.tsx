@@ -15,6 +15,8 @@ import {
   ChampionPerformanceChart,
   RecentFormChart,
 } from "@/components/PlayerCharts";
+import { getQuotesByPlayer } from "@/lib/quotes";
+import { QuoteRow } from "@/components/QuoteCard";
 
 export const dynamic = "force-dynamic";
 
@@ -644,6 +646,23 @@ export default async function PlayerPage({ params }: Props) {
           </div>
         </section>
       )}
+
+      {/* ═══ QUOTES ═══ */}
+      {(() => {
+        const quotes = getQuotesByPlayer(name);
+        if (quotes.length === 0) return null;
+        return (
+          <section className="relative max-w-7xl mx-auto px-6 py-16">
+            <div className="flex items-center gap-3 mb-6">
+              <span className="h-px w-12 bg-[var(--gold)]" />
+              <span className="font-data text-[10px] uppercase tracking-[0.3em] font-bold text-[var(--gold)]">
+                Citations
+              </span>
+            </div>
+            <QuoteRow quotes={quotes} />
+          </section>
+        );
+      })()}
 
       {/* ═══ CHAMPION POOL — horizontal strip ═══ */}
       {topChampions.length > 0 && (
