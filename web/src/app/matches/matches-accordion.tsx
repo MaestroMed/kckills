@@ -17,6 +17,7 @@ interface MatchSummary {
   totalKc: number;
   totalOpp: number;
   hasGames: boolean;
+  clipCount?: number;
 }
 
 interface YearGroup {
@@ -124,17 +125,24 @@ export function MatchesAccordion({ years }: { years: YearGroup[] }) {
                         <p className="text-[10px] text-[var(--text-muted)]">{match.stage} &middot; Bo{match.best_of}</p>
                       </div>
                     </div>
-                    <div className="text-right">
-                      {match.hasGames && (
-                        <p className="font-data text-xs">
-                          <span className="text-[var(--green)]">{match.totalKc}</span>
-                          <span className="text-[var(--text-muted)]">-</span>
-                          <span className="text-[var(--red)]">{match.totalOpp}</span>
-                        </p>
+                    <div className="flex items-center gap-3">
+                      {(match.clipCount ?? 0) > 0 && (
+                        <span className="badge-glass rounded-md px-2 py-0.5 text-[9px] font-bold text-[var(--gold)]">
+                          {match.clipCount} clips
+                        </span>
                       )}
-                      <p className="text-[10px] text-[var(--text-muted)]">
-                        {new Date(match.date).toLocaleDateString("fr-FR", { day: "numeric", month: "short" })}
-                      </p>
+                      <div className="text-right">
+                        {match.hasGames && (
+                          <p className="font-data text-xs">
+                            <span className="text-[var(--green)]">{match.totalKc}</span>
+                            <span className="text-[var(--text-muted)]">-</span>
+                            <span className="text-[var(--red)]">{match.totalOpp}</span>
+                          </p>
+                        )}
+                        <p className="text-[10px] text-[var(--text-muted)]">
+                          {new Date(match.date).toLocaleDateString("fr-FR", { day: "numeric", month: "short" })}
+                        </p>
+                      </div>
                     </div>
                   </Link>
                 ))}
