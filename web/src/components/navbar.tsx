@@ -12,6 +12,7 @@ const NAV_LINKS = [
   { href: "/matches", label: "Matchs" },
   { href: "/hall-of-fame", label: "Hall of Fame" },
   { href: "/records", label: "Records" },
+  { href: "/stats", label: "Stats" },
   { href: "/compare", label: "Comparateur" },
   // Game link only shown when NEXT_PUBLIC_GAME_ENABLED=true
   ...(process.env.NEXT_PUBLIC_GAME_ENABLED === "true"
