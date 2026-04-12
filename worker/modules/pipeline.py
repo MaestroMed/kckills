@@ -272,18 +272,30 @@ async def run_for_match(match_external_id: str) -> dict:
         # Analyzer — only on successfully clipped kills
         clipped = safe_select(
             "kills",
-            "id, killer_champion, victim_champion, is_first_blood, multi_kill, tracked_team_involvement",
+            "id, killer_champion, victim_champion, is_first_blood, multi_kill, tracked_team_involvement, highlight_score",
             status="clipped",
             game_id=game_db_id,
         )
         for kill in clipped:
             result = await analyzer.analyze_kill_row(kill)
             if not result:
+                # No Gemini result — keep the structured base score, still promote
+                safe_update(
+                    "kills",
+                    {"status": "analyzed"},
+                    "id",
+                    kill["id"],
+                )
+                report["kills_analysed"] += 1
                 continue
+            # Blend: 40% structured base + 60% Gemini subjective
+            base_score = _safe_float(kill.get("highlight_score")) or 5.0
+            gemini_score = _safe_float(result.get("highlight_score")) or base_score
+            blended = round(base_score * 0.4 + gemini_score * 0.6, 1)
             safe_update(
                 "kills",
                 {
-                    "highlight_score": _safe_float(result.get("highlight_score")),
+                    "highlight_score": blended,
                     "ai_tags": result.get("tags") or [],
                     "ai_description": result.get("description_fr"),
                     "kill_visible": bool(result.get("kill_visible_on_screen", True)),
