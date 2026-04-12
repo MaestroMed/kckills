@@ -3,6 +3,7 @@
 import { LazyMotion, domAnimation } from "framer-motion";
 import { ToastProvider } from "./Toast";
 import { CommandPalette } from "./CommandPalette";
+import { KonamiBlueWall } from "./KonamiBlueWall";
 
 /**
  * App-wide providers.
@@ -24,6 +25,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
       <ToastProvider>
         {children}
         <CommandPalette />
+        <KonamiBlueWall />
       </ToastProvider>
     </LazyMotion>
   );
