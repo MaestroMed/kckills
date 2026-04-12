@@ -175,8 +175,21 @@ function VideoScrollItem({ item, index, total }: { item: VideoFeedItem; index: n
   const [showRating, setShowRating] = useState(false);
   const [showDoubleTapHeart, setShowDoubleTapHeart] = useState(false);
   const [isDesktop, setIsDesktop] = useState(false);
+  const [isMuted, setIsMuted] = useState(true);
   const toast = useToast();
   const lastTap = useRef(0);
+
+  // Persist mute preference
+  useEffect(() => {
+    const saved = localStorage.getItem("kc-scroll-muted");
+    if (saved === "false") setIsMuted(false);
+  }, []);
+
+  // Sync mute state to video element
+  useEffect(() => {
+    const v = videoRef.current;
+    if (v) v.muted = isMuted;
+  }, [isMuted]);
 
   // Desktop detection — use horizontal 16:9 clip on wide viewports
   useEffect(() => {
@@ -259,6 +272,31 @@ function VideoScrollItem({ item, index, total }: { item: VideoFeedItem; index: n
         >
           #{index + 1} / {total}
         </Link>
+
+        {/* Mute/unmute toggle */}
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            setIsMuted((m) => {
+              const next = !m;
+              localStorage.setItem("kc-scroll-muted", String(next));
+              return next;
+            });
+          }}
+          className="absolute top-16 right-4 z-20 flex h-9 w-9 items-center justify-center rounded-full bg-black/40 backdrop-blur-sm border border-white/10 hover:bg-black/60 transition-colors"
+          aria-label={isMuted ? "Activer le son" : "Couper le son"}
+        >
+          {isMuted ? (
+            <svg className="h-4 w-4 text-white/70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2" />
+            </svg>
+          ) : (
+            <svg className="h-4 w-4 text-[var(--gold)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.536 8.464a5 5 0 010 7.072M18.364 5.636a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
+            </svg>
+          )}
+        </button>
 
         {/* ═══ BOTTOM INFO — compact on mobile, spacious on desktop ═══ */}
         <div className={`space-y-3 transition-all duration-500 ${visible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-6"}`}>
