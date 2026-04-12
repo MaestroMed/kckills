@@ -31,6 +31,11 @@ export function MatchesAccordion({ years }: { years: YearGroup[] }) {
     new Set(years.length > 0 ? [years[0].year] : [])
   );
   const [filter, setFilter] = useState("");
+  const [resultFilter, setResultFilter] = useState<"all" | "win" | "loss">("all");
+  const [clipsOnly, setClipsOnly] = useState(false);
+
+  const hasAnyClips = years.some((y) => y.matches.some((m) => (m.clipCount ?? 0) > 0));
+  const hasFilters = filter || resultFilter !== "all" || clipsOnly;
 
   const toggle = (year: string) => {
     setOpenYears((prev) => {
@@ -41,21 +46,56 @@ export function MatchesAccordion({ years }: { years: YearGroup[] }) {
     });
   };
 
+  const resetAll = () => {
+    setFilter("");
+    setResultFilter("all");
+    setClipsOnly(false);
+  };
+
   return (
     <div className="space-y-4">
-      {/* Filter */}
-      <div className="flex gap-2">
+      {/* Filters */}
+      <div className="flex flex-wrap gap-2">
         <input
           type="text"
           placeholder="Filtrer par adversaire..."
           value={filter}
           onChange={(e) => setFilter(e.target.value)}
-          className="flex-1 rounded-lg border border-[var(--border-gold)] bg-[var(--bg-surface)] px-3 py-2 text-sm text-[var(--text-primary)] placeholder-[var(--text-disabled)] outline-none focus:border-[var(--gold)]"
+          className="flex-1 min-w-[200px] rounded-lg border border-[var(--border-gold)] bg-[var(--bg-surface)] px-3 py-2 text-sm text-[var(--text-primary)] placeholder-[var(--text-disabled)] outline-none focus:border-[var(--gold)]"
         />
-        {filter && (
+        <div className="flex gap-1">
+          {(["all", "win", "loss"] as const).map((v) => (
+            <button
+              key={v}
+              onClick={() => setResultFilter(v)}
+              className={`rounded-lg px-3 py-2 text-xs font-bold uppercase tracking-wider transition-colors ${
+                resultFilter === v
+                  ? v === "win" ? "bg-[var(--green)]/20 text-[var(--green)] border border-[var(--green)]/40"
+                    : v === "loss" ? "bg-[var(--red)]/20 text-[var(--red)] border border-[var(--red)]/40"
+                    : "bg-[var(--gold)]/15 text-[var(--gold)] border border-[var(--gold)]/30"
+                  : "bg-[var(--bg-surface)] text-[var(--text-muted)] border border-[var(--border-gold)] hover:bg-[var(--bg-elevated)]"
+              }`}
+            >
+              {v === "all" ? "Tous" : v === "win" ? "W" : "L"}
+            </button>
+          ))}
+        </div>
+        {hasAnyClips && (
           <button
-            onClick={() => setFilter("")}
-            className="rounded-lg border border-[var(--red)]/30 px-3 py-2 text-sm text-[var(--red)] hover:bg-[var(--red)]/10"
+            onClick={() => setClipsOnly(!clipsOnly)}
+            className={`rounded-lg px-3 py-2 text-xs font-bold transition-colors ${
+              clipsOnly
+                ? "badge-glass text-[var(--gold)]"
+                : "bg-[var(--bg-surface)] text-[var(--text-muted)] border border-[var(--border-gold)] hover:bg-[var(--bg-elevated)]"
+            }`}
+          >
+            Avec clips
+          </button>
+        )}
+        {hasFilters && (
+          <button
+            onClick={resetAll}
+            className="rounded-lg border border-[var(--red)]/30 px-3 py-2 text-xs text-[var(--red)] hover:bg-[var(--red)]/10"
           >
             Reset
           </button>
@@ -63,14 +103,19 @@ export function MatchesAccordion({ years }: { years: YearGroup[] }) {
       </div>
 
       {years.map(({ year, matches }) => {
-        const filtered = filter
-          ? matches.filter((m) =>
-              m.opponent.code.toLowerCase().includes(filter.toLowerCase()) ||
-              m.opponent.name.toLowerCase().includes(filter.toLowerCase())
-            )
-          : matches;
+        let filtered = matches;
+        if (filter) {
+          const q = filter.toLowerCase();
+          filtered = filtered.filter((m) =>
+            m.opponent.code.toLowerCase().includes(q) ||
+            m.opponent.name.toLowerCase().includes(q)
+          );
+        }
+        if (resultFilter === "win") filtered = filtered.filter((m) => m.kc_won);
+        if (resultFilter === "loss") filtered = filtered.filter((m) => !m.kc_won);
+        if (clipsOnly) filtered = filtered.filter((m) => (m.clipCount ?? 0) > 0);
 
-        if (filter && filtered.length === 0) return null;
+        if (hasFilters && filtered.length === 0) return null;
 
         const isOpen = openYears.has(year);
         const wins = filtered.filter((m) => m.kc_won).length;
