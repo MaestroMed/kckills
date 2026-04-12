@@ -54,6 +54,7 @@ export interface VideoFeedItem {
   matchDate: string;
   opponentCode: string;
   kcWon: boolean | null;
+  matchScore: string | null;
 }
 
 export type FeedItem = AggregateFeedItem | VideoFeedItem;
@@ -259,11 +260,19 @@ function VideoScrollItem({ item, index, total }: { item: VideoFeedItem; index: n
         if (!v) return;
         if (isVis) {
           v.currentTime = 0;
-          v.play().catch(() => {
-            // Autoplay rejected (iOS quirks) — user will need to tap
-          });
+          v.play().catch(() => {});
+          // Preload next clip for instant swipe
+          v.preload = "auto";
+          const next = containerRef.current?.nextElementSibling?.querySelector("video");
+          if (next instanceof HTMLVideoElement && next.preload !== "auto") {
+            next.preload = "auto";
+          }
         } else {
           v.pause();
+          // Release memory for far-away clips
+          if (Math.abs(index - 0) > 5) {
+            v.preload = "metadata";
+          }
         }
       },
       { threshold: 0.6 }
@@ -405,6 +414,7 @@ function VideoScrollItem({ item, index, total }: { item: VideoFeedItem; index: n
             {item.kcWon !== null && (
               <span className={`ml-1.5 font-bold ${item.kcWon ? "text-[var(--green)]" : "text-[var(--red)]"}`}>
                 {item.kcWon ? "W" : "L"}
+                {item.matchScore && <span className="ml-1 font-data">{item.matchScore}</span>}
               </span>
             )}
             {" "}&middot; {item.matchStage} &middot; Game {item.gameNumber} &middot;{" "}

@@ -25,6 +25,7 @@ export default async function ScrollPage() {
       const matchJson = data.matches.find((m) => m.id === (matchMeta?.external_id ?? ""));
       const opponentCode = matchJson?.opponent.code ?? "LEC";
       const kcWon = matchJson?.kc_won ?? null;
+      const matchScore = matchJson ? `${matchJson.kc_score}-${matchJson.opp_score}` : null;
       // Wilson-ish score: (0.6 × highlight/10) + (0.3 × rating/5) + (0.1 × engagement cap)
       const hl = (k.highlight_score ?? 5) / 10;
       const rt = k.rating_count > 0 ? (k.avg_rating ?? 0) / 5 : 0;
@@ -65,6 +66,7 @@ export default async function ScrollPage() {
         matchDate: matchMeta?.scheduled_at ?? k.created_at,
         opponentCode,
         kcWon,
+        matchScore,
       };
     });
 

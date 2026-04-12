@@ -59,6 +59,8 @@ const PAGES: Entry[] = [
   { id: "page-stats",   group: "page", label: "Stats",          subtitle: "Dashboard KC",     href: "/stats",       searchText: "stats statistiques dashboard kda winrate chiffres" },
   { id: "page-compare", group: "page", label: "Comparateur",   subtitle: "Joueur vs joueur", href: "/compare",     searchText: "compare comparateur versus vs joueur duel" },
   { id: "page-community",group: "page", label: "Community",    subtitle: "Edits fans",       href: "/community",   searchText: "community communaute edits fans" },
+  { id: "page-api",     group: "page", label: "API Docs",       subtitle: "Documentation",    href: "/api-docs",    searchText: "api documentation endpoints rest developers" },
+  { id: "page-review",  group: "page", label: "Review QA",      subtitle: "Clip quality",     href: "/review",      searchText: "review qa quality test noter clips" },
   { id: "page-settings",group: "page", label: "Parametres",    subtitle: "Profil",           href: "/settings",    searchText: "settings parametres profil" },
 ];
 
