@@ -27,7 +27,7 @@ import structlog
 
 from services import lolesports_api
 from services.supabase_client import safe_select, safe_upsert, safe_update, safe_insert
-from modules import harvester, clipper, analyzer, og_generator
+from modules import harvester, clipper, analyzer, og_generator, qc
 from modules import sentinel  # noqa: F401 — keeps symbol for tests
 
 log = structlog.get_logger()
@@ -220,6 +220,38 @@ async def run_for_match(match_external_id: str) -> dict:
         if not yt_id:
             log.warn("pipeline_no_vod", game=game_ext_id)
             continue
+
+        # ─── QC: calibrate offset before clipping ────────────────────
+        # Use the first kill as a probe to verify the VOD offset is correct.
+        # If the in-game timer doesn't match, auto-correct the offset for
+        # ALL kills in this game before proceeding.
+        if inserted_kill_rows:
+            probe_kill = min(
+                inserted_kill_rows,
+                key=lambda k: int(k.get("game_time_seconds") or 0),
+            )
+            probe_gt = int(probe_kill.get("game_time_seconds") or 60)
+            if probe_gt > 30:  # need at least 30s of game time for a meaningful timer reading
+                calibrated_offset = await qc.calibrate_game_offset(
+                    youtube_id=yt_id,
+                    current_offset=vod_offset,
+                    probe_game_time=probe_gt,
+                )
+                if calibrated_offset != vod_offset:
+                    log.info(
+                        "pipeline_offset_calibrated",
+                        game=game_ext_id,
+                        old=vod_offset,
+                        new=calibrated_offset,
+                        correction=calibrated_offset - vod_offset,
+                    )
+                    vod_offset = calibrated_offset
+                    safe_update(
+                        "games",
+                        {"vod_offset_seconds": calibrated_offset},
+                        "id",
+                        game_db_id,
+                    )
 
         # Clipper — serialised to respect yt-dlp rate limits
         for kill_row in inserted_kill_rows:
