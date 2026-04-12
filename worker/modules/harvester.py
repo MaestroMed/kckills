@@ -34,6 +34,29 @@ log = structlog.get_logger()
 
 # ─── Public API ─────────────────────────────────────────────────────────────
 
+async def get_game_anchor(external_game_id: str) -> tuple[datetime, dict] | None:
+    """Fetch the real game start anchor for a completed game.
+
+    Calls /window/{game_id} without startingTime, which returns a snapshot at
+    the true game-start moment (draft + setup excluded). Returns a tuple of
+    (anchor_datetime_rounded_to_10s, full_livestats_response) so callers can
+    reuse both the timestamp and the participant metadata.
+    """
+    anchor_data = await livestats_api.get_window(external_game_id, starting_time=None)
+    frames = (anchor_data or {}).get("frames") or []
+    if not frames:
+        log.warn("harvester_no_anchor", game_id=external_game_id)
+        return None
+
+    anchor_ts_raw = frames[0].get("rfc460Timestamp")
+    try:
+        anchor = datetime.fromisoformat(anchor_ts_raw.replace("Z", "+00:00"))
+    except Exception:
+        log.error("harvester_bad_anchor_ts", ts=anchor_ts_raw, game_id=external_game_id)
+        return None
+    return _round_down_10s(anchor), anchor_data
+
+
 async def extract_kills_from_game(
     external_game_id: str,
     db_game_id: str,
@@ -41,6 +64,7 @@ async def extract_kills_from_game(
     probe_step_seconds: int = 10,
     max_game_minutes: int = 65,
     max_consecutive_empty: int = 60,
+    precomputed_anchor: tuple[datetime, dict] | None = None,
 ) -> list[KillEvent]:
     """Extract every kill from a completed game by diffing window snapshots.
 
@@ -53,23 +77,25 @@ async def extract_kills_from_game(
         max_game_minutes: Hard cap from anchor → stop probing past this.
         max_consecutive_empty: Early-stop threshold if the feed is silent for
             this many probes in a row (10 min with default 10s step).
+        precomputed_anchor: Optional (datetime, full_frame_response) tuple from
+            a previous get_game_anchor call — avoids a redundant livestats hit
+            when the pipeline already fetched the anchor to compute VOD offsets.
     """
     kills: list[KillEvent] = []
 
-    # ─── Anchor: call without startingTime → real game start ─────────────
-    anchor_data = await livestats_api.get_window(external_game_id, starting_time=None)
+    # ─── Anchor: reuse a precomputed one or call without startingTime ────
+    if precomputed_anchor is not None:
+        anchor, anchor_data = precomputed_anchor
+    else:
+        got = await get_game_anchor(external_game_id)
+        if got is None:
+            return []
+        anchor, anchor_data = got
     frames = (anchor_data or {}).get("frames") or []
     if not frames:
         log.warn("harvester_no_anchor", game_id=external_game_id)
         return []
 
-    anchor_ts_raw = frames[0].get("rfc460Timestamp")
-    try:
-        anchor = datetime.fromisoformat(anchor_ts_raw.replace("Z", "+00:00"))
-    except Exception:
-        log.error("harvester_bad_anchor_ts", ts=anchor_ts_raw, game_id=external_game_id)
-        return []
-    anchor = _round_down_10s(anchor)
     game_start_epoch_ms = int(anchor.timestamp() * 1000)
 
     participants = livestats_api.extract_participants(anchor_data)

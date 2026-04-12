@@ -123,8 +123,54 @@ async def run_for_match(match_external_id: str) -> dict:
         report["errors"].append("no completed games with VODs")
         return report
 
+    # ─── 3b. Compute per-game VOD offsets from livestats anchors ──────
+    # The lolesports API routinely returns offset=0 for every game of a BO3/5
+    # even though they all share a single multi-hour VOD. We derive the real
+    # offsets by fetching each game's livestats anchor and measuring elapsed
+    # time from game 1. Requires `games.game_number` to be sorted correctly.
+    sorted_games = sorted(
+        game_db_rows,
+        key=lambda g: int(g.get("game_number") or 1),
+    )
+    anchors: dict[str, tuple] = {}
+    for g in sorted_games:
+        ext = g.get("external_id")
+        if not ext:
+            continue
+        a = await harvester.get_game_anchor(ext)
+        if a:
+            anchors[ext] = a
+
+    if sorted_games and anchors.get(sorted_games[0].get("external_id", "")):
+        first_ext = sorted_games[0]["external_id"]
+        first_anchor_dt, _first_data = anchors[first_ext]
+        first_api_offset = int(sorted_games[0].get("vod_offset_seconds") or 0)
+        for g in sorted_games:
+            ext = g.get("external_id")
+            if not ext or ext not in anchors:
+                continue
+            anchor_dt, _ = anchors[ext]
+            derived_offset = first_api_offset + int(
+                (anchor_dt - first_anchor_dt).total_seconds()
+            )
+            # Only patch when the derived value differs — avoids noisy upserts
+            if derived_offset != int(g.get("vod_offset_seconds") or 0):
+                safe_update(
+                    "games",
+                    {"vod_offset_seconds": derived_offset},
+                    "id",
+                    g["id"],
+                )
+                g["vod_offset_seconds"] = derived_offset
+                log.info(
+                    "pipeline_vod_offset_derived",
+                    game=ext,
+                    game_number=g.get("game_number"),
+                    offset_seconds=derived_offset,
+                )
+
     # ─── 4. For each game: harvest → clip → analyse → OG ──────────────
-    for game_row in game_db_rows:
+    for game_row in sorted_games:
         game_ext_id = game_row.get("external_id")
         game_db_id = game_row.get("id")
         yt_id = game_row.get("vod_youtube_id")
@@ -133,10 +179,11 @@ async def run_for_match(match_external_id: str) -> dict:
         if not (game_ext_id and game_db_id):
             continue
 
-        # Harvester — self-anchors via livestats default call, no scheduled_at needed
+        # Harvester — reuse the anchor we already fetched above to skip a hit
         kills = await harvester.extract_kills_from_game(
             external_game_id=game_ext_id,
             db_game_id=game_db_id,
+            precomputed_anchor=anchors.get(game_ext_id),
         )
         log.info("pipeline_kills_detected", game=game_ext_id, n=len(kills))
         report["kills_detected"] += len(kills)

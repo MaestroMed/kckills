@@ -31,8 +31,8 @@ _orig_extract = harvester.extract_kills_from_game
 
 
 async def _limited_extract(*args, **kwargs):
-    kwargs.setdefault("max_game_minutes", 15)
-    kwargs.setdefault("max_consecutive_empty", 30)
+    kwargs.setdefault("max_game_minutes", 65)
+    kwargs.setdefault("max_consecutive_empty", 60)
     return await _orig_extract(*args, **kwargs)
 
 
