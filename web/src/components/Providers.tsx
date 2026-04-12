@@ -4,6 +4,7 @@ import { LazyMotion, domAnimation } from "framer-motion";
 import { ToastProvider } from "./Toast";
 import { CommandPalette } from "./CommandPalette";
 import { KonamiBlueWall } from "./KonamiBlueWall";
+import { PwaInstallPrompt } from "./PwaInstallPrompt";
 
 /**
  * App-wide providers.
@@ -26,6 +27,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
         {children}
         <CommandPalette />
         <KonamiBlueWall />
+        <PwaInstallPrompt />
       </ToastProvider>
     </LazyMotion>
   );
