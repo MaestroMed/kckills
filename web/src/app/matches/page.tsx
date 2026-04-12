@@ -1,13 +1,26 @@
 import Link from "next/link";
 import { loadRealData, getMatchesSorted } from "@/lib/real-data";
+import { getPublishedKills } from "@/lib/supabase/kills";
 import { MatchesAccordion } from "./matches-accordion";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Matchs KC \u2014 KCKILLS" };
 
-export default function MatchesPage() {
-  const data = loadRealData();
+export default async function MatchesPage() {
+  const [data, allClips] = await Promise.all([
+    Promise.resolve(loadRealData()),
+    getPublishedKills(500),
+  ]);
   const matches = getMatchesSorted(data);
+
+  // Count clips per match
+  const clipsByMatch = new Map<string, number>();
+  for (const clip of allClips) {
+    const matchId = clip.games?.matches?.external_id;
+    if (matchId) {
+      clipsByMatch.set(matchId, (clipsByMatch.get(matchId) ?? 0) + 1);
+    }
+  }
 
   // Group by year
   const byYear: Record<string, typeof matches> = {};
@@ -33,6 +46,7 @@ export default function MatchesPage() {
         totalKc: match.games.reduce((a, g) => a + g.kc_kills, 0),
         totalOpp: match.games.reduce((a, g) => a + g.opp_kills, 0),
         hasGames: match.games.length > 0,
+        clipCount: clipsByMatch.get(match.id) ?? 0,
       })),
     }));
 
@@ -47,7 +61,14 @@ export default function MatchesPage() {
       <h1 className="font-display text-3xl font-bold">
         Matchs <span className="text-gold-gradient">Karmine Corp</span>
       </h1>
-      <p className="text-[var(--text-muted)]">{matches.length} matchs &middot; {data.total_games} games</p>
+      <p className="text-[var(--text-muted)]">
+        {matches.length} matchs &middot; {data.total_games} games
+        {allClips.length > 0 && (
+          <span className="ml-2 text-[var(--gold)]">
+            &middot; {allClips.length} clips vid&eacute;o
+          </span>
+        )}
+      </p>
 
       <MatchesAccordion years={years} />
     </div>
