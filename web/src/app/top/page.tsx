@@ -4,12 +4,13 @@ import { loadRealData, getMatchesSorted, getCurrentRoster } from "@/lib/real-dat
 import { computeKillScore, type ScoredKill } from "@/lib/feed-algorithm";
 import { championIconUrl } from "@/lib/constants";
 import { PLAYER_PHOTOS } from "@/lib/kc-assets";
+import { getPublishedKills, type PublishedKillRow } from "@/lib/supabase/kills";
 import { TopFilters } from "./top-filters";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Top Kills \u2014 KCKILLS" };
 
-export default function TopPage() {
+export default async function TopPage() {
   const data = loadRealData();
   const matches = getMatchesSorted(data);
   const roster = getCurrentRoster(data);
@@ -40,6 +41,9 @@ export default function TopPage() {
   }
   scored.sort((a, b) => b.score - a.score);
 
+  // ─── Fetch top real clips from Supabase ──────────────────────────────
+  const topClips = await getPublishedKills(10);
+
   return (
     <div className="space-y-8">
       <nav className="flex items-center gap-2 text-sm text-[var(--text-muted)]">
@@ -53,9 +57,67 @@ export default function TopPage() {
           Top <span className="text-gold-gradient">Performances</span>
         </h1>
         <p className="mt-1 text-sm text-[var(--text-muted)]">
-          Class\u00e9 par score composite (KDA, participation, multi-kills, victoire).
+          Class&eacute; par highlight score (vid&eacute;o) + score composite (stats).
         </p>
       </div>
+
+      {/* ═══ REAL HIGHLIGHT CLIPS (from pipeline) ═══ */}
+      {topClips.length > 0 && (
+        <div className="space-y-4">
+          <div className="flex items-center gap-3">
+            <span className="h-2 w-2 rounded-full bg-[var(--gold)] animate-pulse" />
+            <h2 className="font-display text-lg font-bold text-[var(--gold)] uppercase tracking-widest">
+              Top {topClips.length} clips vid&eacute;o
+            </h2>
+          </div>
+          <div className="grid gap-3 md:grid-cols-2">
+            {topClips.slice(0, 6).map((k: PublishedKillRow, i: number) => {
+              const isKc = k.tracked_team_involvement === "team_killer";
+              return (
+                <Link
+                  key={k.id}
+                  href={`/kill/${k.id}`}
+                  className="group flex items-center gap-3 rounded-xl border border-[var(--border-gold)] bg-[var(--bg-surface)] p-3 hover:border-[var(--gold)]/50 transition-all"
+                >
+                  <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-[var(--bg-primary)] font-display font-black text-lg text-[var(--gold)]">
+                    {i + 1}
+                  </div>
+                  {k.thumbnail_url && (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={k.thumbnail_url} alt="" className="h-14 w-14 rounded-lg object-cover flex-shrink-0" />
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <p className="font-display text-sm font-bold truncate">
+                      <span className={isKc ? "text-[var(--gold)]" : "text-white"}>
+                        {k.killer_champion}
+                      </span>
+                      <span className="text-[var(--text-muted)] mx-1">&rarr;</span>
+                      <span className="text-white/80">{k.victim_champion}</span>
+                    </p>
+                    {k.ai_description && (
+                      <p className="text-[10px] text-[var(--text-muted)] truncate italic">
+                        {k.ai_description}
+                      </p>
+                    )}
+                  </div>
+                  <div className="flex flex-col items-end gap-0.5 flex-shrink-0">
+                    {k.highlight_score != null && (
+                      <span className="font-data text-sm font-bold text-[var(--gold)]">
+                        {k.highlight_score.toFixed(1)}
+                      </span>
+                    )}
+                    {k.multi_kill && (
+                      <span className="text-[9px] font-bold uppercase text-[var(--orange)]">
+                        {k.multi_kill}
+                      </span>
+                    )}
+                  </div>
+                </Link>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Filters */}
       <TopFilters players={playerNames} champions={[...new Set(scored.map(s => s.champion))].sort()} />
