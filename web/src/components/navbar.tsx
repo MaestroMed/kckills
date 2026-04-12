@@ -13,6 +13,7 @@ const NAV_LINKS = [
   { href: "/hall-of-fame", label: "Hall of Fame" },
   { href: "/records", label: "Records" },
   { href: "/compare", label: "Comparateur" },
+  { href: "/game", label: "Blue Wall \uD83E\uDDF1" },
 ];
 
 export function Navbar() {
