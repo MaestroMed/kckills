@@ -10,9 +10,14 @@ import { TopFilters } from "./top-filters";
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Top Kills \u2014 KCKILLS" };
 
-export default async function TopPage() {
+export default async function TopPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ player?: string; year?: string; champion?: string; multi?: string }>;
+}) {
+  const params = await searchParams;
   const data = loadRealData();
-  const matches = getMatchesSorted(data);
+  const matches = getMatchesSorted(data, params.year ? parseInt(params.year) : undefined);
   const roster = getCurrentRoster(data);
   const playerNames = roster.map((p) => p.name);
 
@@ -39,7 +44,22 @@ export default async function TopPage() {
       }
     }
   }
-  scored.sort((a, b) => b.score - a.score);
+  // ─── Apply URL filters ──────────────────────────────────────────────
+  let filtered = scored;
+  if (params.player) {
+    filtered = filtered.filter((s) => s.playerName === params.player);
+  }
+  if (params.champion) {
+    filtered = filtered.filter((s) => s.champion === params.champion);
+  }
+  if (params.multi === "3") {
+    filtered = filtered.filter((s) => s.kills >= 3);
+  } else if (params.multi === "5") {
+    filtered = filtered.filter((s) => s.kills >= 5);
+  } else if (params.multi === "perfect") {
+    filtered = filtered.filter((s) => s.deaths === 0 && s.kills >= 2);
+  }
+  filtered.sort((a, b) => b.score - a.score);
 
   // ─── Fetch top real clips from Supabase ──────────────────────────────
   const topClips = await getPublishedKills(10);
@@ -120,22 +140,22 @@ export default async function TopPage() {
       )}
 
       {/* Filters */}
-      <TopFilters players={playerNames} champions={[...new Set(scored.map(s => s.champion))].sort()} />
+      <TopFilters players={playerNames} champions={[...new Set(filtered.map(s => s.champion))].sort()} />
 
       {/* Podium — #1 bigger, #2 and #3 smaller */}
-      {scored.length >= 3 && (
+      {filtered.length >= 3 && (
         <div className="flex items-end justify-center gap-3 md:gap-4">
           {/* #2 */}
-          <PodiumCard kill={scored[1]} rank={2} height="h-[280px]" />
+          <PodiumCard kill={filtered[1]} rank={2} height="h-[280px]" />
           {/* #1 — tallest + crown */}
-          <PodiumCard kill={scored[0]} rank={1} height="h-[340px]" crown />
+          <PodiumCard kill={filtered[0]} rank={1} height="h-[340px]" crown />
           {/* #3 */}
-          <PodiumCard kill={scored[2]} rank={3} height="h-[260px]" />
+          <PodiumCard kill={filtered[2]} rank={3} height="h-[260px]" />
         </div>
       )}
 
       {/* Separators: top 5, top 10, top 25 */}
-      {scored.length > 3 && (
+      {filtered.length > 3 && (
         <div className="space-y-6">
           {/* Top 5 */}
           <div>
@@ -145,12 +165,12 @@ export default async function TopPage() {
               <div className="h-px flex-1 bg-[var(--border-gold)]" />
             </div>
             <div className="space-y-1.5">
-              {scored.slice(3, 5).map((k, i) => <RankRow key={`${k.matchId}-${k.playerName}-${k.gameNumber}`} kill={k} rank={i + 4} />)}
+              {filtered.slice(3, 5).map((k, i) => <RankRow key={`${k.matchId}-${k.playerName}-${k.gameNumber}`} kill={k} rank={i + 4} />)}
             </div>
           </div>
 
           {/* Top 10 */}
-          {scored.length > 5 && (
+          {filtered.length > 5 && (
             <div>
               <div className="flex items-center gap-3 mb-3">
                 <div className="h-px flex-1 bg-[var(--border-gold)]" />
@@ -158,13 +178,13 @@ export default async function TopPage() {
                 <div className="h-px flex-1 bg-[var(--border-gold)]" />
               </div>
               <div className="space-y-1.5">
-                {scored.slice(5, 10).map((k, i) => <RankRow key={`${k.matchId}-${k.playerName}-${k.gameNumber}`} kill={k} rank={i + 6} />)}
+                {filtered.slice(5, 10).map((k, i) => <RankRow key={`${k.matchId}-${k.playerName}-${k.gameNumber}`} kill={k} rank={i + 6} />)}
               </div>
             </div>
           )}
 
           {/* Top 25 */}
-          {scored.length > 10 && (
+          {filtered.length > 10 && (
             <div>
               <div className="flex items-center gap-3 mb-3">
                 <div className="h-px flex-1 bg-[var(--border-gold)]" />
@@ -172,7 +192,7 @@ export default async function TopPage() {
                 <div className="h-px flex-1 bg-[var(--border-gold)]" />
               </div>
               <div className="space-y-1.5">
-                {scored.slice(10, 25).map((k, i) => <RankRow key={`${k.matchId}-${k.playerName}-${k.gameNumber}`} kill={k} rank={i + 11} />)}
+                {filtered.slice(10, 25).map((k, i) => <RankRow key={`${k.matchId}-${k.playerName}-${k.gameNumber}`} kill={k} rank={i + 11} />)}
               </div>
             </div>
           )}
