@@ -155,7 +155,35 @@ export default async function KillDetailPage({ params }: Props) {
         kill.games?.matches?.external_id ?? "",
         data
       );
-      return <VideoKillDetail kill={kill} opponent={opponent} id={id} />;
+
+      // JSON-LD VideoObject for SEO — helps Google index clips as videos
+      const videoJsonLd = kill.clip_url_horizontal ? {
+        "@context": "https://schema.org",
+        "@type": "VideoObject",
+        name: `${kill.killer_champion} \u2192 ${kill.victim_champion} \u2014 KC vs ${opponent.code}`,
+        description: kill.ai_description ?? `Kill highlight from KC vs ${opponent.code}`,
+        thumbnailUrl: kill.thumbnail_url ?? undefined,
+        contentUrl: kill.clip_url_horizontal,
+        uploadDate: kill.created_at,
+        duration: "PT18S",
+        publisher: {
+          "@type": "Organization",
+          name: "KCKILLS",
+          url: "https://kckills.com",
+        },
+      } : null;
+
+      return (
+        <>
+          {videoJsonLd && (
+            <script
+              type="application/ld+json"
+              dangerouslySetInnerHTML={{ __html: JSON.stringify(videoJsonLd) }}
+            />
+          )}
+          <VideoKillDetail kill={kill} opponent={opponent} id={id} />
+        </>
+      );
     }
   }
 
