@@ -280,6 +280,7 @@ async def run_for_match(match_external_id: str) -> dict:
                     youtube_id=yt_id,
                     current_offset=vod_offset,
                     probe_game_times=probe_game_times,
+                    local_vod_path=local_vod_paths.get(yt_id),
                 )
                 if calibrated_offset != vod_offset:
                     log.info(

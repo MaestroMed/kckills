@@ -101,6 +101,7 @@ async def calibrate_game_offset(
     current_offset: int,
     probe_game_times: list[int] | int = 0,
     max_scan_minutes: int = 10,
+    local_vod_path: str | None = None,
 ) -> int:
     """Calibrate the VOD offset for a game using MULTI-PROBE median strategy.
 
@@ -129,6 +130,20 @@ async def calibrate_game_offset(
     )
     os.makedirs(os.path.dirname(probe_path), exist_ok=True)
 
+    # Helper: extract probe from local VOD (fast, no YouTube call) or fall back to yt-dlp
+    async def _download_probe(start: int, end: int) -> bool:
+        if local_vod_path and os.path.exists(local_vod_path):
+            from modules.clipper import _ffmpeg
+            return await _ffmpeg([
+                "-ss", str(start),
+                "-i", local_vod_path,
+                "-t", str(end - start),
+                "-c:v", "libx264", "-preset", "ultrafast", "-crf", "23",
+                "-c:a", "aac", "-b:a", "64k",
+                "-y", probe_path,
+            ])
+        return await _run_ytdlp(vod_url, probe_path, start, end)
+
     log.info(
         "qc_calibrate_start",
         youtube_id=youtube_id,
@@ -150,7 +165,7 @@ async def calibrate_game_offset(
             clip_end = vod_time + 7
 
             _safe_remove(probe_path)
-            ok = await _run_ytdlp(vod_url, probe_path, clip_start, clip_end)
+            ok = await _download_probe(clip_start, clip_end)
             if not ok or not os.path.exists(probe_path):
                 log.warn("qc_probe_download_failed", probe_gt=probe_gt)
                 continue
@@ -190,7 +205,7 @@ async def calibrate_game_offset(
         for extra in range(60, max_scan_minutes * 60 + 1, 60):
             _safe_remove(probe_path)
             scan_start = base_vod_time + extra
-            ok = await _run_ytdlp(vod_url, probe_path, scan_start, scan_start + 7)
+            ok = await _download_probe(scan_start, scan_start + 7)
             if not ok or not os.path.exists(probe_path):
                 continue
             probe_gt = (probe_game_times[0] if probe_game_times else 300) + extra
