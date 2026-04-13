@@ -21,10 +21,14 @@ export const metadata = {
 
 export default async function ScrollPage() {
   // ─── 1. Load both data sources in parallel ──────────────────────────
-  const [data, supabaseKills] = await Promise.all([
+  const [data, allKills] = await Promise.all([
     Promise.resolve(loadRealData()),
-    getPublishedKills(200),
+    getPublishedKills(500),
   ]);
+  // ONLY show KC kills (team_killer) — not deaths, not misidentified opponent kills
+  const supabaseKills = allKills.filter(
+    (k) => k.tracked_team_involvement === "team_killer"
+  );
   const matches = getMatchesSorted(data);
 
   // ─── 2. Build the Supabase video items (real clips) ────────────────
