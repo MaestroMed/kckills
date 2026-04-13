@@ -96,7 +96,14 @@ async def analyze_kill(
 
         if clip_path and os.path.exists(clip_path):
             video_file = genai.upload_file(clip_path)
-            response = model.generate_content([prompt, video_file])
+            # Wait for file to become ACTIVE before querying
+            from services.gemini_client import _wait_for_file_active
+            if not _wait_for_file_active(genai, video_file):
+                log.warn("gemini_file_not_active", clip=clip_path)
+                # Fall back to text-only analysis
+                response = model.generate_content(prompt)
+            else:
+                response = model.generate_content([prompt, video_file])
         else:
             response = model.generate_content(prompt)
 
