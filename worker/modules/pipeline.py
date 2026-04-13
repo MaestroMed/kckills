@@ -91,14 +91,35 @@ async def run_for_match(match_external_id: str) -> dict:
         if not game_ext_id:
             continue
 
+        # Prefer fr-FR (Kamel/Kameto cast) > en-GB > any YouTube VOD
         vod_yt_id = None
         vod_offset = None
-        for vod in g.get("vods", []) or []:
-            if vod.get("provider") == "youtube":
-                vod_yt_id = vod.get("parameter")
-                vod_offset = int(vod.get("offset") or 0)
-                if str(vod.get("locale", "")).startswith("en"):
-                    break  # prefer English
+        alt_vod_yt_id = None
+        vods = g.get("vods", []) or []
+        for vod in vods:
+            if vod.get("provider") != "youtube":
+                continue
+            locale = str(vod.get("locale", ""))
+            vid = vod.get("parameter")
+            off = int(vod.get("offset") or 0)
+            if locale.startswith("fr"):
+                # French cast = primary (Kamel!)
+                vod_yt_id = vid
+                vod_offset = off
+                break
+            elif locale.startswith("en") and not vod_yt_id:
+                vod_yt_id = vid
+                vod_offset = off
+            elif not vod_yt_id:
+                vod_yt_id = vid
+                vod_offset = off
+
+        # Keep English as alt if French is primary
+        if vod_yt_id:
+            for vod in vods:
+                if vod.get("provider") == "youtube" and vod.get("parameter") != vod_yt_id:
+                    alt_vod_yt_id = vod.get("parameter")
+                    break
 
         payload = {
             "external_id": game_ext_id,
@@ -109,6 +130,8 @@ async def run_for_match(match_external_id: str) -> dict:
         if vod_yt_id:
             payload["vod_youtube_id"] = vod_yt_id
             payload["vod_offset_seconds"] = vod_offset or 0
+        if alt_vod_yt_id:
+            payload["alt_vod_youtube_id"] = alt_vod_yt_id
 
         game_row = safe_upsert("games", payload, on_conflict="external_id")
         if game_row:
