@@ -42,15 +42,20 @@ class Config:
     CLIP_AFTER_SECONDS = 5
 
     # Variable clip timing by context (from audit v2 blueprint)
+    #
+    # CRITICAL: the livestats feed reports kills ~10s AFTER they happen
+    # (the KDA change appears in the NEXT frame, frames are 10s apart).
+    # So `before` must be at least 12-15s to capture the actual action
+    # BEFORE the kill, not the aftermath/death timer.
     CLIP_TIMING = {
-        "penta":        {"before": 8, "after": 6, "total": 25},
-        "quadra":       {"before": 6, "after": 4, "total": 18},
-        "triple":       {"before": 5, "after": 4, "total": 16},
-        "double":       {"before": 4, "after": 3, "total": 14},
-        "baron_steal":  {"before": 10, "after": 6, "total": 25},
-        "dragon_steal": {"before": 8, "after": 5, "total": 20},
-        "solo_kill":    {"before": 4, "after": 3, "total": 10},
-        "default":      {"before": 5, "after": 5, "total": 12},
+        "penta":        {"before": 18, "after": 5, "total": 30},
+        "quadra":       {"before": 16, "after": 4, "total": 25},
+        "triple":       {"before": 15, "after": 4, "total": 22},
+        "double":       {"before": 14, "after": 3, "total": 20},
+        "baron_steal":  {"before": 18, "after": 5, "total": 28},
+        "dragon_steal": {"before": 16, "after": 4, "total": 25},
+        "solo_kill":    {"before": 13, "after": 3, "total": 18},
+        "default":      {"before": 13, "after": 3, "total": 18},
     }
 
     # ─── Paths ───────────────────────────────────────────────
