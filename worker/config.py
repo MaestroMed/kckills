@@ -48,14 +48,14 @@ class Config:
     # So `before` must be at least 12-15s to capture the actual action
     # BEFORE the kill, not the aftermath/death timer.
     CLIP_TIMING = {
-        "penta":        {"before": 18, "after": 5, "total": 30},
-        "quadra":       {"before": 16, "after": 4, "total": 25},
-        "triple":       {"before": 15, "after": 4, "total": 22},
-        "double":       {"before": 14, "after": 3, "total": 20},
-        "baron_steal":  {"before": 18, "after": 5, "total": 28},
-        "dragon_steal": {"before": 16, "after": 4, "total": 25},
-        "solo_kill":    {"before": 13, "after": 3, "total": 18},
-        "default":      {"before": 13, "after": 3, "total": 18},
+        "penta":        {"before": 30, "after": 10, "total": 40},
+        "quadra":       {"before": 30, "after": 10, "total": 40},
+        "triple":       {"before": 30, "after": 10, "total": 40},
+        "double":       {"before": 30, "after": 10, "total": 40},
+        "baron_steal":  {"before": 30, "after": 10, "total": 40},
+        "dragon_steal": {"before": 30, "after": 10, "total": 40},
+        "solo_kill":    {"before": 30, "after": 10, "total": 40},
+        "default":      {"before": 30, "after": 10, "total": 40},
     }
 
     # ─── Paths ───────────────────────────────────────────────
