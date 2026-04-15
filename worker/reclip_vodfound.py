@@ -268,6 +268,15 @@ async def main():
 
         print(f"    Done: {total_done} ok, {total_fail} fail total")
 
+        # Clean up VOD after processing this game's kills to save disk space
+        # (it will be re-downloaded if needed for another game on the same VOD)
+        if local_vod and os.path.exists(local_vod):
+            try:
+                os.remove(local_vod)
+                log.info("vod_cleaned_after_game", path=local_vod)
+            except Exception:
+                pass
+
     print(f"\nFinal: {total_done} re-clipped, {total_fail} failed")
 
 
