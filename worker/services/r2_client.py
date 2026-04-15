@@ -127,6 +127,18 @@ async def upload_clip(kill_id: str, local_path: str, format_suffix: str) -> str 
     return await upload(local_path, key, ct)
 
 
+async def upload_moment(moment_id: str, local_path: str, format_suffix: str) -> str | None:
+    """Upload a moment clip to R2 under moments/ prefix.
+
+    format_suffix is one of: 'h', 'v', 'v_low', 'thumb'.
+    """
+    ext = "jpg" if format_suffix == "thumb" else "mp4"
+    folder = "moment_thumbs" if format_suffix == "thumb" else "moments"
+    key = f"{folder}/{moment_id}_{format_suffix}.{ext}"
+    ct = "image/jpeg" if ext == "jpg" else "video/mp4"
+    return await upload(local_path, key, ct)
+
+
 async def upload_og(kill_id: str, local_path: str) -> str | None:
     """Upload an OG image to R2 under og/ prefix."""
     return await upload(local_path, f"og/{kill_id}.png", "image/png")

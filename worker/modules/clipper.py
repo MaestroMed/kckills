@@ -316,6 +316,189 @@ async def clip_kill(
             _safe_remove(p)
 
 
+async def clip_moment(
+    moment_id: str,
+    youtube_id: str,
+    vod_offset_seconds: int,
+    clip_start_game_seconds: int,
+    clip_end_game_seconds: int,
+    classification: str = "teamfight",
+    kill_count: int = 1,
+    match_context: str | None = None,
+    local_vod_path: str | None = None,
+) -> dict | None:
+    """Encode and upload a moment clip with variable duration.
+
+    Unlike clip_kill() which uses fixed -30s/+10s timing, clip_moment()
+    uses the moment's computed window: 15s before first kill to 10s after
+    last kill, clamped to [20, 60] seconds.
+    """
+    os.makedirs(config.CLIPS_DIR, exist_ok=True)
+    os.makedirs(config.THUMBNAILS_DIR, exist_ok=True)
+
+    vod_start = int(vod_offset_seconds or 0) + int(clip_start_game_seconds or 0)
+    vod_end = int(vod_offset_seconds or 0) + int(clip_end_game_seconds or 0)
+    clip_start = max(0, vod_start)
+    clip_duration = vod_end - clip_start
+
+    raw_path = os.path.join(config.CLIPS_DIR, f"raw_m_{moment_id}.mp4")
+    h_path = os.path.join(config.CLIPS_DIR, f"m_{moment_id}_h.mp4")
+    v_path = os.path.join(config.CLIPS_DIR, f"m_{moment_id}_v.mp4")
+    vl_path = os.path.join(config.CLIPS_DIR, f"m_{moment_id}_v_low.mp4")
+    thumb_path = os.path.join(config.THUMBNAILS_DIR, f"m_{moment_id}_thumb.jpg")
+
+    # Build overlay text for the moment
+    badge = classification.upper().replace("_", " ")
+    overlay_text = f"{badge} - {kill_count} kill{'s' if kill_count > 1 else ''}"
+
+    try:
+        # ─── 1. Extract segment from local VOD or YouTube ───────────
+        can_dl = await scheduler.wait_for("ytdlp")
+        if not can_dl:
+            return None
+
+        if local_vod_path and os.path.exists(local_vod_path):
+            log.info("moment_extract_local", moment_id=moment_id, start=clip_start, duration=clip_duration)
+            if not await _ffmpeg([
+                "-ss", str(clip_start),
+                "-i", local_vod_path,
+                "-t", str(clip_duration),
+                "-c:v", "libx264", "-preset", "ultrafast", "-crf", "18",
+                "-c:a", "aac", "-b:a", "128k",
+                "-movflags", "+faststart",
+                "-y", raw_path,
+            ]):
+                log.error("moment_extract_failed", moment_id=moment_id)
+                return None
+        else:
+            vod_url = f"https://www.youtube.com/watch?v={youtube_id}"
+            ok = await _run_ytdlp(vod_url, raw_path, clip_start, clip_start + clip_duration)
+            if not ok or not os.path.exists(raw_path):
+                log.error("moment_download_failed", moment_id=moment_id)
+                return None
+
+        # ─── 2. Horizontal 16:9 ────────────────────────────────────
+        await scheduler.wait_for("ffmpeg_cooldown")
+        if not await _ffmpeg([
+            "-i", raw_path,
+            "-vf", "scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2",
+            "-c:v", "libx264", "-preset", "fast", "-crf", "23",
+            "-profile:v", "main", "-level", "3.1",
+            "-maxrate", "2M", "-bufsize", "4M",
+            "-c:a", "aac", "-b:a", "96k",
+            "-movflags", "+faststart",
+            "-y", h_path,
+        ]):
+            log.error("moment_h_failed", moment_id=moment_id)
+            return None
+
+        # ─── 3. Vertical 9:16 HQ with moment badge overlay ─────────
+        v_crop = "crop=ih*9/16:ih:iw/2-ih*9/32+iw*0.08:0,scale=720:1280"
+        # Moment badge overlay: classification + kill count, visible first 4 seconds
+        badge_filter = _build_moment_overlay(overlay_text, match_context or "")
+        v_filter = f"{v_crop},{badge_filter}" if badge_filter else v_crop
+
+        await scheduler.wait_for("ffmpeg_cooldown")
+        if not await _ffmpeg([
+            "-i", raw_path,
+            "-vf", v_filter,
+            "-c:v", "libx264", "-preset", "fast", "-crf", "23",
+            "-profile:v", "main", "-level", "3.1",
+            "-maxrate", "2M", "-bufsize", "4M",
+            "-c:a", "aac", "-b:a", "96k",
+            "-movflags", "+faststart",
+            "-y", v_path,
+        ]):
+            log.error("moment_v_failed", moment_id=moment_id)
+            return None
+
+        # ─── 4. Vertical 9:16 low (360p) ───────────────────────────
+        await scheduler.wait_for("ffmpeg_cooldown")
+        if not await _ffmpeg([
+            "-i", raw_path,
+            "-vf", "crop=ih*9/16:ih:iw/2-ih*9/32:0,scale=360:640",
+            "-c:v", "libx264", "-preset", "fast", "-crf", "28",
+            "-profile:v", "baseline", "-level", "3.0",
+            "-maxrate", "800k", "-bufsize", "1600k",
+            "-c:a", "aac", "-b:a", "64k",
+            "-movflags", "+faststart",
+            "-y", vl_path,
+        ]):
+            log.warn("moment_vl_failed", moment_id=moment_id)
+
+        # ─── 5. Thumbnail at mid-clip ──────────────────────────────
+        thumb_at = clip_duration // 2
+        await _ffmpeg([
+            "-ss", str(thumb_at),
+            "-i", v_path,
+            "-vframes", "1", "-q:v", "2",
+            "-y", thumb_path,
+        ])
+
+        # ─── 6. Upload to R2 under moments/ prefix ─────────────────
+        h_url, v_url, vl_url, thumb_url = await asyncio.gather(
+            r2_client.upload_moment(moment_id, h_path, "h"),
+            r2_client.upload_moment(moment_id, v_path, "v"),
+            r2_client.upload_moment(moment_id, vl_path, "v_low") if os.path.exists(vl_path) else _noop(),
+            r2_client.upload_moment(moment_id, thumb_path, "thumb") if os.path.exists(thumb_path) else _noop(),
+        )
+
+        log.info(
+            "moment_clip_done",
+            moment_id=moment_id,
+            classification=classification,
+            duration=clip_duration,
+            h=bool(h_url), v=bool(v_url),
+        )
+
+        return {
+            "clip_url_horizontal": h_url,
+            "clip_url_vertical": v_url,
+            "clip_url_vertical_low": vl_url,
+            "thumbnail_url": thumb_url,
+            "_local_h_path": h_path if os.path.exists(h_path) else None,
+        }
+
+    except Exception as e:
+        log.error("moment_clip_error", moment_id=moment_id, error=str(e))
+        return None
+    finally:
+        for p in (raw_path, v_path, vl_path, thumb_path):
+            _safe_remove(p)
+
+
+def _build_moment_overlay(badge_text: str, context: str = "") -> str:
+    """Build ffmpeg drawtext filter for moment badge overlay.
+
+    Shows classification badge (e.g. 'TEAMFIGHT - 5 kills') for first 4 seconds,
+    and match context at the bottom permanently.
+    """
+    # Escape for ffmpeg drawtext (Windows-safe: no single quotes)
+    badge_text = badge_text.replace(":", "\\:").replace(",", "\\,").replace("'", "")
+    context = context.replace(":", "\\:").replace(",", "\\,").replace("'", "")
+
+    parts = []
+
+    # Badge text: top center, gold, first 4 seconds
+    if badge_text:
+        parts.append(
+            f"drawtext=text={badge_text}"
+            f":fontcolor=#C8AA6E:fontsize=36:borderw=3:bordercolor=black"
+            f":x=(w-text_w)/2:y=60"
+            f":enable=between(t\\,0\\,4)"
+        )
+
+    # Context bar: bottom left, permanent
+    if context:
+        parts.append(
+            f"drawtext=text={context}"
+            f":fontcolor=#A09B8C:fontsize=18:borderw=2:bordercolor=black"
+            f":x=20:y=h-40"
+        )
+
+    return ",".join(parts) if parts else ""
+
+
 def cleanup_local_clip(local_path: str | None):
     """Remove a local clip file after Gemini analysis is done."""
     if local_path:

@@ -186,6 +186,140 @@ async def extract_kills_from_game(
     return kills
 
 
+async def extract_moments_from_game(
+    external_game_id: str,
+    db_game_id: str,
+    kc_side: str | None = None,
+    probe_step_seconds: int = 10,
+    max_game_minutes: int = 65,
+    max_consecutive_empty: int = 60,
+    precomputed_anchor: tuple | None = None,
+) -> tuple[list, list, dict[int, dict[str, int]]]:
+    """Extract kills and group them into moments, also tracking gold per frame.
+
+    Returns:
+        (moments, kills, gold_snapshots)
+        - moments: list[MomentEvent]
+        - kills: list[KillEvent] (raw kills, for DB insert with moment_id FK)
+        - gold_snapshots: dict[game_seconds -> {"blue": int, "red": int}]
+    """
+    from models.moment_event import MomentEvent, group_kills_into_moments
+
+    # ─── Anchor ──────────────────────────────────────────────────────────
+    if precomputed_anchor is not None:
+        anchor, anchor_data = precomputed_anchor
+    else:
+        got = await get_game_anchor(external_game_id)
+        if got is None:
+            return [], [], {}
+        anchor, anchor_data = got
+
+    frames = (anchor_data or {}).get("frames") or []
+    if not frames:
+        return [], [], {}
+
+    game_start_epoch_ms = int(anchor.timestamp() * 1000)
+    participants = livestats_api.extract_participants(anchor_data)
+    if kc_side is None:
+        kc_side = _detect_kc_side(participants)
+
+    log.info(
+        "harvester_moments_anchor",
+        game_id=external_game_id,
+        anchor=anchor.isoformat(),
+        kc_side=kc_side,
+    )
+
+    # Seed from anchor
+    prev_kda = livestats_api.extract_kda(frames[-1])
+    total_kills_seen = sum(v.get("kills", 0) for v in prev_kda.values())
+    kills: list[KillEvent] = []
+    gold_snapshots: dict[int, dict[str, int]] = {}
+
+    # Capture initial gold snapshot
+    _record_gold(gold_snapshots, prev_kda, participants, 0)
+
+    # ─── Walk forward ────────────────────────────────────────────────────
+    step = timedelta(seconds=max(probe_step_seconds, 10))
+    end = anchor + timedelta(minutes=max_game_minutes)
+    t = anchor + step
+    consecutive_empty = 0
+
+    while t < end:
+        ts = t.strftime("%Y-%m-%dT%H:%M:%S.000Z")
+        data = await livestats_api.get_window(external_game_id, ts)
+        probe_frames = (data or {}).get("frames") or []
+
+        if not probe_frames:
+            consecutive_empty += 1
+            if consecutive_empty >= max_consecutive_empty:
+                break
+            t += step
+            continue
+
+        consecutive_empty = 0
+        latest = probe_frames[-1]
+        curr_kda = livestats_api.extract_kda(latest)
+        frame_ts = latest.get("rfc460Timestamp", ts)
+
+        # Track gold per frame
+        game_seconds = max(0, (int(_parse_ts(frame_ts).timestamp() * 1000) - game_start_epoch_ms) // 1000) if frame_ts else 0
+        _record_gold(gold_snapshots, curr_kda, participants, game_seconds)
+
+        if kc_side is not None:
+            new_kills = _diff_frames(
+                prev_kda, curr_kda, participants, frame_ts,
+                db_game_id, kc_side, total_kills_seen,
+            )
+            for k in new_kills:
+                if k.event_epoch:
+                    k.game_time_seconds = max(0, (k.event_epoch - game_start_epoch_ms) // 1000)
+                kills.append(k)
+            total_kills_seen += len(new_kills)
+
+        prev_kda = curr_kda
+        t += step
+
+    # Group kills into moments
+    moments = group_kills_into_moments(kills, gold_snapshots, kc_side)
+
+    log.info(
+        "moments_extracted",
+        external_game_id=external_game_id,
+        kills=len(kills),
+        moments=len(moments),
+        classifications={m.classification: sum(1 for m2 in moments if m2.classification == m.classification) for m in moments},
+    )
+
+    return moments, kills, gold_snapshots
+
+
+def _record_gold(
+    gold_snapshots: dict[int, dict[str, int]],
+    kda: dict,
+    participants: dict,
+    game_seconds: int,
+) -> None:
+    """Record team gold totals from a KDA snapshot."""
+    blue_gold = 0
+    red_gold = 0
+    for pid, stats in kda.items():
+        p = participants.get(str(pid), {})
+        side = p.get("side", "")
+        gold = stats.get("gold", 0)
+        if side == "blue":
+            blue_gold += gold
+        elif side == "red":
+            red_gold += gold
+    gold_snapshots[game_seconds] = {"blue": blue_gold, "red": red_gold}
+
+
+def _parse_ts(ts_str: str) -> datetime:
+    """Parse an RFC 3339 / ISO 8601 timestamp."""
+    from dateutil.parser import isoparse
+    return isoparse(ts_str)
+
+
 def _round_down_10s(dt: datetime) -> datetime:
     return dt.replace(microsecond=0, second=(dt.second // 10) * 10)
 

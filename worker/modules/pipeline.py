@@ -444,6 +444,288 @@ async def run_for_match(match_external_id: str) -> dict:
     return report
 
 
+async def run_moments_for_match(match_external_id: str) -> dict:
+    """Run the MOMENTS pipeline on one match.
+
+    Like run_for_match() but produces moments (grouped kills) instead of
+    individual kill clips. Each moment gets one variable-length clip.
+    """
+    report = {
+        "match_id": match_external_id,
+        "games": 0,
+        "kills_detected": 0,
+        "moments_detected": 0,
+        "moments_clipped": 0,
+        "moments_analysed": 0,
+        "moments_published": 0,
+        "errors": [],
+    }
+
+    # ─── 1-3. Reuse match/game/VOD resolution from run_for_match ─────
+    # (identical logic: resolve match, upsert games, compute offsets, download VODs)
+    log.info("moments_pipeline_start", match=match_external_id)
+    details = await lolesports_api.get_event_details(match_external_id)
+    if not details:
+        report["errors"].append("getEventDetails returned nothing")
+        return report
+
+    match = details.get("match", {}) or {}
+    teams = match.get("teams", []) or []
+    if len(teams) < 2:
+        report["errors"].append("match has < 2 teams")
+        return report
+
+    existing = safe_select("matches", "id, scheduled_at, stage", external_id=match_external_id)
+    scheduled_at = existing[0].get("scheduled_at") if existing else None
+    stage = existing[0].get("stage") if existing else ""
+
+    match_row = safe_upsert(
+        "matches",
+        {"external_id": match_external_id, "format": f"bo{(match.get('strategy') or {}).get('count', 1)}",
+         "stage": stage or "", "scheduled_at": scheduled_at, "state": "completed"},
+        on_conflict="external_id",
+    )
+    match_db_id = (match_row or {}).get("id") if match_row else (existing[0]["id"] if existing else None)
+    if not match_db_id:
+        report["errors"].append("could not upsert match row")
+        return report
+
+    # Resolve games + VODs (reuse logic from run_for_match)
+    games_payload = match.get("games", []) or []
+    game_db_rows = []
+    for g in games_payload:
+        if g.get("state") != "completed":
+            continue
+        game_ext_id = g.get("id")
+        if not game_ext_id:
+            continue
+        vod_yt_id = None
+        vod_offset = None
+        vods = g.get("vods", []) or []
+        for vod in vods:
+            if vod.get("provider") != "youtube":
+                continue
+            locale = str(vod.get("locale", ""))
+            vid = vod.get("parameter")
+            off = int(vod.get("offset") or 0)
+            if locale.startswith("fr"):
+                vod_yt_id = vid
+                vod_offset = off
+                break
+            elif not vod_yt_id:
+                vod_yt_id = vid
+                vod_offset = off
+        payload = {"external_id": game_ext_id, "match_id": match_db_id,
+                   "game_number": g.get("number", 1), "state": "vod_found" if vod_yt_id else "pending"}
+        if vod_yt_id:
+            payload["vod_youtube_id"] = vod_yt_id
+            payload["vod_offset_seconds"] = vod_offset or 0
+        game_row = safe_upsert("games", payload, on_conflict="external_id")
+        if game_row:
+            game_db_rows.append(game_row)
+        elif existing_game := safe_select("games", "id, external_id, vod_youtube_id, vod_offset_seconds, match_id", external_id=game_ext_id):
+            game_db_rows.append(existing_game[0])
+
+    report["games"] = len(game_db_rows)
+    if not game_db_rows:
+        report["errors"].append("no completed games with VODs")
+        return report
+
+    sorted_games = sorted(game_db_rows, key=lambda g: int(g.get("game_number") or 1))
+
+    # Compute per-game VOD offsets from livestats anchors
+    anchors = {}
+    for g in sorted_games:
+        ext = g.get("external_id")
+        if ext:
+            a = await harvester.get_game_anchor(ext)
+            if a:
+                anchors[ext] = a
+
+    if sorted_games and anchors.get(sorted_games[0].get("external_id", "")):
+        first_ext = sorted_games[0]["external_id"]
+        first_anchor_dt, _ = anchors[first_ext]
+        first_api_offset = int(sorted_games[0].get("vod_offset_seconds") or 0)
+        for g in sorted_games:
+            ext = g.get("external_id")
+            if not ext or ext not in anchors:
+                continue
+            anchor_dt, _ = anchors[ext]
+            derived_offset = first_api_offset + int((anchor_dt - first_anchor_dt).total_seconds())
+            if derived_offset != int(g.get("vod_offset_seconds") or 0):
+                safe_update("games", {"vod_offset_seconds": derived_offset}, "id", g["id"])
+                g["vod_offset_seconds"] = derived_offset
+
+    # Download full VOD once
+    local_vod_paths = {}
+    for g in sorted_games:
+        vid = g.get("vod_youtube_id")
+        if vid and vid not in local_vod_paths:
+            local = await clipper.download_full_vod(vid)
+            if local:
+                local_vod_paths[vid] = local
+
+    # ─── 4. For each game: harvest moments → clip → analyse ──────────
+    for game_row in sorted_games:
+        game_ext_id = game_row.get("external_id")
+        game_db_id = game_row.get("id")
+        yt_id = game_row.get("vod_youtube_id")
+        vod_offset = int(game_row.get("vod_offset_seconds") or 0)
+
+        if not (game_ext_id and game_db_id):
+            continue
+
+        # ─── Harvest moments (kills grouped into coherent action) ────
+        moments, kills, gold_snapshots = await harvester.extract_moments_from_game(
+            external_game_id=game_ext_id,
+            db_game_id=game_db_id,
+            precomputed_anchor=anchors.get(game_ext_id),
+        )
+        report["kills_detected"] += len(kills)
+        report["moments_detected"] += len(moments)
+        log.info("moments_pipeline_detected", game=game_ext_id, kills=len(kills), moments=len(moments))
+
+        if not yt_id:
+            continue
+
+        # ─── Insert moments + kills ──────────────────────────────────
+        inserted_moments = []
+        for moment in moments:
+            m_payload = moment.to_db_dict()
+            m_payload["status"] = "vod_found"
+            m_row = safe_insert("moments", m_payload)
+            if not m_row:
+                continue
+            inserted_moments.append((moment, m_row))
+
+            # Insert constituent kills with moment_id FK
+            for kill in moment.kills:
+                k_payload = kill.to_db_dict()
+                k_payload["moment_id"] = m_row["id"]
+                k_payload["status"] = "vod_found"
+                safe_insert("kills", k_payload)
+
+        safe_update("games", {"kills_extracted": True}, "id", game_db_id)
+
+        # ─── QC offset calibration ──────────────────────────────────
+        if inserted_moments and kills:
+            sorted_by_time = sorted(kills, key=lambda k: int(k.game_time_seconds or 0))
+            valid_kills = [k for k in sorted_by_time if int(k.game_time_seconds or 0) > 60]
+            if valid_kills:
+                n = len(valid_kills)
+                probe_indices = [0, n // 2, n - 1] if n >= 3 else list(range(n))
+                probe_game_times = [int(valid_kills[i].game_time_seconds or 0) for i in probe_indices]
+                calibrated_offset = await qc.calibrate_game_offset(
+                    youtube_id=yt_id,
+                    current_offset=vod_offset,
+                    probe_game_times=probe_game_times,
+                    local_vod_path=local_vod_paths.get(yt_id),
+                )
+                if calibrated_offset != vod_offset:
+                    log.info("moments_offset_calibrated", game=game_ext_id, old=vod_offset, new=calibrated_offset)
+                    vod_offset = calibrated_offset
+                    safe_update("games", {"vod_offset_seconds": calibrated_offset}, "id", game_db_id)
+
+        # ─── Clip each moment ────────────────────────────────────────
+        for moment, m_row in inserted_moments:
+            game_num = game_row.get("game_number", "?")
+            gt_start = moment.start_time_seconds
+            ctx = f"Game {game_num}  T+{gt_start // 60:02d}:{gt_start % 60:02d}"
+
+            urls = await clipper.clip_moment(
+                moment_id=m_row["id"],
+                youtube_id=yt_id,
+                vod_offset_seconds=vod_offset,
+                clip_start_game_seconds=moment.clip_start_seconds,
+                clip_end_game_seconds=moment.clip_end_seconds,
+                classification=moment.classification,
+                kill_count=moment.kill_count,
+                match_context=ctx,
+                local_vod_path=local_vod_paths.get(yt_id),
+            )
+            if urls and urls.get("clip_url_horizontal"):
+                m_row["_local_h_path"] = urls.pop("_local_h_path", None)
+                safe_update("moments", {**urls, "status": "clipped"}, "id", m_row["id"])
+                report["moments_clipped"] += 1
+            else:
+                safe_update("moments", {"status": "clip_error"}, "id", m_row["id"])
+                report["errors"].append(f"clip_error moment={m_row['id']}")
+
+        # ─── Analyze each clipped moment ─────────────────────────────
+        clipped_moments = safe_select(
+            "moments", "id, classification, kill_count, kc_involvement, gold_swing, moment_score",
+            status="clipped", game_id=game_db_id,
+        )
+        for m in clipped_moments:
+            # Build analysis context from moment metadata
+            ctx_parts = [
+                f"{m.get('classification', 'moment').upper()} with {m.get('kill_count', 0)} kills",
+                f"KC {m.get('kc_involvement', '').replace('kc_', '')}",
+            ]
+            gs = m.get("gold_swing", 0)
+            if abs(gs) > 1000:
+                ctx_parts.append(f"Gold swing: {'+' if gs > 0 else ''}{gs}")
+
+            result = await analyzer.analyze_kill(
+                killer_name="KC",
+                killer_champion=f"{m.get('kill_count', 0)} kills",
+                victim_name="opponent",
+                victim_champion=m.get("classification", "moment"),
+                context=". ".join(ctx_parts),
+            )
+            if result:
+                base_score = _safe_float(m.get("moment_score")) or 5.0
+                gemini_score = _safe_float(result.get("highlight_score")) or base_score
+                blended = round(base_score * 0.4 + gemini_score * 0.6, 1)
+                safe_update("moments", {
+                    "moment_score": blended,
+                    "ai_tags": result.get("tags") or [],
+                    "ai_description": result.get("description_fr"),
+                    "caster_hype_level": _safe_int(result.get("caster_hype_level")),
+                    "status": "analyzed",
+                }, "id", m["id"])
+            else:
+                safe_update("moments", {"status": "analyzed"}, "id", m["id"])
+            report["moments_analysed"] += 1
+
+        # ─── Publish ─────────────────────────────────────────────────
+        analyzed_moments = safe_select("moments", "id", status="analyzed", game_id=game_db_id)
+        for m in analyzed_moments:
+            safe_update("moments", {"status": "published"}, "id", m["id"])
+            report["moments_published"] += 1
+
+    # Cleanup VODs
+    for vod_path in local_vod_paths.values():
+        try:
+            if os.path.exists(vod_path):
+                os.remove(vod_path)
+        except Exception:
+            pass
+
+    log.info("moments_pipeline_done", **{k: v for k, v in report.items() if k != "errors"})
+    return report
+
+
+def print_moments_report(report: dict):
+    """Pretty-print a moments pipeline report."""
+    print()
+    print("=" * 60)
+    print(f"  MOMENTS Pipeline — match {report['match_id']}")
+    print("=" * 60)
+    print(f"  Games            : {report['games']}")
+    print(f"  Kills detected   : {report['kills_detected']}")
+    print(f"  Moments detected : {report['moments_detected']}")
+    print(f"  Moments clipped  : {report['moments_clipped']}")
+    print(f"  Moments analysed : {report['moments_analysed']}")
+    print(f"  Moments published: {report['moments_published']}")
+    if report.get("errors"):
+        print(f"  Errors           : {len(report['errors'])}")
+        for e in report["errors"][:5]:
+            print(f"    - {e}")
+    print("=" * 60)
+    print()
+
+
 def _safe_float(v) -> float | None:
     try:
         return float(v) if v is not None else None
