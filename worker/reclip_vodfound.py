@@ -43,46 +43,60 @@ MAX_CALIBRATION_RETRIES = 3
 
 
 async def read_timer_from_clip(clip_path: str, frame_at: int = 15) -> int | None:
-    """Extract frame from clip and read LoL timer with Gemini. Returns seconds or None."""
+    """Extract frame from clip and read LoL timer with Gemini. Returns seconds or None.
+
+    Tries multiple frame positions if the first one fails (handles replays/scoreboards).
+    """
+    positions = [frame_at, 5, 10, 20, 25]  # try multiple positions
     frame_path = clip_path + ".qc.jpg"
-    try:
-        r = subprocess.run(
-            ["ffmpeg", "-y", "-ss", str(frame_at), "-i", clip_path,
-             "-frames:v", "1", "-q:v", "2", "-vf", "scale=1920:-1", frame_path],
-            capture_output=True, timeout=15,
-        )
-        if r.returncode != 0 or not os.path.exists(frame_path):
-            return None
 
-        can_call = await scheduler.wait_for("gemini")
-        if not can_call:
-            return None
+    import google.generativeai as genai
+    genai.configure(api_key=config.GEMINI_API_KEY)
 
-        import google.generativeai as genai
-        genai.configure(api_key=config.GEMINI_API_KEY)
-        model = genai.GenerativeModel(
-            os.environ.get("GEMINI_MODEL", "gemini-2.5-flash-lite")
-        )
-        img = genai.upload_file(frame_path)
-        from services.gemini_client import _wait_for_file_active
-        _wait_for_file_active(genai, img, timeout=30)
+    for pos in positions:
+        try:
+            r = subprocess.run(
+                ["ffmpeg", "-y", "-ss", str(pos), "-i", clip_path,
+                 "-frames:v", "1", "-q:v", "1", "-vf", "scale=1920:-1", frame_path],
+                capture_output=True, timeout=15,
+            )
+            if r.returncode != 0 or not os.path.exists(frame_path):
+                continue
 
-        response = model.generate_content([
-            "Read the in-game League of Legends timer at the top center. "
-            "Reply ONLY MM:SS. If not visible reply NONE.",
-            img,
-        ])
-        timer_text = response.text.strip()
-        match = re.match(r"(\d+):(\d+)", timer_text)
-        if match:
-            return int(match.group(1)) * 60 + int(match.group(2))
-        return None
-    except Exception as e:
-        log.warn("qc_read_error", error=str(e)[:60])
-        return None
-    finally:
-        if os.path.exists(frame_path):
-            os.remove(frame_path)
+            can_call = await scheduler.wait_for("gemini")
+            if not can_call:
+                return None
+
+            model = genai.GenerativeModel(
+                os.environ.get("GEMINI_MODEL", "gemini-2.5-flash-lite")
+            )
+            img = genai.upload_file(frame_path)
+            from services.gemini_client import _wait_for_file_active
+            _wait_for_file_active(genai, img, timeout=30)
+
+            response = model.generate_content([
+                "Read the in-game League of Legends timer at the top center of the HUD. "
+                "The timer format is MM:SS (e.g. 15:30, 23:45). "
+                "Reply ONLY the timer value like 12:34. If not visible reply NONE.",
+                img,
+            ])
+            timer_text = response.text.strip()
+            match = re.match(r"(\d+):(\d+)", timer_text)
+            if match:
+                actual = int(match.group(1)) * 60 + int(match.group(2))
+                # Adjust for frame position within clip:
+                # if we read at pos instead of frame_at, the actual game time
+                # is shifted by (pos - frame_at) seconds
+                adjusted = actual - (pos - frame_at)
+                return adjusted
+
+        except Exception as e:
+            log.warn("qc_read_error", pos=pos, error=str(e)[:60])
+        finally:
+            if os.path.exists(frame_path):
+                os.remove(frame_path)
+
+    return None
 
 
 async def calibrate_offset_from_clip(
@@ -181,48 +195,54 @@ async def main():
 
         print(f"\n  Game {gid[:8]} (#{game_num}, {len(game_kills)} kills, VOD {yt_id})")
 
-        # ─── STEP 1: Calibrate offset using a mid-game kill as probe ────
+        # ─── STEP 1: Calibrate offset using MULTIPLE probe positions ────
+        # Try 3 different kill positions (early, mid, late) to find one
+        # where the timer is readable. This handles replays/scoreboards.
         game_kills.sort(key=lambda k: k.get("game_time_seconds", 0))
-        mid_kills = [k for k in game_kills if 600 <= (k.get("game_time_seconds", 0)) <= 1400]
-        if not mid_kills:
-            mid_kills = [k for k in game_kills if k.get("game_time_seconds", 0) > 300]
-        probe_kill = mid_kills[len(mid_kills) // 2] if mid_kills else game_kills[len(game_kills) // 2]
-        probe_gt = probe_kill.get("game_time_seconds", 600)
+        valid_kills = [k for k in game_kills if (k.get("game_time_seconds", 0)) > 180]
+        if not valid_kills:
+            valid_kills = game_kills
+
+        # Pick 3 spread positions
+        n = len(valid_kills)
+        probe_indices = [0, n // 2, n - 1] if n >= 3 else list(range(n))
+        probe_gts = [valid_kills[i].get("game_time_seconds", 600) for i in probe_indices]
 
         calibrated = False
-        for attempt in range(MAX_CALIBRATION_RETRIES):
-            new_offset, success = await calibrate_offset_from_clip(
-                local_vod, vod_offset, probe_gt,
-            )
-            if not success:
-                print(f"    Calibration attempt {attempt+1} failed (no timer read)")
-                break
+        for probe_gt in probe_gts:
+            for attempt in range(MAX_CALIBRATION_RETRIES):
+                new_offset, success = await calibrate_offset_from_clip(
+                    local_vod, vod_offset, probe_gt,
+                )
+                if not success:
+                    break  # try next probe position
 
-            if new_offset == vod_offset:
-                print(f"    Offset OK: {vod_offset}s (attempt {attempt+1})")
-                calibrated = True
-                break
+                if new_offset == vod_offset:
+                    print(f"    Offset OK: {vod_offset}s (probe @{probe_gt//60}:{probe_gt%60:02d})")
+                    calibrated = True
+                    break
 
-            print(f"    Offset corrected: {vod_offset} -> {new_offset} (attempt {attempt+1})")
-            vod_offset = new_offset
+                print(f"    Offset corrected: {vod_offset} -> {new_offset} (probe @{probe_gt//60}:{probe_gt%60:02d})")
+                vod_offset = new_offset
 
-            # Verify the correction with another read
-            verify_offset, verify_ok = await calibrate_offset_from_clip(
-                local_vod, vod_offset, probe_gt,
-            )
-            if verify_ok and verify_offset == vod_offset:
-                print(f"    Verified! Final offset: {vod_offset}s")
-                calibrated = True
+                # Verify
+                verify_offset, verify_ok = await calibrate_offset_from_clip(
+                    local_vod, vod_offset, probe_gt,
+                )
+                if verify_ok and abs(verify_offset - vod_offset) <= DRIFT_THRESHOLD:
+                    print(f"    Verified! Final offset: {vod_offset}s")
+                    calibrated = True
+                    break
+                elif verify_ok:
+                    vod_offset = verify_offset
+
+            if calibrated:
                 break
-            elif verify_ok:
-                vod_offset = verify_offset
-                # One more loop
 
         if calibrated:
-            # Save corrected offset to DB
             safe_update("games", {"vod_offset_seconds": vod_offset}, "id", gid)
         else:
-            print(f"    WARNING: Could not calibrate offset, using {vod_offset}s")
+            print(f"    WARNING: Could not calibrate offset for any probe, using {vod_offset}s")
 
         # ─── STEP 2: Clip all kills with the calibrated offset ──────────
         for k in game_kills:
