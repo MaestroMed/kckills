@@ -214,6 +214,5 @@ function weightedShuffle<T extends { score: number }>(items: T[]): T[] {
   jittered.sort((a, b) => b.sortKey - a.sortKey);
   return jittered.map((j) => j.item);
 }
-}
 
 // inferOpponent removed — lookup now inline in the map (includes kcWon)
