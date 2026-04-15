@@ -392,11 +392,9 @@ async def clip_moment(
             log.error("moment_h_failed", moment_id=moment_id)
             return None
 
-        # ─── 3. Vertical 9:16 HQ with moment badge overlay ─────────
+        # ─── 3. Vertical 9:16 HQ (no burnt-in overlay — frontend handles badges)
         v_crop = "crop=ih*9/16:ih:iw/2-ih*9/32+iw*0.08:0,scale=720:1280"
-        # Moment badge overlay: classification + kill count, visible first 4 seconds
-        badge_filter = _build_moment_overlay(overlay_text, match_context or "")
-        v_filter = f"{v_crop},{badge_filter}" if badge_filter else v_crop
+        v_filter = v_crop
 
         await scheduler.wait_for("ffmpeg_cooldown")
         if not await _ffmpeg([
@@ -472,28 +470,39 @@ def _build_moment_overlay(badge_text: str, context: str = "") -> str:
 
     Shows classification badge (e.g. 'TEAMFIGHT - 5 kills') for first 4 seconds,
     and match context at the bottom permanently.
+
+    ffmpeg drawtext escaping rules (Windows-safe):
+    - ':' must be '\\:' inside drawtext option values
+    - ',' must be '\\,' inside drawtext option values
+    - Single quotes are removed entirely (Windows shell issue)
+    - The enable= value uses '\\,' for function arg separators
     """
-    # Escape for ffmpeg drawtext (Windows-safe: no single quotes)
-    badge_text = badge_text.replace(":", "\\:").replace(",", "\\,").replace("'", "")
-    context = context.replace(":", "\\:").replace(",", "\\,").replace("'", "")
+    if not badge_text and not context:
+        return ""
+
+    def _esc(s: str) -> str:
+        """Escape a string for ffmpeg drawtext text= value."""
+        return s.replace("\\", "\\\\").replace(":", "\\:").replace(",", "\\,").replace("'", "").replace('"', "")
 
     parts = []
 
     # Badge text: top center, gold, first 4 seconds
     if badge_text:
+        safe_badge = _esc(badge_text)
         parts.append(
-            f"drawtext=text={badge_text}"
-            f":fontcolor=#C8AA6E:fontsize=36:borderw=3:bordercolor=black"
-            f":x=(w-text_w)/2:y=60"
-            f":enable=between(t\\,0\\,4)"
+            f"drawtext=text={safe_badge}"
+            f"\\:fontcolor=#C8AA6E\\:fontsize=36\\:borderw=3\\:bordercolor=black"
+            f"\\:x=(w-text_w)/2\\:y=60"
+            f"\\:enable='between(t,0,4)'"
         )
 
     # Context bar: bottom left, permanent
     if context:
+        safe_ctx = _esc(context)
         parts.append(
-            f"drawtext=text={context}"
-            f":fontcolor=#A09B8C:fontsize=18:borderw=2:bordercolor=black"
-            f":x=20:y=h-40"
+            f"drawtext=text={safe_ctx}"
+            f"\\:fontcolor=#A09B8C\\:fontsize=18\\:borderw=2\\:bordercolor=black"
+            f"\\:x=20\\:y=h-40"
         )
 
     return ",".join(parts) if parts else ""
