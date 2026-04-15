@@ -1,6 +1,5 @@
-"use server";
-
-import { createClient } from "./server";
+import "server-only";
+import { createServerSupabase } from "./server";
 
 export interface PublishedMoment {
   id: string;
@@ -31,7 +30,7 @@ export interface PublishedMoment {
 export async function getPublishedMoments(
   limit = 200
 ): Promise<PublishedMoment[]> {
-  const supabase = await createClient();
+  const supabase = await createServerSupabase();
 
   const { data, error } = await supabase
     .from("moments")
@@ -59,7 +58,7 @@ export async function getPublishedMoments(
 export async function getMomentById(
   id: string
 ): Promise<PublishedMoment | null> {
-  const supabase = await createClient();
+  const supabase = await createServerSupabase();
 
   const { data, error } = await supabase
     .from("moments")
@@ -75,7 +74,7 @@ export async function getMomentById(
 }
 
 export async function getMomentKills(momentId: string) {
-  const supabase = await createClient();
+  const supabase = await createServerSupabase();
 
   const { data, error } = await supabase
     .from("kills")
