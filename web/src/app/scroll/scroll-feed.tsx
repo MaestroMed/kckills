@@ -5,6 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { championIconUrl, championSplashUrl } from "@/lib/constants";
 import { useToast } from "@/components/Toast";
+import { CommentPanel } from "@/components/CommentPanel";
 
 // ─── Feed item types (discriminated union) ─────────────────────────────
 //
@@ -491,12 +492,14 @@ function MomentScrollItem({ item, index, total, shared }: { item: MomentFeedItem
       <RightSidebar
         killId={item.id}
         onRateClick={() => setShowRating((s) => !s)}
+        onChatClick={() => setShowComments(true)}
         rating={rating}
         shareTitle={`${cls.label} - ${item.killCount} kills`}
         visible={visible}
       />
 
       {showRating && <RatingSheet rating={rating} setRating={setRating} close={() => setShowRating(false)} />}
+      <CommentPanel killId={item.id} isOpen={showComments} onClose={() => setShowComments(false)} />
     </div>
   );
 }
@@ -773,10 +776,11 @@ function VideoScrollItem({ item, index, total, shared }: { item: VideoFeedItem; 
         </div>
       </div>
 
-      {/* ═══ RIGHT SIDEBAR (shared with aggregate items) ═══ */}
+      {/* ═══ RIGHT SIDEBAR ═══ */}
       <RightSidebar
         killId={item.id}
         onRateClick={() => setShowRating((s) => !s)}
+        onChatClick={() => setShowComments(true)}
         rating={rating}
         shareTitle={`${item.killerChampion} kill ${item.victimChampion}`}
         visible={visible}
@@ -789,6 +793,7 @@ function VideoScrollItem({ item, index, total, shared }: { item: VideoFeedItem; 
           close={() => setShowRating(false)}
         />
       )}
+      <CommentPanel killId={item.id} isOpen={showComments} onClose={() => setShowComments(false)} />
     </div>
   );
 }
@@ -986,6 +991,7 @@ function AggregateScrollItem({ item, index, total }: { item: AggregateFeedItem; 
       <RightSidebar
         killId={item.id}
         onRateClick={() => setShowRating((s) => !s)}
+        onChatClick={() => {}}
         rating={rating}
         shareTitle={`${cleanName(killer?.name ?? "")} kills ${cleanName(victim?.name ?? "")}`}
         visible={visible}
@@ -1007,74 +1013,138 @@ function AggregateScrollItem({ item, index, total }: { item: AggregateFeedItem; 
 function RightSidebar({
   killId,
   onRateClick,
+  onChatClick,
   rating,
   shareTitle,
   visible,
 }: {
   killId: string;
   onRateClick: () => void;
+  onChatClick: () => void;
   rating: number;
   shareTitle: string;
   visible: boolean;
 }) {
+  const [showShareSheet, setShowShareSheet] = useState(false);
+  const toast = useToast();
+
+  const shareUrl = typeof window !== "undefined" ? `${window.location.origin}/kill/${killId}` : "";
+
+  const handleShare = () => {
+    if (typeof navigator !== "undefined" && navigator.share) {
+      navigator.share({ url: shareUrl, title: shareTitle }).catch(() => {});
+    } else {
+      setShowShareSheet(true);
+    }
+  };
+
   return (
-    <div className={`absolute right-3 md:right-4 bottom-36 md:bottom-44 z-10 flex flex-col items-center gap-5 md:gap-6 transition-all duration-500 delay-200 ${visible ? "opacity-100 translate-x-0" : "opacity-0 translate-x-4"}`}>
-      <button
-        className="flex flex-col items-center gap-1.5"
-        onClick={onRateClick}
-        aria-label="Noter"
-      >
-        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-black/50 backdrop-blur-sm border border-white/10 transition-all hover:scale-110 hover:bg-[var(--gold)]/20 hover:border-[var(--gold)]/30 active:scale-90">
-          <svg className="h-6 w-6 text-[var(--gold)]" fill="currentColor" viewBox="0 0 20 20">
-            <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-          </svg>
-        </div>
-        <span className="text-[10px] font-bold text-white/70">{rating > 0 ? `${rating}/5` : "Rate"}</span>
-      </button>
+    <>
+      <div className={`absolute right-3 md:right-4 bottom-36 md:bottom-44 z-10 flex flex-col items-center gap-5 md:gap-6 transition-all duration-500 delay-200 ${visible ? "opacity-100 translate-x-0" : "opacity-0 translate-x-4"}`}>
+        {/* Rate */}
+        <button className="flex flex-col items-center gap-1.5" onClick={onRateClick} aria-label="Noter">
+          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-black/50 backdrop-blur-sm border border-white/10 transition-all hover:scale-110 hover:bg-[var(--gold)]/20 hover:border-[var(--gold)]/30 active:scale-90">
+            <svg className="h-6 w-6 text-[var(--gold)]" fill="currentColor" viewBox="0 0 20 20">
+              <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+            </svg>
+          </div>
+          <span className="text-[10px] font-bold text-white/70">{rating > 0 ? `${rating}/5` : "Rate"}</span>
+        </button>
 
-      <Link href={`/kill/${killId}`} className="flex flex-col items-center gap-1.5">
-        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-black/50 backdrop-blur-sm border border-white/10 transition-all hover:scale-110 active:scale-90">
-          <svg className="h-6 w-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-          </svg>
-        </div>
-        <span className="text-[10px] font-bold text-white/70">Chat</span>
-      </Link>
+        {/* F5: Chat — opens CommentPanel */}
+        <button className="flex flex-col items-center gap-1.5" onClick={onChatClick} aria-label="Commentaires">
+          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-black/50 backdrop-blur-sm border border-white/10 transition-all hover:scale-110 active:scale-90">
+            <svg className="h-6 w-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+            </svg>
+          </div>
+          <span className="text-[10px] font-bold text-white/70">Chat</span>
+        </button>
 
-      <button
-        className="flex flex-col items-center gap-1.5"
-        onClick={() => {
-          const url = `${typeof window !== "undefined" ? window.location.origin : ""}/kill/${killId}`;
-          if (typeof navigator !== "undefined" && navigator.share) {
-            navigator.share({ url, title: shareTitle }).catch(() => {});
-          } else {
-            // Desktop fallback: open Twitter/X share intent
-            window.open(
-              `https://x.com/intent/tweet?text=${encodeURIComponent(shareTitle)}&url=${encodeURIComponent(url)}`,
-              "_blank",
-              "noopener,width=550,height=420",
-            );
-          }
-        }}
-        aria-label="Partager sur X"
-      >
-        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-black/50 backdrop-blur-sm border border-white/10 transition-all hover:scale-110 active:scale-90">
-          <svg className="h-5 w-5 text-white" fill="currentColor" viewBox="0 0 24 24">
-            <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
-          </svg>
-        </div>
-        <span className="text-[10px] font-bold text-white/70">X</span>
-      </button>
+        {/* F6: Share — native on mobile, sheet on desktop */}
+        <button className="flex flex-col items-center gap-1.5" onClick={handleShare} aria-label="Partager">
+          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-black/50 backdrop-blur-sm border border-white/10 transition-all hover:scale-110 active:scale-90">
+            <svg className="h-5 w-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+            </svg>
+          </div>
+          <span className="text-[10px] font-bold text-white/70">Share</span>
+        </button>
 
-      <Link href={`/kill/${killId}`} className="flex flex-col items-center gap-1.5">
-        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-black/50 backdrop-blur-sm border border-white/10 transition-all hover:scale-110 active:scale-90">
-          <svg className="h-6 w-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
+        {/* Detail */}
+        <Link href={`/kill/${killId}`} className="flex flex-col items-center gap-1.5">
+          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-black/50 backdrop-blur-sm border border-white/10 transition-all hover:scale-110 active:scale-90">
+            <svg className="h-6 w-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          </div>
+          <span className="text-[10px] font-bold text-white/70">Detail</span>
+        </Link>
+      </div>
+
+      {/* F6: Desktop Share Sheet */}
+      {showShareSheet && (
+        <ShareSheet url={shareUrl} title={shareTitle} onClose={() => setShowShareSheet(false)} />
+      )}
+    </>
+  );
+}
+
+function ShareSheet({ url, title, onClose }: { url: string; title: string; onClose: () => void }) {
+  const toast = useToast();
+  const copyLink = async () => {
+    await navigator.clipboard.writeText(url);
+    toast("Lien copie !", "success");
+    onClose();
+  };
+  return (
+    <>
+      <div className="absolute inset-0 z-30 bg-black/40" onClick={onClose} />
+      <div className="comment-panel absolute bottom-0 left-0 right-0 z-40 rounded-t-2xl bg-black/90 backdrop-blur-xl border-t border-[var(--gold)]/20 px-6 py-6">
+        <div className="flex justify-center pb-3">
+          <div className="h-1 w-10 rounded-full bg-white/20" />
         </div>
-        <span className="text-[10px] font-bold text-white/70">Detail</span>
-      </Link>
-    </div>
+        <h3 className="text-sm font-bold text-white mb-4 text-center">Partager</h3>
+        <div className="grid grid-cols-4 gap-4">
+          {/* Copy Link */}
+          <button onClick={copyLink} className="flex flex-col items-center gap-2">
+            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-white/10 border border-white/10">
+              <svg className="h-6 w-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
+              </svg>
+            </div>
+            <span className="text-[10px] text-white/70">Copier</span>
+          </button>
+          {/* X/Twitter */}
+          <button onClick={() => { window.open(`https://x.com/intent/tweet?text=${encodeURIComponent(title)}&url=${encodeURIComponent(url)}`, "_blank"); onClose(); }} className="flex flex-col items-center gap-2">
+            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-white/10 border border-white/10">
+              <svg className="h-5 w-5 text-white" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+              </svg>
+            </div>
+            <span className="text-[10px] text-white/70">X</span>
+          </button>
+          {/* Discord */}
+          <button onClick={() => { navigator.clipboard.writeText(`${title} ${url}`); toast("Copie pour Discord !", "success"); onClose(); }} className="flex flex-col items-center gap-2">
+            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[#5865F2]/20 border border-[#5865F2]/30">
+              <svg className="h-5 w-5 text-[#5865F2]" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028c.462-.63.874-1.295 1.226-1.994.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03z" />
+              </svg>
+            </div>
+            <span className="text-[10px] text-white/70">Discord</span>
+          </button>
+          {/* WhatsApp */}
+          <button onClick={() => { window.open(`https://wa.me/?text=${encodeURIComponent(`${title} ${url}`)}`, "_blank"); onClose(); }} className="flex flex-col items-center gap-2">
+            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[#25D366]/20 border border-[#25D366]/30">
+              <svg className="h-5 w-5 text-[#25D366]" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z" />
+              </svg>
+            </div>
+            <span className="text-[10px] text-white/70">WhatsApp</span>
+          </button>
+        </div>
+      </div>
+    </>
   );
 }
 
