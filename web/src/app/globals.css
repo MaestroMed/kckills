@@ -247,6 +247,7 @@ button:focus-visible {
   overflow-y: scroll;
   -webkit-overflow-scrolling: touch;
   scrollbar-width: none;
+  overscroll-behavior-y: contain;
 }
 .scroll-container::-webkit-scrollbar { display: none; }
 .scroll-item {
@@ -263,6 +264,50 @@ button:focus-visible {
 }
 .scroll-item:hover .scroll-bg {
   transform: scale(1.05);
+}
+
+/* ─── Progress bar (TikTok-style) ────────────────── */
+.scroll-progress-bar {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  height: 2px;
+  width: 100%;
+  background: var(--gold);
+  z-index: 20;
+  transform-origin: left;
+  will-change: transform;
+  pointer-events: none;
+}
+
+/* ─── Double-tap star burst ──────────────────────── */
+@keyframes starBurst {
+  0% { transform: scale(0) rotate(-20deg); opacity: 0; }
+  40% { transform: scale(1.4) rotate(5deg); opacity: 1; }
+  60% { transform: scale(0.9) rotate(-2deg); opacity: 1; }
+  80% { transform: scale(1.1) rotate(0); opacity: 0.8; }
+  100% { transform: scale(1) rotate(0); opacity: 0; }
+}
+@keyframes particle {
+  0% { transform: translate(0, 0) scale(1); opacity: 1; }
+  100% { transform: translate(var(--px), var(--py)) scale(0); opacity: 0; }
+}
+
+/* ─── Comment panel slide-up ─────────────────────── */
+@keyframes commentSlideUp {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+.comment-panel {
+  animation: commentSlideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* ─── Replay indicator ───────────────────────────── */
+@keyframes replayFade {
+  0% { opacity: 0; transform: scale(0.8) rotate(-30deg); }
+  20% { opacity: 1; transform: scale(1) rotate(0); }
+  80% { opacity: 1; }
+  100% { opacity: 0; }
 }
 
 /* ─── Cards — premium feel ───────────────────────── */

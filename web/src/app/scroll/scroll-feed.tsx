@@ -117,7 +117,70 @@ function formatGameTime(seconds: number): string {
 
 // ─── Top-level feed ────────────────────────────────────────────────────
 
+// ─── Shared props for video-bearing items ─────────────────────────────
+interface SharedScrollProps {
+  muted: boolean;
+  onToggleMute: () => void;
+  useLowQuality: boolean;
+  currentIndexRef: React.MutableRefObject<number>;
+}
+
 export function ScrollFeed({ items, videoCount = 0 }: { items: FeedItem[]; videoCount?: number }) {
+  // ─── F1: Global mute state (gesture-gated unmute) ──────────────────
+  const [globalMuted, setGlobalMuted] = useState(true);
+  const hasInteractedRef = useRef(false);
+
+  useEffect(() => {
+    // Restore user preference
+    const saved = localStorage.getItem("kc-scroll-muted");
+    if (saved === "false") setGlobalMuted(false);
+  }, []);
+
+  const handleFirstInteraction = () => {
+    if (hasInteractedRef.current) return;
+    hasInteractedRef.current = true;
+    // If user hasn't explicitly chosen mute, unmute on first gesture
+    const explicit = localStorage.getItem("kc-scroll-muted");
+    if (explicit !== "true") {
+      setGlobalMuted(false);
+      localStorage.setItem("kc-scroll-muted", "false");
+    }
+  };
+
+  const toggleMute = () => {
+    setGlobalMuted((m) => {
+      const next = !m;
+      localStorage.setItem("kc-scroll-muted", String(next));
+      return next;
+    });
+  };
+
+  // ─── F10: Adaptive quality ─────────────────────────────────────────
+  const [useLowQuality, setUseLowQuality] = useState(false);
+  useEffect(() => {
+    const conn = (navigator as any).connection;
+    if (!conn) return;
+    const check = () => {
+      const slow = conn.effectiveType === "2g" || conn.effectiveType === "slow-2g" || conn.effectiveType === "3g";
+      setUseLowQuality(slow);
+    };
+    check();
+    conn.addEventListener("change", check);
+    return () => conn.removeEventListener("change", check);
+  }, []);
+
+  // ─── F2: Track current visible index for preload window ────────────
+  const currentIndexRef = useRef(0);
+
+  // Shared props for all video items
+  const shared: SharedScrollProps = {
+    muted: globalMuted,
+    onToggleMute: toggleMute,
+    useLowQuality,
+    currentIndexRef,
+  };
+
+  // ─── Swipe hint for first-time visitors ────────────────────────────
   const [showSwipeHint, setShowSwipeHint] = useState(() => {
     if (typeof window === "undefined") return false;
     return !localStorage.getItem("kc-scroll-seen");
@@ -143,9 +206,12 @@ export function ScrollFeed({ items, videoCount = 0 }: { items: FeedItem[]; video
   }, [showSwipeHint]);
 
   return (
-    <div className="scroll-container fixed inset-0 z-[60] bg-black">
-      {/* Top bar */}
-      <div className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-4 py-3">
+    <div
+      className="scroll-container fixed inset-0 z-[60] bg-black"
+      onPointerDown={handleFirstInteraction}
+    >
+      {/* Top bar — minimal, safe-area aware */}
+      <div className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-4 py-3" style={{ paddingTop: "max(0.75rem, env(safe-area-inset-top, 0.75rem))" }}>
         <Link href="/" className="flex h-9 w-9 items-center justify-center rounded-full bg-black/60 backdrop-blur-sm">
           <svg className="h-5 w-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -169,20 +235,11 @@ export function ScrollFeed({ items, videoCount = 0 }: { items: FeedItem[]; video
         </Link>
       </div>
 
-      {videoCount === 0 && (
-        <div className="fixed bottom-4 left-4 z-50 rounded-full bg-black/70 backdrop-blur-sm border border-[var(--gold)]/30 px-3 py-1.5 text-[10px] text-[var(--gold)]/70 uppercase tracking-widest pointer-events-none">
-          <span className="inline-flex items-center gap-1.5">
-            <span className="h-1.5 w-1.5 rounded-full bg-[var(--gold)] animate-pulse" />
-            Beta &middot; clips video en integration
-          </span>
-        </div>
-      )}
-
       {items.map((item, i) =>
         item.kind === "moment" ? (
-          <MomentScrollItem key={`m-${item.id}`} item={item} index={i} total={items.length} />
+          <MomentScrollItem key={`m-${item.id}`} item={item} index={i} total={items.length} shared={shared} />
         ) : item.kind === "video" ? (
-          <VideoScrollItem key={`v-${item.id}`} item={item} index={i} total={items.length} />
+          <VideoScrollItem key={`v-${item.id}`} item={item} index={i} total={items.length} shared={shared} />
         ) : (
           <AggregateScrollItem key={`a-${item.id}-${i}`} item={item} index={i} total={items.length} />
         )
@@ -238,24 +295,25 @@ const CLASSIFICATION_LABELS: Record<string, { label: string; color: string }> = 
   objective_fight: { label: "OBJECTIF", color: "text-purple-400" },
 };
 
-function MomentScrollItem({ item, index, total }: { item: MomentFeedItem; index: number; total: number }) {
+function MomentScrollItem({ item, index, total, shared }: { item: MomentFeedItem; index: number; total: number; shared: SharedScrollProps }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const [visible, setVisible] = useState(false);
-  const [isMuted, setIsMuted] = useState(true);
   const [isDesktop, setIsDesktop] = useState(false);
   const [rating, setRating] = useState(0);
   const [showRating, setShowRating] = useState(false);
+  const [showComments, setShowComments] = useState(false);
+  // F3: Progress bar
+  const [progress, setProgress] = useState(0);
+  // F9: Replay indicator
+  const [showReplay, setShowReplay] = useState(false);
+  const prevTimeRef = useRef(0);
 
-  useEffect(() => {
-    const saved = localStorage.getItem("kc-scroll-muted");
-    if (saved === "false") setIsMuted(false);
-  }, []);
-
+  // F1: Sync mute from shared state
   useEffect(() => {
     const v = videoRef.current;
-    if (v) v.muted = isMuted;
-  }, [isMuted]);
+    if (v) v.muted = shared.muted;
+  }, [shared.muted]);
 
   useEffect(() => {
     const check = () => setIsDesktop(window.innerWidth >= 768);
@@ -274,13 +332,26 @@ function MomentScrollItem({ item, index, total }: { item: MomentFeedItem; index:
         const v = videoRef.current;
         if (!v) return;
         if (isVis) {
+          // F8: Haptic on snap
+          if ("vibrate" in navigator) navigator.vibrate(10);
+          // F2: Track current index
+          shared.currentIndexRef.current = index;
           v.currentTime = 0;
           v.play().catch(() => {});
           v.preload = "auto";
-          const next = containerRef.current?.nextElementSibling?.querySelector("video");
-          if (next instanceof HTMLVideoElement && next.preload !== "auto") next.preload = "auto";
+          // F2: Preload 3 clips ahead
+          let sibling = containerRef.current?.nextElementSibling;
+          for (let i = 0; i < 3 && sibling; i++) {
+            const nextV = sibling.querySelector("video");
+            if (nextV instanceof HTMLVideoElement && nextV.preload !== "auto") nextV.preload = "auto";
+            sibling = sibling.nextElementSibling;
+          }
         } else {
           v.pause();
+          // F2: Release memory for distant clips
+          if (Math.abs(index - shared.currentIndexRef.current) > 4) {
+            v.preload = "none";
+          }
         }
       },
       { threshold: 0.6 }
@@ -289,23 +360,57 @@ function MomentScrollItem({ item, index, total }: { item: MomentFeedItem; index:
     return () => obs.disconnect();
   }, []);
 
+  // F3: Progress bar + F9: Replay detection via timeupdate
+  useEffect(() => {
+    const v = videoRef.current;
+    if (!v) return;
+    const handleTimeUpdate = () => {
+      if (v.duration > 0) setProgress(v.currentTime / v.duration);
+      // F9: Detect loop (currentTime resets)
+      if (v.currentTime < prevTimeRef.current - 1) {
+        setShowReplay(true);
+        setTimeout(() => setShowReplay(false), 1200);
+      }
+      prevTimeRef.current = v.currentTime;
+    };
+    v.addEventListener("timeupdate", handleTimeUpdate);
+    return () => v.removeEventListener("timeupdate", handleTimeUpdate);
+  }, []);
+
   const isKcAggressor = item.kcInvolvement === "kc_aggressor" || item.kcInvolvement === "kc_both";
   const cls = CLASSIFICATION_LABELS[item.classification] ?? CLASSIFICATION_LABELS.solo_kill;
   const duration = item.endTimeSeconds - item.startTimeSeconds;
 
   return (
     <div ref={containerRef} className="scroll-item bg-black">
+      {/* F9: Replay indicator */}
+      {showReplay && (
+        <div className="absolute top-20 right-4 z-20 flex h-8 w-8 items-center justify-center rounded-full bg-black/50 backdrop-blur-sm pointer-events-none" style={{ animation: "replayFade 1.2s ease-out forwards" }}>
+          <svg className="h-4 w-4 text-white/70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+          </svg>
+        </div>
+      )}
+
+      {/* F10: Adaptive quality video */}
       <video
         ref={videoRef}
         className="absolute inset-0 h-full w-full object-cover"
-        src={isDesktop && item.clipHorizontal ? item.clipHorizontal : item.clipVertical}
+        src={isDesktop && item.clipHorizontal
+          ? item.clipHorizontal
+          : (shared.useLowQuality && item.clipVerticalLow)
+            ? item.clipVerticalLow
+            : item.clipVertical}
         poster={item.thumbnail ?? undefined}
         muted loop playsInline
-        preload={index < 3 ? "auto" : "metadata"}
+        preload={index < 3 ? "auto" : "none"}
       />
 
       <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-transparent to-transparent pointer-events-none" />
       <div className="absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-black/50 to-transparent pointer-events-none" />
+
+      {/* F3: Progress bar */}
+      <div className="scroll-progress-bar" style={{ transform: `scaleX(${progress})` }} />
 
       <div className="relative z-10 flex h-full flex-col justify-end px-4 md:px-6 pt-20" style={{ paddingBottom: "max(2rem, env(safe-area-inset-bottom, 2rem))" }}>
         <Link
@@ -315,13 +420,13 @@ function MomentScrollItem({ item, index, total }: { item: MomentFeedItem; index:
           #{index + 1} / {total}
         </Link>
 
-        {/* Mute toggle */}
+        {/* F1: Mute toggle (shared state) */}
         <button
-          onClick={(e) => { e.stopPropagation(); setIsMuted((m) => { const next = !m; localStorage.setItem("kc-scroll-muted", String(next)); return next; }); }}
+          onClick={(e) => { e.stopPropagation(); shared.onToggleMute(); }}
           className="absolute top-16 right-4 z-20 flex h-9 w-9 items-center justify-center rounded-full bg-black/40 backdrop-blur-sm border border-white/10 hover:bg-black/60 transition-colors"
-          aria-label={isMuted ? "Activer le son" : "Couper le son"}
+          aria-label={shared.muted ? "Activer le son" : "Couper le son"}
         >
-          {isMuted ? (
+          {shared.muted ? (
             <svg className="h-4 w-4 text-white/70" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2" /></svg>
           ) : (
             <svg className="h-4 w-4 text-[var(--gold)]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.536 8.464a5 5 0 010 7.072M18.364 5.636a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" /></svg>
@@ -399,7 +504,7 @@ function MomentScrollItem({ item, index, total }: { item: MomentFeedItem; index:
 
 // ─── Video scroll item (real MP4 from R2) ──────────────────────────────
 
-function VideoScrollItem({ item, index, total }: { item: VideoFeedItem; index: number; total: number }) {
+function VideoScrollItem({ item, index, total, shared }: { item: VideoFeedItem; index: number; total: number; shared: SharedScrollProps }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const [visible, setVisible] = useState(false);
@@ -407,23 +512,21 @@ function VideoScrollItem({ item, index, total }: { item: VideoFeedItem; index: n
   const [showRating, setShowRating] = useState(false);
   const [showDoubleTapHeart, setShowDoubleTapHeart] = useState(false);
   const [isDesktop, setIsDesktop] = useState(false);
-  const [isMuted, setIsMuted] = useState(true);
+  const [showComments, setShowComments] = useState(false);
+  // F3: Progress bar
+  const [progress, setProgress] = useState(0);
+  // F9: Replay indicator
+  const [showReplay, setShowReplay] = useState(false);
+  const prevTimeRef = useRef(0);
   const toast = useToast();
   const lastTap = useRef(0);
 
-  // Persist mute preference
-  useEffect(() => {
-    const saved = localStorage.getItem("kc-scroll-muted");
-    if (saved === "false") setIsMuted(false);
-  }, []);
-
-  // Sync mute state to video element
+  // F1: Sync mute from shared state
   useEffect(() => {
     const v = videoRef.current;
-    if (v) v.muted = isMuted;
-  }, [isMuted]);
+    if (v) v.muted = shared.muted;
+  }, [shared.muted]);
 
-  // Desktop detection — use horizontal 16:9 clip on wide viewports
   useEffect(() => {
     const check = () => setIsDesktop(window.innerWidth >= 768);
     check();
@@ -431,18 +534,21 @@ function VideoScrollItem({ item, index, total }: { item: VideoFeedItem; index: n
     return () => window.removeEventListener("resize", check);
   }, []);
 
+  // F4: Enhanced double-tap
   const handleDoubleTap = () => {
     const now = Date.now();
     if (now - lastTap.current < 300) {
       setRating(5);
       setShowDoubleTapHeart(true);
+      // F4: Haptic feedback
+      if ("vibrate" in navigator) navigator.vibrate(30);
       toast("\u2B50 5/5 !", "success");
-      setTimeout(() => setShowDoubleTapHeart(false), 1000);
+      setTimeout(() => setShowDoubleTapHeart(false), 800);
     }
     lastTap.current = now;
   };
 
-  // IntersectionObserver → autoplay when ≥60% visible, pause otherwise
+  // IntersectionObserver with F2 preload + F8 haptics
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
@@ -453,19 +559,25 @@ function VideoScrollItem({ item, index, total }: { item: VideoFeedItem; index: n
         const v = videoRef.current;
         if (!v) return;
         if (isVis) {
+          // F8: Haptic on snap
+          if ("vibrate" in navigator) navigator.vibrate(10);
+          // F2: Track current index
+          shared.currentIndexRef.current = index;
           v.currentTime = 0;
           v.play().catch(() => {});
-          // Preload next clip for instant swipe
           v.preload = "auto";
-          const next = containerRef.current?.nextElementSibling?.querySelector("video");
-          if (next instanceof HTMLVideoElement && next.preload !== "auto") {
-            next.preload = "auto";
+          // F2: Preload 3 clips ahead
+          let sibling = containerRef.current?.nextElementSibling;
+          for (let i = 0; i < 3 && sibling; i++) {
+            const nextV = sibling.querySelector("video");
+            if (nextV instanceof HTMLVideoElement && nextV.preload !== "auto") nextV.preload = "auto";
+            sibling = sibling.nextElementSibling;
           }
         } else {
           v.pause();
-          // Release memory for far-away clips
-          if (Math.abs(index - 0) > 5) {
-            v.preload = "metadata";
+          // F2: Release memory for distant clips
+          if (Math.abs(index - shared.currentIndexRef.current) > 4) {
+            v.preload = "none";
           }
         }
       },
@@ -475,34 +587,77 @@ function VideoScrollItem({ item, index, total }: { item: VideoFeedItem; index: n
     return () => obs.disconnect();
   }, []);
 
+  // F3: Progress bar + F9: Replay detection
+  useEffect(() => {
+    const v = videoRef.current;
+    if (!v) return;
+    const handleTimeUpdate = () => {
+      if (v.duration > 0) setProgress(v.currentTime / v.duration);
+      if (v.currentTime < prevTimeRef.current - 1) {
+        setShowReplay(true);
+        setTimeout(() => setShowReplay(false), 1200);
+      }
+      prevTimeRef.current = v.currentTime;
+    };
+    v.addEventListener("timeupdate", handleTimeUpdate);
+    return () => v.removeEventListener("timeupdate", handleTimeUpdate);
+  }, []);
+
   const isKcKill = item.kcInvolvement === "team_killer";
   const opponentLabel = item.opponentCode || "LEC";
   const matchDate = new Date(item.matchDate);
 
   return (
     <div ref={containerRef} className="scroll-item bg-black" onClick={handleDoubleTap}>
+      {/* F4: Enhanced double-tap star burst */}
       {showDoubleTapHeart && (
-        <div className="absolute inset-0 z-30 flex items-center justify-center pointer-events-none animate-[scaleIn_0.5s_ease-out]">
-          <span className="text-8xl opacity-90 drop-shadow-2xl">&#x2B50;</span>
+        <div className="absolute inset-0 z-30 flex items-center justify-center pointer-events-none">
+          <svg className="h-24 w-24 text-[var(--gold)]" style={{ animation: "starBurst 0.8s ease-out forwards" }} fill="currentColor" viewBox="0 0 24 24">
+            <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+          </svg>
+          {/* Particles */}
+          {[...Array(8)].map((_, i) => {
+            const angle = (i / 8) * Math.PI * 2;
+            const px = Math.cos(angle) * 80;
+            const py = Math.sin(angle) * 80;
+            return (
+              <div key={i} className="absolute h-2 w-2 rounded-full bg-[var(--gold)]" style={{
+                animation: `particle 0.6s ease-out ${i * 0.04}s forwards`,
+                "--px": `${px}px`, "--py": `${py}px`,
+              } as React.CSSProperties} />
+            );
+          })}
         </div>
       )}
 
-      {/* ═══ REAL VIDEO BACKGROUND ═══ */}
+      {/* F9: Replay indicator */}
+      {showReplay && (
+        <div className="absolute top-20 right-4 z-20 flex h-8 w-8 items-center justify-center rounded-full bg-black/50 backdrop-blur-sm pointer-events-none" style={{ animation: "replayFade 1.2s ease-out forwards" }}>
+          <svg className="h-4 w-4 text-white/70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+          </svg>
+        </div>
+      )}
+
+      {/* F10: Adaptive quality video */}
       <video
         ref={videoRef}
         className="absolute inset-0 h-full w-full object-cover"
-        src={isDesktop && item.clipHorizontal ? item.clipHorizontal : item.clipVertical}
+        src={isDesktop && item.clipHorizontal
+          ? item.clipHorizontal
+          : (shared.useLowQuality && item.clipVerticalLow)
+            ? item.clipVerticalLow
+            : item.clipVertical}
         poster={item.thumbnail ?? undefined}
-        muted
-        loop
-        playsInline
-        preload={index < 3 ? "auto" : "metadata"}
+        muted loop playsInline
+        preload={index < 3 ? "auto" : "none"}
       />
 
-      {/* Minimal gradient — only darken the bottom where text overlay sits.
-          The video should fill the screen and breathe on desktop. */}
       <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-transparent to-transparent pointer-events-none" />
       <div className="absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-black/50 to-transparent pointer-events-none" />
+
+      {/* F3: Progress bar */}
+      <div className="scroll-progress-bar" style={{ transform: `scaleX(${progress})` }} />
 
       <div className="relative z-10 flex h-full flex-col justify-end px-4 md:px-6 pt-20" style={{ paddingBottom: "max(2rem, env(safe-area-inset-bottom, 2rem))" }}>
         {/* Kill ID link */}
@@ -513,20 +668,13 @@ function VideoScrollItem({ item, index, total }: { item: VideoFeedItem; index: n
           #{index + 1} / {total}
         </Link>
 
-        {/* Mute/unmute toggle */}
+        {/* F1: Mute toggle (shared state) */}
         <button
-          onClick={(e) => {
-            e.stopPropagation();
-            setIsMuted((m) => {
-              const next = !m;
-              localStorage.setItem("kc-scroll-muted", String(next));
-              return next;
-            });
-          }}
+          onClick={(e) => { e.stopPropagation(); shared.onToggleMute(); }}
           className="absolute top-16 right-4 z-20 flex h-9 w-9 items-center justify-center rounded-full bg-black/40 backdrop-blur-sm border border-white/10 hover:bg-black/60 transition-colors"
-          aria-label={isMuted ? "Activer le son" : "Couper le son"}
+          aria-label={shared.muted ? "Activer le son" : "Couper le son"}
         >
-          {isMuted ? (
+          {shared.muted ? (
             <svg className="h-4 w-4 text-white/70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2" />
