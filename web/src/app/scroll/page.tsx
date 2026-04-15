@@ -180,15 +180,40 @@ export default async function ScrollPage() {
       };
     });
 
-  // ─── 5. Merge + sort: moments first, then kills, then aggregates ────
+  // ─── 5. Merge + weighted shuffle ─────────────────────────────────────
+  // Instead of strict score-descending (same 4 clips on top), use a
+  // weighted shuffle: higher-scored clips appear earlier but not always
+  // in the same order. This gives variety on each page load.
+  const allClips: FeedItem[] = [
+    ...momentItems,
+    ...videoItems,
+  ];
+
+  // Weighted shuffle: score influences position but doesn't dictate it
+  const shuffled = weightedShuffle(allClips);
+
+  // Aggregates go after real clips
   const items: FeedItem[] = [
-    ...momentItems.sort((a, b) => b.score - a.score),
-    ...videoItems.sort((a, b) => b.score - a.score),
+    ...shuffled,
     ...aggregateItems.sort((a, b) => b.score - a.score),
   ];
 
   const clipCount = momentItems.length + videoItems.length;
   return <ScrollFeed items={items} videoCount={clipCount} />;
+}
+
+/** Weighted shuffle: items with higher scores tend to appear earlier,
+ *  but with randomness so each page load feels different. */
+function weightedShuffle<T extends { score: number }>(items: T[]): T[] {
+  // Add random jitter proportional to score range
+  const maxScore = Math.max(1, ...items.map((i) => i.score));
+  const jittered = items.map((item) => ({
+    item,
+    sortKey: item.score + Math.random() * maxScore * 0.5,
+  }));
+  jittered.sort((a, b) => b.sortKey - a.sortKey);
+  return jittered.map((j) => j.item);
+}
 }
 
 // inferOpponent removed — lookup now inline in the map (includes kcWon)
