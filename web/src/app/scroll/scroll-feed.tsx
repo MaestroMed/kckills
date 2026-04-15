@@ -57,7 +57,30 @@ export interface VideoFeedItem {
   matchScore: string | null;
 }
 
-export type FeedItem = AggregateFeedItem | VideoFeedItem;
+export interface MomentFeedItem {
+  kind: "moment";
+  id: string;
+  score: number;
+  classification: string; // solo_kill, skirmish, teamfight, ace, objective_fight
+  killCount: number;
+  blueKills: number;
+  redKills: number;
+  kcInvolvement: string; // kc_aggressor, kc_victim, kc_both
+  goldSwing: number;
+  clipVertical: string;
+  clipVerticalLow: string | null;
+  clipHorizontal: string | null;
+  thumbnail: string | null;
+  momentScore: number | null;
+  avgRating: number | null;
+  ratingCount: number;
+  aiDescription: string | null;
+  aiTags: string[];
+  startTimeSeconds: number;
+  endTimeSeconds: number;
+}
+
+export type FeedItem = AggregateFeedItem | VideoFeedItem | MomentFeedItem;
 
 // ─── Helpers ───────────────────────────────────────────────────────────
 
@@ -156,7 +179,9 @@ export function ScrollFeed({ items, videoCount = 0 }: { items: FeedItem[]; video
       )}
 
       {items.map((item, i) =>
-        item.kind === "video" ? (
+        item.kind === "moment" ? (
+          <MomentScrollItem key={`m-${item.id}`} item={item} index={i} total={items.length} />
+        ) : item.kind === "video" ? (
           <VideoScrollItem key={`v-${item.id}`} item={item} index={i} total={items.length} />
         ) : (
           <AggregateScrollItem key={`a-${item.id}-${i}`} item={item} index={i} total={items.length} />
@@ -202,6 +227,175 @@ export function ScrollFeed({ items, videoCount = 0 }: { items: FeedItem[]; video
     </div>
   );
 }
+
+// ─── Moment scroll item (grouped kills — one clip per fight) ──────────
+
+const CLASSIFICATION_LABELS: Record<string, { label: string; color: string }> = {
+  solo_kill: { label: "SOLO KILL", color: "text-[var(--gold)]" },
+  skirmish: { label: "SKIRMISH", color: "text-[var(--cyan)]" },
+  teamfight: { label: "TEAMFIGHT", color: "text-[var(--orange)]" },
+  ace: { label: "ACE", color: "text-[var(--red)]" },
+  objective_fight: { label: "OBJECTIF", color: "text-purple-400" },
+};
+
+function MomentScrollItem({ item, index, total }: { item: MomentFeedItem; index: number; total: number }) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const [visible, setVisible] = useState(false);
+  const [isMuted, setIsMuted] = useState(true);
+  const [isDesktop, setIsDesktop] = useState(false);
+  const [rating, setRating] = useState(0);
+  const [showRating, setShowRating] = useState(false);
+
+  useEffect(() => {
+    const saved = localStorage.getItem("kc-scroll-muted");
+    if (saved === "false") setIsMuted(false);
+  }, []);
+
+  useEffect(() => {
+    const v = videoRef.current;
+    if (v) v.muted = isMuted;
+  }, [isMuted]);
+
+  useEffect(() => {
+    const check = () => setIsDesktop(window.innerWidth >= 768);
+    check();
+    window.addEventListener("resize", check);
+    return () => window.removeEventListener("resize", check);
+  }, []);
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const obs = new IntersectionObserver(
+      ([entry]) => {
+        const isVis = entry.isIntersecting;
+        setVisible(isVis);
+        const v = videoRef.current;
+        if (!v) return;
+        if (isVis) {
+          v.currentTime = 0;
+          v.play().catch(() => {});
+          v.preload = "auto";
+          const next = containerRef.current?.nextElementSibling?.querySelector("video");
+          if (next instanceof HTMLVideoElement && next.preload !== "auto") next.preload = "auto";
+        } else {
+          v.pause();
+        }
+      },
+      { threshold: 0.6 }
+    );
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, []);
+
+  const isKcAggressor = item.kcInvolvement === "kc_aggressor" || item.kcInvolvement === "kc_both";
+  const cls = CLASSIFICATION_LABELS[item.classification] ?? CLASSIFICATION_LABELS.solo_kill;
+  const duration = item.endTimeSeconds - item.startTimeSeconds;
+
+  return (
+    <div ref={containerRef} className="scroll-item bg-black">
+      <video
+        ref={videoRef}
+        className="absolute inset-0 h-full w-full object-cover"
+        src={isDesktop && item.clipHorizontal ? item.clipHorizontal : item.clipVertical}
+        poster={item.thumbnail ?? undefined}
+        muted loop playsInline
+        preload={index < 3 ? "auto" : "metadata"}
+      />
+
+      <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-transparent to-transparent pointer-events-none" />
+      <div className="absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-black/50 to-transparent pointer-events-none" />
+
+      <div className="relative z-10 flex h-full flex-col justify-end px-4 md:px-6 pt-20" style={{ paddingBottom: "max(2rem, env(safe-area-inset-bottom, 2rem))" }}>
+        <Link
+          href={`/moment/${item.id}`}
+          className="absolute top-16 left-4 z-20 rounded-full bg-black/40 backdrop-blur-sm px-3 py-1 text-[10px] font-data text-[var(--text-muted)] hover:bg-black/60 transition-colors"
+        >
+          #{index + 1} / {total}
+        </Link>
+
+        {/* Mute toggle */}
+        <button
+          onClick={(e) => { e.stopPropagation(); setIsMuted((m) => { const next = !m; localStorage.setItem("kc-scroll-muted", String(next)); return next; }); }}
+          className="absolute top-16 right-4 z-20 flex h-9 w-9 items-center justify-center rounded-full bg-black/40 backdrop-blur-sm border border-white/10 hover:bg-black/60 transition-colors"
+          aria-label={isMuted ? "Activer le son" : "Couper le son"}
+        >
+          {isMuted ? (
+            <svg className="h-4 w-4 text-white/70" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2" /></svg>
+          ) : (
+            <svg className="h-4 w-4 text-[var(--gold)]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.536 8.464a5 5 0 010 7.072M18.364 5.636a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" /></svg>
+          )}
+        </button>
+
+        <div className={`space-y-3 transition-all duration-500 ${visible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-6"}`}>
+          {/* Classification badge + kill count */}
+          <div className="flex flex-wrap items-center gap-2">
+            <span className={`badge-glass rounded-md px-3 py-1.5 text-xs font-black uppercase tracking-[0.15em] ${cls.color}`}>
+              {cls.label}
+            </span>
+            <span className="badge-glass rounded-md px-2.5 py-1 text-[10px] font-black text-white uppercase tracking-wider">
+              {item.killCount} kill{item.killCount > 1 ? "s" : ""}
+            </span>
+            {isKcAggressor && (
+              <span className="badge-glass rounded-md px-2.5 py-1 text-[10px] font-black text-[var(--gold)] uppercase tracking-[0.15em]">
+                KC WIN
+              </span>
+            )}
+            {item.goldSwing !== 0 && Math.abs(item.goldSwing) > 1000 && (
+              <span className={`rounded-md bg-white/5 border border-white/10 px-2 py-1 text-[10px] font-data font-bold ${item.goldSwing > 0 ? "text-[var(--green)]" : "text-[var(--red)]"}`}>
+                {item.goldSwing > 0 ? "+" : ""}{(item.goldSwing / 1000).toFixed(1)}k gold
+              </span>
+            )}
+            {item.momentScore != null && (
+              <span className="rounded-md bg-[var(--gold)]/10 border border-[var(--gold)]/20 px-2 py-1 text-[10px] font-data font-bold text-[var(--gold)]">
+                {item.momentScore.toFixed(1)}/10
+              </span>
+            )}
+          </div>
+
+          {/* Tags */}
+          {item.aiTags && item.aiTags.length > 0 && (
+            <div className="flex flex-wrap gap-1.5">
+              {item.aiTags.slice(0, 4).map((tag) => (
+                <span key={tag} className="rounded-full bg-white/5 border border-white/10 px-2 py-0.5 text-[9px] text-white/60">
+                  #{tag}
+                </span>
+              ))}
+            </div>
+          )}
+
+          {/* AI description */}
+          {item.aiDescription && (
+            <p className="text-[13px] leading-snug text-white/90 italic">
+              &laquo; {item.aiDescription} &raquo;
+            </p>
+          )}
+
+          {/* Duration + game time */}
+          <p className="text-xs text-[var(--text-muted)]">
+            {duration > 0 && <span className="font-data">{duration}s fight</span>}
+            {" "}&middot;{" "}
+            <span className="font-data text-[var(--text-secondary)]">
+              T+{formatGameTime(item.startTimeSeconds)}
+            </span>
+          </p>
+        </div>
+      </div>
+
+      <RightSidebar
+        killId={item.id}
+        onRateClick={() => setShowRating((s) => !s)}
+        rating={rating}
+        shareTitle={`${cls.label} - ${item.killCount} kills`}
+        visible={visible}
+      />
+
+      {showRating && <RatingSheet rating={rating} setRating={setRating} close={() => setShowRating(false)} />}
+    </div>
+  );
+}
+
 
 // ─── Video scroll item (real MP4 from R2) ──────────────────────────────
 

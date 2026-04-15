@@ -1,7 +1,8 @@
 import { loadRealData, getMatchesSorted } from "@/lib/real-data";
 import { computeKillScore } from "@/lib/feed-algorithm";
 import { getPublishedKills } from "@/lib/supabase/kills";
-import { ScrollFeed, type FeedItem, type AggregateFeedItem, type VideoFeedItem } from "./scroll-feed";
+import { getPublishedMoments } from "@/lib/supabase/moments";
+import { ScrollFeed, type FeedItem, type AggregateFeedItem, type VideoFeedItem, type MomentFeedItem } from "./scroll-feed";
 
 export const dynamic = "force-dynamic";
 export const metadata = {
@@ -20,10 +21,11 @@ export const metadata = {
 };
 
 export default async function ScrollPage() {
-  // ─── 1. Load both data sources in parallel ──────────────────────────
-  const [data, allKills] = await Promise.all([
+  // ─── 1. Load all data sources in parallel ───────────────────────────
+  const [data, allKills, allMoments] = await Promise.all([
     Promise.resolve(loadRealData()),
     getPublishedKills(500),
+    getPublishedMoments(300),
   ]);
   // ONLY show KC kills (team_killer) — not deaths, not misidentified opponent kills
   const supabaseKills = allKills.filter(
@@ -141,13 +143,52 @@ export default async function ScrollPage() {
     }
   }
 
-  // ─── 4. Merge + sort: videos first by their own score, then aggregates ──
+  // ─── 4. Build moment items (grouped kills — new system) ──────────────
+  const momentItems: MomentFeedItem[] = allMoments
+    .filter((m) => m.clip_url_vertical && m.kc_involvement !== "kc_none")
+    .map((m) => {
+      const hl = (m.moment_score ?? 5) / 10;
+      const rt = m.rating_count > 0 ? (m.avg_rating ?? 0) / 5 : 0;
+      let score = hl * 0.7 + rt * 0.3;
+      if (m.classification === "ace") score *= 2.0;
+      else if (m.classification === "teamfight") score *= 1.5;
+      else if (m.classification === "objective_fight") score *= 1.4;
+      if (m.kc_involvement === "kc_aggressor") score *= 2.0;
+      else if (m.kc_involvement === "kc_victim") score *= 0.3;
+      score *= 15; // Moments rank above individual kills
+      return {
+        kind: "moment" as const,
+        id: m.id,
+        score,
+        classification: m.classification,
+        killCount: m.kill_count,
+        blueKills: m.blue_kills,
+        redKills: m.red_kills,
+        kcInvolvement: m.kc_involvement,
+        goldSwing: m.gold_swing,
+        clipVertical: m.clip_url_vertical!,
+        clipVerticalLow: m.clip_url_vertical_low,
+        clipHorizontal: m.clip_url_horizontal,
+        thumbnail: m.thumbnail_url,
+        momentScore: m.moment_score,
+        avgRating: m.avg_rating,
+        ratingCount: m.rating_count,
+        aiDescription: m.ai_description,
+        aiTags: m.ai_tags ?? [],
+        startTimeSeconds: m.start_time_seconds,
+        endTimeSeconds: m.end_time_seconds,
+      };
+    });
+
+  // ─── 5. Merge + sort: moments first, then kills, then aggregates ────
   const items: FeedItem[] = [
+    ...momentItems.sort((a, b) => b.score - a.score),
     ...videoItems.sort((a, b) => b.score - a.score),
     ...aggregateItems.sort((a, b) => b.score - a.score),
   ];
 
-  return <ScrollFeed items={items} videoCount={videoItems.length} />;
+  const clipCount = momentItems.length + videoItems.length;
+  return <ScrollFeed items={items} videoCount={clipCount} />;
 }
 
 // inferOpponent removed — lookup now inline in the map (includes kcWon)
