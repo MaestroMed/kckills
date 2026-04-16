@@ -31,6 +31,7 @@ export interface PublishedKillRow {
   multi_kill: string | null;
   is_first_blood: boolean;
   tracked_team_involvement: string | null;
+  kill_visible: boolean | null;
   impression_count: number;
   comment_count: number;
   created_at: string;
@@ -123,6 +124,7 @@ function normalize(row: Record<string, unknown>): PublishedKillRow {
     multi_kill: (row.multi_kill as string | null) ?? null,
     is_first_blood: Boolean(row.is_first_blood),
     tracked_team_involvement: (row.tracked_team_involvement as string | null) ?? null,
+    kill_visible: (row.kill_visible as boolean | null) ?? null,
     impression_count: Number(row.impression_count ?? 0),
     comment_count: Number(row.comment_count ?? 0),
     created_at: String(row.created_at ?? ""),
