@@ -27,9 +27,10 @@ export default async function ScrollPage() {
     getPublishedKills(500),
     getPublishedMoments(300),
   ]);
-  // ONLY show KC kills (team_killer) — not deaths, not misidentified opponent kills
+  // ONLY show KC kills where the kill is actually visible in the clip
   const supabaseKills = allKills.filter(
     (k) => k.tracked_team_involvement === "team_killer"
+      && k.kill_visible !== false  // exclude clips where Gemini QC confirmed kill not visible
   );
   const matches = getMatchesSorted(data);
 

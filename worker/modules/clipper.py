@@ -78,7 +78,7 @@ def _build_overlay_filter(
     return ",".join(parts)
 
 
-VODS_DIR = os.path.join(os.path.dirname(__file__), "..", "vods")
+VODS_DIR = os.environ.get("LOLTOK_VODS_DIR", os.path.join(os.path.dirname(__file__), "..", "vods"))
 
 
 async def download_full_vod(youtube_id: str) -> str | None:
@@ -106,6 +106,7 @@ async def download_full_vod(youtube_id: str) -> str | None:
     cmd = [
         sys.executable, "-m", "yt_dlp",
         *_cookies_args(),
+        "--js-runtimes", "node",
         "-f", "bestvideo[height<=720]+bestaudio/best[height<=720]",
         "--merge-output-format", "mp4",
         "-o", vod_path,

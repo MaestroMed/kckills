@@ -65,6 +65,7 @@ const KILL_SELECT = `
   multi_kill,
   is_first_blood,
   tracked_team_involvement,
+  kill_visible,
   impression_count,
   comment_count,
   created_at,
