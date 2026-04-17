@@ -34,8 +34,12 @@ export interface VideoFeedItem {
   kind: "video";
   id: string;
   score: number;
+  killerPlayerId: string | null;
   killerChampion: string;
   victimChampion: string;
+  /** Grid pivot dimensions — enables the /scroll?axis=...&value=... filter. */
+  minuteBucket: string | null;
+  fightType: string | null;
   clipVertical: string;
   clipVerticalLow: string | null;
   clipHorizontal: string | null;
@@ -126,7 +130,31 @@ interface SharedScrollProps {
   currentIndexRef: React.MutableRefObject<number>;
 }
 
-export function ScrollFeed({ items, videoCount = 0 }: { items: FeedItem[]; videoCount?: number }) {
+export function ScrollFeed({
+  items,
+  videoCount = 0,
+  initialKillId,
+}: {
+  items: FeedItem[];
+  videoCount?: number;
+  /** When set, the feed scrolls that item into view on mount. Enables the
+   *  grid → scroll zoom-in flow without shared-layout animations. */
+  initialKillId?: string;
+}) {
+  // ─── Grid → scroll zoom-in: jump to the tapped kill on mount ───────
+  const containerRefSelf = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!initialKillId) return;
+    // Let the snap container settle, then align the matching item.
+    const timer = window.setTimeout(() => {
+      const target = containerRefSelf.current?.querySelector<HTMLElement>(
+        `[data-kill-id="${CSS.escape(initialKillId)}"]`,
+      );
+      if (target) target.scrollIntoView({ behavior: "auto", block: "start" });
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [initialKillId]);
+
   // ─── F1: Global mute state (gesture-gated unmute) ──────────────────
   const [globalMuted, setGlobalMuted] = useState(true);
   const hasInteractedRef = useRef(false);
@@ -208,6 +236,7 @@ export function ScrollFeed({ items, videoCount = 0 }: { items: FeedItem[]; video
 
   return (
     <div
+      ref={containerRefSelf}
       className="scroll-container fixed inset-0 z-[60] bg-black"
       onPointerDown={handleFirstInteraction}
     >
@@ -383,7 +412,7 @@ function MomentScrollItem({ item, index, total, shared }: { item: MomentFeedItem
   const duration = item.endTimeSeconds - item.startTimeSeconds;
 
   return (
-    <div ref={containerRef} className="scroll-item bg-black">
+    <div ref={containerRef} data-kill-id={item.id} className="scroll-item bg-black">
       {/* F9: Replay indicator */}
       {showReplay && (
         <div className="absolute top-20 right-4 z-20 flex h-8 w-8 items-center justify-center rounded-full bg-black/50 backdrop-blur-sm pointer-events-none" style={{ animation: "replayFade 1.2s ease-out forwards" }}>
@@ -611,7 +640,7 @@ function VideoScrollItem({ item, index, total, shared }: { item: VideoFeedItem; 
   const matchDate = new Date(item.matchDate);
 
   return (
-    <div ref={containerRef} className="scroll-item bg-black" onClick={handleDoubleTap}>
+    <div ref={containerRef} data-kill-id={item.id} className="scroll-item bg-black" onClick={handleDoubleTap}>
       {/* F4: Enhanced double-tap star burst */}
       {showDoubleTapHeart && (
         <div className="absolute inset-0 z-30 flex items-center justify-center pointer-events-none">
@@ -837,7 +866,7 @@ function AggregateScrollItem({ item, index, total }: { item: AggregateFeedItem; 
   const date = new Date(item.match.date);
 
   return (
-    <div ref={ref} className="scroll-item bg-black" onClick={handleDoubleTap}>
+    <div ref={ref} data-kill-id={item.id} className="scroll-item bg-black" onClick={handleDoubleTap}>
       {showDoubleTapHeart && (
         <div className="absolute inset-0 z-30 flex items-center justify-center pointer-events-none animate-[scaleIn_0.5s_ease-out]">
           <span className="text-8xl opacity-90 drop-shadow-2xl">&#x2B50;</span>

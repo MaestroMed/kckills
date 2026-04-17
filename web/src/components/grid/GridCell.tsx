@@ -3,6 +3,8 @@
 import Image from "next/image";
 import Link from "next/link";
 import { memo } from "react";
+import { trackGridEvent } from "@/lib/grid/analytics";
+import type { GridAxisId } from "@/lib/grid/axis-config";
 
 export interface GridCellData {
   cell_x: string;
@@ -19,10 +21,21 @@ interface GridCellProps {
   active: boolean;
   xLabel: string;
   yLabel: string;
-  /** Shared layout id so Framer Motion animates the thumbnail into the
-   *  fullscreen scroll-feed on tap. Kept optional so Phase 4 can wire it
-   *  without this component depending on Framer. */
-  layoutId?: string;
+  /** Current grid Y axis — used to build the zoom-in query string so the
+   *  scroll feed filters on the slice the user was looking at. */
+  axisY: GridAxisId;
+}
+
+/** Build the deep-link URL that opens /scroll at the tapped kill with the
+ *  Y axis pre-applied as a filter. The X axis is deliberately NOT applied
+ *  as a filter (too narrow — two overlapping filters often leaves 0 clips). */
+function buildZoomInHref(cell: GridCellData, axisY: GridAxisId): string {
+  const params = new URLSearchParams({
+    kill: cell.top_kill_id,
+    axis: axisY,
+    value: cell.cell_y,
+  });
+  return `/scroll?${params.toString()}`;
 }
 
 /**
@@ -35,11 +48,22 @@ export const GridCell = memo(function GridCell({
   active,
   xLabel,
   yLabel,
+  axisY,
 }: GridCellProps) {
   const rating = typeof cell.avg_rating === "number" ? cell.avg_rating.toFixed(1) : null;
+  const href = buildZoomInHref(cell, axisY);
   return (
     <Link
-      href={`/kill/${cell.top_kill_id}`}
+      href={href}
+      onClick={() => {
+        trackGridEvent("grid_cell_zoom_in", {
+          kill_id: cell.top_kill_id,
+          cell_x: cell.cell_x,
+          cell_y: cell.cell_y,
+          axis_y: axisY,
+        });
+      }}
+      prefetch={false}
       className={
         "group relative block h-full w-full overflow-hidden rounded-2xl border transition-all duration-300 " +
         (active

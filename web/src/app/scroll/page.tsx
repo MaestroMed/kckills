@@ -2,7 +2,22 @@ import { loadRealData, getMatchesSorted } from "@/lib/real-data";
 import { computeKillScore } from "@/lib/feed-algorithm";
 import { getPublishedKills } from "@/lib/supabase/kills";
 import { getPublishedMoments } from "@/lib/supabase/moments";
-import { ScrollFeed, type FeedItem, type AggregateFeedItem, type VideoFeedItem, type MomentFeedItem } from "./scroll-feed";
+import {
+  ScrollFeed,
+  type FeedItem,
+  type AggregateFeedItem,
+  type VideoFeedItem,
+  type MomentFeedItem,
+} from "@/components/scroll/ScrollFeed";
+import type { GridAxisId } from "@/lib/grid/axis-config";
+
+/** Axes the grid can pass through via ?axis=...&value=.... */
+const FILTERABLE_AXES: ReadonlySet<string> = new Set<GridAxisId>([
+  "game_minute_bucket",
+  "killer_player_id",
+  "opponent_team_code",
+  "fight_type",
+]);
 
 export const revalidate = 60;
 export const metadata = {
@@ -20,7 +35,28 @@ export const metadata = {
   },
 };
 
-export default async function ScrollPage() {
+interface ScrollPageProps {
+  searchParams?: Promise<{
+    kill?: string | string[];
+    axis?: string | string[];
+    value?: string | string[];
+  }>;
+}
+
+function firstString(v: string | string[] | undefined): string | undefined {
+  if (!v) return undefined;
+  return Array.isArray(v) ? v[0] : v;
+}
+
+export default async function ScrollPage({ searchParams }: ScrollPageProps) {
+  const sp = (await searchParams) ?? {};
+  const initialKillId = firstString(sp.kill);
+  const rawAxis = firstString(sp.axis);
+  const rawValue = firstString(sp.value);
+  const filterAxis: GridAxisId | null =
+    rawAxis && FILTERABLE_AXES.has(rawAxis) ? (rawAxis as GridAxisId) : null;
+  const filterValue = rawValue ?? null;
+
   // ─── 1. Load all data sources in parallel ───────────────────────────
   const [data, allKills, allMoments] = await Promise.all([
     Promise.resolve(loadRealData()),
@@ -62,8 +98,11 @@ export default async function ScrollPage() {
         kind: "video" as const,
         id: k.id,
         score,
+        killerPlayerId: k.killer_player_id,
         killerChampion: k.killer_champion ?? "?",
         victimChampion: k.victim_champion ?? "?",
+        minuteBucket: k.game_minute_bucket,
+        fightType: k.fight_type,
         clipVertical: k.clip_url_vertical ?? "",
         clipVerticalLow: k.clip_url_vertical_low ?? null,
         clipHorizontal: k.clip_url_horizontal ?? null,
@@ -181,26 +220,64 @@ export default async function ScrollPage() {
       };
     });
 
-  // ─── 5. Merge + weighted shuffle ─────────────────────────────────────
+  // ─── 5. Optional axis filter (grid → scroll zoom-in) ─────────────────
+  // When the user taps a cell in the Scroll Vivant grid, we pass the Y
+  // axis through as a filter so the vertical feed only contains the slice
+  // they were looking at. Empty filter means "show everything".
+  const filteredVideos = filterAxis && filterValue
+    ? videoItems.filter((v) => videoMatchesFilter(v, filterAxis, filterValue))
+    : videoItems;
+
+  // ─── 6. Merge + weighted shuffle ─────────────────────────────────────
   // Instead of strict score-descending (same 4 clips on top), use a
   // weighted shuffle: higher-scored clips appear earlier but not always
   // in the same order. This gives variety on each page load.
   const allClips: FeedItem[] = [
     ...momentItems,
-    ...videoItems,
+    ...filteredVideos,
   ];
 
   // Weighted shuffle: score influences position but doesn't dictate it
-  const shuffled = weightedShuffle(allClips);
+  // — unless a specific kill was requested, in which case we sort by score
+  // so the surrounding context (same axis bucket) is ranked consistently.
+  const shuffled = initialKillId
+    ? [...allClips].sort((a, b) => b.score - a.score)
+    : weightedShuffle(allClips);
 
-  // Aggregates go after real clips
-  const items: FeedItem[] = [
-    ...shuffled,
-    ...aggregateItems.sort((a, b) => b.score - a.score),
-  ];
+  // Aggregates only go after real clips when there's no active filter —
+  // otherwise they dilute the zoom-in slice.
+  const items: FeedItem[] = filterAxis
+    ? shuffled
+    : [...shuffled, ...aggregateItems.sort((a, b) => b.score - a.score)];
 
-  const clipCount = momentItems.length + videoItems.length;
-  return <ScrollFeed items={items} videoCount={clipCount} />;
+  const clipCount = momentItems.length + filteredVideos.length;
+  return (
+    <ScrollFeed
+      items={items}
+      videoCount={clipCount}
+      initialKillId={initialKillId}
+    />
+  );
+}
+
+/** Returns true when the video item matches the grid axis/value pair. */
+function videoMatchesFilter(
+  v: VideoFeedItem,
+  axis: GridAxisId,
+  value: string,
+): boolean {
+  switch (axis) {
+    case "game_minute_bucket":
+      return v.minuteBucket === value;
+    case "killer_player_id":
+      return v.killerPlayerId === value;
+    case "opponent_team_code":
+      return v.opponentCode === value;
+    case "fight_type":
+      return v.fightType === value;
+    default:
+      return true;
+  }
 }
 
 /** Weighted shuffle: items with higher scores tend to appear earlier,

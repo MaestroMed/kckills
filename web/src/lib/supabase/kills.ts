@@ -52,6 +52,7 @@ export type MinuteBucket =
 
 export interface PublishedKillRow {
   id: string;
+  killer_player_id: string | null;
   killer_champion: string | null;
   victim_champion: string | null;
   game_time_seconds: number | null;
@@ -93,6 +94,7 @@ export interface PublishedKillRow {
 
 const KILL_SELECT = `
   id,
+  killer_player_id,
   killer_champion,
   victim_champion,
   game_time_seconds,
@@ -157,6 +159,7 @@ function normalize(row: Record<string, unknown>): PublishedKillRow {
   }
   return {
     id: String(row.id ?? ""),
+    killer_player_id: (row.killer_player_id as string | null) ?? null,
     killer_champion: (row.killer_champion as string | null) ?? null,
     victim_champion: (row.victim_champion as string | null) ?? null,
     game_time_seconds: (row.game_time_seconds as number | null) ?? null,

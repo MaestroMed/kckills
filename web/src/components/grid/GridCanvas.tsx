@@ -238,6 +238,7 @@ export function GridCanvas({
                   active={slot.x === 0 && slot.y === 0}
                   xLabel={slot.xLabel}
                   yLabel={slot.yLabel}
+                  axisY={engine.axisY}
                 />
               ) : (
                 <div className="h-full w-full rounded-2xl border border-dashed border-white/5 bg-white/[0.02]" />
