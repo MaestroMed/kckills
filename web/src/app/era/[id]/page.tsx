@@ -9,6 +9,7 @@ import { KC_LOGO, TEAM_LOGOS } from "@/lib/kc-assets";
 import { EraClipsSection } from "./era-clips";
 import { getQuotesByEra } from "@/lib/quotes";
 import { QuoteRow } from "@/components/QuoteCard";
+import { PortraitCubeMorph } from "@/components/PortraitCubeMorph";
 
 export const revalidate = 3600;
 
@@ -92,31 +93,56 @@ export default async function EraPage({ params }: Props) {
   );
   const { prev, next } = getNavigation(era.id);
 
-  // Pick a champion splash for the ambient hero fallback
-  const heroChamp =
-    periodMatches[0]?.games[0]?.kc_players?.find((p) => p.name.startsWith("KC "))?.champion ?? "Jhin";
+  // Build the cube-morph palette: top distinct KC champions for this era,
+  // ordered by usage frequency, capped at 6 to keep the morph cycle snappy.
+  const champCounts = new Map<string, number>();
+  for (const m of periodMatches) {
+    for (const g of m.games) {
+      for (const p of g.kc_players) {
+        if (!p.name.startsWith("KC ")) continue;
+        champCounts.set(p.champion, (champCounts.get(p.champion) ?? 0) + 1);
+      }
+    }
+  }
+  const morphChampions = [...champCounts.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 6)
+    .map(([champ]) => champ);
+  // If the era has no recorded matches yet, fall back to a single splash so
+  // the cube grid still renders something meaningful.
+  if (morphChampions.length === 0) morphChampions.push("Jhin");
+  const morphImages = morphChampions.map((c) => championSplashUrl(c));
 
   return (
     <div className="relative -mx-4 -mt-6">
-      {/* ═══ HERO — full-screen cinematic ═══ */}
-      <section className="relative h-[85vh] min-h-[640px] w-full overflow-hidden">
-        {/* Background layer */}
+      {/* ═══ HERO — full-screen cinematic with cube-portrait morph ═══ */}
+      <section className="relative h-[85vh] min-h-[640px] w-full overflow-hidden bg-[var(--bg-primary)]">
+        {/* Static bottom layer keeps the era's identity image visible while
+            the cube morph paints itself on top — gives the hero a base even
+            on cold cache or if Canvas fails to mount. */}
         {era.image ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
+          <Image
             src={era.image}
             alt=""
-            className="absolute inset-0 h-full w-full object-cover scale-110"
-            style={{ filter: "brightness(0.55)" }}
+            fill
+            priority
+            sizes="100vw"
+            className="object-cover scale-110"
+            style={{ filter: "brightness(0.25) saturate(1.1)" }}
           />
-        ) : (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={championSplashUrl(heroChamp)}
-            alt=""
-            className="absolute inset-0 h-full w-full object-cover scale-110 opacity-50"
-          />
-        )}
+        ) : null}
+
+        {/* Cube-portrait morph — cycles through the era's signature champions
+            as a glowing dot-matrix face that breathes between identities. */}
+        <PortraitCubeMorph
+          images={morphImages}
+          accent={era.color}
+          cols={70}
+          aspect={9 / 16}
+          holdMs={5200}
+          morphMs={1900}
+          className="absolute inset-0 mix-blend-screen opacity-90"
+        />
 
         {/* Gradient overlays */}
         <div className="absolute inset-0 bg-gradient-to-t from-[var(--bg-primary)] via-[var(--bg-primary)]/60 to-transparent" />
@@ -411,11 +437,12 @@ export default async function EraPage({ params }: Props) {
                   className="group relative overflow-hidden rounded-2xl border border-[var(--border-gold)] bg-[var(--bg-surface)] transition-all hover:border-[var(--gold)]/50 hover:scale-[1.02]"
                   style={{ aspectRatio: "4/3" }}
                 >
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
+                  <Image
                     src={championSplashUrl(bgChamp)}
                     alt=""
-                    className="absolute inset-0 w-full h-full object-cover opacity-25 group-hover:opacity-50 group-hover:scale-110 transition-all duration-700"
+                    fill
+                    sizes="(max-width: 768px) 100vw, 33vw"
+                    className="object-cover opacity-25 group-hover:opacity-50 group-hover:scale-110 transition-all duration-700"
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-black via-black/60 to-black/30" />
 

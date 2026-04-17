@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback } from "react";
 import { m, AnimatePresence } from "framer-motion";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { ERAS, type Era } from "@/lib/eras";
 
@@ -460,11 +461,12 @@ export function KCTimeline() {
                 }}
               >
                 {popupEra.image ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
+                  <Image
                     src={popupEra.image}
                     alt={popupEra.label}
-                    className="absolute inset-0 w-full h-full object-cover"
+                    fill
+                    sizes="(max-width: 768px) 100vw, 800px"
+                    className="object-cover"
                   />
                 ) : (
                   <div

@@ -168,28 +168,34 @@ export default async function PlayerPage({ params }: Props) {
       {/* ═══ HERO — full-screen cinematic ═══ */}
       <section className="relative h-[90vh] min-h-[720px] w-full overflow-hidden">
         {/* Layer 1 (deepest) — blurred champion splash */}
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
+        <Image
           src={championSplashUrl(signatureChamp)}
           alt=""
-          className="absolute inset-0 h-full w-full object-cover opacity-30 scale-105 blur-2xl"
+          fill
+          priority
+          sizes="100vw"
+          className="object-cover opacity-30 scale-105 blur-2xl"
         />
         {/* Layer 2 — champion loading art (always shown) */}
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
+        <Image
           src={championLoadingUrl(signatureChamp)}
           alt=""
-          className="absolute inset-0 h-full w-full object-cover scale-110"
+          fill
+          priority
+          sizes="100vw"
+          className="object-cover scale-110"
           style={{ filter: "brightness(0.45) saturate(1.1)" }}
         />
         {/* Layer 3 (top) — custom Hextech Gemini background if it exists.
             If the file 404s, the img is invisible and the champion loading
             art below shows through normally. No flicker, no broken icon. */}
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
+        <Image
           src={customBg}
           alt=""
-          className="absolute inset-0 h-full w-full object-cover scale-105"
+          fill
+          priority
+          sizes="100vw"
+          className="object-cover scale-105"
           style={{ filter: "brightness(0.85) saturate(1.1)" }}
         />
 
@@ -411,18 +417,20 @@ export default async function PlayerPage({ params }: Props) {
                   style={{ aspectRatio: "16/10" }}
                 >
                   {k.thumbnail_url ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
+                    <Image
                       src={k.thumbnail_url}
                       alt={`${k.killer_champion} vs ${k.victim_champion}`}
-                      className="absolute inset-0 w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
+                      fill
+                      sizes="(max-width: 768px) 100vw, 33vw"
+                      className="object-cover group-hover:scale-110 transition-transform duration-700"
                     />
                   ) : (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
+                    <Image
                       src={championSplashUrl(k.killer_champion ?? "Aatrox")}
                       alt=""
-                      className="absolute inset-0 w-full h-full object-cover opacity-40"
+                      fill
+                      sizes="(max-width: 768px) 100vw, 33vw"
+                      className="object-cover opacity-40"
                     />
                   )}
                   <div className="absolute inset-0 bg-gradient-to-t from-black via-black/30 to-transparent" />
@@ -538,11 +546,12 @@ export default async function PlayerPage({ params }: Props) {
                   style={{ aspectRatio: "4/5" }}
                 >
                   {/* Full champion splash */}
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
+                  <Image
                     src={championLoadingUrl(m.champion)}
                     alt={m.champion}
-                    className="absolute inset-0 w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
+                    fill
+                    sizes="(max-width: 768px) 100vw, 33vw"
+                    className="object-cover group-hover:scale-110 transition-transform duration-700"
                   />
                   {/* Gradient */}
                   <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-transparent" />
@@ -685,11 +694,12 @@ export default async function PlayerPage({ params }: Props) {
                   key={c.name}
                   className="group relative aspect-square overflow-hidden rounded-2xl border border-[var(--border-gold)] bg-[var(--bg-surface)] transition-all hover:border-[var(--gold)]/50 hover:scale-105"
                 >
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
+                  <Image
                     src={championLoadingUrl(c.name)}
                     alt={c.name}
-                    className="absolute inset-0 w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
+                    fill
+                    sizes="(max-width: 768px) 50vw, 12vw"
+                    className="object-cover group-hover:scale-110 transition-transform duration-500"
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-transparent" />
 

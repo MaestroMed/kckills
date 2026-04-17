@@ -29,7 +29,7 @@ interface GridCellProps {
 /** Build the deep-link URL that opens /scroll at the tapped kill with the
  *  Y axis pre-applied as a filter. The X axis is deliberately NOT applied
  *  as a filter (too narrow — two overlapping filters often leaves 0 clips). */
-function buildZoomInHref(cell: GridCellData, axisY: GridAxisId): string {
+export function buildZoomInHref(cell: GridCellData, axisY: GridAxisId): string {
   const params = new URLSearchParams({
     kill: cell.top_kill_id,
     axis: axisY,
@@ -82,6 +82,13 @@ export const GridCell = memo(function GridCell({
           className={
             "object-cover transition-transform duration-500 motion-reduce:transition-none " +
             (active ? "scale-100" : "scale-105 group-hover:scale-100 motion-reduce:scale-100")
+          }
+          // Only the active cell exposes the transition name — multiple
+          // matching names on the same page break the View Transitions API.
+          style={
+            active
+              ? ({ viewTransitionName: `kill-${cell.top_kill_id}` } as React.CSSProperties)
+              : undefined
           }
         />
       ) : (

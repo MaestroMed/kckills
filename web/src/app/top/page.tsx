@@ -103,8 +103,13 @@ export default async function TopPage({
                     {i + 1}
                   </div>
                   {k.thumbnail_url && (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={k.thumbnail_url} alt="" className="h-14 w-14 rounded-lg object-cover flex-shrink-0" />
+                    <Image
+                      src={k.thumbnail_url}
+                      alt=""
+                      width={56}
+                      height={56}
+                      className="h-14 w-14 rounded-lg object-cover flex-shrink-0"
+                    />
                   )}
                   <div className="flex-1 min-w-0">
                     <p className="font-display text-sm font-bold truncate">
@@ -218,8 +223,13 @@ function PodiumCard({ kill, rank, height, crown }: { kill: ScoredKill; rank: num
       {crown && <div className="absolute top-[-4px] left-1/2 -translate-x-1/2 z-10 text-2xl animate-bounce">{"\uD83D\uDC51"}</div>}
 
       {/* Champion bg */}
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src={`https://ddragon.leagueoflegends.com/cdn/img/champion/splash/${kill.champion}_0.jpg`} alt="" className="absolute inset-0 w-full h-full object-cover opacity-30 group-hover:opacity-50 transition-opacity" />
+      <Image
+        src={`https://ddragon.leagueoflegends.com/cdn/img/champion/splash/${kill.champion}_0.jpg`}
+        alt=""
+        fill
+        sizes="(max-width: 768px) 100vw, 33vw"
+        className="object-cover opacity-30 group-hover:opacity-50 transition-opacity"
+      />
       <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-transparent" />
 
       {/* Content */}

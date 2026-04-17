@@ -9,9 +9,11 @@
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import Link from "next/link";
+import Image from "next/image";
 import { getAlumniBySlug, getAllAlumniSlugs, ALUMNI } from "@/lib/alumni";
 import { getEraById } from "@/lib/eras";
 import { championSplashUrl, championLoadingUrl } from "@/lib/constants";
+import { PortraitCubeMorph } from "@/components/PortraitCubeMorph";
 
 interface Props {
   params: Promise<{ slug: string }>;
@@ -86,20 +88,30 @@ export default async function AlumniDetailPage({ params }: Props) {
         marginRight: "-50vw",
       }}
     >
-      {/* ─── HERO ───────────────────────────────────────────── */}
-      <section className="relative h-[78vh] min-h-[640px] w-full overflow-hidden">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={splash}
-          alt=""
-          className="absolute inset-0 h-full w-full object-cover opacity-25 scale-105 blur-2xl"
-        />
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
+      {/* ─── HERO — cinematic with cube-portrait morph ──────── */}
+      <section className="relative h-[78vh] min-h-[640px] w-full overflow-hidden bg-[var(--bg-primary)]">
+        {/* Soft splash backdrop — heavily darkened so the cube animation owns
+            the visual weight without losing the champion silhouette context. */}
+        <Image
           src={loading}
           alt=""
-          className="absolute inset-0 h-full w-full object-cover scale-110"
-          style={{ filter: "brightness(0.4) saturate(1.15)" }}
+          fill
+          priority
+          sizes="100vw"
+          className="object-cover scale-110"
+          style={{ filter: "brightness(0.22) saturate(1.15)" }}
+        />
+
+        {/* Cube morph alternates between splash + loading art so the alumni's
+            signature champion materialises as a living dot-matrix portrait. */}
+        <PortraitCubeMorph
+          images={[loading, splash]}
+          accent={accent}
+          cols={68}
+          aspect={9 / 16}
+          holdMs={6000}
+          morphMs={2200}
+          className="absolute inset-0 mix-blend-screen opacity-95"
         />
         <div className="absolute inset-0 bg-gradient-to-t from-[var(--bg-primary)] via-[var(--bg-primary)]/50 to-transparent" />
         <div className="absolute inset-0 bg-gradient-to-r from-[var(--bg-primary)] via-transparent to-[var(--bg-primary)]/70" />

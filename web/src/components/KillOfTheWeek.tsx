@@ -28,11 +28,12 @@ export async function KillOfTheWeek() {
           className="group relative w-full md:w-80 aspect-video md:aspect-auto flex-shrink-0 overflow-hidden"
         >
           {kill.thumbnail_url ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
+            <Image
               src={kill.thumbnail_url}
               alt={`${kill.killer_champion} vs ${kill.victim_champion}`}
-              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+              fill
+              sizes="(max-width: 768px) 100vw, 320px"
+              className="object-cover group-hover:scale-105 transition-transform duration-500"
             />
           ) : (
             <div className="w-full h-full bg-[var(--bg-primary)]" />

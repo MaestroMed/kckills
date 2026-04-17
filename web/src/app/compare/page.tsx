@@ -1,6 +1,7 @@
 import { loadRealData, getPlayerStats, getCurrentRoster } from "@/lib/real-data";
 import { championIconUrl } from "@/lib/constants";
 import { PLAYER_PHOTOS } from "@/lib/kc-assets";
+import { PageHero } from "@/components/ui/PageHero";
 import Image from "next/image";
 import Link from "next/link";
 import type { Metadata } from "next";
@@ -35,17 +36,20 @@ async function CompareContent({
   const p2Stats = p2Name ? getPlayerStats(data, p2Name) : null;
 
   return (
-    <div className="mx-auto max-w-5xl space-y-8 py-8">
-      <nav className="flex items-center gap-2 text-sm text-[var(--text-muted)]">
-        <Link href="/" className="hover:text-[var(--gold)]">Accueil</Link>
-        <span className="text-[var(--gold)]/30">{"\u25C6"}</span>
-        <span>Comparateur</span>
-      </nav>
+    <div className="-mt-6">
+      <PageHero
+        variant="compact"
+        crumbs={[
+          { label: "Accueil", href: "/" },
+          { label: "Comparateur" },
+        ]}
+        badge="Karmine Corp · Roster"
+        title="COMPARATEUR"
+        subtitle="Compare deux joueurs Karmine Corp cote a cote. Kills, deaths, KDA, champion pool, gold, CS — tout est aligne."
+        backgroundSrc="/images/hero-bg.jpg"
+      />
 
-      <h1 className="font-display text-3xl font-bold">
-        Comparateur <span className="text-gold-gradient">Joueurs</span>
-      </h1>
-
+      <div className="mx-auto max-w-5xl space-y-8 py-12 px-4 md:px-0">
       {/* Player selectors */}
       <div className="grid grid-cols-2 gap-4">
         <PlayerSelector
@@ -102,6 +106,7 @@ async function CompareContent({
           </p>
         </div>
       )}
+      </div>
     </div>
   );
 }

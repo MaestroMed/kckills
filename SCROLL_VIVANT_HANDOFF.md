@@ -68,13 +68,29 @@ Puis vérifier sur `/` que la section "Scroll sur 4 axes" s'affiche entre le HER
 ## Scope reporté (hors V1)
 
 ### Cosmétique
-- PageHero à appliquer sur : `/hall-of-fame`, `/era/[id]`, `/alumni/[slug]`, `/stats`, `/compare`, `/review`
-- Migration `<img>` → `next/image` dans `KillCard`, `PlayerCard`, `era/[id]`, `alumni/[slug]`, `hall-of-fame`, `records`
-- Nettoyage des 22 `@keyframes` dans `globals.css`
+- ✅ PageHero appliqué sur `/hall-of-fame`, `/stats`, `/compare`. PageHero étendu avec un variant `cinematic` + tag/accent/topRight/scrollHint pour réutilisation future.
+- ❌ `/era/[id]` et `/alumni/[slug]` gardent leur hero cinematic propre — remplacés par un **PortraitCubeMorph** (Canvas dot-matrix qui fait morpher entre les champion splashes de l'ère / signatureChampion de l'alumni). Cf. ci-dessous.
+- ✅ Migration `<img>` → `next/image` complétée sur `era/[id]`, `alumni/[slug]`, `hall-of-fame`, `player/[slug]`, `top`, `KCTimeline` (popup), `KillOfTheWeek`. Reste : `homepage page.tsx` (4 imgs encore), `HomeClipsShowcase`, `HomeFilteredContent`, `not-found`, `kill/[id]`, `navbar` (logo SVG inline OK), composants `CommentPanel`, `video-player`, `ScrollFeed` (aggregate item), et `KCTimeline` (m.img motion-wrapped — à voir si on garde Framer ou migre).
+- ❌ Nettoyage `@keyframes` non fait (low value, risk medium).
 
 ### UX avancée
-- Pinch-zoom sur mobile (remplace le tap) — nécessite gesture handler custom ou Framer Motion
-- Shared-layout animation grille ↔ scroll via Framer `layoutId` (V1 utilise router.push à la place)
+- ✅ **Pinch-zoom mobile sur la grille** — `GridCanvas.tsx`. 2 doigts qui s'écartent au-delà d'un ratio 1.45 → navigation vers `/scroll?kill=&axis=&value=` du cell actif. Pendant le pinch, la grille suit les doigts en temps réel (transition 60ms). Au relâchement : si committed, animation "diving in" 220ms (scale 1.6 + opacity 0.4) puis router.push.
+- ✅ **Shared-layout grille ↔ scroll** via la **View Transitions API native** (Chrome 126+, Safari 18+). Pas de Framer layoutId. CSS `@view-transition { navigation: auto }` dans `globals.css` + `view-transition-name: kill-<id>` sur la cellule active de la grille ET sur l'item du scroll qui matche `initialKillId`. Le browser morphe automatiquement le rectangle entre les deux pages. Dégradation silencieuse sur Firefox.
+
+### Cube portrait morph (nouveau, marquee feature)
+- `components/PortraitCubeMorph.tsx` — composant client Canvas qui sample chaque image source en grille brightness (60×80 par défaut), puis dessine des cubes iso-gold dont l'opacité/taille encodent l'intensité.
+- Crossmorph cellule par cellule entre N images sur un cycle `holdMs` + `morphMs`.
+- Honor `prefers-reduced-motion` (collapse sur 1 seule image, pas de cycle).
+- Pause sur `document.hidden` (Page Visibility API).
+- Utilisé sur :
+  - `/era/[id]` : top 6 champions distincts de l'ère, accent = `era.color`
+  - `/alumni/[slug]` : `loading` + `splash` du signatureChampion en boucle, accent = `accentColor`
+
+### V2 (adaptatif, post-launch)
+- Embeddings pgvector sur `ai_description` pour un axe "kills similaires"
+- Algorithme qui remap les axes selon les préférences comportementales détectées
+- Persistance DB des événements Umami pour ML collaboratif
+- Backoffice CMS pour curer les clips hero, les ères, les alumni sans deploy
 
 ### V2 (adaptatif, post-launch)
 - Embeddings pgvector sur `ai_description` pour un axe "kills similaires"

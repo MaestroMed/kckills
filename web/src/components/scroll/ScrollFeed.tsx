@@ -128,6 +128,10 @@ interface SharedScrollProps {
   onToggleMute: () => void;
   useLowQuality: boolean;
   currentIndexRef: React.MutableRefObject<number>;
+  /** Kill ID that triggered the grid → scroll zoom-in. Used to set the
+   *  `view-transition-name` on the matching scroll item so the browser
+   *  morphs the GridCell thumbnail into the full-screen video. */
+  shellViewTransitionId?: string;
 }
 
 export function ScrollFeed({
@@ -207,6 +211,7 @@ export function ScrollFeed({
     onToggleMute: toggleMute,
     useLowQuality,
     currentIndexRef,
+    shellViewTransitionId: initialKillId,
   };
 
   // ─── Swipe hint for first-time visitors ────────────────────────────
@@ -411,8 +416,18 @@ function MomentScrollItem({ item, index, total, shared }: { item: MomentFeedItem
   const cls = CLASSIFICATION_LABELS[item.classification] ?? CLASSIFICATION_LABELS.solo_kill;
   const duration = item.endTimeSeconds - item.startTimeSeconds;
 
+  const isShellTarget = shared.shellViewTransitionId === item.id;
   return (
-    <div ref={containerRef} data-kill-id={item.id} className="scroll-item bg-black">
+    <div
+      ref={containerRef}
+      data-kill-id={item.id}
+      className="scroll-item bg-black"
+      style={
+        isShellTarget
+          ? ({ viewTransitionName: `kill-${item.id}` } as React.CSSProperties)
+          : undefined
+      }
+    >
       {/* F9: Replay indicator */}
       {showReplay && (
         <div className="absolute top-20 right-4 z-20 flex h-8 w-8 items-center justify-center rounded-full bg-black/50 backdrop-blur-sm pointer-events-none" style={{ animation: "replayFade 1.2s ease-out forwards" }}>
@@ -638,9 +653,20 @@ function VideoScrollItem({ item, index, total, shared }: { item: VideoFeedItem; 
   const isKcKill = item.kcInvolvement === "team_killer";
   const opponentLabel = item.opponentCode || "LEC";
   const matchDate = new Date(item.matchDate);
+  const isShellTarget = shared.shellViewTransitionId === item.id;
 
   return (
-    <div ref={containerRef} data-kill-id={item.id} className="scroll-item bg-black" onClick={handleDoubleTap}>
+    <div
+      ref={containerRef}
+      data-kill-id={item.id}
+      className="scroll-item bg-black"
+      onClick={handleDoubleTap}
+      style={
+        isShellTarget
+          ? ({ viewTransitionName: `kill-${item.id}` } as React.CSSProperties)
+          : undefined
+      }
+    >
       {/* F4: Enhanced double-tap star burst */}
       {showDoubleTapHeart && (
         <div className="absolute inset-0 z-30 flex items-center justify-center pointer-events-none">

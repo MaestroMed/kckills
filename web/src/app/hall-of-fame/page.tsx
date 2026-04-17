@@ -1,7 +1,9 @@
+import Image from "next/image";
 import Link from "next/link";
 import type { Metadata } from "next";
 import { HALL_OF_FAME, type HofMoment } from "@/lib/hall-of-fame";
 import { getEraById } from "@/lib/eras";
+import { PageHero } from "@/components/ui/PageHero";
 
 export const revalidate = 3600;
 
@@ -26,99 +28,52 @@ const TAG_LABELS: Record<HofMoment["tag"], string> = {
 };
 
 export default function HallOfFamePage() {
+  const trophyCount = HALL_OF_FAME.filter(
+    (m) => m.tag === "trophy" || m.tag === "record"
+  ).length;
+  const yearCount = new Set(HALL_OF_FAME.map((m) => m.year)).size;
+
   return (
-    <div
-      className="-mt-6"
-      style={{
-        width: "100vw",
-        position: "relative",
-        left: "50%",
-        right: "50%",
-        marginLeft: "-50vw",
-        marginRight: "-50vw",
-      }}
-    >
-      {/* ═══ HERO ═══ */}
-      <section className="relative min-h-[60vh] flex items-center justify-center overflow-hidden px-6 md:px-16 py-20">
-        {/* Champion splash background */}
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src="/images/hero-bg.jpg"
-          alt=""
-          className="absolute inset-0 w-full h-full object-cover opacity-35 scale-110"
-        />
-        <div className="absolute inset-0 bg-gradient-to-b from-[var(--bg-primary)] via-[var(--bg-primary)]/60 to-[var(--bg-primary)]" />
-        <div className="absolute inset-0 bg-gradient-to-r from-black/60 via-transparent to-black/60" />
-
-        {/* Scanlines */}
-        <div
-          className="absolute inset-0 opacity-15 mix-blend-overlay pointer-events-none"
-          style={{
-            backgroundImage:
-              "repeating-linear-gradient(180deg, transparent 0px, transparent 2px, rgba(200,170,110,0.1) 3px, transparent 4px)",
-          }}
-        />
-
-        <div className="relative z-10 text-center max-w-4xl">
-          {/* Breadcrumb */}
-          <nav className="mb-6 flex items-center justify-center gap-2 text-xs text-white/50">
-            <Link href="/" className="hover:text-[var(--gold)]">
-              Accueil
-            </Link>
-            <span className="text-[var(--gold)]/30">{"\u25C6"}</span>
-            <span className="text-[var(--gold)]">Hall of Fame</span>
-          </nav>
-
-          <div className="inline-flex items-center gap-3 mb-6">
-            <span className="rounded-full border border-[var(--gold)]/30 bg-black/50 backdrop-blur-sm px-4 py-1.5 text-[11px] font-bold tracking-[0.2em] uppercase text-[var(--gold)]">
-              Karmine Corp &middot; Legendes
-            </span>
+    <div className="-mt-6">
+      <PageHero
+        crumbs={[
+          { label: "Accueil", href: "/" },
+          { label: "Hall of Fame" },
+        ]}
+        badge="Karmine Corp · Legendes"
+        title="HALL OF FAME"
+        subtitle="Les 10 moments qui ont defini la Karmine Corp. Du premier titre EU Masters au Sacre LEC Winter 2025, en passant par les pentakills, les comebacks impossibles et les tweets presidentiels."
+        backgroundSrc="/images/hero-bg.jpg"
+      >
+        <div className="flex items-center justify-center gap-8 flex-wrap text-center">
+          <div>
+            <p className="font-data text-4xl md:text-5xl font-black text-[var(--gold)] leading-none tabular-nums">
+              {HALL_OF_FAME.length}
+            </p>
+            <p className="text-[10px] text-white/40 uppercase tracking-widest mt-1">
+              Moments
+            </p>
           </div>
-
-          <h1 className="font-display font-black tracking-tight leading-[0.82] text-5xl md:text-7xl lg:text-8xl mb-5">
-            <span className="hero-title-glow">
-              <span className="text-shimmer">HALL OF FAME</span>
-            </span>
-          </h1>
-
-          <p className="max-w-2xl mx-auto text-base md:text-lg text-white/80 font-medium leading-relaxed">
-            Les 10 moments qui ont defini la Karmine Corp. Du premier titre EU
-            Masters au Sacre LEC Winter 2025, en passant par les pentakills,
-            les comebacks impossibles et les tweets presidentiels. L&apos;histoire
-            du club racontee par ses plus grandes heures.
-          </p>
-
-          {/* Quick stats */}
-          <div className="mt-10 flex items-center justify-center gap-8 flex-wrap text-center">
-            <div>
-              <p className="font-data text-4xl md:text-5xl font-black text-[var(--gold)] leading-none">
-                {HALL_OF_FAME.length}
-              </p>
-              <p className="text-[10px] text-white/40 uppercase tracking-widest mt-1">
-                Moments
-              </p>
-            </div>
-            <div className="h-10 w-px bg-white/10" />
-            <div>
-              <p className="font-data text-4xl md:text-5xl font-black text-[var(--gold)] leading-none">
-                {new Set(HALL_OF_FAME.map((m) => m.year)).size}
-              </p>
-              <p className="text-[10px] text-white/40 uppercase tracking-widest mt-1">
-                Annees
-              </p>
-            </div>
-            <div className="h-10 w-px bg-white/10" />
-            <div>
-              <p className="font-data text-4xl md:text-5xl font-black text-[var(--gold)] leading-none">
-                {HALL_OF_FAME.filter((m) => m.tag === "trophy" || m.tag === "record").length}
-              </p>
-              <p className="text-[10px] text-white/40 uppercase tracking-widest mt-1">
-                Trophees
-              </p>
-            </div>
+          <div className="h-10 w-px bg-white/10" aria-hidden />
+          <div>
+            <p className="font-data text-4xl md:text-5xl font-black text-[var(--gold)] leading-none tabular-nums">
+              {yearCount}
+            </p>
+            <p className="text-[10px] text-white/40 uppercase tracking-widest mt-1">
+              Annees
+            </p>
+          </div>
+          <div className="h-10 w-px bg-white/10" aria-hidden />
+          <div>
+            <p className="font-data text-4xl md:text-5xl font-black text-[var(--gold)] leading-none tabular-nums">
+              {trophyCount}
+            </p>
+            <p className="text-[10px] text-white/40 uppercase tracking-widest mt-1">
+              Trophees
+            </p>
           </div>
         </div>
-      </section>
+      </PageHero>
 
       {/* ═══ LIST ═══ */}
       <section className="max-w-7xl mx-auto px-6 md:px-10 lg:px-16 py-16 space-y-12">
@@ -215,11 +170,12 @@ function HofCard({ moment, eraLabel }: { moment: HofMoment; eraLabel?: string })
                 aspectRatio: "16 / 9",
               }}
             >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
+              <Image
                 src={videoThumb}
                 alt={moment.title}
-                className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
+                fill
+                sizes="(max-width: 768px) 100vw, 50vw"
+                className="object-cover group-hover:scale-105 transition-transform duration-700"
               />
               <div className="absolute inset-0 bg-gradient-to-t from-black via-black/30 to-transparent" />
               {/* Play button */}

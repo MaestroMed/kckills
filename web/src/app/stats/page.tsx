@@ -2,6 +2,7 @@ import Link from "next/link";
 import { loadRealData, getTeamStats, getCurrentRoster, getMatchesSorted } from "@/lib/real-data";
 import { getPublishedKills } from "@/lib/supabase/kills";
 import { AnimatedNumber } from "@/components/AnimatedNumber";
+import { PageHero } from "@/components/ui/PageHero";
 import type { Metadata } from "next";
 
 export const revalidate = 300;
@@ -46,21 +47,20 @@ export default async function StatsPage() {
   );
 
   return (
-    <div className="space-y-10 py-8">
-      <nav className="flex items-center gap-2 text-sm text-[var(--text-muted)]">
-        <Link href="/" className="hover:text-[var(--gold)]">Accueil</Link>
-        <span className="text-[var(--gold)]/30">{"\u25C6"}</span>
-        <span>Stats</span>
-      </nav>
+    <div className="-mt-6">
+      <PageHero
+        variant="compact"
+        crumbs={[
+          { label: "Accueil", href: "/" },
+          { label: "Stats" },
+        ]}
+        badge="Karmine Corp · LEC"
+        title="STATS"
+        subtitle="Toutes les statistiques Karmine Corp depuis l'entree en LEC. Kills, winrate, KDA, records par joueur."
+        backgroundSrc="/images/hero-bg.jpg"
+      />
 
-      <div>
-        <h1 className="font-display text-4xl font-black">
-          Stats <span className="text-gold-gradient">Karmine Corp</span>
-        </h1>
-        <p className="mt-2 text-sm text-[var(--text-muted)]">
-          Toutes les statistiques KC depuis l&apos;entr&eacute;e en LEC.
-        </p>
-      </div>
+      <div className="space-y-10 py-12">
 
       {/* ═══ BIG NUMBERS ═══ */}
       <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
@@ -174,6 +174,7 @@ export default async function StatsPage() {
           </table>
         </div>
       </section>
+      </div>
     </div>
   );
 }
