@@ -7,7 +7,7 @@ import { PLAYER_PHOTOS } from "@/lib/kc-assets";
 import { getPublishedKills, type PublishedKillRow } from "@/lib/supabase/kills";
 import { TopFilters } from "./top-filters";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 120;
 export const metadata = { title: "Top Kills \u2014 KCKILLS" };
 
 export default async function TopPage({

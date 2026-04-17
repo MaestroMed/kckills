@@ -12,7 +12,7 @@ import {
 import { championIconUrl } from "@/lib/constants";
 import { PLAYER_PHOTOS, KC_LOGO, TEAM_LOGOS } from "@/lib/kc-assets";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 300;
 
 export const metadata: Metadata = {
   title: "Records",

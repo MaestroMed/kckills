@@ -4,7 +4,7 @@ import { loadRealData, getKCRoster, displayRole, roleIcon } from "@/lib/real-dat
 import { championIconUrl } from "@/lib/constants";
 import { PLAYER_PHOTOS } from "@/lib/kc-assets";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 300;
 export const metadata = { title: "Joueurs KC \u2014 KCKILLS" };
 
 export default function PlayersPage() {

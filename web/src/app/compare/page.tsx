@@ -5,7 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import type { Metadata } from "next";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 300;
 export const metadata: Metadata = {
   title: "Comparateur joueurs",
   description: "Compare les stats de deux joueurs KC c\u00f4te \u00e0 c\u00f4te.",

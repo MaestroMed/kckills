@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 import { HALL_OF_FAME, type HofMoment } from "@/lib/hall-of-fame";
 import { getEraById } from "@/lib/eras";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 3600;
 
 export const metadata: Metadata = {
   title: "Hall of Fame",

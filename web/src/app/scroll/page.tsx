@@ -4,7 +4,7 @@ import { getPublishedKills } from "@/lib/supabase/kills";
 import { getPublishedMoments } from "@/lib/supabase/moments";
 import { ScrollFeed, type FeedItem, type AggregateFeedItem, type VideoFeedItem, type MomentFeedItem } from "./scroll-feed";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 60;
 export const metadata = {
   title: "Scroll \u2014 KCKILLS",
   description: "Scroll les kills KC comme sur TikTok. Vrais clips vid\u00e9o des matchs LEC, g\u00e9n\u00e9r\u00e9s automatiquement.",

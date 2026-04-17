@@ -2,7 +2,7 @@ import { getPublishedKills } from "@/lib/supabase/kills";
 import { ReviewClient } from "./review-client";
 import type { Metadata } from "next";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 60;
 export const metadata: Metadata = {
   title: "Clip QA Review \u2014 KCKILLS",
   robots: { index: false, follow: false },

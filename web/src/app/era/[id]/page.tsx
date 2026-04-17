@@ -10,7 +10,7 @@ import { EraClipsSection } from "./era-clips";
 import { getQuotesByEra } from "@/lib/quotes";
 import { QuoteRow } from "@/components/QuoteCard";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 3600;
 
 interface Props {
   params: Promise<{ id: string }>;

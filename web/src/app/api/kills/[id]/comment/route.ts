@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerSupabase } from "@/lib/supabase/server";
 
+const PROFILE_SELECT = "id, discord_username, discord_avatar_url, badges";
+const COMMENT_SELECT = `*, profile:profiles(${PROFILE_SELECT})`;
+
 export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -10,15 +13,16 @@ export async function GET(
 
   const { data, error } = await supabase
     .from("comments")
-    .select("*, profile:profiles(id, username, avatar_url, badges)")
+    .select(COMMENT_SELECT)
     .eq("kill_id", id)
+    .eq("is_deleted", false)
+    .eq("moderation_status", "approved")
     .order("created_at", { ascending: false });
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  // Nest replies under parents
   const topLevel = (data ?? []).filter((c) => !c.parent_id);
   const replies = (data ?? []).filter((c) => c.parent_id);
 
@@ -52,19 +56,23 @@ export async function POST(
     return NextResponse.json({ error: "Commentaire vide" }, { status: 400 });
   }
 
-  if (text.length > 2000) {
-    return NextResponse.json({ error: "Commentaire trop long (max 2000)" }, { status: 400 });
+  if (text.length > 500) {
+    return NextResponse.json({ error: "Commentaire trop long (max 500)" }, { status: 400 });
   }
 
+  // TODO(moderation): route through Claude Haiku before approval per spec §5.8.
+  // Auto-approve until the moderation worker is wired in — otherwise the RLS
+  // policy hides every comment and the feature is invisible.
   const { data, error } = await supabase
     .from("comments")
     .insert({
       kill_id: id,
       user_id: user.id,
       parent_id: parentId || null,
-      body: text.trim(),
+      content: text.trim(),
+      moderation_status: "approved",
     })
-    .select("*, profile:profiles(id, username, avatar_url, badges)")
+    .select(COMMENT_SELECT)
     .single();
 
   if (error) {

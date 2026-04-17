@@ -8,7 +8,7 @@ import { getKillById, type PublishedKillRow } from "@/lib/supabase/kills";
 import { KillInteractions } from "./interactions";
 import type { Metadata } from "next";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 600;
 
 interface Props {
   params: Promise<{ id: string }>;

@@ -4,7 +4,7 @@ import { getPublishedKills } from "@/lib/supabase/kills";
 import { AnimatedNumber } from "@/components/AnimatedNumber";
 import type { Metadata } from "next";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 300;
 export const metadata: Metadata = {
   title: "Stats KC \u2014 KCKILLS",
   description: "Toutes les statistiques Karmine Corp en LEC. Kills, winrate, KDA, records.",

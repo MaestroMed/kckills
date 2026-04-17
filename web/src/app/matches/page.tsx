@@ -3,7 +3,7 @@ import { loadRealData, getMatchesSorted } from "@/lib/real-data";
 import { getPublishedKills } from "@/lib/supabase/kills";
 import { MatchesAccordion } from "./matches-accordion";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 300;
 export const metadata = { title: "Matchs KC \u2014 KCKILLS" };
 
 export default async function MatchesPage() {
