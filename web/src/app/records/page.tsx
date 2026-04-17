@@ -11,6 +11,7 @@ import {
 } from "@/lib/real-data";
 import { championIconUrl } from "@/lib/constants";
 import { PLAYER_PHOTOS, KC_LOGO, TEAM_LOGOS } from "@/lib/kc-assets";
+import { PageHero } from "@/components/ui/PageHero";
 
 export const revalidate = 300;
 
@@ -139,57 +140,17 @@ export default function RecordsPage() {
   const topScorerStats = topScorer ? getPlayerStats(data, topScorer.name) : null;
 
   return (
-    <div
-      className="-mt-6"
-      style={{
-        width: "100vw",
-        position: "relative",
-        left: "50%",
-        right: "50%",
-        marginLeft: "-50vw",
-        marginRight: "-50vw",
-      }}
-    >
-      {/* ═══ HERO ═══ */}
-      <section className="relative min-h-[50vh] flex items-center justify-center overflow-hidden px-6 md:px-16 py-20">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src="/images/hero-bg.jpg"
-          alt=""
-          className="absolute inset-0 w-full h-full object-cover opacity-30 scale-110"
-          style={{ filter: "blur(2px)" }}
-        />
-        <div className="absolute inset-0 bg-gradient-to-b from-[var(--bg-primary)] via-[var(--bg-primary)]/60 to-[var(--bg-primary)]" />
-        <div className="absolute inset-0 bg-gradient-to-r from-black/60 via-transparent to-black/60" />
-
-        <div className="relative z-10 text-center max-w-4xl">
-          <nav className="mb-6 flex items-center justify-center gap-2 text-xs text-white/50">
-            <Link href="/" className="hover:text-[var(--gold)]">
-              Accueil
-            </Link>
-            <span className="text-[var(--gold)]/30">{"\u25C6"}</span>
-            <span className="text-[var(--gold)]">Records</span>
-          </nav>
-
-          <div className="inline-flex items-center gap-3 mb-6">
-            <span className="rounded-full border border-[var(--gold)]/30 bg-black/50 backdrop-blur-sm px-4 py-1.5 text-[11px] font-bold tracking-[0.2em] uppercase text-[var(--gold)]">
-              Karmine Corp &middot; LEC 2024 &rarr; 2026
-            </span>
-          </div>
-
-          <h1 className="font-display font-black tracking-tight leading-[0.82] text-5xl md:text-7xl lg:text-8xl mb-5">
-            <span className="hero-title-glow">
-              <span className="text-shimmer">RECORDS</span>
-            </span>
-          </h1>
-
-          <p className="max-w-2xl mx-auto text-base md:text-lg text-white/80 font-medium leading-relaxed">
-            Tout ce que la KC Army doit savoir par coeur. Les plus gros KDA,
-            les games qui ont marque l&apos;histoire, les joueurs qui ont cumule
-            le plus de moments memorables depuis l&apos;entree en LEC.
-          </p>
-        </div>
-      </section>
+    <div className="-mt-6">
+      <PageHero
+        crumbs={[
+          { label: "Accueil", href: "/" },
+          { label: "Records" },
+        ]}
+        badge="Karmine Corp · LEC 2024 → 2026"
+        title="RECORDS"
+        subtitle="Tout ce que la KC Army doit savoir par coeur. Les plus gros KDA, les games qui ont marqué l'histoire, les joueurs qui ont cumulé le plus de moments mémorables depuis l'entrée en LEC."
+        backgroundSrc="/images/hero-bg.jpg"
+      />
 
       {/* ═══ RECORDS GRID ═══ */}
       <section className="max-w-7xl mx-auto px-6 md:px-10 lg:px-16 py-16 space-y-12">
