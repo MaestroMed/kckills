@@ -14,6 +14,7 @@ import { EraComparisonChart } from "@/components/EraComparison";
 import { AnimatedNumber } from "@/components/AnimatedNumber";
 import { MacronEasterEgg } from "@/components/MacronEasterEgg";
 import { HeroClipBackground } from "@/components/HeroClipBackground";
+import { ScrollVivantSection } from "@/components/grid/ScrollVivantSection";
 
 /** Iconic clips that play in the hero background, one after the other.
  *
@@ -382,6 +383,9 @@ export default async function HomePage() {
           </svg>
         </div>
       </section>
+
+      {/* ═══ SCROLL VIVANT — grid 4 axes ════════════════════════════════ */}
+      <ScrollVivantSection />
 
       {/* ═══ ROSTER — Full width, tall bands ════════════════════════════ */}
       {roster.length > 0 && (
