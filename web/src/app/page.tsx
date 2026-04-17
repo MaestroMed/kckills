@@ -14,6 +14,7 @@ import { EraComparisonChart } from "@/components/EraComparison";
 import { AnimatedNumber } from "@/components/AnimatedNumber";
 import { MacronEasterEgg } from "@/components/MacronEasterEgg";
 import { HeroClipBackground } from "@/components/HeroClipBackground";
+import { NextMatchOverlay } from "@/components/NextMatchOverlay";
 import { ScrollVivantSection } from "@/components/grid/ScrollVivantSection";
 
 /** Iconic clips that play in the hero background, one after the other.
@@ -143,6 +144,9 @@ export default async function HomePage() {
             No side vignettes — the cards themselves have dark backdrops. */}
         <div className="absolute inset-0 bg-gradient-to-b from-black/10 via-transparent to-[var(--bg-primary)] pointer-events-none" />
         <div className="absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-black/50 to-transparent pointer-events-none" />
+
+        {/* ─── Floating "next rendez-vous" overlay — top-right of hero ─── */}
+        <NextMatchOverlay />
 
         {/* ─── Full-width 2-column grid on desktop ─── */}
         <div className="relative z-10 min-h-[100vh] md:min-h-[92vh] max-w-[1920px] mx-auto px-6 md:px-10 lg:px-16 py-24 md:py-0 flex flex-col md:grid md:grid-cols-12 md:items-center gap-8">

@@ -580,6 +580,34 @@ button:focus-visible {
 }
 
 /* ═══════════════════════════════════════════════════════════════
+   Next-match overlay — entry animation + status pulse.
+   ═══════════════════════════════════════════════════════════════ */
+@keyframes next-match-enter {
+  from {
+    opacity: 0;
+    transform: translateY(-12px) scale(0.96);
+    filter: blur(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    filter: blur(0);
+  }
+}
+
+@keyframes next-match-pulse {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50%      { transform: scale(1.6); opacity: 0.45; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  @keyframes next-match-enter {
+    from { opacity: 1; transform: none; filter: none; }
+    to   { opacity: 1; transform: none; filter: none; }
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════
    Hero poster breathing — slow opacity oscillation so the celebration
    photo "inhales" forward then recedes again behind the rotating clip
    layer. Tuned to a calm 9-second cycle so it reads as ambient depth,

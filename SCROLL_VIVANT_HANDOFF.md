@@ -108,6 +108,40 @@ La map de cubes pourrait pulser au beat d'un thème sonore propre au joueur.
 #### Sound design synchro morphing
 Composer / sourcer une nappe sonore dédiée aux transitions cube-morph (era, alumni, player). Idée : un drone Hextech (KR / FR ambient), un "swoosh" cristallin sur chaque transition de portrait, un sub-bass discret quand un cube atteint pleine intensité. À gater sur autoplay-policy (premier interaction utilisateur), avec mute par défaut + bouton son global. Référence : Apple TV + intros, Riot Games Cinematic Trailers.
 
+#### Clip-centric platform — composant réutilisable filtré par contexte
+Le tagging profond qu'on vient de poser sur les 340 kills (les 6 dimensions Scroll Vivant + `killer_player_id`, `victim_player_id`, `match_external_id`, `tracked_team_involvement`, `multi_kill`, `is_first_blood`, `highlight_score`, `avg_rating`) ouvre la voie à une vraie plateforme **clip-centric** : la même section vidéo, déclinable sur toutes les pages du site avec un simple changement de filtre.
+
+**Plan** :
+1. Extraire un composant unique `<ClipReel filter={...} />` (peut-être 2 variants : `compact-grid` pour les pages secondaires + `parallax-ribbon` réutilisant le moteur du carrousel YouTube actuel pour les hero secondaires).
+2. Le `filter` est un objet typé qui se traduit en query Supabase + scoring :
+   ```ts
+   type ClipFilter = {
+     killerPlayerId?: string;          // page joueur
+     victimPlayerId?: string;          // page joueur (kills subis)
+     matchExternalId?: string;         // page match
+     championKiller?: string;          // page champion (future)
+     championVictim?: string;
+     fightType?: FightType;            // page filtrée par type
+     laneMatchup?: MatchupLane;        // axe lane
+     minuteBucket?: MinuteBucket;
+     opponentCode?: string;            // page rival (G2, FNC...)
+     trackedTeamInvolvement?: 'team_killer'|'team_victim'|'team_assist';
+     minHighlight?: number;            // "best of"
+     limit?: number;
+   };
+   ```
+3. Côté Supabase : RPC `fn_get_clips_filtered(p_filter jsonb, p_limit int)` qui projette les colonnes minimum (id, killer/victim, thumbnail, clip_url_vertical, clip_url_horizontal, ai_description, multi_kill, highlight_score, avg_rating) — réutilisable, RLS-friendly, egress-controlled.
+4. Pages cibles immédiates :
+   - **Page joueur** (`/player/[slug]`) : remplace l'agrégation actuelle par `<ClipReel filter={{ killerPlayerId, minHighlight: 6, limit: 12 }} />` + un second reel "kills subis" + un reel "carry games".
+   - **Page match** (`/match/[slug]`) : `<ClipReel filter={{ matchExternalId }} />` + sous-sections par game.
+   - **Page rivalité** (futur `/rivalry/[opponentCode]`) : `<ClipReel filter={{ opponentCode, limit: 20 }} />`.
+   - **Page champion** (futur `/champion/[name]`) : `<ClipReel filter={{ championKiller }} />` + reel "vs ce champion".
+   - **Page joueur d'équipe rivale** (futur) : symétrique.
+5. Variant `parallax-ribbon` peut directement réutiliser `YouTubeParallaxCarousel` en généralisant son input (`{ id, title, thumbnail, accentColor, channelLabel, onPlay }`) — soit on factorise l'animation dans un `<ParallaxRibbon items={...} />` agnostique, soit on passe les clips KC dans la même structure.
+6. Tracking Umami : un event `clip_reel_view` avec `{ context, filter_summary }` pour mesurer ce que les users consultent par contexte → V2 personalization signal.
+
+Cette refonte transforme le scroll vivant d'une seule expérience en briques composables — chaque page du site devient un point d'entrée vers les bons clips.
+
 #### Hero poster breathing (déjà livré)
 La photo de fond du hero homepage respire désormais (opacity 0.55↔1, scale 1↔1.018, 9s cycle). Cf `globals.css` — `.hero-poster-breathe`. Cycle calé pour ne pas distraire la lecture du clip qui tourne au-dessus.
 

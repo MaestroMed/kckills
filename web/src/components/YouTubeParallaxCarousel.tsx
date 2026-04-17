@@ -45,7 +45,12 @@ export function YouTubeParallaxCarousel({ videos }: Props) {
     startX: number;
     startPos: number;
     moved: boolean;
+    captured: boolean;
   } | null>(null);
+  // Pixel threshold before a pointer-down is upgraded into an actual drag.
+  // Below this we leave the event chain alone so card clicks (lightbox open)
+  // and dot taps fire normally.
+  const DRAG_THRESHOLD_PX = 6;
 
   const [paused, setPaused] = useState(false);
   const [reducedMotion, setReducedMotion] = useState(false);
@@ -173,14 +178,17 @@ export function YouTubeParallaxCarousel({ videos }: Props) {
   }, [videos.length, paused, reducedMotion]);
 
   // ── Drag (pointer) ──────────────────────────────────────────────────
+  // Capture is deferred until the first move that exceeds DRAG_THRESHOLD_PX.
+  // Below that threshold we treat the gesture as a tap and let the child
+  // button's onClick run untouched — otherwise the lightbox never opens.
   const onPointerDown = useCallback((e: React.PointerEvent) => {
     if (e.button !== undefined && e.button !== 0) return;
-    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
     dragStateRef.current = {
       pointerId: e.pointerId,
       startX: e.clientX,
       startPos: positionRef.current,
       moved: false,
+      captured: false,
     };
   }, []);
 
@@ -188,19 +196,46 @@ export function YouTubeParallaxCarousel({ videos }: Props) {
     const s = dragStateRef.current;
     if (!s || e.pointerId !== s.pointerId) return;
     const dx = e.clientX - s.startX;
-    if (Math.abs(dx) > 6) s.moved = true;
-    positionRef.current = s.startPos - dx;
+    if (!s.moved && Math.abs(dx) > DRAG_THRESHOLD_PX) {
+      // Promote to a real drag: now capture so we keep getting move events
+      // even if the pointer leaves the wrap bounds.
+      try {
+        (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+        s.captured = true;
+      } catch {
+        // capture not supported in this context — no-op
+      }
+      s.moved = true;
+    }
+    if (s.moved) {
+      positionRef.current = s.startPos - dx;
+    }
   }, []);
 
   const onPointerUp = useCallback((e: React.PointerEvent) => {
     const s = dragStateRef.current;
     if (!s || e.pointerId !== s.pointerId) return;
-    try {
-      (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
-    } catch {
-      // pointerId already released — ignore
+    if (s.captured) {
+      try {
+        (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
+      } catch {
+        // already released
+      }
     }
-    dragStateRef.current = null;
+    // Keep the dragStateRef around for one tick so the card click handler
+    // can see whether the gesture was a real drag (suppress lightbox) or a
+    // tap (open lightbox). The click handler clears it itself.
+    if (!s.moved) {
+      // Pure tap — let the click event propagate untouched and clean up
+      // immediately so the next gesture starts fresh.
+      dragStateRef.current = null;
+    } else {
+      // Drag completed — clear after the click event would have fired so
+      // handleCardClick sees the moved flag and suppresses the lightbox.
+      window.setTimeout(() => {
+        if (dragStateRef.current === s) dragStateRef.current = null;
+      }, 0);
+    }
   }, []);
 
   // Manual nudge buttons jump the position by ~one card. We cancel any
