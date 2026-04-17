@@ -87,8 +87,7 @@ export function HeroClipBackground({ clips, posterSrc = "/images/hero-bg.jpg" }:
       <img
         src={posterSrc}
         alt=""
-        className="absolute inset-0 w-full h-full object-cover"
-        style={{ opacity: 1 }}
+        className="hero-poster-breathe absolute inset-0 w-full h-full object-cover"
       />
 
       {/* Stacked iframes crossfading — tuned so the clip feels alive but the

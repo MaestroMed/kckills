@@ -11,7 +11,7 @@
  */
 
 import "server-only";
-import { createServerSupabase } from "./server";
+import { createServerSupabase, rethrowIfDynamic } from "./server";
 
 export type LanePhase = "early" | "mid" | "late";
 export type FightType =
@@ -208,6 +208,7 @@ export async function getPublishedKills(limit = 50): Promise<PublishedKillRow[]>
     }
     return (data ?? []).map((row) => normalize(row as unknown as Record<string, unknown>));
   } catch (err) {
+    rethrowIfDynamic(err);
     console.warn("[supabase/kills] getPublishedKills threw:", err);
     return [];
   }
@@ -229,6 +230,7 @@ export async function getKillById(id: string): Promise<PublishedKillRow | null> 
     }
     return data ? normalize(data as unknown as Record<string, unknown>) : null;
   } catch (err) {
+    rethrowIfDynamic(err);
     console.warn("[supabase/kills] getKillById threw:", err);
     return null;
   }
@@ -252,6 +254,7 @@ export async function getKillsByMatchExternalId(
     }
     return (data ?? []).map((row) => normalize(row as unknown as Record<string, unknown>));
   } catch (err) {
+    rethrowIfDynamic(err);
     console.warn("[supabase/kills] getKillsByMatchExternalId threw:", err);
     return [];
   }
@@ -277,6 +280,7 @@ export async function getKillsByKillerChampion(
     }
     return (data ?? []).map((row) => normalize(row as unknown as Record<string, unknown>));
   } catch (err) {
+    rethrowIfDynamic(err);
     console.warn("[supabase/kills] getKillsByKillerChampion threw:", err);
     return [];
   }

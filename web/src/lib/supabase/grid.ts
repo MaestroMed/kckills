@@ -7,7 +7,7 @@
  */
 
 import "server-only";
-import { createServerSupabase } from "./server";
+import { createServerSupabase, rethrowIfDynamic } from "./server";
 import type { GridAxisId } from "@/lib/grid/axis-config";
 
 export interface GridCellRow {
@@ -45,6 +45,7 @@ export async function getGridCells(
     }
     return (data ?? []) as GridCellRow[];
   } catch (err) {
+    rethrowIfDynamic(err);
     console.warn("[supabase/grid] fn_get_grid_cells threw:", err);
     return [];
   }

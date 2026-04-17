@@ -580,6 +580,33 @@ button:focus-visible {
 }
 
 /* ═══════════════════════════════════════════════════════════════
+   Hero poster breathing — slow opacity oscillation so the celebration
+   photo "inhales" forward then recedes again behind the rotating clip
+   layer. Tuned to a calm 9-second cycle so it reads as ambient depth,
+   not a flashing strobe.
+   ═══════════════════════════════════════════════════════════════ */
+@keyframes hero-poster-breathe {
+  0%   { opacity: 1;    transform: scale(1.000); }
+  50%  { opacity: 0.55; transform: scale(1.018); }
+  100% { opacity: 1;    transform: scale(1.000); }
+}
+
+.hero-poster-breathe {
+  opacity: 1;
+  animation: hero-poster-breathe 9s ease-in-out infinite;
+  transform-origin: 50% 55%;
+  will-change: opacity, transform;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hero-poster-breathe {
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════
    View Transitions API — shared-layout grid ↔ scroll.
    ───────────────────────────────────────────────────────────────
    Native cross-document transitions (Chrome 126+, Safari 18+).

@@ -7,7 +7,7 @@
  */
 
 import "server-only";
-import { createServerSupabase } from "./server";
+import { createServerSupabase, rethrowIfDynamic } from "./server";
 
 export interface PlayerRow {
   id: string;
@@ -34,6 +34,7 @@ export async function getTrackedRoster(): Promise<PlayerRow[]> {
       image_url: (r.image_url as string | null) ?? null,
     }));
   } catch (err) {
+    rethrowIfDynamic(err);
     console.warn("[supabase/players] getTrackedRoster threw:", err);
     return [];
   }

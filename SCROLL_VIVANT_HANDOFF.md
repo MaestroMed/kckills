@@ -90,7 +90,26 @@ Puis vérifier sur `/` que la section "Scroll sur 4 axes" s'affiche entre le HER
 - Embeddings pgvector sur `ai_description` pour un axe "kills similaires"
 - Algorithme qui remap les axes selon les préférences comportementales détectées
 - Persistance DB des événements Umami pour ML collaboratif
-- Backoffice CMS pour curer les clips hero, les ères, les alumni sans deploy
+- Backoffice CMS pour curer les clips hero, les ères, les alumni, et la playlist du carrousel YouTube sans deploy
+
+### V2 — Concepts différenciants (à designer / prototyper)
+
+#### Sphere Scroll 360 Horizon
+Concept à explorer : une variante du `/scroll` où les kills ne défilent pas verticalement mais s'enroulent sur un horizon sphérique 3D — l'utilisateur scrolle "autour" plutôt que "vers le bas". Inspiration : le HUD d'Iron Man, les visions astrales. Permettrait un parallax encore plus immersif et un onboarding magique. À prototyper sur three.js ou react-three-fiber, possiblement gated derrière un toggle "Mode immersif".
+
+#### Cube Morphing Map sur les pages joueur
+Étendre le `PortraitCubeMorph` (déjà déployé sur era + alumni) aux pages `/player/[slug]`. Pour chaque joueur du roster actif, le hero morphe entre :
+1. Sa photo officielle LEC
+2. Son champion signature (splash)
+3. 1-2 portraits Karmine Life si dispo
+4. Optionnel : un portrait IA généré "héroïque"
+La map de cubes pourrait pulser au beat d'un thème sonore propre au joueur.
+
+#### Sound design synchro morphing
+Composer / sourcer une nappe sonore dédiée aux transitions cube-morph (era, alumni, player). Idée : un drone Hextech (KR / FR ambient), un "swoosh" cristallin sur chaque transition de portrait, un sub-bass discret quand un cube atteint pleine intensité. À gater sur autoplay-policy (premier interaction utilisateur), avec mute par défaut + bouton son global. Référence : Apple TV + intros, Riot Games Cinematic Trailers.
+
+#### Hero poster breathing (déjà livré)
+La photo de fond du hero homepage respire désormais (opacity 0.55↔1, scale 1↔1.018, 9s cycle). Cf `globals.css` — `.hero-poster-breathe`. Cycle calé pour ne pas distraire la lecture du clip qui tourne au-dessus.
 
 ### V2 (adaptatif, post-launch)
 - Embeddings pgvector sur `ai_description` pour un axe "kills similaires"
