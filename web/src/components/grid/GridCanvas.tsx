@@ -43,6 +43,20 @@ export function GridCanvas({
   const touchStart = useRef<{ x: number; y: number } | null>(null);
   const cellViewAt = useRef<number>(Date.now());
 
+  // ── Respect prefers-reduced-motion ──────────────────────────────────────
+  // Users who opt out of motion get an instant axis swap instead of a 3D
+  // tilt, and the CSS transitions collapse to 0s. Updates live with the
+  // media query so toggling the OS setting doesn't require a reload.
+  const [reduceMotion, setReduceMotion] = useState(false);
+  useEffect(() => {
+    if (typeof window === "undefined" || !window.matchMedia) return;
+    const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const update = () => setReduceMotion(mq.matches);
+    update();
+    mq.addEventListener("change", update);
+    return () => mq.removeEventListener("change", update);
+  }, []);
+
   // ── Record dwell time per cell for V2 feed tuning ───────────────────────
   useEffect(() => {
     const id = engine.activeCell?.top_kill_id;
@@ -160,10 +174,14 @@ export function GridCanvas({
     }
   };
 
-  const runTilt = useCallback((dir: "br" | "bl") => {
-    setTilt(dir);
-    setTimeout(() => setTilt("none"), 500);
-  }, []);
+  const runTilt = useCallback(
+    (dir: "br" | "bl") => {
+      if (reduceMotion) return; // motion-sensitive users get the pivot without the 3D animation
+      setTilt(dir);
+      setTimeout(() => setTilt("none"), 500);
+    },
+    [reduceMotion],
+  );
 
   // ── Neighbourhood rendering: 3×3 slice centered on cursor ───────────────
   const neighbourhood = useMemo(() => {
@@ -217,14 +235,17 @@ export function GridCanvas({
         }}
       >
         <div
-          className="grid h-full w-full gap-3 p-3 transition-transform duration-500"
+          className={
+            "grid h-full w-full gap-3 p-3 " +
+            (reduceMotion ? "" : "transition-transform duration-500")
+          }
           style={{
             gridTemplateColumns: "repeat(3, 1fr)",
             gridTemplateRows: "repeat(3, 1fr)",
             transform:
-              tilt === "br"
+              !reduceMotion && tilt === "br"
                 ? "rotate3d(1, -1, 0, 12deg)"
-                : tilt === "bl"
+                : !reduceMotion && tilt === "bl"
                   ? "rotate3d(-1, -1, 0, 12deg)"
                   : "none",
             transitionTimingFunction: "cubic-bezier(0.16, 1, 0.3, 1)",

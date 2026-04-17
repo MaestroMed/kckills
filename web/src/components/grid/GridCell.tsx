@@ -66,8 +66,9 @@ export const GridCell = memo(function GridCell({
       prefetch={false}
       className={
         "group relative block h-full w-full overflow-hidden rounded-2xl border transition-all duration-300 " +
+        "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--gold)] motion-reduce:transition-none " +
         (active
-          ? "border-[var(--gold)] scale-[1.02] shadow-2xl shadow-[var(--gold)]/20"
+          ? "border-[var(--gold)] scale-[1.02] shadow-2xl shadow-[var(--gold)]/20 motion-reduce:scale-100"
           : "border-white/10 hover:border-[var(--gold)]/40")
       }
       aria-label={`Clip ${xLabel} × ${yLabel}, ${cell.kill_count} kill${cell.kill_count > 1 ? "s" : ""}`}
@@ -79,8 +80,8 @@ export const GridCell = memo(function GridCell({
           fill
           sizes="(max-width: 768px) 100vw, 33vw"
           className={
-            "object-cover transition-transform duration-500 " +
-            (active ? "scale-100" : "scale-105 group-hover:scale-100")
+            "object-cover transition-transform duration-500 motion-reduce:transition-none " +
+            (active ? "scale-100" : "scale-105 group-hover:scale-100 motion-reduce:scale-100")
           }
         />
       ) : (
