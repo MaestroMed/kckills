@@ -12,6 +12,10 @@ export function PwaInstallPrompt() {
   const deferredRef = useRef<BeforeInstallPromptEvent | null>(null);
 
   useEffect(() => {
+    // Mobile-only: the prompt is noise on desktop where users have a
+    // dedicated install icon in the URL bar. Gate on coarse pointer so it
+    // only appears on touch devices.
+    if (!window.matchMedia("(pointer: coarse)").matches) return;
     // Don't show if already installed or recently dismissed
     if (window.matchMedia("(display-mode: standalone)").matches) return;
     const dismissed = localStorage.getItem("pwa-dismiss");
