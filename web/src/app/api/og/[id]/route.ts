@@ -28,6 +28,8 @@ export async function GET(
     return NextResponse.redirect(data.og_image_url, 302);
   }
 
-  // Fallback: return a generic OG image or 404
-  return new NextResponse("Not found", { status: 404 });
+  // Fallback: generic site OG image rather than 404, so social shares never
+  // render a broken card while the worker backfills og_image_url.
+  const origin = new URL(_request.url).origin;
+  return NextResponse.redirect(`${origin}/images/hero-bg.jpg`, 302);
 }

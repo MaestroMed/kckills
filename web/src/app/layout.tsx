@@ -1,9 +1,11 @@
 import type { Metadata, Viewport } from "next";
+import Script from "next/script";
 import "./globals.css";
-import { Navbar } from "@/components/navbar";
-import { LiveBanner } from "@/components/LiveBanner";
 import { Providers } from "@/components/Providers";
 import { LayoutChrome } from "@/components/LayoutChrome";
+
+const UMAMI_SRC = process.env.NEXT_PUBLIC_UMAMI_SRC;
+const UMAMI_WEBSITE_ID = process.env.NEXT_PUBLIC_UMAMI_WEBSITE_ID;
 
 const SITE_URL =
   process.env.NEXT_PUBLIC_SITE_URL ??
@@ -148,6 +150,14 @@ export default function RootLayout({
           {children}
         </LayoutChrome>
         </Providers>
+        {UMAMI_SRC && UMAMI_WEBSITE_ID ? (
+          <Script
+            src={UMAMI_SRC}
+            data-website-id={UMAMI_WEBSITE_ID}
+            strategy="afterInteractive"
+            defer
+          />
+        ) : null}
         <script dangerouslySetInnerHTML={{ __html: `if('serviceWorker' in navigator){navigator.serviceWorker.register('/sw.js')}` }} />
       </body>
     </html>

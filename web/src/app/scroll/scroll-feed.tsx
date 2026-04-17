@@ -847,7 +847,7 @@ function AggregateScrollItem({ item, index, total }: { item: AggregateFeedItem; 
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         src={championSplashUrl(killerChamp)}
-        alt=""
+        alt={`Splash art du champion ${killerChamp}`}
         className={`absolute inset-0 h-full w-full object-cover transition-all duration-700 ${visible ? "scale-100 opacity-40" : "scale-110 opacity-0"}`}
         loading={index < 3 ? "eager" : "lazy"}
       />
