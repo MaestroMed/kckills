@@ -127,6 +127,12 @@ interface SharedScrollProps {
   muted: boolean;
   onToggleMute: () => void;
   useLowQuality: boolean;
+  /** Viewport width ≥ 768px. Hoisted to the parent so every scroll item
+   *  doesn't register its own resize listener. */
+  isDesktop: boolean;
+  /** True when the user opted into `prefers-reduced-motion`. Items skip
+   *  haptics and heavy flash animations. */
+  reducedMotion: boolean;
   currentIndexRef: React.MutableRefObject<number>;
   /** Kill ID that triggered the grid → scroll zoom-in. Used to set the
    *  `view-transition-name` on the matching scroll item so the browser
@@ -206,6 +212,29 @@ export function ScrollFeed({
     return () => conn.removeEventListener("change", check);
   }, []);
 
+  // ─── Viewport width (hoisted from per-item resize listeners) ───────
+  // Previously every scroll item registered its own resize listener. With
+  // hundreds of items that's hundreds of wake-ups per resize. One listener
+  // at the parent + shared boolean is plenty.
+  const [isDesktop, setIsDesktop] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia("(min-width: 768px)");
+    const apply = () => setIsDesktop(mq.matches);
+    apply();
+    mq.addEventListener("change", apply);
+    return () => mq.removeEventListener("change", apply);
+  }, []);
+
+  // ─── Reduced-motion preference ─────────────────────────────────────
+  const [reducedMotion, setReducedMotion] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const apply = () => setReducedMotion(mq.matches);
+    apply();
+    mq.addEventListener("change", apply);
+    return () => mq.removeEventListener("change", apply);
+  }, []);
+
   // ─── F2: Track current visible index for preload window ────────────
   const currentIndexRef = useRef(0);
 
@@ -248,6 +277,8 @@ export function ScrollFeed({
     muted: globalMuted,
     onToggleMute: toggleMute,
     useLowQuality,
+    isDesktop,
+    reducedMotion,
     currentIndexRef,
     shellViewTransitionId: initialKillId,
     onBroken: handleBroken,
@@ -377,15 +408,16 @@ function MomentScrollItem({ item, index, total, shared }: { item: MomentFeedItem
   const containerRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const [visible, setVisible] = useState(false);
-  const [isDesktop, setIsDesktop] = useState(false);
   const [rating, setRating] = useState(0);
   const [showRating, setShowRating] = useState(false);
   const [showComments, setShowComments] = useState(false);
-  // F3: Progress bar
-  const [progress, setProgress] = useState(0);
-  // F9: Replay indicator
   const [showReplay, setShowReplay] = useState(false);
+  const [showDoubleTapHeart, setShowDoubleTapHeart] = useState(false);
+  const [tapFlash, setTapFlash] = useState<null | "play" | "pause">(null);
+  const rafRef = useRef<number | null>(null);
   const prevTimeRef = useRef(0);
+  const lastTap = useRef(0);
+  const singleTapTimer = useRef<number | null>(null);
 
   // F1: Sync mute from shared state
   useEffect(() => {
@@ -393,13 +425,10 @@ function MomentScrollItem({ item, index, total, shared }: { item: MomentFeedItem
     if (v) v.muted = shared.muted;
   }, [shared.muted]);
 
-  useEffect(() => {
-    const check = () => setIsDesktop(window.innerWidth >= 768);
-    check();
-    window.addEventListener("resize", check);
-    return () => window.removeEventListener("resize", check);
-  }, []);
-
+  // Visibility + play + preload ladder.
+  // Tighter preload window than before (next=auto, next+1=metadata, rest=none)
+  // keeps mobile bandwidth on the actual playing clip instead of queuing
+  // three heavy MP4 downloads in parallel.
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
@@ -407,27 +436,26 @@ function MomentScrollItem({ item, index, total, shared }: { item: MomentFeedItem
       ([entry]) => {
         const isVis = entry.isIntersecting;
         setVisible(isVis);
+        el.classList.toggle("is-visible", isVis);
         const v = videoRef.current;
         if (!v) return;
         if (isVis) {
-          // F8: Haptic on snap
-          if ("vibrate" in navigator) navigator.vibrate(10);
-          // F2: Track current index
+          if (!shared.reducedMotion && "vibrate" in navigator) navigator.vibrate(10);
           shared.currentIndexRef.current = index;
           v.currentTime = 0;
           v.play().catch(() => {});
           v.preload = "auto";
-          // F2: Preload 3 clips ahead
-          let sibling = containerRef.current?.nextElementSibling;
-          for (let i = 0; i < 3 && sibling; i++) {
+          let sibling = el.nextElementSibling;
+          for (let i = 0; i < 2 && sibling; i++) {
             const nextV = sibling.querySelector("video");
-            if (nextV instanceof HTMLVideoElement && nextV.preload !== "auto") nextV.preload = "auto";
+            if (nextV instanceof HTMLVideoElement) {
+              nextV.preload = i === 0 ? "auto" : "metadata";
+            }
             sibling = sibling.nextElementSibling;
           }
         } else {
           v.pause();
-          // F2: Release memory for distant clips
-          if (Math.abs(index - shared.currentIndexRef.current) > 4) {
+          if (Math.abs(index - shared.currentIndexRef.current) > 2) {
             v.preload = "none";
           }
         }
@@ -436,24 +464,74 @@ function MomentScrollItem({ item, index, total, shared }: { item: MomentFeedItem
     );
     obs.observe(el);
     return () => obs.disconnect();
-  }, []);
+  }, [index, shared.currentIndexRef, shared.reducedMotion]);
 
-  // F3: Progress bar + F9: Replay detection via timeupdate
+  // Progress bar via rAF — writes `--p` directly on the container element.
+  // No React re-renders per tick. Only runs while the item is visible.
   useEffect(() => {
+    if (!visible) return;
     const v = videoRef.current;
-    if (!v) return;
-    const handleTimeUpdate = () => {
-      if (v.duration > 0) setProgress(v.currentTime / v.duration);
-      // F9: Detect loop (currentTime resets)
+    const el = containerRef.current;
+    if (!v || !el) return;
+    let cancelled = false;
+    const tick = () => {
+      if (cancelled) return;
+      if (v.duration > 0) {
+        el.style.setProperty("--p", String(v.currentTime / v.duration));
+      }
       if (v.currentTime < prevTimeRef.current - 1) {
         setShowReplay(true);
-        setTimeout(() => setShowReplay(false), 1200);
+        window.setTimeout(() => setShowReplay(false), 1200);
       }
       prevTimeRef.current = v.currentTime;
+      rafRef.current = requestAnimationFrame(tick);
     };
-    v.addEventListener("timeupdate", handleTimeUpdate);
-    return () => v.removeEventListener("timeupdate", handleTimeUpdate);
-  }, []);
+    rafRef.current = requestAnimationFrame(tick);
+    return () => {
+      cancelled = true;
+      if (rafRef.current != null) cancelAnimationFrame(rafRef.current);
+    };
+  }, [visible]);
+
+  // Apple-style single-tap = play/pause with flash glyph, double-tap = rate 5.
+  // The single-tap action is deferred 260ms so a second tap within that
+  // window cancels it and promotes to the double-tap path.
+  const handleTap = (e: React.MouseEvent<HTMLDivElement>) => {
+    // Bail if the user tapped any interactive child (buttons, links, inputs).
+    // Without this the RightSidebar's Rate / Chat / Share buttons would each
+    // also flip play-pause since the click bubbles up to the container.
+    const target = e.target as HTMLElement | null;
+    if (target?.closest("button, a, input, textarea, [role='button']")) return;
+
+    const now = Date.now();
+    const isDouble = now - lastTap.current < 260;
+    lastTap.current = now;
+    if (isDouble) {
+      if (singleTapTimer.current != null) {
+        window.clearTimeout(singleTapTimer.current);
+        singleTapTimer.current = null;
+      }
+      setRating(5);
+      setShowDoubleTapHeart(true);
+      if (!shared.reducedMotion && "vibrate" in navigator) navigator.vibrate(30);
+      window.setTimeout(() => setShowDoubleTapHeart(false), 800);
+      return;
+    }
+    if (singleTapTimer.current != null) window.clearTimeout(singleTapTimer.current);
+    singleTapTimer.current = window.setTimeout(() => {
+      const v = videoRef.current;
+      singleTapTimer.current = null;
+      if (!v) return;
+      if (v.paused) {
+        v.play().catch(() => {});
+        setTapFlash("play");
+      } else {
+        v.pause();
+        setTapFlash("pause");
+      }
+      window.setTimeout(() => setTapFlash(null), 600);
+    }, 260);
+  };
 
   const isKcAggressor = item.kcInvolvement === "kc_aggressor" || item.kcInvolvement === "kc_both";
   const cls = CLASSIFICATION_LABELS[item.classification] ?? CLASSIFICATION_LABELS.solo_kill;
@@ -465,13 +543,41 @@ function MomentScrollItem({ item, index, total, shared }: { item: MomentFeedItem
       ref={containerRef}
       data-kill-id={item.id}
       className="scroll-item bg-black"
+      onClick={handleTap}
       style={
         isShellTarget
           ? ({ viewTransitionName: `kill-${item.id}` } as React.CSSProperties)
           : undefined
       }
     >
-      {/* F9: Replay indicator */}
+      {/* Double-tap rating star burst */}
+      {showDoubleTapHeart && (
+        <div className="absolute inset-0 z-30 flex items-center justify-center pointer-events-none">
+          <svg className="h-24 w-24 text-[var(--gold)]" style={{ animation: "starBurst 0.8s ease-out forwards" }} fill="currentColor" viewBox="0 0 24 24">
+            <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+          </svg>
+        </div>
+      )}
+
+      {/* Tap-to-pause flash glyph — iOS Photos vibe. Play and pause share
+          the same ring + blur so the transition reads as one affordance. */}
+      {tapFlash && (
+        <div className="absolute inset-0 z-30 flex items-center justify-center pointer-events-none">
+          <div className="scroll-tap-flash flex h-20 w-20 items-center justify-center rounded-full bg-black/45 backdrop-blur-md border border-white/20">
+            {tapFlash === "play" ? (
+              <svg className="h-8 w-8 text-white translate-x-[2px]" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M8 5v14l11-7z" />
+              </svg>
+            ) : (
+              <svg className="h-8 w-8 text-white" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M6 5h4v14H6zM14 5h4v14h-4z" />
+              </svg>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Loop-replay indicator */}
       {showReplay && (
         <div className="absolute top-20 right-4 z-20 flex h-8 w-8 items-center justify-center rounded-full bg-black/50 backdrop-blur-sm pointer-events-none" style={{ animation: "replayFade 1.2s ease-out forwards" }}>
           <svg className="h-4 w-4 text-white/70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -480,39 +586,44 @@ function MomentScrollItem({ item, index, total, shared }: { item: MomentFeedItem
         </div>
       )}
 
-      {/* F10: Adaptive quality video */}
+      {/* Adaptive quality video */}
       <video
         ref={videoRef}
         className="absolute inset-0 h-full w-full object-cover"
-        src={isDesktop && item.clipHorizontal
+        src={shared.isDesktop && item.clipHorizontal
           ? item.clipHorizontal
           : (shared.useLowQuality && item.clipVerticalLow)
             ? item.clipVerticalLow
             : item.clipVertical}
         poster={item.thumbnail ?? undefined}
         muted loop playsInline
-        preload={index < 3 ? "auto" : "none"}
+        preload={index < 2 ? "auto" : index < 4 ? "metadata" : "none"}
         onError={(e) => {
           const v = e.currentTarget;
           shared.onBroken("moment", item.id, v.currentSrc || v.src);
         }}
       />
 
-      <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-transparent to-transparent pointer-events-none" />
-      <div className="absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-black/50 to-transparent pointer-events-none" />
+      {/* Unified bottom + top gradient overlay (single paint layer). */}
+      <div className="absolute inset-0 pointer-events-none" style={{
+        background:
+          "linear-gradient(to top, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0) 55%)," +
+          "linear-gradient(to bottom, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0) 18%)",
+      }} />
 
-      {/* F3: Progress bar */}
-      <div className="scroll-progress-bar" style={{ transform: `scaleX(${progress})` }} />
+      {/* Progress bar — driven by --p via CSS, zero JS per frame. */}
+      <div className="scroll-progress-bar" />
 
       <div className="relative z-10 flex h-full flex-col justify-end px-4 md:px-6 pt-20" style={{ paddingBottom: "max(2rem, env(safe-area-inset-bottom, 2rem))" }}>
         <Link
           href={`/moment/${item.id}`}
+          onClick={(e) => e.stopPropagation()}
           className="absolute top-16 left-4 z-20 rounded-full bg-black/40 backdrop-blur-sm px-3 py-1 text-[10px] font-data text-[var(--text-muted)] hover:bg-black/60 transition-colors"
         >
           #{index + 1} / {total}
         </Link>
 
-        {/* F1: Mute toggle (shared state) */}
+        {/* Mute toggle (shared state) */}
         <button
           onClick={(e) => { e.stopPropagation(); shared.onToggleMute(); }}
           className="absolute top-16 right-4 z-20 flex h-9 w-9 items-center justify-center rounded-full bg-black/40 backdrop-blur-sm border border-white/10 hover:bg-black/60 transition-colors"
@@ -525,7 +636,10 @@ function MomentScrollItem({ item, index, total, shared }: { item: MomentFeedItem
           )}
         </button>
 
-        <div className={`space-y-3 transition-all duration-500 ${visible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-6"}`}>
+        {/* Bottom overlay fades in via the `.is-visible` class that the
+            IntersectionObserver toggles on the container — pure CSS, no
+            layout thrash and no per-item transition state. */}
+        <div className="scroll-overlay-in space-y-3">
           {/* Classification badge + kill count */}
           <div className="flex flex-wrap items-center gap-2">
             <span className={`badge-glass rounded-md px-3 py-1.5 text-xs font-black uppercase tracking-[0.15em] ${cls.color}`}>
@@ -590,7 +704,7 @@ function MomentScrollItem({ item, index, total, shared }: { item: MomentFeedItem
       />
 
       {showRating && <RatingSheet rating={rating} setRating={setRating} close={() => setShowRating(false)} />}
-      <CommentPanel killId={item.id} isOpen={showComments} onClose={() => setShowComments(false)} />
+      {showComments && <CommentPanel killId={item.id} isOpen={showComments} onClose={() => setShowComments(false)} />}
     </div>
   );
 }
@@ -605,44 +719,22 @@ function VideoScrollItem({ item, index, total, shared }: { item: VideoFeedItem; 
   const [rating, setRating] = useState(0);
   const [showRating, setShowRating] = useState(false);
   const [showDoubleTapHeart, setShowDoubleTapHeart] = useState(false);
-  const [isDesktop, setIsDesktop] = useState(false);
+  const [tapFlash, setTapFlash] = useState<null | "play" | "pause">(null);
   const [showComments, setShowComments] = useState(false);
-  // F3: Progress bar
-  const [progress, setProgress] = useState(0);
-  // F9: Replay indicator
   const [showReplay, setShowReplay] = useState(false);
+  const rafRef = useRef<number | null>(null);
   const prevTimeRef = useRef(0);
   const toast = useToast();
   const lastTap = useRef(0);
+  const singleTapTimer = useRef<number | null>(null);
 
-  // F1: Sync mute from shared state
+  // Sync mute from shared state
   useEffect(() => {
     const v = videoRef.current;
     if (v) v.muted = shared.muted;
   }, [shared.muted]);
 
-  useEffect(() => {
-    const check = () => setIsDesktop(window.innerWidth >= 768);
-    check();
-    window.addEventListener("resize", check);
-    return () => window.removeEventListener("resize", check);
-  }, []);
-
-  // F4: Enhanced double-tap
-  const handleDoubleTap = () => {
-    const now = Date.now();
-    if (now - lastTap.current < 300) {
-      setRating(5);
-      setShowDoubleTapHeart(true);
-      // F4: Haptic feedback
-      if ("vibrate" in navigator) navigator.vibrate(30);
-      toast("\u2B50 5/5 !", "success");
-      setTimeout(() => setShowDoubleTapHeart(false), 800);
-    }
-    lastTap.current = now;
-  };
-
-  // IntersectionObserver with F2 preload + F8 haptics
+  // Visibility + play + preload ladder.
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
@@ -650,27 +742,26 @@ function VideoScrollItem({ item, index, total, shared }: { item: VideoFeedItem; 
       ([entry]) => {
         const isVis = entry.isIntersecting;
         setVisible(isVis);
+        el.classList.toggle("is-visible", isVis);
         const v = videoRef.current;
         if (!v) return;
         if (isVis) {
-          // F8: Haptic on snap
-          if ("vibrate" in navigator) navigator.vibrate(10);
-          // F2: Track current index
+          if (!shared.reducedMotion && "vibrate" in navigator) navigator.vibrate(10);
           shared.currentIndexRef.current = index;
           v.currentTime = 0;
           v.play().catch(() => {});
           v.preload = "auto";
-          // F2: Preload 3 clips ahead
-          let sibling = containerRef.current?.nextElementSibling;
-          for (let i = 0; i < 3 && sibling; i++) {
+          let sibling = el.nextElementSibling;
+          for (let i = 0; i < 2 && sibling; i++) {
             const nextV = sibling.querySelector("video");
-            if (nextV instanceof HTMLVideoElement && nextV.preload !== "auto") nextV.preload = "auto";
+            if (nextV instanceof HTMLVideoElement) {
+              nextV.preload = i === 0 ? "auto" : "metadata";
+            }
             sibling = sibling.nextElementSibling;
           }
         } else {
           v.pause();
-          // F2: Release memory for distant clips
-          if (Math.abs(index - shared.currentIndexRef.current) > 4) {
+          if (Math.abs(index - shared.currentIndexRef.current) > 2) {
             v.preload = "none";
           }
         }
@@ -679,23 +770,69 @@ function VideoScrollItem({ item, index, total, shared }: { item: VideoFeedItem; 
     );
     obs.observe(el);
     return () => obs.disconnect();
-  }, []);
+  }, [index, shared.currentIndexRef, shared.reducedMotion]);
 
-  // F3: Progress bar + F9: Replay detection
+  // Progress bar via rAF — direct DOM write, no React re-renders.
   useEffect(() => {
+    if (!visible) return;
     const v = videoRef.current;
-    if (!v) return;
-    const handleTimeUpdate = () => {
-      if (v.duration > 0) setProgress(v.currentTime / v.duration);
+    const el = containerRef.current;
+    if (!v || !el) return;
+    let cancelled = false;
+    const tick = () => {
+      if (cancelled) return;
+      if (v.duration > 0) {
+        el.style.setProperty("--p", String(v.currentTime / v.duration));
+      }
       if (v.currentTime < prevTimeRef.current - 1) {
         setShowReplay(true);
-        setTimeout(() => setShowReplay(false), 1200);
+        window.setTimeout(() => setShowReplay(false), 1200);
       }
       prevTimeRef.current = v.currentTime;
+      rafRef.current = requestAnimationFrame(tick);
     };
-    v.addEventListener("timeupdate", handleTimeUpdate);
-    return () => v.removeEventListener("timeupdate", handleTimeUpdate);
-  }, []);
+    rafRef.current = requestAnimationFrame(tick);
+    return () => {
+      cancelled = true;
+      if (rafRef.current != null) cancelAnimationFrame(rafRef.current);
+    };
+  }, [visible]);
+
+  // Single-tap = play/pause, double-tap = rate 5.
+  const handleTap = (e: React.MouseEvent<HTMLDivElement>) => {
+    const target = e.target as HTMLElement | null;
+    if (target?.closest("button, a, input, textarea, [role='button']")) return;
+
+    const now = Date.now();
+    const isDouble = now - lastTap.current < 260;
+    lastTap.current = now;
+    if (isDouble) {
+      if (singleTapTimer.current != null) {
+        window.clearTimeout(singleTapTimer.current);
+        singleTapTimer.current = null;
+      }
+      setRating(5);
+      setShowDoubleTapHeart(true);
+      if (!shared.reducedMotion && "vibrate" in navigator) navigator.vibrate(30);
+      toast("\u2B50 5/5 !", "success");
+      window.setTimeout(() => setShowDoubleTapHeart(false), 800);
+      return;
+    }
+    if (singleTapTimer.current != null) window.clearTimeout(singleTapTimer.current);
+    singleTapTimer.current = window.setTimeout(() => {
+      const v = videoRef.current;
+      singleTapTimer.current = null;
+      if (!v) return;
+      if (v.paused) {
+        v.play().catch(() => {});
+        setTapFlash("play");
+      } else {
+        v.pause();
+        setTapFlash("pause");
+      }
+      window.setTimeout(() => setTapFlash(null), 600);
+    }, 260);
+  };
 
   const isKcKill = item.kcInvolvement === "team_killer";
   const opponentLabel = item.opponentCode || "LEC";
@@ -707,21 +844,20 @@ function VideoScrollItem({ item, index, total, shared }: { item: VideoFeedItem; 
       ref={containerRef}
       data-kill-id={item.id}
       className="scroll-item bg-black"
-      onClick={handleDoubleTap}
+      onClick={handleTap}
       style={
         isShellTarget
           ? ({ viewTransitionName: `kill-${item.id}` } as React.CSSProperties)
           : undefined
       }
     >
-      {/* F4: Enhanced double-tap star burst */}
+      {/* Double-tap rating star burst */}
       {showDoubleTapHeart && (
         <div className="absolute inset-0 z-30 flex items-center justify-center pointer-events-none">
           <svg className="h-24 w-24 text-[var(--gold)]" style={{ animation: "starBurst 0.8s ease-out forwards" }} fill="currentColor" viewBox="0 0 24 24">
             <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
           </svg>
-          {/* Particles */}
-          {[...Array(8)].map((_, i) => {
+          {!shared.reducedMotion && [...Array(8)].map((_, i) => {
             const angle = (i / 8) * Math.PI * 2;
             const px = Math.cos(angle) * 80;
             const py = Math.sin(angle) * 80;
@@ -735,7 +871,24 @@ function VideoScrollItem({ item, index, total, shared }: { item: VideoFeedItem; 
         </div>
       )}
 
-      {/* F9: Replay indicator */}
+      {/* Tap-to-pause flash glyph */}
+      {tapFlash && (
+        <div className="absolute inset-0 z-30 flex items-center justify-center pointer-events-none">
+          <div className="scroll-tap-flash flex h-20 w-20 items-center justify-center rounded-full bg-black/45 backdrop-blur-md border border-white/20">
+            {tapFlash === "play" ? (
+              <svg className="h-8 w-8 text-white translate-x-[2px]" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M8 5v14l11-7z" />
+              </svg>
+            ) : (
+              <svg className="h-8 w-8 text-white" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M6 5h4v14H6zM14 5h4v14h-4z" />
+              </svg>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Loop-replay indicator */}
       {showReplay && (
         <div className="absolute top-20 right-4 z-20 flex h-8 w-8 items-center justify-center rounded-full bg-black/50 backdrop-blur-sm pointer-events-none" style={{ animation: "replayFade 1.2s ease-out forwards" }}>
           <svg className="h-4 w-4 text-white/70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -744,34 +897,39 @@ function VideoScrollItem({ item, index, total, shared }: { item: VideoFeedItem; 
         </div>
       )}
 
-      {/* F10: Adaptive quality video */}
+      {/* Adaptive quality video */}
       <video
         ref={videoRef}
         className="absolute inset-0 h-full w-full object-cover"
-        src={isDesktop && item.clipHorizontal
+        src={shared.isDesktop && item.clipHorizontal
           ? item.clipHorizontal
           : (shared.useLowQuality && item.clipVerticalLow)
             ? item.clipVerticalLow
             : item.clipVertical}
         poster={item.thumbnail ?? undefined}
         muted loop playsInline
-        preload={index < 3 ? "auto" : "none"}
+        preload={index < 2 ? "auto" : index < 4 ? "metadata" : "none"}
         onError={(e) => {
           const v = e.currentTarget;
           shared.onBroken("video", item.id, v.currentSrc || v.src);
         }}
       />
 
-      <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-transparent to-transparent pointer-events-none" />
-      <div className="absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-black/50 to-transparent pointer-events-none" />
+      {/* Unified gradient overlay (single paint layer). */}
+      <div className="absolute inset-0 pointer-events-none" style={{
+        background:
+          "linear-gradient(to top, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0) 55%)," +
+          "linear-gradient(to bottom, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0) 18%)",
+      }} />
 
-      {/* F3: Progress bar */}
-      <div className="scroll-progress-bar" style={{ transform: `scaleX(${progress})` }} />
+      {/* Progress bar — driven by --p via CSS. */}
+      <div className="scroll-progress-bar" />
 
       <div className="relative z-10 flex h-full flex-col justify-end px-4 md:px-6 pt-20" style={{ paddingBottom: "max(2rem, env(safe-area-inset-bottom, 2rem))" }}>
         {/* Kill ID link */}
         <Link
           href={`/kill/${item.id}`}
+          onClick={(e) => e.stopPropagation()}
           className="absolute top-16 left-4 z-20 rounded-full bg-black/40 backdrop-blur-sm px-3 py-1 text-[10px] font-data text-[var(--text-muted)] hover:bg-black/60 transition-colors"
         >
           #{index + 1} / {total}
@@ -795,8 +953,8 @@ function VideoScrollItem({ item, index, total, shared }: { item: VideoFeedItem; 
           )}
         </button>
 
-        {/* ═══ BOTTOM INFO — compact on mobile, spacious on desktop ═══ */}
-        <div className={`space-y-3 transition-all duration-500 ${visible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-6"}`}>
+        {/* Bottom overlay — CSS-driven fade via .is-visible on container. */}
+        <div className="scroll-overlay-in space-y-3">
           {/* Badges row */}
           <div className="flex flex-wrap items-center gap-2">
             {isKcKill ? (
@@ -899,7 +1057,7 @@ function VideoScrollItem({ item, index, total, shared }: { item: VideoFeedItem; 
           close={() => setShowRating(false)}
         />
       )}
-      <CommentPanel killId={item.id} isOpen={showComments} onClose={() => setShowComments(false)} />
+      {showComments && <CommentPanel killId={item.id} isOpen={showComments} onClose={() => setShowComments(false)} />}
     </div>
   );
 }
