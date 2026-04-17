@@ -7,6 +7,9 @@ For each clipped kill:
 - description_fr (max 120 chars, commentateur style)
 - kill_visible (bool)
 - caster_hype_level (1–5)
+- Scroll Vivant structured dimensions (for the grid pivot axes):
+  lane_phase, fight_type, objective_context, matchup_lane, champion_class,
+  game_minute_bucket
 
 Exposes:
 - analyze_kill(...) low-level helper (text-only or with a local clip file)
@@ -26,8 +29,67 @@ from services.supabase_client import safe_select, safe_update
 log = structlog.get_logger()
 
 
+# ─── Structured dimensions (Scroll Vivant V1 grid axes) ─────────────────────
+
+LANE_PHASES = {"early", "mid", "late"}
+FIGHT_TYPES = {
+    "solo_kill", "gank", "skirmish_2v2", "skirmish_3v3",
+    "teamfight_4v4", "teamfight_5v5", "pick",
+}
+OBJECTIVE_CONTEXTS = {
+    "none", "dragon", "baron", "herald", "atakhan",
+    "tower", "inhibitor", "nexus",
+}
+MATCHUP_LANES = {"top", "jungle", "mid", "bot", "support", "cross_map"}
+CHAMPION_CLASSES = {
+    "assassin", "bruiser", "mage", "marksman",
+    "tank", "enchanter", "skirmisher",
+}
+MINUTE_BUCKETS = [
+    "0-5", "5-10", "10-15", "15-20",
+    "20-25", "25-30", "30-35", "35+",
+]
+
+
+def minute_bucket_from_seconds(seconds: int | None) -> str | None:
+    """Map a kill's game_time_seconds to its 5-minute bucket label.
+
+    Returns None if seconds is missing — the grid drops cells with null axes.
+    """
+    if seconds is None or seconds < 0:
+        return None
+    minute = seconds // 60
+    if minute < 5:
+        return "0-5"
+    if minute < 10:
+        return "5-10"
+    if minute < 15:
+        return "10-15"
+    if minute < 20:
+        return "15-20"
+    if minute < 25:
+        return "20-25"
+    if minute < 30:
+        return "25-30"
+    if minute < 35:
+        return "30-35"
+    return "35+"
+
+
+def _lane_phase_from_seconds(seconds: int | None) -> str | None:
+    """Deterministic early/mid/late phase from game time (<14min / 14-25 / >25)."""
+    if seconds is None or seconds < 0:
+        return None
+    minute = seconds // 60
+    if minute < 14:
+        return "early"
+    if minute <= 25:
+        return "mid"
+    return "late"
+
+
 ANALYSIS_PROMPT = """<role>Analyste esport LoL specialise highlights. Tu commentes avec precision factuelle.</role>
-<task>Decris ce kill de match pro LoL en 1 phrase percutante.
+<task>Decris ce kill de match pro LoL en 1 phrase percutante ET classe-le sur 6 dimensions structurees.
 Killer: {killer_champion} ({killer_name})
 Victime: {victim_champion} ({victim_name})
 Donnees factuelles: {context}
@@ -47,13 +109,24 @@ Reponds UNIQUEMENT en JSON valide.</task>
               "engage","peel","snipe","steal">],
     "description_fr": "<max 120 chars, style commentateur hype mais FACTUEL>",
     "kill_visible_on_screen": true,
-    "caster_hype_level": <int 1-5>
+    "caster_hype_level": <int 1-5>,
+    "lane_phase": "early"|"mid"|"late",
+    "fight_type": "solo_kill"|"gank"|"skirmish_2v2"|"skirmish_3v3"|"teamfight_4v4"|"teamfight_5v5"|"pick",
+    "objective_context": "none"|"dragon"|"baron"|"herald"|"atakhan"|"tower"|"inhibitor"|"nexus",
+    "matchup_lane": "top"|"jungle"|"mid"|"bot"|"support"|"cross_map",
+    "champion_class": "assassin"|"bruiser"|"mage"|"marksman"|"tank"|"enchanter"|"skirmisher",
+    "game_minute_bucket": "0-5"|"5-10"|"10-15"|"15-20"|"20-25"|"25-30"|"30-35"|"35+"
 }}
 </output_format>
 <rules>
 - 1-3=routine, 4-6=interessant, 7-8=tres bon, 9-10=exceptionnel
 - description_fr: percutante mais FACTUELLE — pas d'invention
 - Si assistants present: mentionne-les dans la description (ex: "avec l'assist de Xin Zhao")
+- fight_type: regarde le nombre de champions visibles dans les 3s avant le kill. 1v1 isole = solo_kill. 2 allies + 1 ennemi isole = gank. Plus de 3 par camp = teamfight.
+- objective_context: "none" SAUF si un objectif neutre (drake/nashor/herald/atakhan) ou une tour/inhib/nexus est contestee/prise dans les 5s autour du kill
+- matchup_lane: la lane d'appartenance de la victime (top/jungle/mid/bot/support) OU "cross_map" si les 2 joueurs sont de lanes differentes
+- champion_class: classe du KILLER (pas de la victime)
+- TOUS les 6 champs structures sont OBLIGATOIRES — ne mets jamais null
 - JSON VALIDE uniquement, pas de texte avant/apres
 </rules>"""
 
@@ -195,7 +268,8 @@ async def run() -> int:
 
     kills = safe_select(
         "kills",
-        "id, killer_champion, victim_champion, is_first_blood, multi_kill, tracked_team_involvement",
+        "id, killer_champion, victim_champion, is_first_blood, multi_kill, "
+        "tracked_team_involvement, game_time_seconds, assistants, confidence",
         status="clipped",
     )
     if not kills:
@@ -212,14 +286,7 @@ async def run() -> int:
         if not result:
             continue
 
-        patch = {
-            "highlight_score": _safe_float(result.get("highlight_score")),
-            "ai_tags": result.get("tags") or [],
-            "ai_description": result.get("description_fr"),
-            "kill_visible": bool(result.get("kill_visible_on_screen", True)),
-            "caster_hype_level": _safe_int(result.get("caster_hype_level")),
-            "status": "analyzed",
-        }
+        patch = _build_analysis_patch(result, kill)
         safe_update("kills", patch, "id", kill["id"])
         analysed += 1
 
@@ -239,3 +306,47 @@ def _safe_int(v) -> int | None:
         return int(v) if v is not None else None
     except (TypeError, ValueError):
         return None
+
+
+def _enum_or_none(value, allowed: set[str]) -> str | None:
+    """Accept the Gemini value only if it belongs to the allowed enum set.
+
+    Rejecting unknown values keeps the grid axes well-formed and makes hallucination
+    visible in the logs instead of corrupting the DB.
+    """
+    if not isinstance(value, str):
+        return None
+    v = value.strip().lower()
+    return v if v in allowed else None
+
+
+def _build_analysis_patch(result: dict, kill: dict) -> dict:
+    """Combine Gemini output with deterministic fallbacks before persisting.
+
+    game_minute_bucket and lane_phase are derived server-side from
+    game_time_seconds when Gemini disagrees or omits — the livestats frame
+    timestamp is ground truth.
+    """
+    seconds = kill.get("game_time_seconds")
+    deterministic_bucket = minute_bucket_from_seconds(seconds)
+    deterministic_phase = _lane_phase_from_seconds(seconds)
+
+    gemini_bucket = _enum_or_none(result.get("game_minute_bucket"), set(MINUTE_BUCKETS))
+    gemini_phase = _enum_or_none(result.get("lane_phase"), LANE_PHASES)
+
+    return {
+        "highlight_score": _safe_float(result.get("highlight_score")),
+        "ai_tags": result.get("tags") or [],
+        "ai_description": result.get("description_fr"),
+        "kill_visible": bool(result.get("kill_visible_on_screen", True)),
+        "caster_hype_level": _safe_int(result.get("caster_hype_level")),
+        "lane_phase": deterministic_phase or gemini_phase,
+        "fight_type": _enum_or_none(result.get("fight_type"), FIGHT_TYPES),
+        "objective_context": _enum_or_none(
+            result.get("objective_context"), OBJECTIVE_CONTEXTS
+        ) or "none",
+        "matchup_lane": _enum_or_none(result.get("matchup_lane"), MATCHUP_LANES),
+        "champion_class": _enum_or_none(result.get("champion_class"), CHAMPION_CLASSES),
+        "game_minute_bucket": deterministic_bucket or gemini_bucket,
+        "status": "analyzed",
+    }

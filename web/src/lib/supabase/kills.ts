@@ -13,6 +13,43 @@
 import "server-only";
 import { createServerSupabase } from "./server";
 
+export type LanePhase = "early" | "mid" | "late";
+export type FightType =
+  | "solo_kill"
+  | "gank"
+  | "skirmish_2v2"
+  | "skirmish_3v3"
+  | "teamfight_4v4"
+  | "teamfight_5v5"
+  | "pick";
+export type ObjectiveContext =
+  | "none"
+  | "dragon"
+  | "baron"
+  | "herald"
+  | "atakhan"
+  | "tower"
+  | "inhibitor"
+  | "nexus";
+export type MatchupLane = "top" | "jungle" | "mid" | "bot" | "support" | "cross_map";
+export type ChampionClass =
+  | "assassin"
+  | "bruiser"
+  | "mage"
+  | "marksman"
+  | "tank"
+  | "enchanter"
+  | "skirmisher";
+export type MinuteBucket =
+  | "0-5"
+  | "5-10"
+  | "10-15"
+  | "15-20"
+  | "20-25"
+  | "25-30"
+  | "30-35"
+  | "35+";
+
 export interface PublishedKillRow {
   id: string;
   killer_champion: string | null;
@@ -32,6 +69,12 @@ export interface PublishedKillRow {
   is_first_blood: boolean;
   tracked_team_involvement: string | null;
   kill_visible: boolean | null;
+  lane_phase: LanePhase | null;
+  fight_type: FightType | null;
+  objective_context: ObjectiveContext | null;
+  matchup_lane: MatchupLane | null;
+  champion_class: ChampionClass | null;
+  game_minute_bucket: MinuteBucket | null;
   impression_count: number;
   comment_count: number;
   created_at: string;
@@ -67,6 +110,12 @@ const KILL_SELECT = `
   is_first_blood,
   tracked_team_involvement,
   kill_visible,
+  lane_phase,
+  fight_type,
+  objective_context,
+  matchup_lane,
+  champion_class,
+  game_minute_bucket,
   impression_count,
   comment_count,
   created_at,
@@ -125,6 +174,12 @@ function normalize(row: Record<string, unknown>): PublishedKillRow {
     is_first_blood: Boolean(row.is_first_blood),
     tracked_team_involvement: (row.tracked_team_involvement as string | null) ?? null,
     kill_visible: (row.kill_visible as boolean | null) ?? null,
+    lane_phase: (row.lane_phase as LanePhase | null) ?? null,
+    fight_type: (row.fight_type as FightType | null) ?? null,
+    objective_context: (row.objective_context as ObjectiveContext | null) ?? null,
+    matchup_lane: (row.matchup_lane as MatchupLane | null) ?? null,
+    champion_class: (row.champion_class as ChampionClass | null) ?? null,
+    game_minute_bucket: (row.game_minute_bucket as MinuteBucket | null) ?? null,
     impression_count: Number(row.impression_count ?? 0),
     comment_count: Number(row.comment_count ?? 0),
     created_at: String(row.created_at ?? ""),
