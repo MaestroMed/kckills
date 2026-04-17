@@ -1,11 +1,9 @@
-import { loadRealData, getMatchesSorted } from "@/lib/real-data";
-import { computeKillScore } from "@/lib/feed-algorithm";
+import { loadRealData } from "@/lib/real-data";
 import { getPublishedKills } from "@/lib/supabase/kills";
 import { getPublishedMoments } from "@/lib/supabase/moments";
 import {
   ScrollFeed,
   type FeedItem,
-  type AggregateFeedItem,
   type VideoFeedItem,
   type MomentFeedItem,
 } from "@/components/scroll/ScrollFeed";
@@ -63,16 +61,18 @@ export default async function ScrollPage({ searchParams }: ScrollPageProps) {
     getPublishedKills(500),
     getPublishedMoments(300),
   ]);
-  // ONLY show KC kills where the kill is actually visible in the clip
+  // ONLY show KC kills with a real clip + thumbnail + kill confirmed visible.
+  // Anything else is a broken/incomplete row that would dead-link the feed.
   const supabaseKills = allKills.filter(
-    (k) => k.tracked_team_involvement === "team_killer"
-      && k.kill_visible !== false  // exclude clips where Gemini QC confirmed kill not visible
+    (k) =>
+      k.tracked_team_involvement === "team_killer" &&
+      k.kill_visible === true &&
+      !!k.clip_url_vertical &&
+      !!k.thumbnail_url,
   );
-  const matches = getMatchesSorted(data);
 
   // ─── 2. Build the Supabase video items (real clips) ────────────────
   const videoItems: VideoFeedItem[] = supabaseKills
-    .filter((k) => k.clip_url_vertical) // defensive — already filtered server-side
     .map((k) => {
       const matchMeta = k.games?.matches;
       const matchJson = data.matches.find((m) => m.id === (matchMeta?.external_id ?? ""));
@@ -126,66 +126,15 @@ export default async function ScrollPage({ searchParams }: ScrollPageProps) {
       };
     });
 
-  // ─── 3. Build legacy aggregate items (fallback while backfill runs) ──
-  const videoMatchIds = new Set(
-    videoItems.map((v) => v.matchExternalId).filter(Boolean)
-  );
-
-  const aggregateItems: AggregateFeedItem[] = [];
-  for (const match of matches) {
-    // Skip matches that already have real clips — prevents the same match
-    // from appearing twice (once as video, once as aggregate).
-    if (videoMatchIds.has(match.id)) continue;
-
-    for (const game of match.games) {
-      for (const p of game.kc_players) {
-        if (!p.name.startsWith("KC ")) continue;
-        if (p.kills === 0 && p.assists === 0) continue;
-        const cleanName = p.name.replace("KC ", "");
-        const bestOpp = [...game.opp_players].sort((a, b) => b.deaths - a.deaths)[0] ?? null;
-        const score = computeKillScore(
-          p.kills,
-          p.deaths,
-          p.assists,
-          game.kc_kills,
-          true,
-          match.kc_won
-        );
-
-        let multiKill: string | null = null;
-        if (p.kills >= 5) multiKill = "penta";
-        else if (p.kills >= 4) multiKill = "quadra";
-        else if (p.kills >= 3) multiKill = "triple";
-        else if (p.kills >= 2) multiKill = "double";
-
-        aggregateItems.push({
-          kind: "aggregate",
-          id: `${match.id}-${game.number}-${cleanName}`,
-          kcPlayer: p,
-          oppPlayer: bestOpp,
-          match: {
-            id: match.id,
-            date: match.date,
-            stage: match.stage,
-            opponent: match.opponent,
-            kc_won: match.kc_won,
-          },
-          game: {
-            number: game.number,
-            kc_kills: game.kc_kills,
-            opp_kills: game.opp_kills,
-          },
-          isKcKiller: p.kills > 0,
-          score,
-          multiKill,
-        });
-      }
-    }
-  }
-
-  // ─── 4. Build moment items (grouped kills — new system) ──────────────
+  // ─── 3. Build moment items (grouped kills — new system) ──────────────
+  // Same strict rule: real vertical clip AND thumbnail required.
   const momentItems: MomentFeedItem[] = allMoments
-    .filter((m) => m.clip_url_vertical && m.kc_involvement !== "kc_none")
+    .filter(
+      (m) =>
+        !!m.clip_url_vertical &&
+        !!m.thumbnail_url &&
+        m.kc_involvement !== "kc_none",
+    )
     .map((m) => {
       const hl = (m.moment_score ?? 5) / 10;
       const rt = m.rating_count > 0 ? (m.avg_rating ?? 0) / 5 : 0;
@@ -220,7 +169,7 @@ export default async function ScrollPage({ searchParams }: ScrollPageProps) {
       };
     });
 
-  // ─── 5. Optional axis filter (grid → scroll zoom-in) ─────────────────
+  // ─── 4. Optional axis filter (grid → scroll zoom-in) ─────────────────
   // When the user taps a cell in the Scroll Vivant grid, we pass the Y
   // axis through as a filter so the vertical feed only contains the slice
   // they were looking at. Empty filter means "show everything".
@@ -228,29 +177,21 @@ export default async function ScrollPage({ searchParams }: ScrollPageProps) {
     ? videoItems.filter((v) => videoMatchesFilter(v, filterAxis, filterValue))
     : videoItems;
 
-  // ─── 6. Merge + weighted shuffle ─────────────────────────────────────
-  // Instead of strict score-descending (same 4 clips on top), use a
-  // weighted shuffle: higher-scored clips appear earlier but not always
-  // in the same order. This gives variety on each page load.
+  // ─── 5. Merge + weighted shuffle ─────────────────────────────────────
+  // ONLY real clips — no more aggregate splash-art placeholders. If a row
+  // doesn't have a verified clip + thumbnail, it doesn't enter the feed.
   const allClips: FeedItem[] = [
     ...momentItems,
     ...filteredVideos,
   ];
 
   // Weighted shuffle: score influences position but doesn't dictate it
-  // — unless a specific kill was requested, in which case we sort by score
-  // so the surrounding context (same axis bucket) is ranked consistently.
-  const shuffled = initialKillId
+  // — unless a specific kill was requested, in which case we sort by score.
+  const items: FeedItem[] = initialKillId
     ? [...allClips].sort((a, b) => b.score - a.score)
     : weightedShuffle(allClips);
 
-  // Aggregates only go after real clips when there's no active filter —
-  // otherwise they dilute the zoom-in slice.
-  const items: FeedItem[] = filterAxis
-    ? shuffled
-    : [...shuffled, ...aggregateItems.sort((a, b) => b.score - a.score)];
-
-  const clipCount = momentItems.length + filteredVideos.length;
+  const clipCount = items.length;
   return (
     <ScrollFeed
       items={items}

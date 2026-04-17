@@ -198,7 +198,9 @@ export async function getPublishedKills(limit = 50): Promise<PublishedKillRow[]>
       .from("kills")
       .select(KILL_SELECT)
       .eq("status", "published")
-      .not("clip_url_vertical", "is", null)
+      .eq("kill_visible", true)            // Gemini QC must have confirmed the kill is in-frame
+      .not("clip_url_vertical", "is", null) // real MP4 on R2
+      .not("thumbnail_url", "is", null)     // poster frame so the player isn't black on load
       .order("highlight_score", { ascending: false, nullsFirst: false })
       .order("created_at", { ascending: false })
       .limit(limit);

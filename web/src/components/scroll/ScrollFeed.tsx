@@ -132,6 +132,10 @@ interface SharedScrollProps {
    *  `view-transition-name` on the matching scroll item so the browser
    *  morphs the GridCell thumbnail into the full-screen video. */
   shellViewTransitionId?: string;
+  /** Called by a video item when its <video> errors out (e.g. R2 404, decode
+   *  failure). The feed removes the item so the dead clip never blocks the
+   *  scroll, and best-effort reports it to the server for cleanup. */
+  onBroken: (kind: "video" | "moment", id: string, src: string) => void;
 }
 
 export function ScrollFeed({
@@ -205,6 +209,40 @@ export function ScrollFeed({
   // ─── F2: Track current visible index for preload window ────────────
   const currentIndexRef = useRef(0);
 
+  // ─── Broken-clip auto-skip ─────────────────────────────────────────
+  // Any item whose <video> fires `error` (R2 404, decode failure, network
+  // abort) is dropped from the feed in real time AND reported to the
+  // server so we can purge the row from Supabase later.
+  const [brokenIds, setBrokenIds] = useState<Set<string>>(() => new Set());
+  const reportedRef = useRef<Set<string>>(new Set());
+  const handleBroken = (kind: "video" | "moment", id: string, src: string) => {
+    setBrokenIds((prev) => {
+      if (prev.has(id)) return prev;
+      const next = new Set(prev);
+      next.add(id);
+      return next;
+    });
+    if (reportedRef.current.has(id)) return;
+    reportedRef.current.add(id);
+    // Best-effort beacon. Never await — a broken clip must NEVER block UX.
+    try {
+      const payload = JSON.stringify({ kind, id, src });
+      if (typeof navigator !== "undefined" && "sendBeacon" in navigator) {
+        const blob = new Blob([payload], { type: "application/json" });
+        navigator.sendBeacon("/api/scroll/report-broken", blob);
+      } else {
+        fetch("/api/scroll/report-broken", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: payload,
+          keepalive: true,
+        }).catch(() => {});
+      }
+    } catch {
+      // Telemetry is fire-and-forget. Swallow.
+    }
+  };
+
   // Shared props for all video items
   const shared: SharedScrollProps = {
     muted: globalMuted,
@@ -212,7 +250,12 @@ export function ScrollFeed({
     useLowQuality,
     currentIndexRef,
     shellViewTransitionId: initialKillId,
+    onBroken: handleBroken,
   };
+
+  const visibleItems = brokenIds.size === 0
+    ? items
+    : items.filter((it) => !brokenIds.has(it.id));
 
   // ─── Swipe hint for first-time visitors ────────────────────────────
   const [showSwipeHint, setShowSwipeHint] = useState(() => {
@@ -270,18 +313,18 @@ export function ScrollFeed({
         </Link>
       </div>
 
-      {items.map((item, i) =>
+      {visibleItems.map((item, i) =>
         item.kind === "moment" ? (
-          <MomentScrollItem key={`m-${item.id}`} item={item} index={i} total={items.length} shared={shared} />
+          <MomentScrollItem key={`m-${item.id}`} item={item} index={i} total={visibleItems.length} shared={shared} />
         ) : item.kind === "video" ? (
-          <VideoScrollItem key={`v-${item.id}`} item={item} index={i} total={items.length} shared={shared} />
+          <VideoScrollItem key={`v-${item.id}`} item={item} index={i} total={visibleItems.length} shared={shared} />
         ) : (
-          <AggregateScrollItem key={`a-${item.id}-${i}`} item={item} index={i} total={items.length} />
+          <AggregateScrollItem key={`a-${item.id}-${i}`} item={item} index={i} total={visibleItems.length} />
         )
       )}
 
       {/* Swipe hint for first-time visitors */}
-      {showSwipeHint && items.length > 0 && (
+      {showSwipeHint && visibleItems.length > 0 && (
         <div className="fixed bottom-20 left-1/2 -translate-x-1/2 z-[65] pointer-events-none animate-[fadeIn_0.5s_ease-out]">
           <div className="flex flex-col items-center gap-2 text-white/60">
             <svg className="h-6 w-6 animate-bounce" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -292,7 +335,7 @@ export function ScrollFeed({
         </div>
       )}
 
-      {items.length === 0 && (
+      {visibleItems.length === 0 && (
         <div className="scroll-item flex items-center justify-center">
           <div className="text-center max-w-md px-6">
             <div className="text-6xl mb-6">{"\u2694\uFE0F"}</div>
@@ -449,6 +492,10 @@ function MomentScrollItem({ item, index, total, shared }: { item: MomentFeedItem
         poster={item.thumbnail ?? undefined}
         muted loop playsInline
         preload={index < 3 ? "auto" : "none"}
+        onError={(e) => {
+          const v = e.currentTarget;
+          shared.onBroken("moment", item.id, v.currentSrc || v.src);
+        }}
       />
 
       <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-transparent to-transparent pointer-events-none" />
@@ -709,6 +756,10 @@ function VideoScrollItem({ item, index, total, shared }: { item: VideoFeedItem; 
         poster={item.thumbnail ?? undefined}
         muted loop playsInline
         preload={index < 3 ? "auto" : "none"}
+        onError={(e) => {
+          const v = e.currentTarget;
+          shared.onBroken("video", item.id, v.currentSrc || v.src);
+        }}
       />
 
       <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-transparent to-transparent pointer-events-none" />

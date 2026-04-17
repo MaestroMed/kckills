@@ -44,6 +44,8 @@ export async function getPublishedMoments(
        created_at`
     )
     .eq("status", "published")
+    .not("clip_url_vertical", "is", null)
+    .not("thumbnail_url", "is", null)
     .order("created_at", { ascending: false })
     .limit(limit);
 
