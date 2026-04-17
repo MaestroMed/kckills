@@ -39,3 +39,35 @@ export async function getTrackedRoster(): Promise<PlayerRow[]> {
     return [];
   }
 }
+
+/**
+ * Resolve a single player by IGN (case-insensitive). Used by pages that
+ * arrive with just the slug ("Caliste") and need the UUID to drive the
+ * clip-centric ClipReel filters.
+ */
+export async function getPlayerByIgn(ign: string): Promise<PlayerRow | null> {
+  try {
+    const supabase = await createServerSupabase();
+    const { data, error } = await supabase
+      .from("players")
+      .select("id, ign, role, image_url")
+      .ilike("ign", ign)
+      .limit(1);
+    if (error) {
+      console.warn("[supabase/players] getPlayerByIgn error:", error.message);
+      return null;
+    }
+    const row = (data ?? [])[0] as Record<string, unknown> | undefined;
+    if (!row) return null;
+    return {
+      id: String(row.id ?? ""),
+      ign: String(row.ign ?? "?"),
+      role: (row.role as string | null) ?? null,
+      image_url: (row.image_url as string | null) ?? null,
+    };
+  } catch (err) {
+    rethrowIfDynamic(err);
+    console.warn("[supabase/players] getPlayerByIgn threw:", err);
+    return null;
+  }
+}

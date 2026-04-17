@@ -2,6 +2,9 @@ import { notFound } from "next/navigation";
 import { loadRealData, getPlayerStats, type RealData } from "@/lib/real-data";
 import { championSplashUrl, championLoadingUrl, championIconUrl } from "@/lib/constants";
 import { PLAYER_PHOTOS } from "@/lib/kc-assets";
+import { PortraitCubeMorph } from "@/components/PortraitCubeMorph";
+import { ClipReel } from "@/components/ClipReel";
+import { getPlayerByIgn } from "@/lib/supabase/players";
 import {
   getKillsByKillerChampion,
   type PublishedKillRow,
@@ -130,8 +133,26 @@ export default async function PlayerPage({ params }: Props) {
   const signatureChamp = stats.champions[0]?.name ?? "Jhin";
   const topChampions = stats.champions.slice(0, 8);
 
-  // Real kills from Supabase pipeline
+  // Cube-morph palette — the player's official KC photo (when known) gets
+  // top billing, then their top champion splashes morph behind. Falls back
+  // to splash-only when the photo is missing so the hero still feels alive.
+  const playerPhoto = PLAYER_PHOTOS[name];
+  const morphImages = [
+    ...(playerPhoto ? [playerPhoto] : []),
+    ...stats.champions.slice(0, 5).map((c) => championSplashUrl(c.name)),
+  ];
+  if (morphImages.length === 0) morphImages.push(championSplashUrl(signatureChamp));
+
+  // Real kills from Supabase pipeline (legacy champion-proxy path —
+  // still used as a fallback for the "champion pool" matrix below).
   const realKills = await getRealKillsForPlayer(name, stats.champions, data);
+
+  // Resolve the player's UUID once so the clip-centric ClipReel can fetch
+  // a clean slice via killer_player_id (the canonical filter, populated
+  // by worker/scripts/backfill_player_ids.py). Falls back to null if the
+  // backfill hasn't run yet — the reel then renders its empty state.
+  const playerRow = await getPlayerByIgn(name);
+  const playerId = playerRow?.id ?? null;
 
   // Best clips = highest KDA games
   const bestClips = [...stats.matchHistory]
@@ -165,18 +186,10 @@ export default async function PlayerPage({ params }: Props) {
         marginRight: "-50vw",
       }}
     >
-      {/* ═══ HERO — full-screen cinematic ═══ */}
-      <section className="relative h-[90vh] min-h-[720px] w-full overflow-hidden">
-        {/* Layer 1 (deepest) — blurred champion splash */}
-        <Image
-          src={championSplashUrl(signatureChamp)}
-          alt=""
-          fill
-          priority
-          sizes="100vw"
-          className="object-cover opacity-30 scale-105 blur-2xl"
-        />
-        {/* Layer 2 — champion loading art (always shown) */}
+      {/* ═══ HERO — full-screen cinematic with cube-portrait morph ═══ */}
+      <section className="relative h-[90vh] min-h-[720px] w-full overflow-hidden bg-[var(--bg-primary)]">
+        {/* Soft champion-art backdrop — heavily darkened so the dot-matrix
+            cubes paint themselves on top with full saturation. */}
         <Image
           src={championLoadingUrl(signatureChamp)}
           alt=""
@@ -184,19 +197,29 @@ export default async function PlayerPage({ params }: Props) {
           priority
           sizes="100vw"
           className="object-cover scale-110"
-          style={{ filter: "brightness(0.45) saturate(1.1)" }}
+          style={{ filter: "brightness(0.22) saturate(1.15)" }}
         />
-        {/* Layer 3 (top) — custom Hextech Gemini background if it exists.
-            If the file 404s, the img is invisible and the champion loading
-            art below shows through normally. No flicker, no broken icon. */}
+        {/* Optional Hextech Gemini accent — kept very subtle so it doesn't
+            fight the morph (renders as ambient depth, 404s silently). */}
         <Image
           src={customBg}
           alt=""
           fill
-          priority
           sizes="100vw"
-          className="object-cover scale-105"
-          style={{ filter: "brightness(0.85) saturate(1.1)" }}
+          className="object-cover scale-105 mix-blend-overlay"
+          style={{ filter: "brightness(0.7) saturate(1.05)", opacity: 0.55 }}
+        />
+
+        {/* Cube-portrait morph — cycles between the player's official photo
+            and their signature champion splashes, dot-matrix style. */}
+        <PortraitCubeMorph
+          images={morphImages}
+          accent="#C8AA6E"
+          cols={68}
+          aspect={9 / 16}
+          holdMs={5800}
+          morphMs={2100}
+          className="absolute inset-0 mix-blend-screen opacity-95"
         />
 
         {/* Dark vignettes */}
@@ -391,8 +414,58 @@ export default async function PlayerPage({ params }: Props) {
         </div>
       </section>
 
-      {/* ═══ REAL KILL CLIPS (from Supabase pipeline) ═══ */}
-      {realKills.length > 0 && (
+      {/* ═══ CLIP-CENTRIC REELS — driven by killer/victim_player_id ═══ */}
+      {playerId && (
+        <section className="relative max-w-7xl mx-auto px-6 py-16 space-y-12">
+          {/* Top kills BY this player */}
+          <ClipReel
+            kicker="Pipeline automatique"
+            title={`Les meilleurs kills de ${name}`}
+            subtitle="Clips où ce joueur termine l'adversaire — classés par highlight score puis rating communauté."
+            filter={{
+              killerPlayerId: playerId,
+              trackedTeamInvolvement: "team_killer",
+              minHighlight: 5,
+            }}
+            limit={9}
+            ctaHref="/scroll"
+            ctaLabel="Tout voir dans le scroll"
+            emptyState={null}
+          />
+
+          {/* Carry games — kills with first blood, multi-kill or 8+ score */}
+          <ClipReel
+            kicker="Carry mode"
+            title="Clutch & multi-kills"
+            subtitle="First Bloods, doubles+ et plays au score IA ≥ 7.5 sur ce joueur."
+            filter={{
+              killerPlayerId: playerId,
+              trackedTeamInvolvement: "team_killer",
+              minHighlight: 7.5,
+            }}
+            limit={6}
+            emptyState={null}
+          />
+
+          {/* Kills suffered — what got this player picked off */}
+          <ClipReel
+            kicker="L'envers du décor"
+            title="Kills subis"
+            subtitle="Quand l'adversaire prend l'avantage — utile pour analyser ses death patterns."
+            filter={{
+              victimPlayerId: playerId,
+              trackedTeamInvolvement: "team_victim",
+            }}
+            limit={6}
+            emptyState={null}
+          />
+        </section>
+      )}
+
+      {/* ═══ REAL KILL CLIPS (legacy champion-proxy fallback) ═══
+          Kept for backwards compatibility while the killer_player_id
+          backfill rolls out — drop once the new reels reach 100% coverage. */}
+      {!playerId && realKills.length > 0 && (
         <section className="relative max-w-7xl mx-auto px-6 py-20">
           <div className="flex items-center justify-between mb-8 flex-wrap gap-4">
             <div className="flex items-center gap-3">
