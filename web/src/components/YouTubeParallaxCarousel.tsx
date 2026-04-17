@@ -62,10 +62,13 @@ export function YouTubeParallaxCarousel({ videos }: Props) {
   // Each card occupies CARD_STEP horizontally — the actual card is a bit
   // wider so adjacent cards visually overlap, which is what gives the
   // ribbon its dense, "band of film" feel.
-  const CARD_W_VW = 56;          // viewport-relative width of one card
-  const CARD_W_MAX = 740;        // hard cap on large screens (px)
-  const STEP_RATIO = 0.66;       // step / card_width — < 1 means overlap
-  const SPEED_PX_PER_S = 26;     // hypnotic drift, gentle on the eye
+  // Tuned so a 4K viewer (3840px) gets ~3 cards visible at once with the
+  // hero card filling roughly a third of the screen — anything smaller
+  // and the ribbon stops feeling cinematic on big monitors.
+  const CARD_W_VW = 62;          // viewport-relative width of one card
+  const CARD_W_MAX = 1280;       // hard cap on large screens (px)
+  const STEP_RATIO = 0.62;       // step / card_width — < 1 means overlap
+  const SPEED_PX_PER_S = 30;     // hypnotic drift, scaled to the bigger ribbon
   const COPIES = 2;              // render the list twice → seamless loop
 
   // Duplicate the list so the loop is invisible. Keys are namespaced
@@ -232,7 +235,7 @@ export function YouTubeParallaxCarousel({ videos }: Props) {
     <>
       <div
         ref={wrapRef}
-        className="parallax-carousel relative h-[480px] md:h-[560px] lg:h-[620px] w-full overflow-hidden focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[var(--gold)] focus-visible:rounded-2xl"
+        className="parallax-carousel relative h-[520px] md:h-[680px] lg:h-[820px] xl:h-[900px] w-full overflow-hidden focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[var(--gold)] focus-visible:rounded-2xl"
         style={{
           perspective: reducedMotion ? "none" : "1800px",
           perspectiveOrigin: "50% 60%",
