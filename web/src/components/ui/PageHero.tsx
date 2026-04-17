@@ -266,7 +266,7 @@ export function PageHero({
           aria-hidden
         >
           <span className="text-[10px] uppercase tracking-[0.3em]">
-            {typeof scrollHint === "string" ? scrollHint : "D\u00e9rouler"}
+            {typeof scrollHint === "string" ? scrollHint : "Dérouler"}
           </span>
           <svg
             className="h-4 w-4 animate-bounce motion-reduce:animate-none"

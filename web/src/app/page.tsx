@@ -6,7 +6,7 @@ import { PLAYER_PHOTOS, TEAM_LOGOS, KC_LOGO } from "@/lib/kc-assets";
 import { getPublishedKills } from "@/lib/supabase/kills";
 import { AudioPlayer } from "@/components/AudioPlayer";
 import { HomeFilteredContent } from "@/components/HomeFilteredContent";
-import { HomeClipsShowcase } from "@/components/HomeClipsShowcase";
+import { HomeYouTubeShowcase } from "@/components/HomeYouTubeShowcase";
 import { KillOfTheWeek } from "@/components/KillOfTheWeek";
 import { QuoteCard } from "@/components/QuoteCard";
 import { QUOTES } from "@/lib/quotes";
@@ -404,10 +404,13 @@ export default async function HomePage() {
                   {photo ? (
                     <Image src={photo} alt={player.name} fill className="object-cover object-top transition-all duration-700 group-hover:scale-105 group-hover:brightness-110" />
                   ) : (
-                    <>
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={championSplashUrl(champ)} alt="" className="absolute inset-0 w-full h-full object-cover opacity-40 transition-all duration-700 group-hover:scale-110 group-hover:opacity-60" />
-                    </>
+                    <Image
+                      src={championSplashUrl(champ)}
+                      alt=""
+                      fill
+                      sizes="(max-width: 768px) 100vw, 20vw"
+                      className="object-cover opacity-40 transition-all duration-700 group-hover:scale-110 group-hover:opacity-60"
+                    />
                   )}
 
                   {/* Gradient */}
@@ -484,8 +487,8 @@ export default async function HomePage() {
       {/* ═══ KILL OF THE WEEK ═══════════════════════════════════════════ */}
       <KillOfTheWeek />
 
-      {/* ═══ HIGHLIGHTS CLIPS SHOWCASE (real YouTube clips) ═══════════════ */}
-      <HomeClipsShowcase />
+      {/* ═══ YOUTUBE PARALLAX SHOWCASE (RSS-driven 3D carousel) ═══════════ */}
+      <HomeYouTubeShowcase />
 
       {/* ═══ ERA COMPARISON CHARTS ═══════════════════════════════════════ */}
       {(() => {
@@ -546,8 +549,13 @@ export default async function HomePage() {
         const bgChamp = match.games[0]?.kc_players?.find(p => p.name.startsWith("KC "))?.champion ?? "Jhin";
         return (
           <section className="relative overflow-hidden py-8">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={championSplashUrl(bgChamp)} alt="" className="absolute inset-0 w-full h-full object-cover opacity-[0.04]" />
+            <Image
+              src={championSplashUrl(bgChamp)}
+              alt=""
+              fill
+              sizes="100vw"
+              className="object-cover opacity-[0.04]"
+            />
             <div className="relative z-10 px-4 max-w-7xl mx-auto space-y-4">
               <h2 className="font-display text-xl font-bold">
                 Dernier <span className="text-gold-gradient">match</span>

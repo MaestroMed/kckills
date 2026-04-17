@@ -65,11 +65,12 @@ export function HomeFilteredContent({ allMatches }: Props) {
                   style={{ aspectRatio: "4/3" }}
                 >
                   {/* Splash bg */}
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
+                  <Image
                     src={championSplashUrl(bgChamp)}
                     alt=""
-                    className="absolute inset-0 w-full h-full object-cover opacity-25 group-hover:opacity-50 group-hover:scale-110 transition-all duration-700"
+                    fill
+                    sizes="(max-width: 768px) 100vw, 33vw"
+                    className="object-cover opacity-25 group-hover:opacity-50 group-hover:scale-110 transition-all duration-700"
                   />
                   {/* Gradient */}
                   <div className="absolute inset-0 bg-gradient-to-t from-black via-black/60 to-black/30" />
