@@ -15,35 +15,41 @@ interface Props {
 }
 
 /**
- * Cover-Flow inspired 3D parallax carousel for the homepage YouTube
- * showcase. Cards live on a horizontal track with deep CSS perspective:
- * the centre card sits flat and full-size, neighbours rotate away on
- * the Y axis and scale down — Apple Music's "Featured" rail in spirit.
+ * Cinematic YouTube ribbon — a slowly-drifting band of oversized cards
+ * with deep 3D parallax. Inspired by Apple TV's hero rail and Cover Flow.
  *
- * Interaction model:
- *  - Mouse / touch drag scrubs the active index.
- *  - Wheel: horizontal trackpad swipes nudge by ±1.
- *  - Keyboard: ←/→ arrows and Home/End once the carousel has focus.
- *  - Tap a side card to jump to it; tap the centre card to play.
+ * The track auto-scrolls right-to-left at a hypnotic pace; pointer hover,
+ * keyboard focus, or an active drag all pause the drift instantly. Each
+ * card's rotation, depth, and saturation update every frame from its
+ * live screen-space position so the parallax follows the gesture rather
+ * than a snap index.
  *
- * Playback opens YouTube's privacy-friendly nocookie embed in a
- * full-screen lightbox so users never leave the site. Esc / overlay
- * tap closes.
+ * The video list is rendered twice back-to-back so the ribbon loops
+ * seamlessly — when the cumulative offset reaches one cycle width we
+ * subtract it and the user never sees a jump.
  *
- * Honors `prefers-reduced-motion` by collapsing the 3D transforms to a
- * flat snap-rail.
+ * Honors `prefers-reduced-motion` by freezing the auto-drift and
+ * collapsing the per-card transforms.
  */
 export function YouTubeParallaxCarousel({ videos }: Props) {
+  const wrapRef = useRef<HTMLDivElement | null>(null);
   const trackRef = useRef<HTMLDivElement | null>(null);
-  const [active, setActive] = useState(0);
+  const cardRefs = useRef<Array<HTMLElement | null>>([]);
+
+  // Position is the cumulative px offset of the track. We keep it in a
+  // ref to avoid re-rendering at 60Hz — instead we mutate inline styles
+  // on the DOM nodes directly inside the rAF loop.
+  const positionRef = useRef(0);
+  const dragStateRef = useRef<{
+    pointerId: number;
+    startX: number;
+    startPos: number;
+    moved: boolean;
+  } | null>(null);
+
+  const [paused, setPaused] = useState(false);
   const [reducedMotion, setReducedMotion] = useState(false);
   const [playing, setPlaying] = useState<ScoredVideo | null>(null);
-  const dragStateRef = useRef<{
-    startX: number;
-    startActive: number;
-    cardWidth: number;
-  } | null>(null);
-  const [dragOffset, setDragOffset] = useState(0);
 
   useEffect(() => {
     const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
@@ -53,104 +59,166 @@ export function YouTubeParallaxCarousel({ videos }: Props) {
     return () => mq.removeEventListener("change", h);
   }, []);
 
-  // Clamp & wrap helpers — we don't loop but we do clamp so swiping past
-  // the edge feels rubbery rather than dead.
-  const goTo = useCallback(
-    (i: number) => {
-      const clamped = Math.max(0, Math.min(videos.length - 1, i));
-      setActive(clamped);
-    },
-    [videos.length],
-  );
+  // Each card occupies CARD_STEP horizontally — the actual card is a bit
+  // wider so adjacent cards visually overlap, which is what gives the
+  // ribbon its dense, "band of film" feel.
+  const CARD_W_VW = 56;          // viewport-relative width of one card
+  const CARD_W_MAX = 740;        // hard cap on large screens (px)
+  const STEP_RATIO = 0.66;       // step / card_width — < 1 means overlap
+  const SPEED_PX_PER_S = 26;     // hypnotic drift, gentle on the eye
+  const COPIES = 2;              // render the list twice → seamless loop
 
-  // ── Pointer drag (mouse + touch share PointerEvent) ────────────────
-  const onPointerDown = (e: React.PointerEvent) => {
-    if (!trackRef.current) return;
-    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-    const cardW = trackRef.current.clientWidth / 4; // approx — see render math
-    dragStateRef.current = {
-      startX: e.clientX,
-      startActive: active,
-      cardWidth: cardW,
-    };
-    setDragOffset(0);
-  };
-
-  const onPointerMove = (e: React.PointerEvent) => {
-    const s = dragStateRef.current;
-    if (!s) return;
-    const dx = e.clientX - s.startX;
-    setDragOffset(dx);
-  };
-
-  const onPointerUp = (e: React.PointerEvent) => {
-    const s = dragStateRef.current;
-    if (!s) return;
-    (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
-    const dx = e.clientX - s.startX;
-    const stepThreshold = Math.max(40, s.cardWidth * 0.25);
-    const steps = Math.round(-dx / stepThreshold);
-    if (steps !== 0) goTo(s.startActive + steps);
-    dragStateRef.current = null;
-    setDragOffset(0);
-  };
-
-  // ── Wheel (trackpad horizontal scroll) ──────────────────────────────
-  const wheelAccum = useRef({ x: 0, t: 0 });
-  const onWheel = useCallback(
-    (e: React.WheelEvent) => {
-      // Only respond to dominant horizontal scrolls so the carousel
-      // doesn't hijack page scrolling.
-      if (Math.abs(e.deltaX) < Math.abs(e.deltaY)) return;
-      e.preventDefault();
-      const now = Date.now();
-      if (now - wheelAccum.current.t > 200) wheelAccum.current.x = 0;
-      wheelAccum.current.t = now;
-      wheelAccum.current.x += e.deltaX;
-      if (Math.abs(wheelAccum.current.x) > 60) {
-        goTo(active + (wheelAccum.current.x > 0 ? 1 : -1));
-        wheelAccum.current.x = 0;
-      }
-    },
-    [active, goTo],
-  );
-
-  // ── Keyboard ─────────────────────────────────────────────────────────
-  useEffect(() => {
-    const el = trackRef.current;
-    if (!el) return;
-    const h = (e: KeyboardEvent) => {
-      if (!el.contains(document.activeElement) && document.activeElement !== el) return;
-      if (e.key === "ArrowRight") {
-        e.preventDefault();
-        goTo(active + 1);
-      } else if (e.key === "ArrowLeft") {
-        e.preventDefault();
-        goTo(active - 1);
-      } else if (e.key === "Home") {
-        e.preventDefault();
-        goTo(0);
-      } else if (e.key === "End") {
-        e.preventDefault();
-        goTo(videos.length - 1);
-      } else if ((e.key === "Enter" || e.key === " ") && videos[active]) {
-        e.preventDefault();
-        setPlaying(videos[active]);
-      }
-    };
-    window.addEventListener("keydown", h);
-    return () => window.removeEventListener("keydown", h);
-  }, [active, goTo, videos]);
-
-  // ── Card geometry ────────────────────────────────────────────────────
-  const cards = useMemo(
+  // Duplicate the list so the loop is invisible. Keys are namespaced
+  // with the copy index so React doesn't reuse DOM nodes across copies.
+  const ribbon = useMemo(
     () =>
-      videos.map((v, i) => {
-        const offset = i - active;
-        return { v, i, offset };
-      }),
-    [videos, active],
+      Array.from({ length: COPIES }, (_, copy) =>
+        videos.map((v, i) => ({ v, key: `${copy}-${v.videoId}-${i}`, copy, i })),
+      ).flat(),
+    [videos],
   );
+
+  // ── Animation loop ──────────────────────────────────────────────────
+  useEffect(() => {
+    if (videos.length === 0) return;
+    let raf = 0;
+    let last = performance.now();
+    let running = true;
+
+    const tick = (now: number) => {
+      if (!running) return;
+      const dt = Math.min(64, now - last); // cap dt so a tab-switch doesn't fling the ribbon
+      last = now;
+
+      const wrap = wrapRef.current;
+      const track = trackRef.current;
+      if (!wrap || !track) {
+        raf = requestAnimationFrame(tick);
+        return;
+      }
+
+      const cardWidth = Math.min((wrap.clientWidth * CARD_W_VW) / 100, CARD_W_MAX);
+      const step = cardWidth * STEP_RATIO;
+      const cycleWidth = step * videos.length;
+
+      const moving = !paused && !dragStateRef.current && !reducedMotion;
+      if (moving) {
+        positionRef.current += (SPEED_PX_PER_S * dt) / 1000;
+      }
+
+      // Wrap the cumulative offset back into [0, cycleWidth) so the
+      // second copy of the array cleanly covers what the first copy left.
+      if (positionRef.current >= cycleWidth) positionRef.current -= cycleWidth;
+      if (positionRef.current < 0) positionRef.current += cycleWidth;
+
+      track.style.transform = `translate3d(${-positionRef.current}px, 0, 0)`;
+
+      // Per-card 3D transform — re-computed every frame so the parallax
+      // tracks the ribbon's current position smoothly, not in snap steps.
+      const wrapRect = wrap.getBoundingClientRect();
+      const wrapCenter = wrapRect.left + wrapRect.width / 2;
+      const halfRange = wrapRect.width * 0.55; // distance at which a card is fully tilted
+
+      for (let idx = 0; idx < cardRefs.current.length; idx += 1) {
+        const el = cardRefs.current[idx];
+        if (!el) continue;
+        const r = el.getBoundingClientRect();
+        const cardCenter = r.left + r.width / 2;
+        const offsetN = (cardCenter - wrapCenter) / halfRange; // -1 to 1 across the screen
+        const clamped = Math.max(-1.6, Math.min(1.6, offsetN));
+        const abs = Math.abs(clamped);
+
+        if (reducedMotion) {
+          el.style.transform = "none";
+          el.style.filter = "none";
+          el.style.opacity = abs > 1.4 ? "0" : "1";
+          el.style.zIndex = `${100 - Math.round(abs * 10)}`;
+          continue;
+        }
+
+        const rotateY = -clamped * 24;          // ±24° at the screen edges
+        const translateZ = -abs * 160;          // pushes side cards back
+        const scale = 1 - abs * 0.1;            // gentle scale-down
+        const baseTilt = 4;                     // baseline forward tilt for the whole ribbon
+        el.style.transform = `translateZ(${translateZ}px) rotateY(${rotateY}deg) rotateX(${baseTilt - abs * 2}deg) scale(${scale})`;
+        el.style.opacity = String(Math.max(0, 1 - abs * 0.42));
+        el.style.filter = `saturate(${Math.max(0.55, 1 - abs * 0.28)}) brightness(${Math.max(0.65, 1 - abs * 0.18)})`;
+        el.style.zIndex = `${200 - Math.round(abs * 50)}`;
+      }
+
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+
+    const onVis = () => {
+      if (document.hidden) {
+        running = false;
+        cancelAnimationFrame(raf);
+      } else if (!running) {
+        running = true;
+        last = performance.now();
+        raf = requestAnimationFrame(tick);
+      }
+    };
+    document.addEventListener("visibilitychange", onVis);
+
+    return () => {
+      running = false;
+      cancelAnimationFrame(raf);
+      document.removeEventListener("visibilitychange", onVis);
+    };
+  }, [videos.length, paused, reducedMotion]);
+
+  // ── Drag (pointer) ──────────────────────────────────────────────────
+  const onPointerDown = useCallback((e: React.PointerEvent) => {
+    if (e.button !== undefined && e.button !== 0) return;
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    dragStateRef.current = {
+      pointerId: e.pointerId,
+      startX: e.clientX,
+      startPos: positionRef.current,
+      moved: false,
+    };
+  }, []);
+
+  const onPointerMove = useCallback((e: React.PointerEvent) => {
+    const s = dragStateRef.current;
+    if (!s || e.pointerId !== s.pointerId) return;
+    const dx = e.clientX - s.startX;
+    if (Math.abs(dx) > 6) s.moved = true;
+    positionRef.current = s.startPos - dx;
+  }, []);
+
+  const onPointerUp = useCallback((e: React.PointerEvent) => {
+    const s = dragStateRef.current;
+    if (!s || e.pointerId !== s.pointerId) return;
+    try {
+      (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
+    } catch {
+      // pointerId already released — ignore
+    }
+    dragStateRef.current = null;
+  }, []);
+
+  // Manual nudge buttons jump the position by ~one card. We cancel any
+  // ongoing drag so the click feels deterministic.
+  const nudge = useCallback(
+    (direction: 1 | -1) => {
+      const wrap = wrapRef.current;
+      if (!wrap) return;
+      const cardWidth = Math.min((wrap.clientWidth * CARD_W_VW) / 100, CARD_W_MAX);
+      const step = cardWidth * STEP_RATIO;
+      positionRef.current += direction * step;
+    },
+    [],
+  );
+
+  // Open the lightbox unless the click was actually a drag.
+  const handleCardClick = (v: ScoredVideo) => {
+    const s = dragStateRef.current;
+    if (s && s.moved) return; // suppress click after a real drag
+    setPlaying(v);
+  };
 
   if (videos.length === 0) {
     return (
@@ -160,225 +228,214 @@ export function YouTubeParallaxCarousel({ videos }: Props) {
     );
   }
 
-  // We pre-compute the px offset of the "drag glide" so the centre slug
-  // tracks the finger 1:1 even before the snap commits.
-  const dragPx = dragOffset;
-
   return (
     <>
       <div
-        ref={trackRef}
-        tabIndex={0}
-        role="listbox"
-        aria-label="Vidéos YouTube Karmine Corp"
-        onWheel={onWheel}
+        ref={wrapRef}
+        className="parallax-carousel relative h-[480px] md:h-[560px] lg:h-[620px] w-full overflow-hidden focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[var(--gold)] focus-visible:rounded-2xl"
+        style={{
+          perspective: reducedMotion ? "none" : "1800px",
+          perspectiveOrigin: "50% 60%",
+          touchAction: "pan-y",
+        }}
+        onMouseEnter={() => setPaused(true)}
+        onMouseLeave={() => setPaused(false)}
+        onFocus={() => setPaused(true)}
+        onBlur={() => setPaused(false)}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
         onPointerCancel={onPointerUp}
-        className="parallax-carousel relative h-[420px] md:h-[480px] w-full select-none overflow-visible focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[var(--gold)] focus-visible:rounded-2xl"
-        style={{
-          perspective: reducedMotion ? "none" : "1400px",
-          perspectiveOrigin: "50% 55%",
-          touchAction: "pan-y",
-          cursor: dragStateRef.current ? "grabbing" : "grab",
-        }}
       >
-        {cards.map(({ v, i, offset }) => {
-          const abs = Math.abs(offset);
-          const visible = abs <= 4; // render up to 4 cards each side
-          if (!visible) return null;
-
-          // Translate by index offset, plus the live drag delta on the
-          // active card so the gesture feels glued to the finger.
-          const translateX = reducedMotion
-            ? offset * 280
-            : offset * 220 + (offset === 0 ? dragPx : dragPx * 0.4);
-
-          // Cards farther from center push back in Z and rotate away.
-          const rotateY = reducedMotion ? 0 : Math.max(-55, Math.min(55, -offset * 22));
-          const translateZ = reducedMotion ? 0 : -abs * 110;
-          const scale = reducedMotion ? (offset === 0 ? 1 : 0.92) : Math.max(0.55, 1 - abs * 0.12);
-          const opacity = abs <= 1 ? 1 : Math.max(0.2, 1 - abs * 0.22);
-          const zIndex = 100 - abs;
-
-          return (
-            <button
-              key={v.videoId}
-              type="button"
-              role="option"
-              aria-selected={offset === 0}
-              aria-label={`${v.title} — chaîne ${v.channel.name}`}
-              tabIndex={offset === 0 ? 0 : -1}
-              onClick={() => {
-                if (offset === 0) {
-                  setPlaying(v);
-                } else {
-                  goTo(i);
-                }
-              }}
-              className="parallax-card absolute left-1/2 top-1/2 origin-center will-change-transform"
-              style={{
-                width: "min(72vw, 640px)",
-                height: "min(40.5vw, 360px)", // 16:9 of width
-                transform: `translate3d(calc(-50% + ${translateX}px), -50%, ${translateZ}px) rotateY(${rotateY}deg) scale(${scale})`,
-                opacity,
-                zIndex,
-                transition: dragStateRef.current
-                  ? "none"
-                  : "transform 700ms cubic-bezier(0.16, 1, 0.3, 1), opacity 500ms ease",
-                pointerEvents: abs <= 2 ? "auto" : "none",
-                filter: offset === 0 ? "none" : `saturate(${Math.max(0.5, 1 - abs * 0.18)}) brightness(${Math.max(0.6, 1 - abs * 0.12)})`,
-              }}
-            >
+        {/* Track wrapper — the global translateX is applied here on every
+            animation frame so React doesn't re-render. */}
+        <div
+          ref={trackRef}
+          className="absolute top-1/2 left-0 -translate-y-1/2"
+          style={{
+            transformStyle: "preserve-3d",
+            willChange: "transform",
+            cursor: dragStateRef.current ? "grabbing" : "grab",
+          }}
+        >
+          {ribbon.map(({ v, key, i }, idx) => {
+            const cardWidthCss = `min(${CARD_W_VW}vw, ${CARD_W_MAX}px)`;
+            const cardHeightCss = `min(${CARD_W_VW * 0.5625}vw, ${CARD_W_MAX * 0.5625}px)`;
+            // Each card is positioned along the track via `left = idx * step`.
+            // The step is calculated in the same units (vw + px clamp) to
+            // stay perfectly aligned with the per-card width.
+            const leftCss = `calc((${cardWidthCss}) * ${STEP_RATIO} * ${idx})`;
+            return (
               <article
-                className="relative h-full w-full overflow-hidden rounded-3xl border bg-black shadow-[0_30px_80px_rgba(0,0,0,0.55)]"
-                style={{
-                  borderColor: offset === 0 ? `${v.channel.color ?? "#C8AA6E"}80` : "rgba(255,255,255,0.08)",
-                  boxShadow:
-                    offset === 0
-                      ? `0 30px 90px ${v.channel.color ?? "#C8AA6E"}30, 0 0 0 1px ${v.channel.color ?? "#C8AA6E"}55`
-                      : undefined,
+                key={key}
+                ref={(el) => {
+                  cardRefs.current[idx] = el;
                 }}
+                className="parallax-card absolute top-1/2 -translate-y-1/2 will-change-transform"
+                style={{
+                  left: leftCss,
+                  width: cardWidthCss,
+                  transformStyle: "preserve-3d",
+                  transition: dragStateRef.current
+                    ? "none"
+                    : "transform 60ms linear, filter 220ms ease, opacity 220ms ease",
+                }}
+                aria-roledescription="slide"
+                aria-label={`${v.title} — chaîne ${v.channel.name}`}
               >
-                <Image
-                  src={v.thumbnailUrl}
-                  alt=""
-                  fill
-                  sizes="(max-width: 768px) 72vw, 640px"
-                  priority={abs <= 1}
-                  className="object-cover"
-                />
-                {/* Cinematic gradient stack — keeps the title legible while
-                    letting the YouTube thumb breathe through. */}
-                <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/35 to-transparent" />
-                <div
-                  className="absolute inset-0 mix-blend-overlay opacity-30"
-                  style={{
-                    background: `radial-gradient(circle at 50% 35%, ${v.channel.color ?? "#C8AA6E"}40 0%, transparent 70%)`,
-                  }}
-                />
+                {/* Title perched above the frame — always visible, not just
+                    on hover. Subtle but legible. */}
+                <header className="mb-3 px-1">
+                  <p
+                    className="font-data text-[10px] uppercase tracking-[0.25em] mb-1"
+                    style={{ color: v.channel.color ?? "#C8AA6E" }}
+                  >
+                    {v.channel.name} · {formatRelative(v.publishedAt)}
+                  </p>
+                  <h3
+                    className="font-display text-lg md:text-xl font-bold leading-tight text-white drop-shadow line-clamp-2"
+                    style={{ textShadow: "0 2px 14px rgba(0,0,0,0.8)" }}
+                  >
+                    {v.title}
+                  </h3>
+                </header>
 
-                {/* Top-left: channel pill */}
-                <div className="absolute top-4 left-4 z-10 flex items-center gap-2">
+                {/* The frame itself — clickable, glowing accent border. */}
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleCardClick(v);
+                  }}
+                  aria-label={`Lire ${v.title}`}
+                  className="group relative block w-full overflow-hidden rounded-3xl border bg-black shadow-[0_40px_120px_rgba(0,0,0,0.7)]"
+                  style={{
+                    height: cardHeightCss,
+                    borderColor: `${v.channel.color ?? "#C8AA6E"}55`,
+                    boxShadow: `0 30px 90px rgba(0,0,0,0.55), 0 0 0 1px ${v.channel.color ?? "#C8AA6E"}30, 0 0 60px ${v.channel.color ?? "#C8AA6E"}18`,
+                  }}
+                >
+                  <Image
+                    src={v.thumbnailUrl}
+                    alt=""
+                    fill
+                    sizes="(max-width: 768px) 60vw, 740px"
+                    className="object-cover transition-transform duration-700 group-hover:scale-[1.03]"
+                  />
+                  {/* Accent gradient for warmth on the channel colour. */}
+                  <div
+                    className="absolute inset-0 mix-blend-overlay opacity-25"
+                    style={{
+                      background: `radial-gradient(circle at 50% 30%, ${v.channel.color ?? "#C8AA6E"}55 0%, transparent 70%)`,
+                    }}
+                  />
+                  {/* Bottom darken so the views pill stays legible. */}
+                  <div className="absolute inset-x-0 bottom-0 h-32 bg-gradient-to-t from-black/85 via-black/35 to-transparent" />
+
+                  {/* Channel pill — top-left, redundant with the header but
+                      reinforces the brand at a glance. */}
                   <span
-                    className="rounded-full border bg-black/55 backdrop-blur-md px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.18em]"
+                    className="absolute top-4 left-4 rounded-full border bg-black/55 backdrop-blur-md px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.2em]"
                     style={{
                       color: v.channel.color ?? "#C8AA6E",
-                      borderColor: `${v.channel.color ?? "#C8AA6E"}55`,
+                      borderColor: `${v.channel.color ?? "#C8AA6E"}60`,
                     }}
                   >
                     {v.channel.name}
                   </span>
-                </div>
 
-                {/* Top-right: relative date */}
-                <div className="absolute top-4 right-4 z-10">
-                  <span className="rounded-full bg-black/50 backdrop-blur-md px-3 py-1.5 text-[10px] font-data tracking-wider text-white/70">
-                    {formatRelative(v.publishedAt)}
-                  </span>
-                </div>
-
-                {/* Centred play affordance — only on the active card */}
-                {offset === 0 && (
-                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                  {/* Centred play affordance with a soft ring of accent. */}
+                  <span
+                    className="absolute inset-0 flex items-center justify-center pointer-events-none"
+                    aria-hidden
+                  >
                     <span
-                      className="flex h-20 w-20 items-center justify-center rounded-full backdrop-blur-md transition-transform duration-300 group-hover:scale-110"
+                      className="flex h-20 w-20 md:h-24 md:w-24 items-center justify-center rounded-full backdrop-blur-md transition-transform duration-300 group-hover:scale-110"
                       style={{
-                        backgroundColor: `${v.channel.color ?? "#C8AA6E"}30`,
+                        backgroundColor: `${v.channel.color ?? "#C8AA6E"}28`,
                         border: `2px solid ${v.channel.color ?? "#C8AA6E"}90`,
-                        boxShadow: `0 0 40px ${v.channel.color ?? "#C8AA6E"}60`,
+                        boxShadow: `0 0 50px ${v.channel.color ?? "#C8AA6E"}55`,
                       }}
                     >
                       <svg
-                        className="h-7 w-7 translate-x-0.5 text-white"
+                        className="h-8 w-8 md:h-10 md:w-10 translate-x-0.5 text-white"
                         fill="currentColor"
                         viewBox="0 0 24 24"
                       >
                         <path d="M8 5v14l11-7z" />
                       </svg>
                     </span>
+                  </span>
+
+                  {/* Bottom row — views & date pills. */}
+                  <div className="absolute inset-x-5 bottom-5 flex items-end justify-between gap-3">
+                    <span className="rounded-full bg-black/55 backdrop-blur-md px-3 py-1.5 text-[10px] font-data uppercase tracking-[0.18em] text-white/75">
+                      {v.views !== null ? formatViews(v.views) : v.channel.tagline ?? ""}
+                    </span>
+                    <span className="rounded-full bg-black/55 backdrop-blur-md px-3 py-1.5 text-[10px] font-data tracking-wider text-white/70">
+                      {formatRelative(v.publishedAt)}
+                    </span>
                   </div>
-                )}
-
-                {/* Bottom: title + meta */}
-                <div className="absolute inset-x-0 bottom-0 z-10 p-5 md:p-6">
-                  <p
-                    className="font-display text-base md:text-lg font-bold leading-tight text-white drop-shadow-lg line-clamp-2"
-                    style={{ textShadow: "0 2px 14px rgba(0,0,0,0.85)" }}
-                  >
-                    {v.title}
-                  </p>
-                  {(v.views !== null || v.channel.tagline) && (
-                    <p className="mt-2 text-[11px] font-data uppercase tracking-[0.18em] text-white/60">
-                      {v.views !== null ? formatViews(v.views) : v.channel.tagline}
-                    </p>
-                  )}
-                </div>
+                </button>
               </article>
-            </button>
-          );
-        })}
+            );
+          })}
+        </div>
 
-        {/* Side fade masks so far cards bleed off rather than getting clipped */}
+        {/* Edge fade masks so cards bleed off rather than getting clipped. */}
         <div
           aria-hidden
-          className="pointer-events-none absolute inset-y-0 left-0 w-24 md:w-40 z-[200]"
+          className="pointer-events-none absolute inset-y-0 left-0 w-32 md:w-56 z-[300]"
           style={{
-            background:
-              "linear-gradient(to right, var(--bg-primary) 0%, transparent 100%)",
+            background: "linear-gradient(to right, var(--bg-primary) 0%, transparent 100%)",
           }}
         />
         <div
           aria-hidden
-          className="pointer-events-none absolute inset-y-0 right-0 w-24 md:w-40 z-[200]"
+          className="pointer-events-none absolute inset-y-0 right-0 w-32 md:w-56 z-[300]"
           style={{
-            background:
-              "linear-gradient(to left, var(--bg-primary) 0%, transparent 100%)",
+            background: "linear-gradient(to left, var(--bg-primary) 0%, transparent 100%)",
           }}
         />
-      </div>
 
-      {/* Indicator + manual nav under the rail */}
-      <div className="mt-6 flex items-center justify-center gap-4">
+        {/* Manual nudge buttons — overlay style, only visible on hover/focus. */}
         <button
           type="button"
-          onClick={() => goTo(active - 1)}
-          disabled={active === 0}
-          aria-label="Vidéo précédente"
-          className="flex h-10 w-10 items-center justify-center rounded-full border border-[var(--border-gold)] bg-[var(--bg-surface)] text-[var(--gold)] transition-all hover:bg-[var(--bg-elevated)] disabled:opacity-30 disabled:cursor-not-allowed"
+          onClick={() => nudge(-1)}
+          aria-label="Reculer"
+          className="group absolute left-4 md:left-10 top-1/2 -translate-y-1/2 z-[310] flex h-12 w-12 items-center justify-center rounded-full border border-white/15 bg-black/40 backdrop-blur-md text-white opacity-0 transition-all hover:bg-black/70 hover:scale-110 focus-visible:opacity-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--gold)]"
+          style={{ animation: "none" }}
+          onMouseEnter={(e) => (e.currentTarget.style.opacity = "1")}
+          onMouseLeave={(e) => (e.currentTarget.style.opacity = "0")}
         >
-          <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7" />
           </svg>
         </button>
-        <div className="flex items-center gap-1.5">
-          {videos.map((v, i) => (
-            <button
-              key={v.videoId}
-              type="button"
-              onClick={() => goTo(i)}
-              aria-label={`Aller à la vidéo ${i + 1}`}
-              className="h-1.5 rounded-full transition-all duration-300"
-              style={{
-                width: i === active ? 28 : 8,
-                backgroundColor:
-                  i === active ? v.channel.color ?? "#C8AA6E" : "rgba(255,255,255,0.25)",
-              }}
-            />
-          ))}
-        </div>
         <button
           type="button"
-          onClick={() => goTo(active + 1)}
-          disabled={active === videos.length - 1}
-          aria-label="Vidéo suivante"
-          className="flex h-10 w-10 items-center justify-center rounded-full border border-[var(--border-gold)] bg-[var(--bg-surface)] text-[var(--gold)] transition-all hover:bg-[var(--bg-elevated)] disabled:opacity-30 disabled:cursor-not-allowed"
+          onClick={() => nudge(1)}
+          aria-label="Avancer"
+          className="group absolute right-4 md:right-10 top-1/2 -translate-y-1/2 z-[310] flex h-12 w-12 items-center justify-center rounded-full border border-white/15 bg-black/40 backdrop-blur-md text-white opacity-0 transition-all hover:bg-black/70 hover:scale-110 focus-visible:opacity-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--gold)]"
+          onMouseEnter={(e) => (e.currentTarget.style.opacity = "1")}
+          onMouseLeave={(e) => (e.currentTarget.style.opacity = "0")}
         >
-          <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
           </svg>
         </button>
+
+        {/* Tiny "drift" indicator + paused state — discreet bottom-right hint. */}
+        <div className="absolute bottom-4 right-6 z-[310] flex items-center gap-2 text-[10px] font-data uppercase tracking-[0.25em] text-white/35">
+          <span
+            className="h-1.5 w-1.5 rounded-full transition-colors duration-300"
+            style={{
+              backgroundColor: paused ? "var(--gold)" : "rgba(255,255,255,0.3)",
+              boxShadow: paused ? "0 0 10px var(--gold)" : "none",
+            }}
+          />
+          {paused ? "En pause" : "Lecture continue"}
+        </div>
       </div>
 
       {playing && (
@@ -394,7 +451,7 @@ function formatRelative(iso: string): string {
   const t = Date.parse(iso);
   if (Number.isNaN(t)) return "";
   const days = (Date.now() - t) / (1000 * 60 * 60 * 24);
-  if (days < 1) return "Aujourd\u2019hui";
+  if (days < 1) return "Aujourd'hui";
   if (days < 2) return "Hier";
   if (days < 7) return `Il y a ${Math.floor(days)} j`;
   if (days < 30) return `Il y a ${Math.floor(days / 7)} sem`;
@@ -434,7 +491,7 @@ function YouTubeLightbox({
       role="dialog"
       aria-modal="true"
       aria-label={video.title}
-      className="fixed inset-0 z-[200] flex items-center justify-center bg-black/90 backdrop-blur-md p-4"
+      className="fixed inset-0 z-[400] flex items-center justify-center bg-black/90 backdrop-blur-md p-4"
       onClick={onClose}
     >
       <div
