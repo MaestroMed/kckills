@@ -108,7 +108,11 @@ export default async function SpherePage() {
           <span className="text-white/20">·</span>
           <span>Scroll : zoom</span>
           <span className="text-white/20">·</span>
-          <span>Click : ouvrir le kill</span>
+          <span>Click : ouvrir</span>
+          <span className="text-white/20">·</span>
+          <span>1-5 : axes</span>
+          <span className="text-white/20">·</span>
+          <span>Esc : reset filtre</span>
         </div>
       </header>
 

@@ -93,7 +93,9 @@ export function SphereScene({
       <pointLight position={[0, 0, 0]} intensity={0.8} />
       {/* OrbitControls inverted so dragging rotates the WORLD (not the
           camera around the world) — that's how an inside-out sphere
-          should feel from the centre. */}
+          should feel from the centre. autoRotate gives the first
+          visitor visible motion immediately; the moment they touch the
+          sphere it stops (autoRotate handles that internally). */}
       <OrbitControls
         enableZoom
         enablePan={false}
@@ -101,6 +103,8 @@ export function SphereScene({
         maxDistance={SPHERE_RADIUS - 0.5}
         rotateSpeed={-0.4}
         zoomSpeed={0.6}
+        autoRotate
+        autoRotateSpeed={0.4}
       />
       <SphereTiles tiles={tiles} axis={axis} filter={filter} onFilterChange={onFilterChange} />
       <CenterFocusBeam />

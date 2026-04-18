@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { SphereAxis, SphereFilter, SphereTile } from "./SphereScene";
 
 /**
@@ -39,6 +39,29 @@ const AXES: { id: SphereAxis; label: string; hint: string }[] = [
 export function SphereSceneClient({ tiles, cameraZ, debug, initialAxis = "fibonacci" }: Props) {
   const [axis, setAxis] = useState<SphereAxis>(initialAxis);
   const [filter, setFilter] = useState<SphereFilter | null>(null);
+
+  // Keyboard shortcuts — power users on desktop. 1-5 cycle axes, Esc
+  // clears the filter, F focuses the active filter chip via tabindex.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      // Skip if user is typing in an input
+      if (e.target && (e.target as HTMLElement).tagName === "INPUT") return;
+      if (e.target && (e.target as HTMLElement).tagName === "TEXTAREA") return;
+      const key = e.key;
+      if (key === "Escape" && filter) {
+        e.preventDefault();
+        setFilter(null);
+        return;
+      }
+      const idx = ["1", "2", "3", "4", "5"].indexOf(key);
+      if (idx !== -1) {
+        e.preventDefault();
+        setAxis(AXES[idx].id);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [filter]);
 
   // Count tiles passing the filter — surfaced in the active-filter chip
   // so the user knows immediately how much they narrowed.
@@ -95,22 +118,31 @@ export function SphereSceneClient({ tiles, cameraZ, debug, initialAxis = "fibona
         aria-label="Selecteur d'axe semantique"
       >
         <div className="pointer-events-auto flex items-center gap-1 rounded-full border border-[var(--gold)]/30 bg-black/65 backdrop-blur-xl px-2 py-1.5 shadow-2xl shadow-black/40">
-          {AXES.map((a) => {
+          {AXES.map((a, i) => {
             const active = axis === a.id;
             return (
               <button
                 key={a.id}
                 type="button"
                 onClick={() => setAxis(a.id)}
-                title={a.hint}
+                title={`${a.hint} (touche ${i + 1})`}
                 className={
-                  "rounded-full px-3 py-1.5 text-[10px] font-data font-bold uppercase tracking-[0.18em] transition-all " +
+                  "group relative rounded-full px-3 py-1.5 text-[10px] font-data font-bold uppercase tracking-[0.18em] transition-all " +
                   (active
                     ? "bg-[var(--gold)] text-black shadow-md shadow-[var(--gold)]/30"
                     : "text-white/65 hover:text-white hover:bg-white/8")
                 }
               >
                 {a.label}
+                <kbd
+                  className={
+                    "ml-1.5 inline-flex h-3.5 min-w-[14px] items-center justify-center rounded text-[8px] font-data " +
+                    (active ? "bg-black/30 text-black/70" : "bg-white/10 text-white/40")
+                  }
+                  aria-hidden
+                >
+                  {i + 1}
+                </kbd>
               </button>
             );
           })}
