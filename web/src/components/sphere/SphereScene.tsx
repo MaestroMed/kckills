@@ -1,6 +1,6 @@
 "use client";
 
-import { Canvas, useFrame, useThree } from "@react-three/fiber";
+import { Canvas, useFrame } from "@react-three/fiber";
 import { Html, OrbitControls, Stats } from "@react-three/drei";
 import { useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
@@ -11,15 +11,26 @@ export interface SphereTile {
   thumbnailUrl: string | null;
   killerChampion: string | null;
   victimChampion: string | null;
+  killerName: string | null;
+  killerPlayerId: string | null;
   highlightScore: number | null;
   multiKill: string | null;
-  tagX: string | null; // game_minute_bucket
-  tagY: string | null; // killer_player_id (for player-axis)
-  hue: number;         // 0-360, derived from tag for colour banding
+  fightType: string | null;
+  minuteBucket: string | null;
+  opponentCode: string | null;
+  hue: number;         // 0-360, derived from active axis for colour banding
 }
+
+export type SphereAxis =
+  | "time"        // game_minute_bucket: 0-5 -> 35+ across latitude
+  | "player"      // killer_player_id: each player on its own meridian
+  | "opponent"    // opponent_team_code: enemy bands
+  | "fight"       // fight_type: solo -> teamfight scale
+  | "fibonacci";  // default - even golden-angle distribution
 
 interface SphereSceneProps {
   tiles: SphereTile[];
+  axis?: SphereAxis;
   /** Show debug overlays (FPS counter, axis helpers). */
   debug?: boolean;
   /** Initial camera distance from sphere center. */
@@ -51,7 +62,7 @@ const TILE_GAP_RAD = 0.02; // visual breathing space between tiles
  *   - Multi-shell / pinch-zoom
  *   - Personalisation, learning compass
  */
-export function SphereScene({ tiles, debug = false, cameraZ = 0 }: SphereSceneProps) {
+export function SphereScene({ tiles, axis = "fibonacci", debug = false, cameraZ = 0 }: SphereSceneProps) {
   return (
     <Canvas
       camera={{ position: [0, 0, cameraZ], fov: 75, near: 0.1, far: 100 }}
@@ -72,7 +83,7 @@ export function SphereScene({ tiles, debug = false, cameraZ = 0 }: SphereScenePr
         rotateSpeed={-0.4}
         zoomSpeed={0.6}
       />
-      <SphereTiles tiles={tiles} />
+      <SphereTiles tiles={tiles} axis={axis} />
       <CenterFocusBeam />
       {debug && <Stats />}
       {debug && <axesHelper args={[5]} />}
@@ -81,9 +92,14 @@ export function SphereScene({ tiles, debug = false, cameraZ = 0 }: SphereScenePr
 }
 
 /** Render every tile as a plane positioned on the inner sphere surface,
- *  facing the centre. Click handler routes to the kill detail page. */
-function SphereTiles({ tiles }: { tiles: SphereTile[] }) {
-  const positions = useMemo(() => fibonacciSphere(tiles.length, SPHERE_RADIUS), [tiles.length]);
+ *  facing the centre. Click handler routes to the kill detail page.
+ *  When axis != "fibonacci", tiles are clustered in semantic bands so
+ *  drag direction acquires intrinsic meaning. */
+function SphereTiles({ tiles, axis }: { tiles: SphereTile[]; axis: SphereAxis }) {
+  const positions = useMemo(
+    () => positionTilesByAxis(tiles, axis, SPHERE_RADIUS),
+    [tiles, axis],
+  );
   const cameraDir = useRef(new THREE.Vector3());
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
 
@@ -223,7 +239,7 @@ function CenterFocusBeam() {
 /**
  * Fibonacci sphere — places N points on a sphere with near-uniform
  * spacing. Avoids the polar clustering of naive (theta, phi) random
- * sampling.
+ * sampling. The fallback when no semantic axis is selected.
  */
 function fibonacciSphere(n: number, radius: number): THREE.Vector3[] {
   const points: THREE.Vector3[] = [];
@@ -237,6 +253,116 @@ function fibonacciSphere(n: number, radius: number): THREE.Vector3[] {
     points.push(new THREE.Vector3(x * radius, y * radius, z * radius));
   }
   return points;
+}
+
+// Stable order for each axis — drives the spatial gradient (top→bottom for
+// time/fight, around the sphere for player/opponent).
+const AXIS_ORDER: Record<SphereAxis, string[] | null> = {
+  fibonacci: null,
+  time: ["0-5", "5-10", "10-15", "15-20", "20-25", "25-30", "30-35", "35+"],
+  fight: [
+    "solo_kill", "gank", "pick",
+    "skirmish_2v2", "skirmish_3v3",
+    "teamfight_4v4", "teamfight_5v5",
+  ],
+  player: null,    // ordered alphabetically at runtime
+  opponent: null,  // ordered alphabetically at runtime
+};
+
+function getAxisKey(tile: SphereTile, axis: SphereAxis): string | null {
+  switch (axis) {
+    case "time":     return tile.minuteBucket;
+    case "fight":    return tile.fightType;
+    case "player":   return tile.killerPlayerId;
+    case "opponent": return tile.opponentCode;
+    default:         return null;
+  }
+}
+
+/**
+ * Place each tile at a sphere position determined by its value on the
+ * active axis. The semantic dimension becomes inherent to the layout —
+ * dragging "down" on the time axis genuinely takes you later in the
+ * game, dragging "around" on the player axis cycles through KC players.
+ *
+ *   time / fight  → latitude bands (north pole = first value, south = last)
+ *   player / opp  → longitude wedges (each value occupies a meridian sector)
+ *   fibonacci     → uniform fallback
+ */
+function positionTilesByAxis(
+  tiles: SphereTile[],
+  axis: SphereAxis,
+  radius: number,
+): THREE.Vector3[] {
+  if (axis === "fibonacci" || tiles.length === 0) {
+    return fibonacciSphere(tiles.length, radius);
+  }
+
+  // Group tile indices by their axis value.
+  const groupsMap = new Map<string, number[]>();
+  for (let i = 0; i < tiles.length; i += 1) {
+    const key = getAxisKey(tiles[i], axis) ?? "_unknown";
+    if (!groupsMap.has(key)) groupsMap.set(key, []);
+    groupsMap.get(key)!.push(i);
+  }
+
+  // Sort groups by the axis's intrinsic order (e.g. 0-5 before 5-10).
+  const explicitOrder = AXIS_ORDER[axis];
+  const sortedGroups = [...groupsMap.entries()].sort((a, b) => {
+    if (explicitOrder) {
+      const ia = explicitOrder.indexOf(a[0]);
+      const ib = explicitOrder.indexOf(b[0]);
+      // Unknown values sink to the end.
+      return (ia === -1 ? 999 : ia) - (ib === -1 ? 999 : ib);
+    }
+    return a[0].localeCompare(b[0]);
+  });
+
+  const G = sortedGroups.length;
+  const positions = new Array<THREE.Vector3>(tiles.length);
+
+  // Latitude-banded axes: groups stack vertically along the sphere's
+  // y-axis. Within a band, tiles distribute evenly around the longitude.
+  const isLatitudeAxis = axis === "time" || axis === "fight";
+
+  sortedGroups.forEach(([, indices], gIdx) => {
+    if (isLatitudeAxis) {
+      // phiCenter spreads from 0.18 (near north pole) to π-0.18 (near south).
+      const phiCenter = 0.18 + (gIdx / Math.max(1, G - 1)) * (Math.PI - 0.36);
+      const phiSpread = (Math.PI - 0.36) / Math.max(1, G) * 0.5;
+      indices.forEach((idx, i) => {
+        const theta = (i / indices.length) * 2 * Math.PI + gIdx * 0.13;
+        const phi = phiCenter + ((i % 5) - 2) * (phiSpread / 5);
+        positions[idx] = sphericalToCartesian(radius, phi, theta);
+      });
+    } else {
+      // Longitude-wedge axes: each group occupies a meridian sector,
+      // tiles spread by phi within their wedge.
+      const thetaCenter = (gIdx / G) * 2 * Math.PI;
+      const thetaSpread = (2 * Math.PI) / G * 0.85;
+      indices.forEach((idx, i) => {
+        const phi = 0.25 + (i / Math.max(1, indices.length - 1)) * (Math.PI - 0.5);
+        const theta = thetaCenter + ((i % 4) - 1.5) * (thetaSpread / 4);
+        positions[idx] = sphericalToCartesian(radius, phi, theta);
+      });
+    }
+  });
+
+  // Fill any holes from race conditions / odd grouping with fibonacci fallback.
+  const fallback = fibonacciSphere(tiles.length, radius);
+  for (let i = 0; i < positions.length; i += 1) {
+    if (!positions[i]) positions[i] = fallback[i];
+  }
+  return positions;
+}
+
+function sphericalToCartesian(r: number, phi: number, theta: number): THREE.Vector3 {
+  const sinPhi = Math.sin(phi);
+  return new THREE.Vector3(
+    r * sinPhi * Math.cos(theta),
+    r * Math.cos(phi),
+    r * sinPhi * Math.sin(theta),
+  );
 }
 
 // `Stats` import only used in debug — keep the bundle lean.

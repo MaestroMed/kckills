@@ -3,6 +3,7 @@ import { loadRealData, getMatchById, displayRole } from "@/lib/real-data";
 import { championIconUrl } from "@/lib/constants";
 import { KC_LOGO, TEAM_LOGOS } from "@/lib/kc-assets";
 import { getKillsByMatchExternalId, type PublishedKillRow } from "@/lib/supabase/kills";
+import { ClipReel } from "@/components/ClipReel";
 import Image from "next/image";
 import Link from "next/link";
 import type { Metadata } from "next";
@@ -117,6 +118,34 @@ export default async function MatchPage({ params }: Props) {
           <p className="text-xs text-[var(--text-muted)]">K/D ratio</p>
         </div>
       </div>
+
+      {/* ═══ Clip-Centric Reels — powered by fn_get_clips_filtered ═══ */}
+      {totalRealKills > 0 && (
+        <section className="space-y-10 pt-2">
+          <ClipReel
+            kicker={`KC vs ${match.opponent.code}`}
+            title="Les meilleurs kills de ce match"
+            subtitle={`Top des highlights tri\u00e9s par score IA. ${totalRealKills} clips vid\u00e9o disponibles pour cette rencontre.`}
+            filter={{ matchExternalId: slug, trackedTeamInvolvement: "team_killer" }}
+            limit={9}
+            ctaHref="/best"
+            ctaLabel="Voir tous les meilleurs"
+            emptyState={null}
+          />
+          <ClipReel
+            kicker="Multi-kills + clutch"
+            title="Action highlights"
+            subtitle="Les triples, quadras, pentas et plays au score IA \u2265 7.5 sur cette rencontre."
+            filter={{
+              matchExternalId: slug,
+              trackedTeamInvolvement: "team_killer",
+              minHighlight: 7.5,
+            }}
+            limit={6}
+            emptyState={null}
+          />
+        </section>
+      )}
 
       {/* Real clips banner — only shown when worker has produced clips for this match */}
       {totalRealKills > 0 && (

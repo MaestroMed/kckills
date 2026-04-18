@@ -45,21 +45,37 @@ export default async function SpherePage() {
     (k) => !!k.thumbnail_url && k.kill_visible !== false,
   );
 
-  // Map each kill to a SphereTile. Player IGN lookup happens via the
-  // kill's killer_player_id — we don't have it on the kill row directly,
-  // so we'll color-band by killer_champion as a proxy. Phase 1 will
-  // upgrade to real player banding via a join.
-  const tiles: SphereTile[] = eligible.map((k) => ({
-    id: k.id,
-    thumbnailUrl: k.thumbnail_url,
-    killerChampion: k.killer_champion,
-    victimChampion: k.victim_champion,
-    highlightScore: k.highlight_score,
-    multiKill: k.multi_kill,
-    tagX: k.game_minute_bucket,
-    tagY: k.killer_player_id,
-    hue: hueForKill(k.killer_champion),
-  }));
+  // Map each kill to a SphereTile. We need killer name + opponent code
+  // for the player/opponent axis layouts — kc_matches.json holds the
+  // opponent metadata, players table holds the IGN. Resolve both.
+  const players = await import("@/lib/supabase/players").then((m) => m.getTrackedRoster());
+  const ignById = new Map(players.map((p) => [p.id, p.ign]));
+
+  const data = await import("@/lib/real-data").then((m) => m.loadRealData());
+  const opponentByMatchExtId = new Map<string, string>();
+  for (const m of data.matches) {
+    opponentByMatchExtId.set(m.id, m.opponent.code);
+  }
+
+  const tiles: SphereTile[] = eligible.map((k) => {
+    const killerName = k.killer_player_id ? ignById.get(k.killer_player_id) ?? null : null;
+    const matchExtId = k.games?.matches?.external_id ?? "";
+    const opponentCode = opponentByMatchExtId.get(matchExtId) ?? null;
+    return {
+      id: k.id,
+      thumbnailUrl: k.thumbnail_url,
+      killerChampion: k.killer_champion,
+      victimChampion: k.victim_champion,
+      killerName,
+      killerPlayerId: k.killer_player_id,
+      highlightScore: k.highlight_score,
+      multiKill: k.multi_kill,
+      fightType: k.fight_type,
+      minuteBucket: k.game_minute_bucket,
+      opponentCode,
+      hue: hueForKill(killerName ?? k.killer_champion),
+    };
+  });
 
   return (
     <div
