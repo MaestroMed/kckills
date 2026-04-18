@@ -36,21 +36,40 @@ import { FeedPlayerPool, type PoolItem } from "./FeedPlayerPool";
 import { useFeedGesture } from "./hooks/useFeedGesture";
 import { useNetworkQuality } from "./hooks/useNetworkQuality";
 import { useFeedBuffer } from "./hooks/useFeedBuffer";
+import { EndOfFeedCard } from "./EndOfFeedCard";
+import { PullToRefreshIndicator } from "./PullToRefreshIndicator";
+import { ScrollChipBar, type ChipFilters } from "@/components/scroll/ScrollChipBar";
 import type { FeedItem } from "@/components/scroll/ScrollFeed";
 
 interface Props {
   items: FeedItem[];
   videoCount?: number;
   initialKillId?: string;
+  chipFilters?: ChipFilters;
+  rosterChips?: { id: string; ign: string; role: "TOP" | "JGL" | "MID" | "ADC" | "SUP" }[];
 }
 
-export function ScrollFeedV2({ items, videoCount = 0, initialKillId }: Props) {
+export function ScrollFeedV2({
+  items: itemsProp,
+  videoCount = 0,
+  initialKillId,
+  chipFilters,
+  rosterChips,
+}: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [itemHeight, setItemHeight] = useState(0);
   const [muted, setMuted] = useState(true);
   const [isDesktop, setIsDesktop] = useState(false);
   const [reducedMotion, setReducedMotion] = useState(false);
   const [brokenIds, setBrokenIds] = useState<Set<string>>(() => new Set());
+
+  // ─── Reshuffle state (Phase 5 — drives PTR) ───────────────────────
+  // Items live in client state so we can re-shuffle on PTR without a
+  // server round-trip. Initial state mirrors the server-rendered list.
+  const [items, setItems] = useState(itemsProp);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  // Sync prop changes (e.g. URL filter changes triggering server re-render).
+  useEffect(() => setItems(itemsProp), [itemsProp]);
 
   // ─── Network-driven quality (Phase 3) ─────────────────────────────
   const { quality, useLowQuality, effectiveType } = useNetworkQuality();
@@ -101,12 +120,16 @@ export function ScrollFeedV2({ items, videoCount = 0, initialKillId }: Props) {
   };
 
   // ─── Gesture controller ──────────────────────────────────────────
+  // We add +1 to totalItems so the gesture engine considers the virtual
+  // EndOfFeedCard as a real index (visibleItems.length). The user can
+  // swipe up from the last clip and land on the recommendation card.
   const { bind, y, activeIndex, jumpTo, isDragging } = useFeedGesture({
-    totalItems: visibleItems.length,
+    totalItems: visibleItems.length + 1, // +1 for EndOfFeedCard slot
     itemHeight,
     initialIndex,
     onActiveChange: handleActiveChange,
   });
+  const isAtEndOfFeed = activeIndex === visibleItems.length;
 
   // ─── Speculative thumbnail buffer (Phase 3) ───────────────────────
   // Preloads thumbnails for items 3-10 ahead so fast flicks never
@@ -190,6 +213,26 @@ export function ScrollFeedV2({ items, videoCount = 0, initialKillId }: Props) {
     });
   };
 
+  // ─── Reshuffle handler — fired by PTR + EndOfFeedCard ─────────────
+  const handleReshuffle = () => {
+    setIsRefreshing(true);
+    // Simple Fisher-Yates with a tiny artificial delay so the spinner
+    // is visible (else the refresh feels accidental). The real shuffle
+    // is instant — we want it to feel intentional.
+    window.setTimeout(() => {
+      setItems((prev) => {
+        const arr = [...prev];
+        for (let i = arr.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [arr[i], arr[j]] = [arr[j], arr[i]];
+        }
+        return arr;
+      });
+      jumpTo(0, { instant: true });
+      setIsRefreshing(false);
+    }, 350);
+  };
+
   const poolItems: PoolItem[] = useMemo(
     () =>
       visibleItems.map((it) => {
@@ -253,6 +296,22 @@ export function ScrollFeedV2({ items, videoCount = 0, initialKillId }: Props) {
           )}
         </button>
       </div>
+
+      {/* Filter chip bar — sticky just below the top bar (Phase 5).
+          Reuses the v1 ScrollChipBar component since the URL state
+          contract is identical. */}
+      {chipFilters && (
+        <ScrollChipBar filters={chipFilters} rosterChips={rosterChips} />
+      )}
+
+      {/* Pull-to-refresh indicator (Phase 5) — visible only when at the
+          top of the feed AND user is pulling down past 5px. */}
+      <PullToRefreshIndicator
+        containerY={y}
+        atTop={activeIndex === 0}
+        onRefresh={handleReshuffle}
+        isRefreshing={isRefreshing}
+      />
 
       {/* Pool — anchored to viewport, follows containerY */}
       {itemHeight > 0 && (
@@ -329,6 +388,28 @@ export function ScrollFeedV2({ items, videoCount = 0, initialKillId }: Props) {
             </div>
           );
         })}
+
+        {/* End-of-feed card (Phase 5) — virtual item at index N.
+            Same gesture model as real items, the user lands here by
+            swiping past the last clip. */}
+        {visibleItems.length > 0 && itemHeight > 0 && (
+          <div
+            key="end-of-feed"
+            style={{
+              position: "absolute",
+              top: visibleItems.length * itemHeight,
+              left: 0,
+              right: 0,
+              height: itemHeight,
+            }}
+          >
+            <EndOfFeedCard
+              itemHeight={itemHeight}
+              onReshuffle={handleReshuffle}
+              totalSeen={visibleItems.length}
+            />
+          </div>
+        )}
       </motion.div>
 
       {/* Drag indicator — subtle dot grid showing position in feed */}

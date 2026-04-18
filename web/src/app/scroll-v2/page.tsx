@@ -231,20 +231,18 @@ export default async function ScrollV2Page({ searchParams }: ScrollPageProps) {
     : weightedShuffle(allClips);
   const clipCount = items.length;
 
-  // ─── Phase 1: ScrollFeedV2 with the new player pool ────────────────
-  // Chip filters / rosterChips not yet wired into v2 (Phase 5).
-  // The chip bar will land alongside pull-to-refresh + end-of-feed.
-  void rosterChips; // suppress unused warning during phase 1
-  void chipFilters;
+  // ─── Phase 5: ScrollFeedV2 + chip bar + PTR + end-of-feed ──────────
   return (
     <>
       <div className="fixed top-0 left-0 right-0 z-[70] bg-[var(--gold)] text-black text-center text-[10px] font-bold py-1 uppercase tracking-widest">
-        Preview /scroll-v2 (Phase 1 — pool de 5) · {clipCount} clips
+        Preview /scroll-v2 (Phase 5 — full feature parity + TikTok-grade UX) · {clipCount} clips
       </div>
       <ScrollFeedV2
         items={items}
         videoCount={clipCount}
         initialKillId={initialKillId}
+        chipFilters={chipFilters}
+        rosterChips={rosterChips}
       />
     </>
   );
