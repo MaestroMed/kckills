@@ -28,9 +28,21 @@ export type SphereAxis =
   | "fight"       // fight_type: solo -> teamfight scale
   | "fibonacci";  // default - even golden-angle distribution
 
+export type SphereFilterKey = "player" | "opponent" | "fight" | "time";
+
+export interface SphereFilter {
+  key: SphereFilterKey;
+  value: string;
+  label: string;
+}
+
 interface SphereSceneProps {
   tiles: SphereTile[];
   axis?: SphereAxis;
+  /** Active semantic filter — non-matching tiles dim, matching pop. */
+  filter?: SphereFilter | null;
+  /** Tile clicks a chip on its active overlay -> updates parent state. */
+  onFilterChange?: (filter: SphereFilter | null) => void;
   /** Show debug overlays (FPS counter, axis helpers). */
   debug?: boolean;
   /** Initial camera distance from sphere center. */
@@ -62,7 +74,14 @@ const TILE_GAP_RAD = 0.02; // visual breathing space between tiles
  *   - Multi-shell / pinch-zoom
  *   - Personalisation, learning compass
  */
-export function SphereScene({ tiles, axis = "fibonacci", debug = false, cameraZ = 0 }: SphereSceneProps) {
+export function SphereScene({
+  tiles,
+  axis = "fibonacci",
+  filter = null,
+  onFilterChange,
+  debug = false,
+  cameraZ = 0,
+}: SphereSceneProps) {
   return (
     <Canvas
       camera={{ position: [0, 0, cameraZ], fov: 75, near: 0.1, far: 100 }}
@@ -83,7 +102,7 @@ export function SphereScene({ tiles, axis = "fibonacci", debug = false, cameraZ 
         rotateSpeed={-0.4}
         zoomSpeed={0.6}
       />
-      <SphereTiles tiles={tiles} axis={axis} />
+      <SphereTiles tiles={tiles} axis={axis} filter={filter} onFilterChange={onFilterChange} />
       <CenterFocusBeam />
       {debug && <Stats />}
       {debug && <axesHelper args={[5]} />}
@@ -91,11 +110,32 @@ export function SphereScene({ tiles, axis = "fibonacci", debug = false, cameraZ 
   );
 }
 
+function tileMatchesFilter(tile: SphereTile, f: SphereFilter | null): boolean {
+  if (!f) return true;
+  switch (f.key) {
+    case "player":   return tile.killerPlayerId === f.value;
+    case "opponent": return tile.opponentCode === f.value;
+    case "fight":    return tile.fightType === f.value;
+    case "time":     return tile.minuteBucket === f.value;
+    default:         return true;
+  }
+}
+
 /** Render every tile as a plane positioned on the inner sphere surface,
  *  facing the centre. Click handler routes to the kill detail page.
  *  When axis != "fibonacci", tiles are clustered in semantic bands so
  *  drag direction acquires intrinsic meaning. */
-function SphereTiles({ tiles, axis }: { tiles: SphereTile[]; axis: SphereAxis }) {
+function SphereTiles({
+  tiles,
+  axis,
+  filter,
+  onFilterChange,
+}: {
+  tiles: SphereTile[];
+  axis: SphereAxis;
+  filter: SphereFilter | null;
+  onFilterChange?: (filter: SphereFilter | null) => void;
+}) {
   const positions = useMemo(
     () => positionTilesByAxis(tiles, axis, SPHERE_RADIUS),
     [tiles, axis],
@@ -131,12 +171,15 @@ function SphereTiles({ tiles, axis }: { tiles: SphereTile[]; axis: SphereAxis })
       {tiles.map((tile, i) => {
         const p = positions[i];
         const isActive = activeIndex === i;
+        const passesFilter = tileMatchesFilter(tile, filter);
         return (
           <SphereTileMesh
             key={tile.id}
             tile={tile}
             position={p}
             active={isActive}
+            dim={!passesFilter}
+            onFilterChange={onFilterChange}
           />
         );
       })}
@@ -148,9 +191,11 @@ interface TileMeshProps {
   tile: SphereTile;
   position: THREE.Vector3;
   active: boolean;
+  dim: boolean;
+  onFilterChange?: (filter: SphereFilter | null) => void;
 }
 
-function SphereTileMesh({ tile, position, active }: TileMeshProps) {
+function SphereTileMesh({ tile, position, active, dim, onFilterChange }: TileMeshProps) {
   const meshRef = useRef<THREE.Mesh>(null);
   const [texture, setTexture] = useState<THREE.Texture | null>(null);
 
@@ -181,8 +226,45 @@ function SphereTileMesh({ tile, position, active }: TileMeshProps) {
 
   const tileColor = useMemo(() => new THREE.Color().setHSL(tile.hue / 360, 0.45, 0.4), [tile.hue]);
 
-  // Slight scale-up + emissive boost for active tile.
-  const scale = active ? 1.18 : 1.0;
+  // Tile size scales with highlight_score so the eye lands on great
+  // clips first. Min 0.85x (routine) → max 1.55x (penta / score 10).
+  const baseScale = useMemo(() => {
+    const hl = (tile.highlightScore ?? 5) / 10;
+    let s = 0.85 + hl * 0.45;
+    if (tile.multiKill === "penta") s *= 1.25;
+    else if (tile.multiKill === "quadra") s *= 1.15;
+    else if (tile.multiKill === "triple") s *= 1.08;
+    return Math.min(1.55, s);
+  }, [tile.highlightScore, tile.multiKill]);
+
+  // Active tile pops further. Dim tiles shrink slightly to reinforce focus.
+  const scale = active ? baseScale * 1.18 : dim ? baseScale * 0.85 : baseScale;
+
+  // Emissive accent: gold for active, orange for high-score multi-kills,
+  // none for the rest. Dim tiles get NO accent so they recede visually.
+  const emissive = useMemo(() => {
+    if (dim) return new THREE.Color("#000000");
+    if (active) return new THREE.Color("#C8AA6E");
+    if (tile.multiKill === "penta") return new THREE.Color("#FFD700");
+    if (tile.multiKill === "quadra") return new THREE.Color("#FF9800");
+    if ((tile.highlightScore ?? 0) >= 8.5) return new THREE.Color("#C8AA6E");
+    return new THREE.Color("#000000");
+  }, [active, dim, tile.multiKill, tile.highlightScore]);
+
+  const emissiveIntensity = active
+    ? 0.5
+    : dim
+      ? 0
+      : tile.multiKill === "penta"
+        ? 0.45
+        : tile.multiKill === "quadra"
+          ? 0.3
+          : (tile.highlightScore ?? 0) >= 8.5
+            ? 0.18
+            : 0;
+
+  // Dim tiles drop opacity hard so the focused subset reads instantly.
+  const opacity = dim ? 0.18 : 1;
 
   return (
     <mesh ref={meshRef} position={position} scale={scale}>
@@ -190,31 +272,107 @@ function SphereTileMesh({ tile, position, active }: TileMeshProps) {
       <meshStandardMaterial
         map={texture ?? undefined}
         color={texture ? "#ffffff" : tileColor}
-        emissive={active ? new THREE.Color("#C8AA6E") : new THREE.Color("#000000")}
-        emissiveIntensity={active ? 0.4 : 0}
+        emissive={emissive}
+        emissiveIntensity={emissiveIntensity}
         side={THREE.DoubleSide}
         toneMapped={false}
+        transparent
+        opacity={opacity}
       />
-      {active && (
-        <Html position={[0, -TILE_H / 2 - 0.15, 0]} center distanceFactor={6} occlude={false}>
-          <Link
-            href={`/kill/${tile.id}`}
-            className="pointer-events-auto block rounded-lg bg-black/85 backdrop-blur-md border border-[var(--gold)]/45 px-3 py-1.5 text-center whitespace-nowrap"
-          >
-            <p className="font-display text-[10px] font-bold text-white leading-tight">
-              <span className="text-[var(--gold)]">{tile.killerChampion ?? "?"}</span>
-              <span className="text-white/55 mx-1">→</span>
-              <span>{tile.victimChampion ?? "?"}</span>
-            </p>
-            {tile.highlightScore != null && (
-              <p className="mt-0.5 font-data text-[8px] text-[var(--gold)]/80 uppercase tracking-widest">
-                {tile.highlightScore.toFixed(1)}/10 · ouvrir
-              </p>
-            )}
-          </Link>
+      {active && !dim && (
+        <Html
+          position={[0, -TILE_H / 2 - 0.15, 0]}
+          center
+          distanceFactor={6}
+          occlude={false}
+          style={{ pointerEvents: "auto" }}
+        >
+          <ActiveTileOverlay tile={tile} onFilterChange={onFilterChange} />
         </Html>
       )}
     </mesh>
+  );
+}
+
+/** Glassmorphism overlay shown beneath the active tile. Title + click-
+ *  to-open + filter chips that update the parent sphere state. */
+function ActiveTileOverlay({
+  tile,
+  onFilterChange,
+}: {
+  tile: SphereTile;
+  onFilterChange?: (filter: SphereFilter | null) => void;
+}) {
+  return (
+    <div className="rounded-xl bg-black/85 backdrop-blur-md border border-[var(--gold)]/45 px-3 py-2 text-center whitespace-nowrap shadow-2xl shadow-black/50">
+      <Link
+        href={`/kill/${tile.id}`}
+        className="block hover:opacity-90"
+      >
+        <p className="font-display text-[11px] font-bold text-white leading-tight">
+          <span className="text-[var(--gold)]">{tile.killerChampion ?? "?"}</span>
+          <span className="text-white/55 mx-1">→</span>
+          <span>{tile.victimChampion ?? "?"}</span>
+        </p>
+        {tile.highlightScore != null && (
+          <p className="mt-0.5 font-data text-[8px] text-[var(--gold)]/80 uppercase tracking-widest">
+            {tile.highlightScore.toFixed(1)}/10
+            {tile.multiKill ? ` · ${tile.multiKill}` : ""}
+            {" · ouvrir"}
+          </p>
+        )}
+      </Link>
+
+      {/* Filter chips — click to filter the sphere */}
+      {onFilterChange && (
+        <div className="mt-1.5 flex items-center justify-center gap-1 flex-wrap">
+          {tile.killerName && tile.killerPlayerId && (
+            <FilterChip
+              label={tile.killerName}
+              onClick={() =>
+                onFilterChange({ key: "player", value: tile.killerPlayerId!, label: tile.killerName! })
+              }
+            />
+          )}
+          {tile.opponentCode && (
+            <FilterChip
+              label={`vs ${tile.opponentCode}`}
+              onClick={() =>
+                onFilterChange({ key: "opponent", value: tile.opponentCode!, label: `vs ${tile.opponentCode}` })
+              }
+            />
+          )}
+          {tile.fightType && (
+            <FilterChip
+              label={tile.fightType}
+              onClick={() =>
+                onFilterChange({ key: "fight", value: tile.fightType!, label: tile.fightType! })
+              }
+            />
+          )}
+          {tile.minuteBucket && (
+            <FilterChip
+              label={`${tile.minuteBucket} min`}
+              onClick={() =>
+                onFilterChange({ key: "time", value: tile.minuteBucket!, label: `${tile.minuteBucket} min` })
+              }
+            />
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function FilterChip({ label, onClick }: { label: string; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="rounded-full border border-[var(--gold)]/40 bg-[var(--gold)]/10 px-2 py-0.5 text-[8px] font-data uppercase tracking-widest text-[var(--gold)]/90 hover:bg-[var(--gold)]/25 hover:border-[var(--gold)]/70 transition-colors"
+    >
+      {label}
+    </button>
   );
 }
 
