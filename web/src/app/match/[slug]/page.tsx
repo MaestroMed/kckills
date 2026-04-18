@@ -64,8 +64,56 @@ export default async function MatchPage({ params }: Props) {
   const totalKcKills = match.games.reduce((a, g) => a + g.kc_kills, 0);
   const totalOppKills = match.games.reduce((a, g) => a + g.opp_kills, 0);
 
+  // ─── JSON-LD: SportsEvent is the rich-result schema esports leagues
+  //     get bucketed under. Two homeTeam/awayTeam facets, score line,
+  //     event location (LEC studio for the canonical case), competitor
+  //     count = 2. Google has special handling for SportsEvent in the
+  //     match-up rich card carousel.
+  const matchJsonLd = {
+    "@context": "https://schema.org",
+    "@type": "SportsEvent",
+    name: `Karmine Corp vs ${match.opponent.name} — ${match.stage}`,
+    description: `Match LEC : Karmine Corp vs ${match.opponent.name} (${match.stage}, Bo${match.best_of}). Résultat : ${match.kc_score}-${match.opp_score} ${match.kc_won ? "victoire KC" : `victoire ${match.opponent.code}`}.`,
+    startDate: match.date,
+    eventStatus: "https://schema.org/EventScheduled",
+    eventAttendanceMode: "https://schema.org/OnlineEventAttendanceMode",
+    location: {
+      "@type": "VirtualLocation",
+      url: "https://lolesports.com/en-US/leagues/lec",
+    },
+    sport: "League of Legends",
+    superEvent: {
+      "@type": "SportsEvent",
+      name: match.league,
+    },
+    homeTeam: {
+      "@type": "SportsTeam",
+      name: "Karmine Corp",
+      url: "https://kckills.com",
+    },
+    awayTeam: {
+      "@type": "SportsTeam",
+      name: match.opponent.name,
+      identifier: match.opponent.code,
+    },
+    competitor: [
+      { "@type": "SportsTeam", name: "Karmine Corp" },
+      { "@type": "SportsTeam", name: match.opponent.name },
+    ],
+    organizer: {
+      "@type": "Organization",
+      name: "Riot Games — LEC",
+      url: "https://lolesports.com",
+    },
+    url: `https://kckills.com/match/${match.id}`,
+  };
+
   return (
     <div className="space-y-8">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(matchJsonLd) }}
+      />
       {/* Breadcrumb */}
       <nav className="flex items-center gap-2 text-sm text-[var(--text-muted)]">
         <Link href="/" className="hover:text-[var(--gold)]">Accueil</Link>

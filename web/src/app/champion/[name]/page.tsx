@@ -69,6 +69,37 @@ export default async function ChampionPage({ params }: Props) {
     .sort((a, b) => b[1] - a[1])
     .slice(0, 6);
 
+  // ─── JSON-LD: champion-as-VideoCollection. Same CollectionPage shape
+  //     used on /matchup/[a]/vs/[b], adapted to a single champion. The
+  //     ItemList caps at 12 entries — Google rich-results doesn't reward
+  //     dumping the full backlog and big payloads slow first paint.
+  const totalClips = totalAsKiller + totalAsVictim;
+  const championJsonLd = {
+    "@context": "https://schema.org",
+    "@type": "CollectionPage",
+    name: `${champ} — Plays Karmine Corp`,
+    description: `Tous les kills LEC du champion ${champ} côté KC.`,
+    inLanguage: "fr-FR",
+    isPartOf: { "@type": "WebSite", name: "KCKILLS", url: "https://kckills.com" },
+    image: championSplashUrl(champ),
+    about: {
+      "@type": "VideoGame",
+      name: "League of Legends",
+      publisher: "Riot Games",
+    },
+    mainEntity: {
+      "@type": "ItemList",
+      numberOfItems: totalClips,
+      itemListElement: [...asKiller, ...asVictim]
+        .slice(0, 12)
+        .map((k, i) => ({
+          "@type": "ListItem",
+          position: i + 1,
+          url: `https://kckills.com/kill/${k.id}`,
+        })),
+    },
+  };
+
   return (
     <div
       className="-mt-6"
@@ -81,6 +112,10 @@ export default async function ChampionPage({ params }: Props) {
         marginRight: "-50vw",
       }}
     >
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(championJsonLd) }}
+      />
       {/* ─── HERO — cinematic with cube portrait morph ─── */}
       <section className="relative h-[72vh] min-h-[560px] w-full overflow-hidden bg-[var(--bg-primary)]">
         <Image

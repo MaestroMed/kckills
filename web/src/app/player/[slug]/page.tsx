@@ -173,6 +173,46 @@ export default async function PlayerPage({ params }: Props) {
   // Gemini). Falls back to the champion loading art if no custom bg exists.
   const customBg = `/images/players/player-bg-${name.toLowerCase()}.jpg`;
 
+  // ─── JSON-LD: tells Google this is a competitive esports player.
+  //     Person + memberOf SportsTeam (KC) gives the entity the right
+  //     edge in knowledge-panel candidate signals. We tack on a
+  //     summary stat block via 'description' rather than
+  //     PerformanceRole because the latter requires Wikidata-grade
+  //     IDs we don't have. Photo + ItemList of clips so video
+  //     carousels can attribute hits to the right athlete.
+  const playerJsonLd = {
+    "@context": "https://schema.org",
+    "@type": "Person",
+    name,
+    alternateName: `KC ${name}`,
+    url: `https://kckills.com/player/${encodeURIComponent(name)}`,
+    image: photo ? `https://kckills.com${photo}` : undefined,
+    jobTitle: "Pro Player",
+    description:
+      `${name} — joueur Karmine Corp en LEC. ${stats.kills} kills, ${stats.deaths} deaths, ${stats.assists} assists sur ${stats.gamesPlayed} games.`,
+    memberOf: {
+      "@type": "SportsTeam",
+      name: "Karmine Corp",
+      url: "https://kckills.com",
+      sport: "League of Legends",
+    },
+    knowsAbout: stats.champions.slice(0, 5).map((c) => c.name),
+    ...(realKills.length > 0
+      ? {
+          subjectOf: {
+            "@type": "ItemList",
+            name: `Clips de ${name}`,
+            numberOfItems: realKills.length,
+            itemListElement: realKills.slice(0, 10).map((k, i) => ({
+              "@type": "ListItem",
+              position: i + 1,
+              url: `https://kckills.com/kill/${k.id}`,
+            })),
+          },
+        }
+      : {}),
+  };
+
   return (
     <div
       className="-mt-6"
@@ -186,6 +226,10 @@ export default async function PlayerPage({ params }: Props) {
         marginRight: "-50vw",
       }}
     >
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(playerJsonLd) }}
+      />
       {/* ═══ HERO — full-screen cinematic with cube-portrait morph ═══ */}
       <section className="relative h-[90vh] min-h-[720px] w-full overflow-hidden bg-[var(--bg-primary)]">
         {/* Soft champion-art backdrop — heavily darkened so the dot-matrix

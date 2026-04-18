@@ -76,6 +76,28 @@ export default async function AlumniDetailPage({ params }: Props) {
   const prev = idx > 0 ? ALUMNI[idx - 1] : null;
   const next = idx < ALUMNI.length - 1 ? ALUMNI[idx + 1] : null;
 
+  // ─── JSON-LD: Person schema for the alumnus, with alumniOf back to KC.
+  //     Different from active /player schema because there's no live
+  //     stats payload — we lean on the curated bio text instead.
+  const alumniJsonLd = {
+    "@context": "https://schema.org",
+    "@type": "Person",
+    name: alumni.name,
+    alternateName: alumni.realName ?? undefined,
+    nationality: alumni.nationality,
+    description: `${alumni.subtitle}. ${alumni.bio.slice(0, 200).replace(/\s+/g, " ").trim()}…`,
+    url: `https://kckills.com/alumni/${alumni.slug}`,
+    image: splash,
+    jobTitle: ROLE_LABEL[alumni.role] ?? "Pro Player",
+    alumniOf: {
+      "@type": "SportsTeam",
+      name: "Karmine Corp",
+      url: "https://kckills.com",
+      sport: "League of Legends",
+    },
+    knowsAbout: [alumni.signatureChampion],
+  };
+
   return (
     <div
       className="-mt-6"
@@ -88,6 +110,10 @@ export default async function AlumniDetailPage({ params }: Props) {
         marginRight: "-50vw",
       }}
     >
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(alumniJsonLd) }}
+      />
       {/* ─── HERO — cinematic with cube-portrait morph ──────── */}
       <section className="relative h-[78vh] min-h-[640px] w-full overflow-hidden bg-[var(--bg-primary)]">
         {/* Soft splash backdrop — heavily darkened so the cube animation owns
