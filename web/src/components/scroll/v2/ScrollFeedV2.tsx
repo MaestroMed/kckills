@@ -36,8 +36,10 @@ import { FeedPlayerPool, type PoolItem } from "./FeedPlayerPool";
 import { useFeedGesture } from "./hooks/useFeedGesture";
 import { useNetworkQuality } from "./hooks/useNetworkQuality";
 import { useFeedBuffer } from "./hooks/useFeedBuffer";
+import { useKeyboardShortcuts } from "./hooks/useKeyboardShortcuts";
 import { EndOfFeedCard } from "./EndOfFeedCard";
 import { PullToRefreshIndicator } from "./PullToRefreshIndicator";
+import { KeyboardHelpOverlay } from "./KeyboardHelpOverlay";
 import { ScrollChipBar, type ChipFilters } from "@/components/scroll/ScrollChipBar";
 import type { FeedItem } from "@/components/scroll/ScrollFeed";
 
@@ -183,25 +185,18 @@ export function ScrollFeedV2({
     });
   };
 
-  // ─── Basic keyboard nav (Phase 6 will add full set) ──────────────
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      const tag = (e.target as HTMLElement | null)?.tagName ?? "";
-      if (tag === "INPUT" || tag === "TEXTAREA") return;
-      if (e.key === "ArrowDown" || e.key === "j") {
-        e.preventDefault();
-        jumpTo(activeIndex + 1);
-      } else if (e.key === "ArrowUp" || e.key === "k") {
-        e.preventDefault();
-        jumpTo(activeIndex - 1);
-      } else if (e.key === "m" || e.key === "M") {
-        e.preventDefault();
-        toggleMute();
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [activeIndex, jumpTo]);
+  // ─── Full keyboard shortcuts (Phase 6) ────────────────────────────
+  // Pro mode bindings: J/K next/prev, Space, M mute, L like, C comments,
+  // S share, ? help overlay, Esc close. See useKeyboardShortcuts for
+  // the full table — the overlay component renders the cheatsheet.
+  const { showHelp, setShowHelp } = useKeyboardShortcuts({
+    onNext: () => jumpTo(activeIndex + 1),
+    onPrev: () => jumpTo(activeIndex - 1),
+    onToggleMute: toggleMute,
+    // L / C / S not yet wired — those depend on per-item handlers that
+    // live in the right sidebar (Phase 7 will hoist them up to here).
+    // Esc closes the help overlay (handled inside the hook).
+  });
 
   // ─── Pool error handler ──────────────────────────────────────────
   const handlePoolError = (itemId: string) => {
@@ -437,6 +432,22 @@ export function ScrollFeedV2({
 
       {/* isDragging hint — fade overlays during active swipe */}
       {isDragging && <div className="pointer-events-none fixed inset-0 z-30" />}
+
+      {/* Keyboard help overlay — toggled by ? on desktop */}
+      <KeyboardHelpOverlay open={showHelp} onClose={() => setShowHelp(false)} />
+
+      {/* Discreet "?" hint pill — only on desktop, hidden on mobile.
+          Lets the user discover the keyboard shortcuts without poking
+          random keys. Disappears once they've opened the overlay once. */}
+      {isDesktop && !showHelp && (
+        <button
+          onClick={() => setShowHelp(true)}
+          className="hidden md:flex fixed bottom-6 left-6 z-40 h-10 w-10 items-center justify-center rounded-full bg-black/60 backdrop-blur-md border border-white/10 text-white/65 transition-colors hover:bg-black/80 hover:text-[var(--gold)] hover:border-[var(--gold)]/40"
+          aria-label="Raccourcis clavier"
+        >
+          <span className="font-data text-base font-bold">?</span>
+        </button>
+      )}
 
       {/* Empty state */}
       {visibleItems.length === 0 && itemHeight > 0 && (
