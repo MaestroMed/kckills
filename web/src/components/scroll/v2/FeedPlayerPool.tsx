@@ -48,6 +48,7 @@
  */
 
 import { useEffect, useMemo, useRef } from "react";
+import { useMotionValue, useMotionValueEvent, type MotionValue } from "framer-motion";
 import {
   POOL_SIZE,
   useFeedPlayer,
@@ -81,6 +82,11 @@ interface Props {
    *  first time it activates (fixes the "first clip frozen" bug we
    *  shipped on /scroll v1). Defaults true. */
   resetOnFirstPlay?: boolean;
+  /** When the parent uses gesture-driven scrolling (Phase 2+), pass the
+   *  motion value carrying the container's translateY so the pool can
+   *  keep its videos in lockstep with the drag — every video element's
+   *  transform stays anchored to its item position even mid-flick. */
+  containerY?: MotionValue<number>;
 }
 
 export function FeedPlayerPool({
@@ -93,6 +99,7 @@ export function FeedPlayerPool({
   reducedMotion,
   onError,
   resetOnFirstPlay = true,
+  containerY,
 }: Props) {
   const { slotItemIndex, priorities } = useFeedPlayer({
     activeIndex,
@@ -154,10 +161,14 @@ export function FeedPlayerPool({
       }
 
       // Position the video at the right "lane" — translateY relative
-      // to the active item. translate3d so the GPU keeps it.
-      const offsetItems = itemIdx - activeIndex;
-      const ty = offsetItems * itemHeight;
-      v.style.transform = `translate3d(0, ${ty}px, 0)`;
+      // to viewport top. When containerY is wired (gesture-driven mode),
+      // the video position = (itemIdx * itemHeight) + containerY.
+      // When not wired (Phase 1 fallback), positions are anchored to
+      // the snap-aligned activeIndex.
+      const baseY = containerY
+        ? itemIdx * itemHeight + containerY.get()
+        : (itemIdx - activeIndex) * itemHeight;
+      v.style.transform = `translate3d(0, ${baseY}px, 0)`;
       v.style.opacity = "1";
 
       // Apply priority-driven playback state.
@@ -178,6 +189,27 @@ export function FeedPlayerPool({
     useLowQuality,
     resetOnFirstPlay,
   ]);
+
+  /** Live drag tracker — when containerY is provided, this fires on
+   *  every animation frame during a drag/spring and updates each video's
+   *  transform directly. Stays compositor-only (no React re-render).
+   *
+   *  React hook rules require unconditional hook calls, so we always
+   *  attach the listener. If containerY isn't passed (Phase 1 fallback),
+   *  the listener fires on the no-op fallback motion value (which never
+   *  changes) and the callback short-circuits via the `if` guard. */
+  const fallbackY = useMotionValue(0);
+  useMotionValueEvent(containerY ?? fallbackY, "change", (latest) => {
+    if (!containerY) return;
+    for (let s = 0; s < POOL_SIZE; s++) {
+      const v = videoRefs.current[s];
+      if (!v) continue;
+      const itemIdx = slotItemIndex[s];
+      if (itemIdx === -1) continue;
+      const ty = itemIdx * itemHeight + latest;
+      v.style.transform = `translate3d(0, ${ty}px, 0)`;
+    }
+  });
 
   /** Render the 5 video elements once. They're absolutely positioned at
    *  the top of the pool container; their transform places them. */

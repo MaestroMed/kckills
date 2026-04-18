@@ -1,35 +1,39 @@
 "use client";
 
 /**
- * ScrollFeedV2 — Phase 1 orchestrator.
+ * ScrollFeedV2 — Phase 2 orchestrator (gesture-driven).
  *
- * What's done in Phase 1:
- *   • 5-slot video pool that follows the active item via translate3d
- *     (FeedPlayerPool) — replaces the per-item <video> model of v1
- *   • Items render only their UI overlay (FeedItem*) — no video
- *   • Active item detection via IntersectionObserver — same pattern as
- *     v1 since CSS scroll-snap is still the gesture engine for now
+ * Phase deltas vs Phase 1:
+ *   • CSS scroll-snap-mandatory REPLACED by useFeedGesture (drag +
+ *     wheel + keyboard with framer-motion spring snap on release)
+ *   • Container is now a motion.div with style={{ y }} that follows
+ *     the gesture in real time
+ *   • The pool's videos are anchored to the same containerY motion
+ *     value so they slide in lockstep with the drag
+ *   • Items are absolutely positioned by index instead of relying on
+ *     scroll-snap-align — that's the only way to keep them in sync
+ *     with a free-form translateY container
+ *   • IntersectionObserver active-item detection removed: activeIndex
+ *     now comes directly from the gesture's snap commit
+ *   • Tap detection routed through use-gesture filterTaps so swipes
+ *     don't fire links/buttons by accident
  *
- * What's deferred to later phases:
- *   • Phase 2 — framer-motion + use-gesture replaces scroll-snap
- *   • Phase 3 — useNetworkQuality wires bitrate switching
- *   • Phase 4 — useHlsPlayer attaches HLS streams
- *   • Phase 5 — pull-to-refresh + end-of-feed card
- *   • Phase 6 — keyboard shortcuts
- *
- * Memory model the pool enforces:
- *   - 5 <video> elements total, REGARDLESS of how many items in the feed
- *   - 1, 200, 10000 clips → same memory footprint at the player layer
- *   - Items themselves are cheap DOM (img poster + overlays = ~3KB each)
+ * Still deferred to later phases:
+ *   - Phase 3: useNetworkQuality + buffer manager
+ *   - Phase 4: useHlsPlayer
+ *   - Phase 5: pull-to-refresh + end-of-feed card + chip bar v2
+ *   - Phase 6: keyboard shortcuts (basic ↑↓ + space already wired here)
  */
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import { motion } from "framer-motion";
 import {
   FeedItemVideo,
   FeedItemMoment,
 } from "./FeedItem";
 import { FeedPlayerPool, type PoolItem } from "./FeedPlayerPool";
+import { useFeedGesture } from "./hooks/useFeedGesture";
 import type { FeedItem } from "@/components/scroll/ScrollFeed";
 
 interface Props {
@@ -40,21 +44,16 @@ interface Props {
 
 export function ScrollFeedV2({ items, videoCount = 0, initialKillId }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const [activeIndex, setActiveIndex] = useState(0);
   const [itemHeight, setItemHeight] = useState(0);
   const [muted, setMuted] = useState(true);
   const [useLowQuality, setUseLowQuality] = useState(false);
   const [isDesktop, setIsDesktop] = useState(false);
   const [reducedMotion, setReducedMotion] = useState(false);
-  /** IDs of items the pool reported as broken — filtered out. */
   const [brokenIds, setBrokenIds] = useState<Set<string>>(() => new Set());
 
   // ─── Viewport sizing ──────────────────────────────────────────────
   useEffect(() => {
     const update = () => {
-      // 100dvh — accounts for mobile browser chrome bars correctly.
-      // Use the container if mounted (safer than reading window.innerHeight
-      // which lags during iOS toolbar collapse).
       const el = containerRef.current;
       const h = el?.clientHeight ?? window.innerHeight;
       setItemHeight(h);
@@ -68,7 +67,52 @@ export function ScrollFeedV2({ items, videoCount = 0, initialKillId }: Props) {
     };
   }, []);
 
-  // ─── Desktop / reduced-motion / network detection ─────────────────
+  // ─── Filter broken items ──────────────────────────────────────────
+  const visibleItems = useMemo(
+    () => (brokenIds.size === 0 ? items : items.filter((it) => !brokenIds.has(it.id))),
+    [items, brokenIds],
+  );
+
+  // ─── Resolve initial index from ?kill=<id> deep link ─────────────
+  const initialIndex = useMemo(() => {
+    if (!initialKillId) return 0;
+    const idx = visibleItems.findIndex((it) => it.id === initialKillId);
+    return idx >= 0 ? idx : 0;
+  }, [initialKillId, visibleItems]);
+
+  // ─── URL state sync — fired on every snap commit ─────────────────
+  const handleActiveChange = (idx: number) => {
+    if (idx === 0) return; // don't dirty URL on the initial snap
+    const item = visibleItems[idx];
+    if (!item || typeof window === "undefined") return;
+    try {
+      const url = new URL(window.location.href);
+      if (url.searchParams.get("kill") !== item.id) {
+        url.searchParams.set("kill", item.id);
+        window.history.replaceState(window.history.state, "", url.toString());
+      }
+    } catch {
+      // sandboxed contexts disallow history mutation — silent
+    }
+  };
+
+  // ─── Gesture controller ──────────────────────────────────────────
+  const { bind, y, activeIndex, jumpTo, isDragging } = useFeedGesture({
+    totalItems: visibleItems.length,
+    itemHeight,
+    initialIndex,
+    onActiveChange: handleActiveChange,
+  });
+
+  // ─── Apply initial deep-link jump once item heights are measured ──
+  useEffect(() => {
+    if (itemHeight > 0 && initialIndex > 0) {
+      jumpTo(initialIndex, { instant: true });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [itemHeight]);
+
+  // ─── Desktop / reduced-motion / network detection ────────────────
   useEffect(() => {
     const mq = window.matchMedia("(min-width: 768px)");
     const apply = () => setIsDesktop(mq.matches);
@@ -98,7 +142,7 @@ export function ScrollFeedV2({ items, videoCount = 0, initialKillId }: Props) {
     return () => conn.removeEventListener?.("change", check);
   }, []);
 
-  // ─── Mute persistence ─────────────────────────────────────────────
+  // ─── Mute persistence ────────────────────────────────────────────
   useEffect(() => {
     const saved = localStorage.getItem("kc-scroll-muted");
     if (saved === "false") setMuted(false);
@@ -111,70 +155,27 @@ export function ScrollFeedV2({ items, videoCount = 0, initialKillId }: Props) {
     });
   };
 
-  // ─── Active item detection (Phase 1: IntersectionObserver) ────────
+  // ─── Basic keyboard nav (Phase 6 will add full set) ──────────────
   useEffect(() => {
-    const root = containerRef.current;
-    if (!root) return;
-    const obs = new IntersectionObserver(
-      (entries) => {
-        // Pick the entry with the highest intersection ratio — that's
-        // the "active" item in a snap-y container. Stable even during
-        // half-scrolls thanks to threshold steps.
-        let bestRatio = 0;
-        let bestIdx: number | null = null;
-        for (const e of entries) {
-          const idxAttr = (e.target as HTMLElement).dataset.feedIndex;
-          if (idxAttr == null) continue;
-          if (e.isIntersecting && e.intersectionRatio > bestRatio) {
-            bestRatio = e.intersectionRatio;
-            bestIdx = parseInt(idxAttr, 10);
-          }
-        }
-        if (bestIdx != null && bestRatio > 0.5) setActiveIndex(bestIdx);
-      },
-      {
-        root,
-        threshold: [0.4, 0.6, 0.8, 1.0],
-      },
-    );
-    const itemEls = root.querySelectorAll<HTMLElement>("[data-feed-item]");
-    itemEls.forEach((el) => obs.observe(el));
-    return () => obs.disconnect();
-  }, [items.length]);
-
-  // ─── Initial scroll (deep link via ?kill=<id>) ────────────────────
-  useEffect(() => {
-    if (!initialKillId) return;
-    const root = containerRef.current;
-    if (!root) return;
-    const t = window.setTimeout(() => {
-      const target = root.querySelector<HTMLElement>(
-        `[data-feed-id="${CSS.escape(initialKillId)}"]`,
-      );
-      if (target) target.scrollIntoView({ behavior: "auto", block: "start" });
-    }, 0);
-    return () => window.clearTimeout(t);
-  }, [initialKillId]);
-
-  // ─── URL state — reflect active item ─────────────────────────────
-  useEffect(() => {
-    if (items.length === 0 || activeIndex < 0 || activeIndex >= items.length) return;
-    const item = items[activeIndex];
-    if (!item) return;
-    if (typeof window === "undefined") return;
-    if (activeIndex === 0) return; // don't dirty URL on cold load
-    try {
-      const url = new URL(window.location.href);
-      if (url.searchParams.get("kill") !== item.id) {
-        url.searchParams.set("kill", item.id);
-        window.history.replaceState(window.history.state, "", url.toString());
+    const onKey = (e: KeyboardEvent) => {
+      const tag = (e.target as HTMLElement | null)?.tagName ?? "";
+      if (tag === "INPUT" || tag === "TEXTAREA") return;
+      if (e.key === "ArrowDown" || e.key === "j") {
+        e.preventDefault();
+        jumpTo(activeIndex + 1);
+      } else if (e.key === "ArrowUp" || e.key === "k") {
+        e.preventDefault();
+        jumpTo(activeIndex - 1);
+      } else if (e.key === "m" || e.key === "M") {
+        e.preventDefault();
+        toggleMute();
       }
-    } catch {
-      // sandboxed contexts disallow this — silent
-    }
-  }, [activeIndex, items]);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [activeIndex, jumpTo]);
 
-  // ─── Pool error handler — drop broken items from the feed ─────────
+  // ─── Pool error handler ──────────────────────────────────────────
   const handlePoolError = (itemId: string) => {
     setBrokenIds((prev) => {
       if (prev.has(itemId)) return prev;
@@ -184,31 +185,37 @@ export function ScrollFeedV2({ items, videoCount = 0, initialKillId }: Props) {
     });
   };
 
-  // ─── Filter out broken items + project into PoolItem[] ────────────
-  const visibleItems =
-    brokenIds.size === 0 ? items : items.filter((it) => !brokenIds.has(it.id));
-
-  const poolItems: PoolItem[] = visibleItems.map((it) => {
-    if (it.kind === "video" || it.kind === "moment") {
-      return {
-        id: it.id,
-        clipVertical: it.clipVertical,
-        clipVerticalLow: it.clipVerticalLow,
-        clipHorizontal: it.clipHorizontal,
-        thumbnail: it.thumbnail,
-      };
-    }
-    // Aggregate items have no clip — give the pool an empty src so it
-    // skips them. The UI layer renders the splash-art card on top.
-    return { id: it.id, clipVertical: "", clipVerticalLow: null, clipHorizontal: null, thumbnail: null };
-  });
+  const poolItems: PoolItem[] = useMemo(
+    () =>
+      visibleItems.map((it) => {
+        if (it.kind === "video" || it.kind === "moment") {
+          return {
+            id: it.id,
+            clipVertical: it.clipVertical,
+            clipVerticalLow: it.clipVerticalLow,
+            clipHorizontal: it.clipHorizontal,
+            thumbnail: it.thumbnail,
+          };
+        }
+        return {
+          id: it.id,
+          clipVertical: "",
+          clipVerticalLow: null,
+          clipHorizontal: null,
+          thumbnail: null,
+        };
+      }),
+    [visibleItems],
+  );
 
   return (
     <div
       ref={containerRef}
-      className="scroll-container fixed inset-0 z-[60] bg-black"
+      className="fixed inset-0 z-[60] bg-black overflow-hidden"
+      // Touch-action: pan-y so the browser doesn't fight the drag.
+      style={{ touchAction: "pan-y", overscrollBehavior: "contain" }}
     >
-      {/* Top bar */}
+      {/* Top bar — outside the motion container so it doesn't translate. */}
       <div
         className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-4 py-3"
         style={{ paddingTop: "max(0.75rem, env(safe-area-inset-top, 0.75rem))" }}
@@ -239,7 +246,7 @@ export function ScrollFeedV2({ items, videoCount = 0, initialKillId }: Props) {
         </button>
       </div>
 
-      {/* The pool floats above all items, follows active via translate3d */}
+      {/* Pool — anchored to viewport, follows containerY */}
       {itemHeight > 0 && (
         <FeedPlayerPool
           items={poolItems}
@@ -250,53 +257,100 @@ export function ScrollFeedV2({ items, videoCount = 0, initialKillId }: Props) {
           isDesktop={isDesktop}
           reducedMotion={reducedMotion}
           onError={handlePoolError}
+          containerY={y}
         />
       )}
 
-      {/* Items — pure UI overlays, no video */}
-      {visibleItems.map((item, i) => {
-        const isActive = i === activeIndex;
-        if (item.kind === "video") {
+      {/* Items container — gesture-driven, items absolutely positioned. */}
+      <motion.div
+        className="absolute inset-0"
+        style={{ y, willChange: "transform" }}
+        {...bind()}
+      >
+        {visibleItems.map((item, i) => {
+          const isActive = i === activeIndex;
+          const top = i * itemHeight;
+          if (item.kind === "video") {
+            return (
+              <div
+                key={`v-${item.id}`}
+                style={{ position: "absolute", top, left: 0, right: 0, height: itemHeight }}
+              >
+                <FeedItemVideo
+                  item={item}
+                  index={i}
+                  total={visibleItems.length}
+                  itemHeight={itemHeight}
+                  isActive={isActive}
+                />
+              </div>
+            );
+          }
+          if (item.kind === "moment") {
+            return (
+              <div
+                key={`m-${item.id}`}
+                style={{ position: "absolute", top, left: 0, right: 0, height: itemHeight }}
+              >
+                <FeedItemMoment
+                  item={item}
+                  index={i}
+                  total={visibleItems.length}
+                  itemHeight={itemHeight}
+                  isActive={isActive}
+                />
+              </div>
+            );
+          }
           return (
-            <FeedItemVideo
-              key={`v-${item.id}`}
-              item={item}
-              index={i}
-              total={visibleItems.length}
-              itemHeight={itemHeight}
-              isActive={isActive}
-            />
+            <div
+              key={`a-${item.id}-${i}`}
+              data-feed-item
+              data-feed-index={i}
+              data-feed-id={item.id}
+              style={{
+                position: "absolute",
+                top,
+                left: 0,
+                right: 0,
+                height: itemHeight,
+              }}
+              className="flex items-center justify-center bg-[var(--bg-elevated)] text-white/40 text-sm"
+            >
+              (legacy aggregate item)
+            </div>
           );
-        }
-        if (item.kind === "moment") {
-          return (
-            <FeedItemMoment
-              key={`m-${item.id}`}
-              item={item}
-              index={i}
-              total={visibleItems.length}
-              itemHeight={itemHeight}
-              isActive={isActive}
-            />
-          );
-        }
-        // Aggregate (legacy splash-art) — render a minimal placeholder for now.
-        return (
-          <div
-            key={`a-${item.id}-${i}`}
-            data-feed-item
-            data-feed-index={i}
-            data-feed-id={item.id}
-            style={{ height: `${itemHeight}px` }}
-            className="flex items-center justify-center bg-[var(--bg-elevated)] text-white/40 text-sm"
-          >
-            (legacy aggregate item — Phase 1 minimal render)
-          </div>
-        );
-      })}
+        })}
+      </motion.div>
+
+      {/* Drag indicator — subtle dot grid showing position in feed */}
+      {visibleItems.length > 1 && (
+        <div className="fixed right-2 top-1/2 -translate-y-1/2 z-50 flex flex-col gap-1">
+          {visibleItems.slice(0, 5).map((_, i) => {
+            const offset = activeIndex - 2 + i;
+            const isActive = offset === activeIndex;
+            const inRange = offset >= 0 && offset < visibleItems.length;
+            return (
+              <span
+                key={i}
+                className={`block h-1 w-1 rounded-full transition-all ${
+                  isActive
+                    ? "bg-[var(--gold)] h-2"
+                    : inRange
+                    ? "bg-white/40"
+                    : "bg-white/10"
+                }`}
+              />
+            );
+          })}
+        </div>
+      )}
+
+      {/* isDragging hint — fade overlays during active swipe */}
+      {isDragging && <div className="pointer-events-none fixed inset-0 z-30" />}
 
       {/* Empty state */}
-      {visibleItems.length === 0 && (
+      {visibleItems.length === 0 && itemHeight > 0 && (
         <div
           className="flex items-center justify-center"
           style={{ height: `${itemHeight}px` }}
