@@ -6,6 +6,7 @@ import Link from "next/link";
 import { championIconUrl, championSplashUrl } from "@/lib/constants";
 import { useToast } from "@/components/Toast";
 import { CommentPanel } from "@/components/CommentPanel";
+import { useScrollAutoplay } from "./useScrollAutoplay";
 
 // ─── Feed item types (discriminated union) ─────────────────────────────
 //
@@ -405,9 +406,6 @@ const CLASSIFICATION_LABELS: Record<string, { label: string; color: string }> = 
 };
 
 function MomentScrollItem({ item, index, total, shared }: { item: MomentFeedItem; index: number; total: number; shared: SharedScrollProps }) {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const [visible, setVisible] = useState(false);
   const [rating, setRating] = useState(0);
   const [showRating, setShowRating] = useState(false);
   const [showComments, setShowComments] = useState(false);
@@ -416,6 +414,16 @@ function MomentScrollItem({ item, index, total, shared }: { item: MomentFeedItem
   const [tapFlash, setTapFlash] = useState<null | "play" | "pause">(null);
   const rafRef = useRef<number | null>(null);
   const prevTimeRef = useRef(0);
+
+  // Robust autoplay (see useScrollAutoplay.ts).
+  const { containerRef, videoRef, visible, needsTapToPlay, manualPlay } =
+    useScrollAutoplay({
+      index,
+      currentIndexRef: shared.currentIndexRef,
+      onActivated: () => {
+        if (!shared.reducedMotion && "vibrate" in navigator) navigator.vibrate(10);
+      },
+    });
   const lastTap = useRef(0);
   const singleTapTimer = useRef<number | null>(null);
 
@@ -423,48 +431,9 @@ function MomentScrollItem({ item, index, total, shared }: { item: MomentFeedItem
   useEffect(() => {
     const v = videoRef.current;
     if (v) v.muted = shared.muted;
+    // videoRef is a stable ref
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [shared.muted]);
-
-  // Visibility + play + preload ladder.
-  // Tighter preload window than before (next=auto, next+1=metadata, rest=none)
-  // keeps mobile bandwidth on the actual playing clip instead of queuing
-  // three heavy MP4 downloads in parallel.
-  useEffect(() => {
-    const el = containerRef.current;
-    if (!el) return;
-    const obs = new IntersectionObserver(
-      ([entry]) => {
-        const isVis = entry.isIntersecting;
-        setVisible(isVis);
-        el.classList.toggle("is-visible", isVis);
-        const v = videoRef.current;
-        if (!v) return;
-        if (isVis) {
-          if (!shared.reducedMotion && "vibrate" in navigator) navigator.vibrate(10);
-          shared.currentIndexRef.current = index;
-          v.currentTime = 0;
-          v.play().catch(() => {});
-          v.preload = "auto";
-          let sibling = el.nextElementSibling;
-          for (let i = 0; i < 2 && sibling; i++) {
-            const nextV = sibling.querySelector("video");
-            if (nextV instanceof HTMLVideoElement) {
-              nextV.preload = i === 0 ? "auto" : "metadata";
-            }
-            sibling = sibling.nextElementSibling;
-          }
-        } else {
-          v.pause();
-          if (Math.abs(index - shared.currentIndexRef.current) > 2) {
-            v.preload = "none";
-          }
-        }
-      },
-      { threshold: 0.6 }
-    );
-    obs.observe(el);
-    return () => obs.disconnect();
-  }, [index, shared.currentIndexRef, shared.reducedMotion]);
 
   // Progress bar via rAF — writes `--p` directly on the container element.
   // No React re-renders per tick. Only runs while the item is visible.
@@ -604,6 +573,21 @@ function MomentScrollItem({ item, index, total, shared }: { item: MomentFeedItem
         }}
       />
 
+      {/* Autoplay-blocked CTA — see VideoScrollItem for rationale. */}
+      {needsTapToPlay && visible && (
+        <button
+          onClick={(e) => { e.stopPropagation(); manualPlay(); }}
+          className="absolute inset-0 z-30 flex items-center justify-center bg-black/30 backdrop-blur-[2px] cursor-pointer group"
+          aria-label="Lancer le clip"
+        >
+          <span className="flex h-20 w-20 items-center justify-center rounded-full bg-[var(--gold)]/95 shadow-[0_0_40px_rgba(200,170,110,0.6)] transition-transform group-hover:scale-110 group-active:scale-95">
+            <svg className="h-9 w-9 translate-x-1 text-[var(--bg-primary)]" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M8 5v14l11-7z" />
+            </svg>
+          </span>
+        </button>
+      )}
+
       {/* Unified bottom + top gradient overlay (single paint layer). */}
       <div className="absolute inset-0 pointer-events-none" style={{
         background:
@@ -713,9 +697,6 @@ function MomentScrollItem({ item, index, total, shared }: { item: MomentFeedItem
 // ─── Video scroll item (real MP4 from R2) ──────────────────────────────
 
 function VideoScrollItem({ item, index, total, shared }: { item: VideoFeedItem; index: number; total: number; shared: SharedScrollProps }) {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const [visible, setVisible] = useState(false);
   const [rating, setRating] = useState(0);
   const [showRating, setShowRating] = useState(false);
   const [showDoubleTapHeart, setShowDoubleTapHeart] = useState(false);
@@ -728,49 +709,25 @@ function VideoScrollItem({ item, index, total, shared }: { item: VideoFeedItem; 
   const lastTap = useRef(0);
   const singleTapTimer = useRef<number | null>(null);
 
+  // Robust autoplay — owns the IntersectionObserver, retries on canplay,
+  // surfaces a tap-to-play affordance when autoplay is blocked. See
+  // useScrollAutoplay.ts for the rationale (fixes "first clip frozen" bug).
+  const { containerRef, videoRef, visible, needsTapToPlay, manualPlay } =
+    useScrollAutoplay({
+      index,
+      currentIndexRef: shared.currentIndexRef,
+      onActivated: () => {
+        if (!shared.reducedMotion && "vibrate" in navigator) navigator.vibrate(10);
+      },
+    });
+
   // Sync mute from shared state
   useEffect(() => {
     const v = videoRef.current;
     if (v) v.muted = shared.muted;
+    // videoRef is a stable ref, no need in deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [shared.muted]);
-
-  // Visibility + play + preload ladder.
-  useEffect(() => {
-    const el = containerRef.current;
-    if (!el) return;
-    const obs = new IntersectionObserver(
-      ([entry]) => {
-        const isVis = entry.isIntersecting;
-        setVisible(isVis);
-        el.classList.toggle("is-visible", isVis);
-        const v = videoRef.current;
-        if (!v) return;
-        if (isVis) {
-          if (!shared.reducedMotion && "vibrate" in navigator) navigator.vibrate(10);
-          shared.currentIndexRef.current = index;
-          v.currentTime = 0;
-          v.play().catch(() => {});
-          v.preload = "auto";
-          let sibling = el.nextElementSibling;
-          for (let i = 0; i < 2 && sibling; i++) {
-            const nextV = sibling.querySelector("video");
-            if (nextV instanceof HTMLVideoElement) {
-              nextV.preload = i === 0 ? "auto" : "metadata";
-            }
-            sibling = sibling.nextElementSibling;
-          }
-        } else {
-          v.pause();
-          if (Math.abs(index - shared.currentIndexRef.current) > 2) {
-            v.preload = "none";
-          }
-        }
-      },
-      { threshold: 0.6 }
-    );
-    obs.observe(el);
-    return () => obs.disconnect();
-  }, [index, shared.currentIndexRef, shared.reducedMotion]);
 
   // Progress bar via rAF — direct DOM write, no React re-renders.
   useEffect(() => {
@@ -914,6 +871,23 @@ function VideoScrollItem({ item, index, total, shared }: { item: VideoFeedItem; 
           shared.onBroken("video", item.id, v.currentSrc || v.src);
         }}
       />
+
+      {/* Autoplay-blocked CTA — only renders when the browser refused
+          play() AND the canplay-retry also failed. Tapping it counts as a
+          user gesture so the next play() always succeeds. */}
+      {needsTapToPlay && visible && (
+        <button
+          onClick={(e) => { e.stopPropagation(); manualPlay(); }}
+          className="absolute inset-0 z-30 flex items-center justify-center bg-black/30 backdrop-blur-[2px] cursor-pointer group"
+          aria-label="Lancer le clip"
+        >
+          <span className="flex h-20 w-20 items-center justify-center rounded-full bg-[var(--gold)]/95 shadow-[0_0_40px_rgba(200,170,110,0.6)] transition-transform group-hover:scale-110 group-active:scale-95">
+            <svg className="h-9 w-9 translate-x-1 text-[var(--bg-primary)]" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M8 5v14l11-7z" />
+            </svg>
+          </span>
+        </button>
+      )}
 
       {/* Unified gradient overlay (single paint layer). */}
       <div className="absolute inset-0 pointer-events-none" style={{
