@@ -55,6 +55,7 @@ const PAGES: Entry[] = [
   { id: "page-sphere",  group: "page", label: "Sphere immersif", subtitle: "Mode 3D 360",   href: "/sphere",     searchText: "sphere 3d 360 immersif experimental orbit" },
   { id: "page-players", group: "page", label: "Joueurs",       subtitle: "Roster KC",        href: "/players",     searchText: "joueurs players roster" },
   { id: "page-champions", group: "page", label: "Champions",   subtitle: "Browse par champ", href: "/champions",   searchText: "champions champion picks pool meta" },
+  { id: "page-matchups",  group: "page", label: "Match-ups",     subtitle: "Confrontations",   href: "/matchups",    searchText: "matchups match-ups vs versus confrontations rivalites duels champions" },
   { id: "page-alumni",  group: "page", label: "Alumni",        subtitle: "Legendes passees", href: "/alumni",      searchText: "alumni ancien past legendes rekkles xmatty cabochard" },
   { id: "page-matches", group: "page", label: "Matchs",        subtitle: "Historique",       href: "/matches",     searchText: "matchs matches historique" },
   { id: "page-top",     group: "page", label: "Top kills",     subtitle: "Leaderboard",      href: "/top",         searchText: "top leaderboard best meilleurs" },

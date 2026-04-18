@@ -77,7 +77,37 @@ export default async function ChampionsIndexPage() {
         backgroundSrc="/images/hero-bg.jpg"
       />
 
-      <div className="max-w-7xl mx-auto px-4 md:px-8 py-12">
+      <div className="max-w-7xl mx-auto px-4 md:px-8 py-12 space-y-6">
+        {/* CTA → matchups index. Lives above the grid because curious users
+            who land here often want "show me all the rivalries", not the
+            champion list. One pixel-priced link, big visual payoff. */}
+        <Link
+          href="/matchups"
+          className="group flex items-center justify-between gap-4 rounded-2xl border border-[var(--border-gold)] bg-[var(--bg-surface)] px-5 py-4 transition-all hover:border-[var(--gold)]/55 hover:-translate-y-0.5"
+        >
+          <div className="flex items-center gap-4 min-w-0">
+            <span className="font-display text-3xl font-black text-[var(--gold)]/65 group-hover:text-[var(--gold)] transition-colors">
+              VS
+            </span>
+            <div className="min-w-0">
+              <p className="font-display text-sm md:text-base font-bold text-white group-hover:text-[var(--gold)] transition-colors">
+                Voir tous les match-ups
+              </p>
+              <p className="text-xs text-[var(--text-muted)]">
+                Champion contre champion, classés par fréquence
+              </p>
+            </div>
+          </div>
+          <svg
+            className="h-5 w-5 text-white/35 group-hover:text-[var(--gold)] transition-colors flex-shrink-0"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
+          </svg>
+        </Link>
+
         <div className="grid gap-3 grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8">
           {ordered.map((c) => (
             <Link
