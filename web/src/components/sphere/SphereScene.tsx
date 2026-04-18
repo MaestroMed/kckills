@@ -1,0 +1,243 @@
+"use client";
+
+import { Canvas, useFrame, useThree } from "@react-three/fiber";
+import { Html, OrbitControls, Stats } from "@react-three/drei";
+import { useEffect, useMemo, useRef, useState } from "react";
+import * as THREE from "three";
+import Link from "next/link";
+
+export interface SphereTile {
+  id: string;
+  thumbnailUrl: string | null;
+  killerChampion: string | null;
+  victimChampion: string | null;
+  highlightScore: number | null;
+  multiKill: string | null;
+  tagX: string | null; // game_minute_bucket
+  tagY: string | null; // killer_player_id (for player-axis)
+  hue: number;         // 0-360, derived from tag for colour banding
+}
+
+interface SphereSceneProps {
+  tiles: SphereTile[];
+  /** Show debug overlays (FPS counter, axis helpers). */
+  debug?: boolean;
+  /** Initial camera distance from sphere center. */
+  cameraZ?: number;
+}
+
+const SPHERE_RADIUS = 8;
+const TILE_W = 1.6;
+const TILE_H = 0.9;
+const TILE_GAP_RAD = 0.02; // visual breathing space between tiles
+
+/**
+ * Sphere Scroll 360 — V0 spike.
+ *
+ * The user sits at sphere center; tiles are placed on the inner surface
+ * via Fibonacci sphere distribution (best practice for evenly spreading
+ * N points on a sphere without clustering at the poles).
+ *
+ * V0 scope (validate technical feasibility):
+ *   - All tiles rendered at once with frustum culling by three.js
+ *   - Drag to orbit, scroll to dolly
+ *   - Click a tile -> navigate to /kill/[id]
+ *   - Centre tile (closest to camera viewing direction) glows + scales
+ *   - Hue banding by player so the user sees clusters even at distance
+ *
+ * Out of scope for V0 (Phase 2/3 per the plan):
+ *   - Semantic gestures (left=same player, etc.)
+ *   - LOD streaming, prefetch, frustum-pool selection
+ *   - Multi-shell / pinch-zoom
+ *   - Personalisation, learning compass
+ */
+export function SphereScene({ tiles, debug = false, cameraZ = 0 }: SphereSceneProps) {
+  return (
+    <Canvas
+      camera={{ position: [0, 0, cameraZ], fov: 75, near: 0.1, far: 100 }}
+      dpr={[1, 2]}
+      gl={{ antialias: true, alpha: false }}
+      style={{ background: "radial-gradient(circle, #0A1428 0%, #010A13 100%)" }}
+    >
+      <ambientLight intensity={0.5} />
+      <pointLight position={[0, 0, 0]} intensity={0.8} />
+      {/* OrbitControls inverted so dragging rotates the WORLD (not the
+          camera around the world) — that's how an inside-out sphere
+          should feel from the centre. */}
+      <OrbitControls
+        enableZoom
+        enablePan={false}
+        minDistance={0}
+        maxDistance={SPHERE_RADIUS - 0.5}
+        rotateSpeed={-0.4}
+        zoomSpeed={0.6}
+      />
+      <SphereTiles tiles={tiles} />
+      <CenterFocusBeam />
+      {debug && <Stats />}
+      {debug && <axesHelper args={[5]} />}
+    </Canvas>
+  );
+}
+
+/** Render every tile as a plane positioned on the inner sphere surface,
+ *  facing the centre. Click handler routes to the kill detail page. */
+function SphereTiles({ tiles }: { tiles: SphereTile[] }) {
+  const positions = useMemo(() => fibonacciSphere(tiles.length, SPHERE_RADIUS), [tiles.length]);
+  const cameraDir = useRef(new THREE.Vector3());
+  const [activeIndex, setActiveIndex] = useState<number | null>(null);
+
+  // Update active tile on every frame — closest to forward-looking camera dir.
+  useFrame(({ camera }) => {
+    cameraDir.current.set(0, 0, -1).applyQuaternion(camera.quaternion);
+    let bestDot = -Infinity;
+    let bestIdx = -1;
+    for (let i = 0; i < positions.length; i += 1) {
+      const p = positions[i];
+      // Tile direction from origin (which is camera position when zoomed-in)
+      const dot =
+        cameraDir.current.x * (p.x / SPHERE_RADIUS) +
+        cameraDir.current.y * (p.y / SPHERE_RADIUS) +
+        cameraDir.current.z * (p.z / SPHERE_RADIUS);
+      if (dot > bestDot) {
+        bestDot = dot;
+        bestIdx = i;
+      }
+    }
+    // Only update when actually different — React re-renders cost.
+    if (bestIdx !== activeIndex && bestDot > 0.85) {
+      setActiveIndex(bestIdx);
+    }
+  });
+
+  return (
+    <group>
+      {tiles.map((tile, i) => {
+        const p = positions[i];
+        const isActive = activeIndex === i;
+        return (
+          <SphereTileMesh
+            key={tile.id}
+            tile={tile}
+            position={p}
+            active={isActive}
+          />
+        );
+      })}
+    </group>
+  );
+}
+
+interface TileMeshProps {
+  tile: SphereTile;
+  position: THREE.Vector3;
+  active: boolean;
+}
+
+function SphereTileMesh({ tile, position, active }: TileMeshProps) {
+  const meshRef = useRef<THREE.Mesh>(null);
+  const [texture, setTexture] = useState<THREE.Texture | null>(null);
+
+  // Load thumbnail texture lazily — this is V0's biggest perf risk on
+  // mobile, will move to LOD/streaming in Phase 3.
+  useEffect(() => {
+    if (!tile.thumbnailUrl) return;
+    const loader = new THREE.TextureLoader();
+    loader.crossOrigin = "anonymous";
+    loader.load(
+      tile.thumbnailUrl,
+      (t) => {
+        t.colorSpace = THREE.SRGBColorSpace;
+        setTexture(t);
+      },
+      undefined,
+      () => {
+        // Quietly skip on failure — tile renders as solid colour.
+      },
+    );
+  }, [tile.thumbnailUrl]);
+
+  // Orient the tile so its face looks at the sphere centre.
+  useEffect(() => {
+    if (!meshRef.current) return;
+    meshRef.current.lookAt(0, 0, 0);
+  }, [position]);
+
+  const tileColor = useMemo(() => new THREE.Color().setHSL(tile.hue / 360, 0.45, 0.4), [tile.hue]);
+
+  // Slight scale-up + emissive boost for active tile.
+  const scale = active ? 1.18 : 1.0;
+
+  return (
+    <mesh ref={meshRef} position={position} scale={scale}>
+      <planeGeometry args={[TILE_W, TILE_H]} />
+      <meshStandardMaterial
+        map={texture ?? undefined}
+        color={texture ? "#ffffff" : tileColor}
+        emissive={active ? new THREE.Color("#C8AA6E") : new THREE.Color("#000000")}
+        emissiveIntensity={active ? 0.4 : 0}
+        side={THREE.DoubleSide}
+        toneMapped={false}
+      />
+      {active && (
+        <Html position={[0, -TILE_H / 2 - 0.15, 0]} center distanceFactor={6} occlude={false}>
+          <Link
+            href={`/kill/${tile.id}`}
+            className="pointer-events-auto block rounded-lg bg-black/85 backdrop-blur-md border border-[var(--gold)]/45 px-3 py-1.5 text-center whitespace-nowrap"
+          >
+            <p className="font-display text-[10px] font-bold text-white leading-tight">
+              <span className="text-[var(--gold)]">{tile.killerChampion ?? "?"}</span>
+              <span className="text-white/55 mx-1">→</span>
+              <span>{tile.victimChampion ?? "?"}</span>
+            </p>
+            {tile.highlightScore != null && (
+              <p className="mt-0.5 font-data text-[8px] text-[var(--gold)]/80 uppercase tracking-widest">
+                {tile.highlightScore.toFixed(1)}/10 · ouvrir
+              </p>
+            )}
+          </Link>
+        </Html>
+      )}
+    </mesh>
+  );
+}
+
+/** Subtle radial fade in the centre of the sphere, hints at "you are
+ *  inside something" rather than floating in void. */
+function CenterFocusBeam() {
+  return (
+    <mesh>
+      <sphereGeometry args={[SPHERE_RADIUS - 0.01, 32, 32]} />
+      <meshBasicMaterial
+        color="#C8AA6E"
+        side={THREE.BackSide}
+        transparent
+        opacity={0.04}
+      />
+    </mesh>
+  );
+}
+
+// ─── Math helpers ───────────────────────────────────────────────────────
+
+/**
+ * Fibonacci sphere — places N points on a sphere with near-uniform
+ * spacing. Avoids the polar clustering of naive (theta, phi) random
+ * sampling.
+ */
+function fibonacciSphere(n: number, radius: number): THREE.Vector3[] {
+  const points: THREE.Vector3[] = [];
+  const phi = Math.PI * (3 - Math.sqrt(5)); // golden angle
+  for (let i = 0; i < n; i += 1) {
+    const y = 1 - (i / Math.max(1, n - 1)) * 2;
+    const r = Math.sqrt(1 - y * y);
+    const theta = phi * i;
+    const x = Math.cos(theta) * r;
+    const z = Math.sin(theta) * r;
+    points.push(new THREE.Vector3(x * radius, y * radius, z * radius));
+  }
+  return points;
+}
+
+// `Stats` import only used in debug — keep the bundle lean.
+void Stats;

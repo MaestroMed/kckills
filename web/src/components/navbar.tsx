@@ -8,6 +8,7 @@ const NAV_LINKS = [
   { href: "/", label: "Accueil" },
   { href: "/scroll", label: "Scroll" },
   { href: "/best", label: "Meilleurs" },
+  { href: "/sphere", label: "Sphere \u2728" },
   { href: "/players", label: "Joueurs" },
   { href: "/alumni", label: "Alumni" },
   { href: "/matches", label: "Matchs" },
