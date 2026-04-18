@@ -6,6 +6,7 @@ import { PLAYER_PHOTOS, TEAM_LOGOS, KC_LOGO } from "@/lib/kc-assets";
 import { getPublishedKills } from "@/lib/supabase/kills";
 import { AudioPlayer } from "@/components/AudioPlayer";
 import { HomeFilteredContent } from "@/components/HomeFilteredContent";
+import { HomeRareCards } from "@/components/HomeRareCards";
 import { HomeYouTubeShowcase } from "@/components/HomeYouTubeShowcase";
 import { KillOfTheWeek } from "@/components/KillOfTheWeek";
 import { QuoteCard } from "@/components/QuoteCard";
@@ -490,6 +491,9 @@ export default async function HomePage() {
 
       {/* ═══ KILL OF THE WEEK ═══════════════════════════════════════════ */}
       <KillOfTheWeek />
+
+      {/* ═══ CARTES LEGENDAIRES — TCG visual layer en showcase home ═════ */}
+      <HomeRareCards />
 
       {/* ═══ YOUTUBE PARALLAX SHOWCASE (RSS-driven 3D carousel) ═══════════ */}
       <HomeYouTubeShowcase />
