@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import Image from "next/image";
 import { PageHero } from "@/components/ui/PageHero";
+import { DiscoverMore } from "@/components/DiscoverMore";
 import { getPublishedKills, type PublishedKillRow } from "@/lib/supabase/kills";
 
 export const revalidate = 120; // 2 min — fresh feed
@@ -73,6 +74,8 @@ export default async function RecentPage() {
             </p>
           </div>
         )}
+
+        <DiscoverMore excludeHrefs={["/recent"]} />
       </div>
     </div>
   );

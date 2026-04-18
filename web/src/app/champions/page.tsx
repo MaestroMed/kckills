@@ -3,6 +3,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { championIconUrl } from "@/lib/constants";
 import { PageHero } from "@/components/ui/PageHero";
+import { DiscoverMore } from "@/components/DiscoverMore";
 import { getPublishedKills } from "@/lib/supabase/kills";
 
 export const revalidate = 600;
@@ -149,6 +150,8 @@ export default async function ChampionsIndexPage() {
             </Link>
           ))}
         </div>
+
+        <DiscoverMore excludeHrefs={["/champions"]} />
       </div>
     </div>
   );

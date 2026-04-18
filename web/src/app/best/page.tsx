@@ -4,6 +4,7 @@ import Image from "next/image";
 import { ClipReel } from "@/components/ClipReel";
 import { ClipCard } from "@/components/tcg/ClipCard";
 import { PageHero } from "@/components/ui/PageHero";
+import { DiscoverMore } from "@/components/DiscoverMore";
 import { getPublishedKills, type PublishedKillRow } from "@/lib/supabase/kills";
 
 export const revalidate = 300; // 5 min — best of needs to feel live
@@ -177,6 +178,8 @@ export default async function BestPage() {
             <PlayerReel key={ign} ign={ign} />
           ))}
         </section>
+
+        <DiscoverMore excludeHrefs={["/best"]} />
       </div>
     </div>
   );
