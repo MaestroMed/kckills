@@ -380,30 +380,92 @@ export function ScrollFeed({
         </div>
       )}
 
-      {visibleItems.length === 0 && (
-        <div className="scroll-item flex items-center justify-center">
-          <div className="text-center max-w-md px-6">
-            <div className="text-6xl mb-6">{"\u2694\uFE0F"}</div>
-            <h1 className="font-display text-3xl font-black text-[var(--gold)] mb-3 uppercase">
-              Clips en cours de traitement
-            </h1>
-            <p className="text-sm text-[var(--text-muted)] leading-relaxed mb-6">
-              Le worker Python broie les 83 matchs KC pour en extraire les
-              kills les plus hypes. En attendant, va regarder les clips YouTube
-              officiels sur la home.
-            </p>
+      {visibleItems.length === 0 && <ScrollEmptyState chipFilters={chipFilters} />}
+    </div>
+  );
+}
+
+// ─── Empty state ───────────────────────────────────────────────────────
+
+function ScrollEmptyState({ chipFilters }: { chipFilters?: ChipFilters }) {
+  // Detect whether the user actively narrowed the feed (vs landed on an
+  // empty catalogue). Filter-driven empty state needs different copy and
+  // a different CTA — telling someone "the worker is still processing"
+  // when they just filtered to "Caliste pentas + KC death side" is wrong.
+  const hasFilter =
+    chipFilters &&
+    (chipFilters.multiKillsOnly ||
+      chipFilters.firstBloodsOnly ||
+      chipFilters.player !== null ||
+      chipFilters.fight !== null ||
+      chipFilters.side !== null);
+
+  if (hasFilter) {
+    return (
+      <div className="scroll-item flex items-center justify-center">
+        <div className="text-center max-w-md px-6">
+          <div className="text-6xl mb-6 opacity-60">{"\uD83D\uDD0E"}</div>
+          <h1 className="font-display text-3xl font-black text-[var(--gold)] mb-3 uppercase">
+            Aucun clip pour ces filtres
+          </h1>
+          <p className="text-sm text-[var(--text-muted)] leading-relaxed mb-6">
+            Essaie de retirer un ou deux chips, ou jette un œil aux pages
+            d&apos;exploration ci-dessous.
+          </p>
+          <div className="flex flex-wrap items-center justify-center gap-2">
             <Link
-              href="/#highlights"
-              className="inline-flex items-center gap-2 rounded-xl bg-[var(--gold)] px-6 py-3 font-display text-xs font-bold uppercase tracking-widest text-[var(--bg-primary)]"
+              href="/scroll"
+              className="rounded-xl bg-[var(--gold)] px-5 py-2.5 font-display text-xs font-bold uppercase tracking-widest text-[var(--bg-primary)]"
             >
-              Voir les clips YouTube
-              <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M9 5l7 7-7 7" />
-              </svg>
+              Reset filtres
+            </Link>
+            <Link
+              href="/multikills"
+              className="rounded-xl border border-[var(--orange)]/45 bg-[var(--orange)]/10 px-4 py-2.5 font-display text-xs font-bold uppercase tracking-widest text-[var(--orange)]"
+            >
+              Multi-kills
+            </Link>
+            <Link
+              href="/first-bloods"
+              className="rounded-xl border border-[var(--red)]/45 bg-[var(--red)]/10 px-4 py-2.5 font-display text-xs font-bold uppercase tracking-widest text-[var(--red)]"
+            >
+              First Bloods
+            </Link>
+            <Link
+              href="/best"
+              className="rounded-xl border border-white/15 bg-black/30 px-4 py-2.5 font-display text-xs font-bold uppercase tracking-widest text-white/80"
+            >
+              Meilleurs
             </Link>
           </div>
         </div>
-      )}
+      </div>
+    );
+  }
+
+  // Catalogue is genuinely empty (worker hasn't published anything yet).
+  return (
+    <div className="scroll-item flex items-center justify-center">
+      <div className="text-center max-w-md px-6">
+        <div className="text-6xl mb-6">{"\u2694\uFE0F"}</div>
+        <h1 className="font-display text-3xl font-black text-[var(--gold)] mb-3 uppercase">
+          Clips en cours de traitement
+        </h1>
+        <p className="text-sm text-[var(--text-muted)] leading-relaxed mb-6">
+          Le worker Python broie les 83 matchs KC pour en extraire les
+          kills les plus hypes. En attendant, va regarder les clips YouTube
+          officiels sur la home.
+        </p>
+        <Link
+          href="/#highlights"
+          className="inline-flex items-center gap-2 rounded-xl bg-[var(--gold)] px-6 py-3 font-display text-xs font-bold uppercase tracking-widest text-[var(--bg-primary)]"
+        >
+          Voir les clips YouTube
+          <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M9 5l7 7-7 7" />
+          </svg>
+        </Link>
+      </div>
     </div>
   );
 }
