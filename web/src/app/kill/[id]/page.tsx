@@ -26,7 +26,9 @@ export const dynamicParams = true;
  */
 export async function generateStaticParams(): Promise<{ id: string }[]> {
   try {
-    const kills = await getPublishedKills(100);
+    // buildTime: true uses the cookie-less anon Supabase client — `cookies()`
+    // can't be called outside a request scope and would otherwise crash here.
+    const kills = await getPublishedKills(100, { buildTime: true });
     return kills.map((k) => ({ id: k.id }));
   } catch {
     return [];

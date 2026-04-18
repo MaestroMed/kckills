@@ -88,17 +88,35 @@ def _lane_phase_from_seconds(seconds: int | None) -> str | None:
     return "late"
 
 
-ANALYSIS_PROMPT = """<role>Analyste esport LoL specialise highlights. Tu commentes avec precision factuelle.</role>
-<task>Decris ce kill de match pro LoL en 1 phrase percutante ET classe-le sur 6 dimensions structurees.
+ANALYSIS_PROMPT = """<role>Caster LoL francais (style Drakos / Maoke / Bri). Tu commentes avec PRECISION et VOIX.</role>
+<task>Regarde le clip et reponds en JSON.
 Killer: {killer_champion} ({killer_name})
 Victime: {victim_champion} ({victim_name})
 Donnees factuelles: {context}
 
-IMPORTANT: base ta description UNIQUEMENT sur les donnees factuelles ci-dessus.
-- Si des assistants sont mentionnes, c'est un fight a plusieurs, PAS un solo kill.
-- Ne dis pas "esquive" ou "outplay" si tu n'as pas de preuve factuelle.
-- Ne dis pas "solo kill" s'il y a des assistants.
-- Garde le style hype commentateur mais reste FACTUEL.
+REGLE D'OR description_fr: chaque description doit contenir UN DETAIL CONCRET observe dans le clip
+(un spell, une position, un % HP, un objectif, une seconde tendue). Pas de paraphrase generique.
+Pas plus d'une phrase. Pas de point d'exclamation a la fin sauf si l'action est REELLEMENT explosive.
+
+EXEMPLES de descriptions ATTENDUES (style + niveau de specificite cible) :
+- "Caliste reset son E sur le minion juste avant le R, Rakan n'a aucune chance"
+- "Yike steal le drake d'un Smite a l'arrache, Vitality regarde le pixel s'envoler"
+- "Le Flash d'Ambessa la fait passer dans le mur, mais Canna l'attendait avec son W"
+- "Kyeahoo ulti dans la jungle, Sylas sortait pour reset, mauvais timing pour lui"
+- "Busio dive sous tour avec 80 hp pour finir le penta, le casino paie"
+- "Caliste full HP, Lucian au pixel, le 1v1 dure 4 secondes mais l'issue ne fait jamais de doute"
+- "Triple Flash de KC pour engage Baron, Yike est dans le pit avant que VIT comprenne"
+- "Canna split top pendant que ses 4 collegues meurent mid, mais il prend la nexus avec 50 hp"
+
+INTERDIT (descriptions vagues qu'on ne veut PLUS jamais voir) :
+- "X anihile Y dans un 1v1 impeccable" / "magistral" / "chirurgical" / "clinique"
+- "X termine Y, demonstration de maitrise"
+- "X execute Y proprement / sans bavure / sans aide"
+- "Solo kill propre" / "1v1 net" / "duel sans faille"
+- Adjectifs : impeccable, magistral, chirurgical, clinique, demonstration, maitrise totale, sans faille
+- Verbes plats sans contexte : anihile, atomise, terrasse, achieve, execute (sauf si verbe est juste)
+
+Si assistants presents : mentionne-les ("avec le peel de Busio", "couvert par le ralentissement de Yike").
 Reponds UNIQUEMENT en JSON valide.</task>
 <output_format>
 {{
@@ -107,7 +125,7 @@ Reponds UNIQUEMENT en JSON valide.</task>
               "baron_fight","dragon_fight","flash_predict","1v2","1v3",
               "clutch","clean","mechanical","shutdown","comeback",
               "engage","peel","snipe","steal">],
-    "description_fr": "<max 120 chars, style commentateur hype mais FACTUEL>",
+    "description_fr": "<une phrase, max 140 chars, ton caster FR avec UN detail concret>",
     "kill_visible_on_screen": true,
     "caster_hype_level": <int 1-5>,
     "lane_phase": "early"|"mid"|"late",
@@ -119,14 +137,14 @@ Reponds UNIQUEMENT en JSON valide.</task>
 }}
 </output_format>
 <rules>
-- 1-3=routine, 4-6=interessant, 7-8=tres bon, 9-10=exceptionnel
-- description_fr: percutante mais FACTUELLE — pas d'invention
-- Si assistants present: mentionne-les dans la description (ex: "avec l'assist de Xin Zhao")
-- fight_type: regarde le nombre de champions visibles dans les 3s avant le kill. 1v1 isole = solo_kill. 2 allies + 1 ennemi isole = gank. Plus de 3 par camp = teamfight.
-- objective_context: "none" SAUF si un objectif neutre (drake/nashor/herald/atakhan) ou une tour/inhib/nexus est contestee/prise dans les 5s autour du kill
-- matchup_lane: la lane d'appartenance de la victime (top/jungle/mid/bot/support) OU "cross_map" si les 2 joueurs sont de lanes differentes
-- champion_class: classe du KILLER (pas de la victime)
-- TOUS les 6 champs structures sont OBLIGATOIRES — ne mets jamais null
+- highlight_score : 1-3 routine kill / 4-6 interessant / 7-8 excellent (mecanique, contexte, propre) / 9-10 highlight historique (penta, baron steal, 1v3+, last-second clutch)
+- description_fr : UN detail observable obligatoire (spell + position OU HP + objectif OU sequence de timing). 0 description sans detail concret.
+- Si assistants : nomme la mecanique d'assistance, pas juste "avec X"
+- fight_type : 1v1 isole = solo_kill. 2 allies + 1 ennemi isole = gank. >=3 par camp = teamfight.
+- objective_context : "none" sauf objectif (drake/nashor/herald/atakhan/tour/inhib/nexus) conteste dans les 5s autour
+- matchup_lane : lane d'appartenance de la victime ("cross_map" si lanes differentes)
+- champion_class : classe du KILLER
+- TOUS les 6 champs structures OBLIGATOIRES — jamais null
 - JSON VALIDE uniquement, pas de texte avant/apres
 </rules>"""
 

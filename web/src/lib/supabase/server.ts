@@ -1,3 +1,4 @@
+import { createClient } from "@supabase/supabase-js";
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 
@@ -28,6 +29,25 @@ export function rethrowIfDynamic(err: unknown): void {
       throw err;
     }
   }
+}
+
+/**
+ * Cookie-less Supabase client safe to call from `generateStaticParams`,
+ * sitemap.ts, and any other place that runs OUTSIDE a request scope.
+ * Uses the anon key only — RLS still applies, so we can only read what
+ * `Public kills` allows.
+ */
+export function createAnonSupabase() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      auth: {
+        persistSession: false,
+        autoRefreshToken: false,
+      },
+    },
+  );
 }
 
 export async function createServerSupabase() {

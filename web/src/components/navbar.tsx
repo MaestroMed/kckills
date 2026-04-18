@@ -7,6 +7,7 @@ import { CommandPaletteButton } from "./CommandPalette";
 const NAV_LINKS = [
   { href: "/", label: "Accueil" },
   { href: "/scroll", label: "Scroll" },
+  { href: "/best", label: "Meilleurs" },
   { href: "/players", label: "Joueurs" },
   { href: "/alumni", label: "Alumni" },
   { href: "/matches", label: "Matchs" },

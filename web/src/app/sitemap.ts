@@ -22,7 +22,8 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   // server-side, so Google sees the best ones first. Falls back to []
   // if Supabase is unreachable at build — the deploy still ships, just
   // without per-clip URLs that build (ISR populates on first hit).
-  const publishedKills = await getPublishedKills(SITEMAP_MAX_CLIPS).catch(() => []);
+  // buildTime: true so cookies() isn't called from sitemap-build context.
+  const publishedKills = await getPublishedKills(SITEMAP_MAX_CLIPS, { buildTime: true }).catch(() => []);
 
   const staticPages: MetadataRoute.Sitemap = [
     {
@@ -36,6 +37,12 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       lastModified: now,
       changeFrequency: "hourly",
       priority: 0.9,
+    },
+    {
+      url: `${SITE_URL}/best`,
+      lastModified: now,
+      changeFrequency: "daily",
+      priority: 0.85,
     },
     {
       url: `${SITE_URL}/matches`,

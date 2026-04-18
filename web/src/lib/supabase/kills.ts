@@ -11,7 +11,7 @@
  */
 
 import "server-only";
-import { createServerSupabase, rethrowIfDynamic } from "./server";
+import { createAnonSupabase, createServerSupabase, rethrowIfDynamic } from "./server";
 
 export type LanePhase = "early" | "mid" | "late";
 export type FightType =
@@ -190,10 +190,24 @@ function normalize(row: Record<string, unknown>): PublishedKillRow {
   };
 }
 
-/** Get the published kill feed sorted by highlight score. */
-export async function getPublishedKills(limit = 50): Promise<PublishedKillRow[]> {
+/**
+ * Get the published kill feed sorted by highlight score.
+ *
+ * `buildTime: true` swaps the cookie-bound server client for an
+ * anon-only client, so this can be safely called from
+ * generateStaticParams + sitemap.ts (which run outside any request
+ * scope and would otherwise crash on `cookies()`). The data returned
+ * is identical — the kills RLS policy is `Public kills` (status =
+ * published), so no auth is needed.
+ */
+export async function getPublishedKills(
+  limit = 50,
+  opts: { buildTime?: boolean } = {},
+): Promise<PublishedKillRow[]> {
   try {
-    const supabase = await createServerSupabase();
+    const supabase = opts.buildTime
+      ? createAnonSupabase()
+      : await createServerSupabase();
     const { data, error } = await supabase
       .from("kills")
       .select(KILL_SELECT)
