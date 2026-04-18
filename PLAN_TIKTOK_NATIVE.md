@@ -1,8 +1,17 @@
 # PLAN — Passer `/scroll` en TikTok-native
 
-> Statut : draft v1, 18 avril 2026
+> Statut : v2 — décisions verrouillées 18 avril 2026
 > Cible : remplacer le scroll "TikTok-shaped" actuel par une expérience qui tient la comparaison directe avec l'app TikTok native sur mobile (iOS/Android via PWA + desktop fallback).
 > Compatible avec le pivot Kameto VOD-only (qui multipliera le catalogue par ~10x).
+>
+> **Décisions actées par Mehdi (mandat "fais au mieux") :**
+>   - D1 : Player pool = **5**
+>   - D2 : Format = **HLS** (hls.js sur Android, natif sur Safari)
+>   - D3 : Gesture = **`@use-gesture/react` + `framer-motion`**
+>   - D4 : Virtualization = **custom léger**
+>   - D5 : End-of-feed = **carte + 3 CTA recommendation**
+>   - D6 : Migration = **route `/scroll-v2` en parallèle**
+>   - HLS scope : **TOUT le backlog 340 clips** (uniformité d'expérience > économie 5GB)
 
 ---
 
