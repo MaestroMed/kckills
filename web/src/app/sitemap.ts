@@ -57,6 +57,12 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       priority: 0.8,
     },
     {
+      url: `${SITE_URL}/champions`,
+      lastModified: now,
+      changeFrequency: "weekly",
+      priority: 0.7,
+    },
+    {
       url: `${SITE_URL}/top`,
       lastModified: now,
       changeFrequency: "daily",
@@ -148,6 +154,22 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     priority: 0.5,
   }));
 
+  // Per-champion URLs derived from the kills sample we already have in
+  // memory (no extra DB hit). Each champion gets a stable URL even if
+  // they only appear once — keeps the index growing organically as new
+  // metas roll through KC's pick pool.
+  const championNames = new Set<string>();
+  for (const k of publishedKills) {
+    if (k.killer_champion) championNames.add(k.killer_champion);
+    if (k.victim_champion) championNames.add(k.victim_champion);
+  }
+  const championPages: MetadataRoute.Sitemap = [...championNames].map((c) => ({
+    url: `${SITE_URL}/champion/${encodeURIComponent(c)}`,
+    lastModified: now,
+    changeFrequency: "weekly" as const,
+    priority: 0.55,
+  }));
+
   // Per-clip URLs — the actual content Google should index. Priority is
   // attenuated by highlight score so the index gets a quality signal.
   const clipPages: MetadataRoute.Sitemap = publishedKills.map((k) => {
@@ -164,5 +186,13 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     };
   });
 
-  return [...staticPages, ...eraPages, ...alumniPages, ...playerPages, ...matchPages, ...clipPages];
+  return [
+    ...staticPages,
+    ...eraPages,
+    ...alumniPages,
+    ...playerPages,
+    ...championPages,
+    ...matchPages,
+    ...clipPages,
+  ];
 }

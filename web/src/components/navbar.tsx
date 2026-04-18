@@ -10,6 +10,7 @@ const NAV_LINKS = [
   { href: "/best", label: "Meilleurs" },
   { href: "/sphere", label: "Sphere \u2728" },
   { href: "/players", label: "Joueurs" },
+  { href: "/champions", label: "Champions" },
   { href: "/alumni", label: "Alumni" },
   { href: "/matches", label: "Matchs" },
   { href: "/hall-of-fame", label: "Hall of Fame" },
