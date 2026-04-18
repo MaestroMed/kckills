@@ -92,6 +92,60 @@ Puis vérifier sur `/` que la section "Scroll sur 4 axes" s'affiche entre le HER
 - Persistance DB des événements Umami pour ML collaboratif
 - Backoffice CMS pour curer les clips hero, les ères, les alumni, et la playlist du carrousel YouTube sans deploy
 
+### Phase 1 — Metadata foundation (post-launch + 2 weeks per AUDIT.md)
+
+> **Gate** : per AUDIT.md §7.2.3 + ARCHITECTURE.md §7, no new Phase 1
+> *feature* implementation until V1 has run 2 weeks of real traffic and
+> the pilot is validated. Below is the implementation plan, ready to
+> trigger when the gate opens.
+
+**Already prepped during Phase 0** (zero-feature, foundation only):
+- Migration `006_v1_schema_alignment.sql` — every Section 6 column
+  exists as nullable. Done.
+- `worker/scripts/backfill_player_ids.py` — populated `killer_player_id` /
+  `victim_player_id` on 189/340 kills. Already executed.
+- `worker/scripts/backfill_phase1_metadata.py` — projects `event_id`,
+  `canonical_game_id`, `region`, `split`, `year`, `event_tier`,
+  `stage_canonical`, `kc_roster_era` from `kc_matches.json` onto every
+  published kill. **Script written, NOT yet run** — Mehdi triggers when
+  Phase 1 gate opens.
+- `worker/services/clip_hash.py` — SHA-256 + DCT pHash already in the
+  clipper, every NEW clip ships with both. Existing 340 backlog gets
+  hashed during the eventual reclip pass.
+
+**Phase 1 work proper** (do NOT start until 2-week pilot gate clears):
+
+1. **Canonical match database ingestion** (~3-4 days)
+   - Worker module: `worker/modules/canonical_ingest.py`
+   - Sources priority: Leaguepedia Cargo API > Oracle's Elixir CSV > gol.gg HTML scrape > Riot API
+   - Backfill `event_id` + `canonical_game_id` with the REAL Leaguepedia
+     ids (overwrites the placeholder format the prep script used)
+   - Pull patch numbers from Leaguepedia per game
+
+2. **Identification pipeline** (~5-6 days)
+   - pHash dedup: rebuild a B-tree of existing pHashes, insert each new
+     clip, trigger a `flag dup` action when hamming distance < 6
+   - OCR pass on the first frame: scoreboard text → cross-reference
+     match DB → confidence-weight against existing tags
+   - Audio signature: detect caster language + intensity (peak amplitude
+     histograms, no ML required for V1)
+   - Champion/player CV: deferred to Phase 2 (heavier dep)
+
+3. **Tag taxonomy backfill** (~2-3 days)
+   - Auto-tag Dimensions 1-3 from canonical match DB
+   - Compute `tag_tier` for every clip (BRONZE/SILVER/GOLD/PLATINUM/DIAMOND)
+   - Manual curation pass for the top 200 clips on Dimensions 4-6
+     (action_secondary, mechanic_highlight, historic_significance) —
+     Mehdi + EtoStark in a Notion worksheet, single SQL UPDATE batch
+
+4. **Quality gates**
+   - Only SILVER+ surfaces in user-facing features (per ARCHITECTURE.md §3.6)
+   - Dashboard: % of clips at each tier, % verified, % with
+     `historic_significance != null`
+
+**Done when** : 80% of published clips are SILVER+ tier, 40% are GOLD+,
+and the canonical match DB has every KC game from 2021-onwards anchored.
+
 ### V2 — Concepts différenciants (à designer / prototyper)
 
 #### Sphere Scroll 360 Horizon

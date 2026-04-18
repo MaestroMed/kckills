@@ -31,7 +31,11 @@ body {
   color: var(--text-primary);
   font-family: "Inter Tight", system-ui, -apple-system, sans-serif;
   -webkit-font-smoothing: antialiased;
-  overflow-x: hidden;
+  /* `clip` is more aggressive than `hidden` and prevents the 4px bleed
+     full-bleed sections (`width: 100vw + -50vw margins`) can cause on
+     iOS Safari when body padding ≠ 0. Both anchor scroll AND horizontal
+     drag are blocked. */
+  overflow-x: clip;
   font-feature-settings: "ss01", "cv11";
 }
 
