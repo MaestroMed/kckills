@@ -33,7 +33,7 @@ import { ALUMNI } from "@/lib/alumni";
 
 // ─── Index types ────────────────────────────────────────────────────────────
 
-type Group = "era" | "player" | "match" | "page";
+type Group = "era" | "player" | "match" | "page" | "champion";
 
 interface Entry {
   id: string;
@@ -50,7 +50,10 @@ interface Entry {
 const PAGES: Entry[] = [
   { id: "page-home",    group: "page", label: "Accueil",       subtitle: "Landing KCKILLS", href: "/",            searchText: "accueil home landing" },
   { id: "page-scroll",  group: "page", label: "Scroll kills",  subtitle: "Mode TikTok",      href: "/scroll",      searchText: "scroll tiktok feed clips kills" },
+  { id: "page-best",    group: "page", label: "Meilleurs",     subtitle: "Curation IA + comm.", href: "/best",     searchText: "meilleurs best top curation legendaires" },
+  { id: "page-sphere",  group: "page", label: "Sphere immersif", subtitle: "Mode 3D 360",   href: "/sphere",     searchText: "sphere 3d 360 immersif experimental orbit" },
   { id: "page-players", group: "page", label: "Joueurs",       subtitle: "Roster KC",        href: "/players",     searchText: "joueurs players roster" },
+  { id: "page-champions", group: "page", label: "Champions",   subtitle: "Browse par champ", href: "/champions",   searchText: "champions champion picks pool meta" },
   { id: "page-alumni",  group: "page", label: "Alumni",        subtitle: "Legendes passees", href: "/alumni",      searchText: "alumni ancien past legendes rekkles xmatty cabochard" },
   { id: "page-matches", group: "page", label: "Matchs",        subtitle: "Historique",       href: "/matches",     searchText: "matchs matches historique" },
   { id: "page-top",     group: "page", label: "Top kills",     subtitle: "Leaderboard",      href: "/top",         searchText: "top leaderboard best meilleurs" },
@@ -109,7 +112,10 @@ interface MiniMatch {
   opp_score: number;
   best_of: number;
   opponent: { name: string; code: string };
-  games: { kc_players: { name: string; role: string }[] }[];
+  games: {
+    kc_players: { name: string; role: string; champion?: string }[];
+    opp_players?: { name: string; role: string; champion?: string }[];
+  }[];
 }
 const kc = kcMatchesJson as unknown as { matches: MiniMatch[] };
 
@@ -153,6 +159,33 @@ const PLAYER_ENTRIES: Entry[] = (() => {
     });
 })();
 
+// ─── Champions index (every champion seen in any kc_players or opp_players) ─
+
+const CHAMPION_ENTRIES: Entry[] = (() => {
+  const seen = new Map<string, number>();
+  for (const match of kc.matches) {
+    for (const game of match.games) {
+      const all = [...(game.kc_players ?? []), ...(game.opp_players ?? [])];
+      for (const p of all) {
+        const c = p.champion;
+        if (!c) continue;
+        seen.set(c, (seen.get(c) ?? 0) + 1);
+      }
+    }
+  }
+  return Array.from(seen.entries())
+    .sort((a, b) => b[1] - a[1])
+    .map(([champ, count]) => ({
+      id: `champion-${champ}`,
+      group: "champion" as const,
+      label: champ,
+      subtitle: `${count} apparition${count > 1 ? "s" : ""}`,
+      href: `/champion/${encodeURIComponent(champ)}`,
+      hint: "CHAMP",
+      searchText: champ.toLowerCase(),
+    }));
+})();
+
 // ─── Matches index (last 40, newest first) ──────────────────────────────────
 
 const MATCH_ENTRIES: Entry[] = kc.matches
@@ -178,6 +211,7 @@ const INDEX: Entry[] = [
   ...ERA_ENTRIES,
   ...ALUMNI_ENTRIES,
   ...PLAYER_ENTRIES,
+  ...CHAMPION_ENTRIES,
   ...MATCH_ENTRIES,
 ];
 
@@ -200,7 +234,7 @@ function scoreEntry(entry: Entry, query: string): number {
     else score += 10;
   }
   // Tiny boost per group so pages/eras rise above long match list
-  const groupBoost: Record<Group, number> = { era: 12, page: 8, player: 6, match: 2 };
+  const groupBoost: Record<Group, number> = { era: 12, page: 8, player: 6, champion: 4, match: 2 };
   return score + groupBoost[entry.group];
 }
 
@@ -224,9 +258,10 @@ const GROUP_LABELS: Record<Group, string> = {
   page: "Pages",
   era: "Epoques",
   player: "Joueurs",
+  champion: "Champions",
   match: "Matchs",
 };
-const GROUP_ORDER: Group[] = ["page", "era", "player", "match"];
+const GROUP_ORDER: Group[] = ["page", "era", "player", "champion", "match"];
 
 export function CommandPalette() {
   const [open, setOpen] = useState(false);
@@ -275,7 +310,7 @@ export function CommandPalette() {
 
   // Group results for display
   const grouped = useMemo(() => {
-    const map: Record<Group, Entry[]> = { page: [], era: [], player: [], match: [] };
+    const map: Record<Group, Entry[]> = { page: [], era: [], player: [], champion: [], match: [] };
     for (const r of results) map[r.group].push(r);
     // Flat list order must match the visual order so keyboard nav is consistent
     const flat: Entry[] = [];
@@ -427,6 +462,7 @@ const GROUP_ICON: Record<Group, string> = {
   page: "P",
   era: "E",
   player: "J",
+  champion: "C",
   match: "M",
 };
 
