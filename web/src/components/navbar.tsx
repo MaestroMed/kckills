@@ -8,6 +8,7 @@ const NAV_LINKS = [
   { href: "/", label: "Accueil" },
   { href: "/scroll", label: "Scroll" },
   { href: "/best", label: "Meilleurs" },
+  { href: "/recent", label: "Derniers" },
   { href: "/sphere", label: "Sphere \u2728" },
   { href: "/players", label: "Joueurs" },
   { href: "/champions", label: "Champions" },
