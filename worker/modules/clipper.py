@@ -1,13 +1,15 @@
 """
 CLIPPER — Downloads VOD segments, produces triple format clips, uploads to R2.
 
-Output per kill:
-  {id}_h.mp4      — 16:9 1280x720  (desktop, kill detail page)
-  {id}_v.mp4      — 9:16 720x1280  (scroll mobile, HQ)
-  {id}_v_low.mp4  — 9:16 360x640   (scroll mobile, slow network)
-  {id}_thumb.jpg  — 9:16 720x1280  (poster frame, OG base)
+Output per kill (V2 — 1080p quality bump):
+  {id}_h.mp4      — 16:9 1920x1080  (desktop, kill detail page)
+  {id}_v.mp4      — 9:16 1080x1920  (scroll mobile, HQ)
+  {id}_v_low.mp4  — 9:16  540x 960  (scroll mobile, slow network)
+  {id}_thumb.jpg  — 9:16 1080x1920  (poster frame, OG base)
 
-All MP4s: H.264, movflags +faststart, AAC 96k / 64k for v_low.
+All MP4s: H.264 main 4.0 (HQ) / baseline 3.1 (low), movflags +faststart,
+AAC 128k / 80k. yt-dlp pulls source at <= 1080p; older Twitch VODs that
+only have 720p available are upscaled cleanly by libx264.
 
 Flow:
 1. Compute clip window (game_time_seconds + vod_offset ± pad)
@@ -107,7 +109,7 @@ async def download_full_vod(youtube_id: str) -> str | None:
         sys.executable, "-m", "yt_dlp",
         *_cookies_args(),
         "--js-runtimes", "node",
-        "-f", "bestvideo[height<=720]+bestaudio/best[height<=720]",
+        "-f", "bestvideo[height<=1080]+bestaudio/best[height<=1080]",
         "--merge-output-format", "mp4",
         "-o", vod_path,
         "--no-playlist",
@@ -219,11 +221,11 @@ async def clip_kill(
         await scheduler.wait_for("ffmpeg_cooldown")
         if not await _ffmpeg([
             "-i", raw_path,
-            "-vf", "scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2",
-            "-c:v", "libx264", "-preset", "fast", "-crf", "23",
-            "-profile:v", "main", "-level", "3.1",
-            "-maxrate", "2M", "-bufsize", "4M",
-            "-c:a", "aac", "-b:a", "96k",
+            "-vf", "scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2",
+            "-c:v", "libx264", "-preset", "fast", "-crf", "22",
+            "-profile:v", "main", "-level", "4.0",
+            "-maxrate", "4M", "-bufsize", "8M",
+            "-c:a", "aac", "-b:a", "128k",
             "-movflags", "+faststart",
             "-y", h_path,
         ]):
@@ -235,7 +237,7 @@ async def clip_kill(
         # The LoL broadcast camera tracks action slightly right-of-center,
         # and the kill feed is in the top-right quadrant.
         # Standard center: iw/2 - ih*9/32. Shifted right: + iw*0.08
-        v_crop = "crop=ih*9/16:ih:iw/2-ih*9/32+iw*0.08:0,scale=720:1280"
+        v_crop = "crop=ih*9/16:ih:iw/2-ih*9/32+iw*0.08:0,scale=1080:1920"
         if killer_champion and victim_champion:
             overlay = _build_overlay_filter(
                 killer_champion, victim_champion,
@@ -250,25 +252,25 @@ async def clip_kill(
         if not await _ffmpeg([
             "-i", raw_path,
             "-vf", v_filter,
-            "-c:v", "libx264", "-preset", "fast", "-crf", "23",
-            "-profile:v", "main", "-level", "3.1",
-            "-maxrate", "2M", "-bufsize", "4M",
-            "-c:a", "aac", "-b:a", "96k",
+            "-c:v", "libx264", "-preset", "fast", "-crf", "22",
+            "-profile:v", "main", "-level", "4.0",
+            "-maxrate", "4M", "-bufsize", "8M",
+            "-c:a", "aac", "-b:a", "128k",
             "-movflags", "+faststart",
             "-y", v_path,
         ]):
             log.error("ffmpeg_vertical_failed", kill_id=kill_id)
             return None
 
-        # ─── 4. Encode vertical 9:16 low (360p, no overlay for perf) ──
+        # ─── 4. Encode vertical 9:16 low (540p, no overlay for perf) ──
         await scheduler.wait_for("ffmpeg_cooldown")
         if not await _ffmpeg([
             "-i", raw_path,
-            "-vf", "crop=ih*9/16:ih:iw/2-ih*9/32:0,scale=360:640",
-            "-c:v", "libx264", "-preset", "fast", "-crf", "28",
-            "-profile:v", "baseline", "-level", "3.0",
-            "-maxrate", "800k", "-bufsize", "1600k",
-            "-c:a", "aac", "-b:a", "64k",
+            "-vf", "crop=ih*9/16:ih:iw/2-ih*9/32:0,scale=540:960",
+            "-c:v", "libx264", "-preset", "fast", "-crf", "27",
+            "-profile:v", "baseline", "-level", "3.1",
+            "-maxrate", "1200k", "-bufsize", "2400k",
+            "-c:a", "aac", "-b:a", "80k",
             "-movflags", "+faststart",
             "-y", vl_path,
         ]):
@@ -382,11 +384,11 @@ async def clip_moment(
         await scheduler.wait_for("ffmpeg_cooldown")
         if not await _ffmpeg([
             "-i", raw_path,
-            "-vf", "scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2",
-            "-c:v", "libx264", "-preset", "fast", "-crf", "23",
-            "-profile:v", "main", "-level", "3.1",
-            "-maxrate", "2M", "-bufsize", "4M",
-            "-c:a", "aac", "-b:a", "96k",
+            "-vf", "scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2",
+            "-c:v", "libx264", "-preset", "fast", "-crf", "22",
+            "-profile:v", "main", "-level", "4.0",
+            "-maxrate", "4M", "-bufsize", "8M",
+            "-c:a", "aac", "-b:a", "128k",
             "-movflags", "+faststart",
             "-y", h_path,
         ]):
@@ -394,32 +396,32 @@ async def clip_moment(
             return None
 
         # ─── 3. Vertical 9:16 HQ (no burnt-in overlay — frontend handles badges)
-        v_crop = "crop=ih*9/16:ih:iw/2-ih*9/32+iw*0.08:0,scale=720:1280"
+        v_crop = "crop=ih*9/16:ih:iw/2-ih*9/32+iw*0.08:0,scale=1080:1920"
         v_filter = v_crop
 
         await scheduler.wait_for("ffmpeg_cooldown")
         if not await _ffmpeg([
             "-i", raw_path,
             "-vf", v_filter,
-            "-c:v", "libx264", "-preset", "fast", "-crf", "23",
-            "-profile:v", "main", "-level", "3.1",
-            "-maxrate", "2M", "-bufsize", "4M",
-            "-c:a", "aac", "-b:a", "96k",
+            "-c:v", "libx264", "-preset", "fast", "-crf", "22",
+            "-profile:v", "main", "-level", "4.0",
+            "-maxrate", "4M", "-bufsize", "8M",
+            "-c:a", "aac", "-b:a", "128k",
             "-movflags", "+faststart",
             "-y", v_path,
         ]):
             log.error("moment_v_failed", moment_id=moment_id)
             return None
 
-        # ─── 4. Vertical 9:16 low (360p) ───────────────────────────
+        # ─── 4. Vertical 9:16 low (540p) ───────────────────────────
         await scheduler.wait_for("ffmpeg_cooldown")
         if not await _ffmpeg([
             "-i", raw_path,
-            "-vf", "crop=ih*9/16:ih:iw/2-ih*9/32:0,scale=360:640",
-            "-c:v", "libx264", "-preset", "fast", "-crf", "28",
-            "-profile:v", "baseline", "-level", "3.0",
-            "-maxrate", "800k", "-bufsize", "1600k",
-            "-c:a", "aac", "-b:a", "64k",
+            "-vf", "crop=ih*9/16:ih:iw/2-ih*9/32:0,scale=540:960",
+            "-c:v", "libx264", "-preset", "fast", "-crf", "27",
+            "-profile:v", "baseline", "-level", "3.1",
+            "-maxrate", "1200k", "-bufsize", "2400k",
+            "-c:a", "aac", "-b:a", "80k",
             "-movflags", "+faststart",
             "-y", vl_path,
         ]):
@@ -536,7 +538,7 @@ async def _run_ytdlp(url: str, output_path: str, start: float, end: float) -> bo
         *_cookies_args(),
         "--download-sections", f"*{start}-{end}",
         "--force-keyframes-at-cuts",
-        "-f", "bestvideo[height<=720]+bestaudio/best[height<=720]",
+        "-f", "bestvideo[height<=1080]+bestaudio/best[height<=1080]",
         "--merge-output-format", "mp4",
         "-o", output_path,
         "--no-playlist",
