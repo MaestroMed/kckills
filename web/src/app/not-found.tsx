@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 import { championSplashUrl } from "@/lib/constants";
 
@@ -14,11 +15,13 @@ export default function NotFound() {
   return (
     <div className="-mx-4 -mt-6 relative min-h-[85vh] overflow-hidden flex items-center justify-center">
       {/* Full-screen champion splash background */}
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
+      <Image
         src={championSplashUrl(randomChamp)}
         alt=""
-        className="absolute inset-0 w-full h-full object-cover opacity-30 scale-110"
+        fill
+        priority
+        sizes="100vw"
+        className="object-cover opacity-30 scale-110"
       />
       <div className="absolute inset-0 bg-gradient-to-t from-[var(--bg-primary)] via-[var(--bg-primary)]/70 to-[var(--bg-primary)]/40" />
       <div className="absolute inset-0 bg-gradient-to-r from-[var(--bg-primary)]/60 via-transparent to-[var(--bg-primary)]/60" />

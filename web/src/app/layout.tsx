@@ -60,7 +60,10 @@ export const viewport: Viewport = {
   themeColor: "#C8AA6E",
   width: "device-width",
   initialScale: 1,
-  maximumScale: 1,
+  // WCAG 1.4.4 — never block user-initiated zoom. Cap at 5x so the
+  // gesture is still anchored but accessibility is preserved.
+  maximumScale: 5,
+  userScalable: true,
   viewportFit: "cover",
 };
 

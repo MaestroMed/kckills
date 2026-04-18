@@ -135,6 +135,10 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
       const title = `${kill.killer_champion ?? "?"} \u2192 ${kill.victim_champion ?? "?"} \u2014 KCKILLS`;
       const description = kill.ai_description ?? `Highlight score ${kill.highlight_score?.toFixed(1) ?? "?"}/10`;
       const canonicalPath = `/kill/${id}`;
+      // Always route social-card images through /api/og/[id] so the
+      // crawler never sees a 404 even if og_image_url isn't backfilled
+      // yet — the route falls through to the site hero image.
+      const ogImage = `/api/og/${id}`;
       return {
         title,
         description,
@@ -146,7 +150,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
           url: canonicalPath,
           siteName: "KCKILLS",
           locale: "fr_FR",
-          images: kill.og_image_url ? [kill.og_image_url] : undefined,
+          images: [{ url: ogImage, width: 1200, height: 630, alt: title }],
           videos: kill.clip_url_horizontal
             ? [
                 {
@@ -162,7 +166,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
           card: "player",
           title,
           description,
-          images: kill.og_image_url ? [kill.og_image_url] : undefined,
+          images: [ogImage],
         },
       };
     }
@@ -232,7 +236,7 @@ export default async function KillDetailPage({ params }: Props) {
           url: "https://kckills.com",
           logo: {
             "@type": "ImageObject",
-            url: "https://kckills.com/icons/icon-512.png",
+            url: "https://kckills.com/icons/icon-512x512.png",
           },
         },
         ...(kill.rating_count > 0 && kill.avg_rating != null
