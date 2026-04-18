@@ -62,6 +62,10 @@ export interface PublishedKillRow {
   clip_url_horizontal: string | null;
   clip_url_vertical: string | null;
   clip_url_vertical_low: string | null;
+  /** HLS master playlist URL (migration 007). NULL until the worker's
+   *  hls_packager has processed this clip. The Phase 4 player consumes
+   *  this first; if NULL it falls back to clip_url_vertical MP4. */
+  hls_master_url: string | null;
   thumbnail_url: string | null;
   og_image_url: string | null;
   ai_description: string | null;
@@ -104,6 +108,7 @@ const KILL_SELECT = `
   clip_url_horizontal,
   clip_url_vertical,
   clip_url_vertical_low,
+  hls_master_url,
   thumbnail_url,
   og_image_url,
   ai_description,
@@ -157,6 +162,7 @@ interface RawKillSelect {
   clip_url_horizontal?: string | null;
   clip_url_vertical?: string | null;
   clip_url_vertical_low?: string | null;
+  hls_master_url?: string | null;
   thumbnail_url?: string | null;
   og_image_url?: string | null;
   ai_description?: string | null;
@@ -225,6 +231,7 @@ function normalize(row: RawKillSelect): PublishedKillRow {
     clip_url_horizontal: row.clip_url_horizontal ?? null,
     clip_url_vertical: row.clip_url_vertical ?? null,
     clip_url_vertical_low: row.clip_url_vertical_low ?? null,
+    hls_master_url: row.hls_master_url ?? null,
     thumbnail_url: row.thumbnail_url ?? null,
     og_image_url: row.og_image_url ?? null,
     ai_description: row.ai_description ?? null,

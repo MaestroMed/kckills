@@ -16,6 +16,9 @@ export interface PublishedMoment {
   clip_url_horizontal: string | null;
   clip_url_vertical: string | null;
   clip_url_vertical_low: string | null;
+  /** HLS master playlist URL (Phase 4 / migration 007). NULL until
+   *  worker hls_packager has processed this moment. */
+  hls_master_url: string | null;
   thumbnail_url: string | null;
   moment_score: number | null;
   ai_tags: string[];
@@ -39,6 +42,7 @@ export async function getPublishedMoments(
        kc_involvement, gold_swing, participants_involved,
        start_time_seconds, end_time_seconds,
        clip_url_horizontal, clip_url_vertical, clip_url_vertical_low,
+       hls_master_url,
        thumbnail_url, moment_score, ai_tags, ai_description,
        avg_rating, rating_count, comment_count, impression_count,
        created_at`

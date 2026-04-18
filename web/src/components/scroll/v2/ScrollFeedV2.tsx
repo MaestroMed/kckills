@@ -199,6 +199,7 @@ export function ScrollFeedV2({ items, videoCount = 0, initialKillId }: Props) {
             clipVertical: it.clipVertical,
             clipVerticalLow: it.clipVerticalLow,
             clipHorizontal: it.clipHorizontal,
+            hlsMasterUrl: it.hlsMasterUrl ?? null,
             thumbnail: it.thumbnail,
           };
         }
@@ -207,6 +208,7 @@ export function ScrollFeedV2({ items, videoCount = 0, initialKillId }: Props) {
           clipVertical: "",
           clipVerticalLow: null,
           clipHorizontal: null,
+          hlsMasterUrl: null,
           thumbnail: null,
         };
       }),

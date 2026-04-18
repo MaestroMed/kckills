@@ -54,11 +54,12 @@ import {
   useFeedPlayer,
   type SlotPriority,
 } from "./hooks/useFeedPlayer";
+import { useHlsAttach } from "./hooks/useHlsAttach";
 
 export interface PoolItem {
   /** Stable id used for telemetry + autoplay decisions. */
   id: string;
-  /** Vertical 9:16 mp4 — Phase 1 source. */
+  /** Vertical 9:16 mp4 — Phase 1 source AND HLS fallback. */
   clipVertical: string;
   /** 360p fallback for slow networks. */
   clipVerticalLow: string | null;
@@ -66,6 +67,10 @@ export interface PoolItem {
   clipHorizontal: string | null;
   /** Poster frame shown before the first video frame paints. */
   thumbnail: string | null;
+  /** HLS master playlist URL (Phase 4). When present, the pool
+   *  attaches via hls.js (Chrome/Firefox) or native (Safari) for
+   *  adaptive bitrate. NULL falls back to the MP4 chain above. */
+  hlsMasterUrl?: string | null;
 }
 
 interface Props {
@@ -122,6 +127,9 @@ export function FeedPlayerPool({
    *  reassignment and reset hasPlayed accordingly. */
   const prevSlotItemRef = useRef<number[]>([...slotItemIndex]);
 
+  /** HLS adapter — lazy-loads hls.js on first non-Safari attach. */
+  const { attachHlsTo } = useHlsAttach();
+
   /** Sync mute state across all 5 elements when shared mute toggles. */
   useEffect(() => {
     for (const v of videoRefs.current) {
@@ -150,12 +158,16 @@ export function FeedPlayerPool({
       if (!item) continue;
       const priority = priorities[s];
 
-      // Did this slot just take a new item? Reset src + hasPlayed.
+      // Did this slot just take a new item? Update src (HLS-aware) + reset hasPlayed.
       if (itemIdx !== prevItemIdx) {
-        const newSrc = pickSrc(item, isDesktop, useLowQuality);
-        if (v.src !== newSrc) {
-          v.src = newSrc;
-        }
+        const fallbackMp4 = pickSrc(item, isDesktop, useLowQuality);
+        // attachHlsTo handles 3 cases internally:
+        //   - HLS URL + Safari: native <video src=hls>
+        //   - HLS URL + other:  hls.js attach (lazy-loaded)
+        //   - No HLS URL:       falls through to fallbackMp4
+        // It's async (lazy hls.js import) but fire-and-forget — the
+        // poster covers the gap and play() retries via canplay listener.
+        void attachHlsTo(v, item.hlsMasterUrl ?? null, fallbackMp4);
         v.poster = item.thumbnail ?? "";
         hasPlayedRef.current[s] = false;
       }

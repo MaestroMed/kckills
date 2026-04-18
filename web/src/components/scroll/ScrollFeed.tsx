@@ -45,6 +45,8 @@ export interface VideoFeedItem {
   clipVertical: string;
   clipVerticalLow: string | null;
   clipHorizontal: string | null;
+  /** HLS master playlist URL — null = not yet HLS-packaged. */
+  hlsMasterUrl?: string | null;
   thumbnail: string | null;
   highlightScore: number | null;
   avgRating: number | null;
@@ -77,6 +79,8 @@ export interface MomentFeedItem {
   clipVertical: string;
   clipVerticalLow: string | null;
   clipHorizontal: string | null;
+  /** HLS master playlist URL (Phase 4). */
+  hlsMasterUrl?: string | null;
   thumbnail: string | null;
   momentScore: number | null;
   avgRating: number | null;
