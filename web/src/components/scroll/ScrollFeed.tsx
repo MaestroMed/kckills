@@ -7,6 +7,7 @@ import { championIconUrl, championSplashUrl } from "@/lib/constants";
 import { useToast } from "@/components/Toast";
 import { CommentPanel } from "@/components/CommentPanel";
 import { useScrollAutoplay } from "./useScrollAutoplay";
+import { ScrollChipBar, type ChipFilters } from "./ScrollChipBar";
 
 // ─── Feed item types (discriminated union) ─────────────────────────────
 //
@@ -149,12 +150,19 @@ export function ScrollFeed({
   items,
   videoCount = 0,
   initialKillId,
+  chipFilters,
+  rosterChips,
 }: {
   items: FeedItem[];
   videoCount?: number;
   /** When set, the feed scrolls that item into view on mount. Enables the
    *  grid → scroll zoom-in flow without shared-layout animations. */
   initialKillId?: string;
+  /** Active chip filters from the URL — drives the visual state of the
+   *  filter chips at the top of the feed. */
+  chipFilters?: ChipFilters;
+  /** KC roster IGN/UUID/role triples for the player chip group. */
+  rosterChips?: { id: string; ign: string; role: "TOP" | "JGL" | "MID" | "ADC" | "SUP" }[];
 }) {
   // ─── Grid → scroll zoom-in: jump to the tapped kill on mount ───────
   const containerRefSelf = useRef<HTMLDivElement>(null);
@@ -344,6 +352,11 @@ export function ScrollFeed({
           <span>Clips</span>
         </Link>
       </div>
+
+      {/* Filter chip bar — sticky just below the top bar. URL state owned. */}
+      {chipFilters && (
+        <ScrollChipBar filters={chipFilters} rosterChips={rosterChips} />
+      )}
 
       {visibleItems.map((item, i) =>
         item.kind === "moment" ? (
@@ -602,7 +615,7 @@ function MomentScrollItem({ item, index, total, shared }: { item: MomentFeedItem
         <Link
           href={`/moment/${item.id}`}
           onClick={(e) => e.stopPropagation()}
-          className="absolute top-16 left-4 z-20 rounded-full bg-black/40 backdrop-blur-sm px-3 py-1 text-[10px] font-data text-[var(--text-muted)] hover:bg-black/60 transition-colors"
+          className="absolute top-28 left-4 z-20 rounded-full bg-black/40 backdrop-blur-sm px-3 py-1 text-[10px] font-data text-[var(--text-muted)] hover:bg-black/60 transition-colors"
         >
           #{index + 1} / {total}
         </Link>
@@ -610,7 +623,7 @@ function MomentScrollItem({ item, index, total, shared }: { item: MomentFeedItem
         {/* Mute toggle (shared state) */}
         <button
           onClick={(e) => { e.stopPropagation(); shared.onToggleMute(); }}
-          className="absolute top-16 right-4 z-20 flex h-9 w-9 items-center justify-center rounded-full bg-black/40 backdrop-blur-sm border border-white/10 hover:bg-black/60 transition-colors"
+          className="absolute top-28 right-4 z-20 flex h-9 w-9 items-center justify-center rounded-full bg-black/40 backdrop-blur-sm border border-white/10 hover:bg-black/60 transition-colors"
           aria-label={shared.muted ? "Activer le son" : "Couper le son"}
         >
           {shared.muted ? (
@@ -904,7 +917,7 @@ function VideoScrollItem({ item, index, total, shared }: { item: VideoFeedItem; 
         <Link
           href={`/kill/${item.id}`}
           onClick={(e) => e.stopPropagation()}
-          className="absolute top-16 left-4 z-20 rounded-full bg-black/40 backdrop-blur-sm px-3 py-1 text-[10px] font-data text-[var(--text-muted)] hover:bg-black/60 transition-colors"
+          className="absolute top-28 left-4 z-20 rounded-full bg-black/40 backdrop-blur-sm px-3 py-1 text-[10px] font-data text-[var(--text-muted)] hover:bg-black/60 transition-colors"
         >
           #{index + 1} / {total}
         </Link>
@@ -912,7 +925,7 @@ function VideoScrollItem({ item, index, total, shared }: { item: VideoFeedItem; 
         {/* F1: Mute toggle (shared state) */}
         <button
           onClick={(e) => { e.stopPropagation(); shared.onToggleMute(); }}
-          className="absolute top-16 right-4 z-20 flex h-9 w-9 items-center justify-center rounded-full bg-black/40 backdrop-blur-sm border border-white/10 hover:bg-black/60 transition-colors"
+          className="absolute top-28 right-4 z-20 flex h-9 w-9 items-center justify-center rounded-full bg-black/40 backdrop-blur-sm border border-white/10 hover:bg-black/60 transition-colors"
           aria-label={shared.muted ? "Activer le son" : "Couper le son"}
         >
           {shared.muted ? (
@@ -1096,7 +1109,7 @@ function AggregateScrollItem({ item, index, total }: { item: AggregateFeedItem; 
       <div className="relative z-10 flex h-full flex-col justify-end px-5 pb-8 pt-20">
         <Link
           href={`/kill/${item.id}`}
-          className="absolute top-16 left-4 z-20 rounded-full bg-black/40 backdrop-blur-sm px-3 py-1 text-[10px] font-data text-[var(--text-muted)] hover:bg-black/60 transition-colors"
+          className="absolute top-28 left-4 z-20 rounded-full bg-black/40 backdrop-blur-sm px-3 py-1 text-[10px] font-data text-[var(--text-muted)] hover:bg-black/60 transition-colors"
         >
           #{index + 1} / {total}
         </Link>

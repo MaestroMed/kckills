@@ -1,6 +1,7 @@
 import { loadRealData } from "@/lib/real-data";
 import { getPublishedKills } from "@/lib/supabase/kills";
 import { getPublishedMoments } from "@/lib/supabase/moments";
+import { getTrackedRoster } from "@/lib/supabase/players";
 import {
   ScrollFeed,
   type FeedItem,
@@ -38,12 +39,33 @@ interface ScrollPageProps {
     kill?: string | string[];
     axis?: string | string[];
     value?: string | string[];
+    /** New chip filters — orthogonal to axis/value, can stack. */
+    multi?: string | string[];
+    fb?: string | string[];
+    player?: string | string[];
+    fight?: string | string[];
+    side?: string | string[];
   }>;
 }
 
 function firstString(v: string | string[] | undefined): string | undefined {
   if (!v) return undefined;
   return Array.isArray(v) ? v[0] : v;
+}
+
+/** Active-filter shape passed to <ScrollFeed> so the chip bar can paint
+ *  itself and so the page knows what to filter server-side. */
+export interface ScrollChipFilters {
+  /** "1" / "true" → only show clips with multi_kill ≠ null. */
+  multiKillsOnly: boolean;
+  /** "1" / "true" → only show clips with is_first_blood === true. */
+  firstBloodsOnly: boolean;
+  /** Player IGN slug (case-insensitive match against killer name). */
+  player: string | null;
+  /** Fight type enum. */
+  fight: string | null;
+  /** "kc" or "vs" — restrict to KC kills or KC deaths. */
+  side: "kc" | "vs" | null;
 }
 
 export default async function ScrollPage({ searchParams }: ScrollPageProps) {
@@ -55,12 +77,44 @@ export default async function ScrollPage({ searchParams }: ScrollPageProps) {
     rawAxis && FILTERABLE_AXES.has(rawAxis) ? (rawAxis as GridAxisId) : null;
   const filterValue = rawValue ?? null;
 
+  // ─── Chip filters (composable, orthogonal to axis/value) ────────────
+  const isTrue = (v: string | undefined) => v === "1" || v === "true";
+  const sideRaw = firstString(sp.side);
+  const chipFilters: ScrollChipFilters = {
+    multiKillsOnly: isTrue(firstString(sp.multi)),
+    firstBloodsOnly: isTrue(firstString(sp.fb)),
+    player: firstString(sp.player) ?? null,
+    fight: firstString(sp.fight) ?? null,
+    side: sideRaw === "kc" || sideRaw === "vs" ? sideRaw : null,
+  };
+  const hasChipFilter =
+    chipFilters.multiKillsOnly ||
+    chipFilters.firstBloodsOnly ||
+    chipFilters.player !== null ||
+    chipFilters.fight !== null ||
+    chipFilters.side !== null;
+
   // ─── 1. Load all data sources in parallel ───────────────────────────
-  const [data, allKills, allMoments] = await Promise.all([
+  const [data, allKills, allMoments, roster] = await Promise.all([
     Promise.resolve(loadRealData()),
     getPublishedKills(500),
     getPublishedMoments(300),
+    getTrackedRoster(),
   ]);
+
+  // Roster chip definitions for the filter UI. Map our 5 starters to the
+  // role labels the chip strip displays. Anyone whose ign isn't in the
+  // current LEC roster gets dropped (alumni stay browseable via /alumni).
+  const ROLE_FOR_IGN: Record<string, "TOP" | "JGL" | "MID" | "ADC" | "SUP"> = {
+    Canna: "TOP",
+    Yike: "JGL",
+    Kyeahoo: "MID",
+    Caliste: "ADC",
+    Busio: "SUP",
+  };
+  const rosterChips = roster
+    .filter((p) => ROLE_FOR_IGN[p.ign])
+    .map((p) => ({ id: p.id, ign: p.ign, role: ROLE_FOR_IGN[p.ign] }));
   // ONLY show KC kills with a real clip + thumbnail + kill confirmed visible.
   // Anything else is a broken/incomplete row that would dead-link the feed.
   const supabaseKills = allKills.filter(
@@ -89,6 +143,8 @@ export default async function ScrollPage({ searchParams }: ScrollPageProps) {
       if (k.multi_kill === "penta") score *= 2.0;
       else if (k.multi_kill === "quadra") score *= 1.5;
       else if (k.multi_kill === "triple") score *= 1.2;
+      // First bloods carry tempo signal — small but meaningful boost
+      if (k.is_first_blood) score *= 1.15;
       // KC kills are the hero content — deaths are context but shouldn't dominate the feed
       if (k.tracked_team_involvement === "team_killer") score *= 2.0;
       else if (k.tracked_team_involvement === "team_victim") score *= 0.3;
@@ -173,15 +229,25 @@ export default async function ScrollPage({ searchParams }: ScrollPageProps) {
   // When the user taps a cell in the Scroll Vivant grid, we pass the Y
   // axis through as a filter so the vertical feed only contains the slice
   // they were looking at. Empty filter means "show everything".
-  const filteredVideos = filterAxis && filterValue
+  let filteredVideos = filterAxis && filterValue
     ? videoItems.filter((v) => videoMatchesFilter(v, filterAxis, filterValue))
     : videoItems;
+
+  // ─── 4b. Chip filters (composable) ───────────────────────────────────
+  if (hasChipFilter) {
+    filteredVideos = filteredVideos.filter((v) => videoMatchesChips(v, chipFilters));
+  }
+  // Moments don't have all the same dimensions — filter them with what we
+  // can resolve, drop the ones that can't possibly match.
+  const filteredMoments = hasChipFilter
+    ? momentItems.filter((m) => momentMatchesChips(m, chipFilters))
+    : momentItems;
 
   // ─── 5. Merge + weighted shuffle ─────────────────────────────────────
   // ONLY real clips — no more aggregate splash-art placeholders. If a row
   // doesn't have a verified clip + thumbnail, it doesn't enter the feed.
   const allClips: FeedItem[] = [
-    ...momentItems,
+    ...filteredMoments,
     ...filteredVideos,
   ];
 
@@ -197,8 +263,49 @@ export default async function ScrollPage({ searchParams }: ScrollPageProps) {
       items={items}
       videoCount={clipCount}
       initialKillId={initialKillId}
+      chipFilters={chipFilters}
+      rosterChips={rosterChips}
     />
   );
+}
+
+/** Composable chip-filter match for VideoFeedItem. */
+function videoMatchesChips(v: VideoFeedItem, c: ScrollChipFilters): boolean {
+  if (c.multiKillsOnly && !v.multiKill) return false;
+  if (c.firstBloodsOnly && !v.isFirstBlood) return false;
+  if (c.fight && v.fightType !== c.fight) return false;
+  if (c.side === "kc" && v.kcInvolvement !== "team_killer") return false;
+  if (c.side === "vs" && v.kcInvolvement !== "team_victim") return false;
+  // Player filter: case-insensitive match against killer name (we don't
+  // have killerPlayerName on the row yet, so use UUID as-is for the slug
+  // case OR look at the player_id pattern). For now, accept the IGN in
+  // the URL as long as it shows up in the killer_player_id resolution
+  // table managed by getPlayerByIgn — we approximate by matching the
+  // killer_player_id directly (the chip UI passes the UUID).
+  if (c.player && v.killerPlayerId !== c.player) return false;
+  return true;
+}
+
+/** Composable chip-filter match for MomentFeedItem. Moments don't expose
+ *  per-killer info (yet), so player + fight chips drop them entirely
+ *  rather than showing irrelevant fights. */
+function momentMatchesChips(m: MomentFeedItem, c: ScrollChipFilters): boolean {
+  if (c.multiKillsOnly) return false; // moments aren't tagged with multi-kill
+  if (c.firstBloodsOnly) return false;
+  if (c.player) return false;
+  if (c.fight) {
+    // Loose mapping: teamfight chip matches "teamfight" + "ace" classifications
+    if (c.fight === "teamfight_5v5" || c.fight === "teamfight_4v4") {
+      if (m.classification !== "teamfight" && m.classification !== "ace") return false;
+    } else if (c.fight === "solo_kill") {
+      if (m.classification !== "solo_kill") return false;
+    } else {
+      return false;
+    }
+  }
+  if (c.side === "kc" && m.kcInvolvement !== "kc_aggressor" && m.kcInvolvement !== "kc_both") return false;
+  if (c.side === "vs" && m.kcInvolvement !== "kc_victim") return false;
+  return true;
 }
 
 /** Returns true when the video item matches the grid axis/value pair. */
@@ -221,17 +328,68 @@ function videoMatchesFilter(
   }
 }
 
-/** Weighted shuffle: items with higher scores tend to appear earlier,
- *  but with randomness so each page load feels different. */
-function weightedShuffle<T extends { score: number }>(items: T[]): T[] {
-  // Add random jitter proportional to score range
+/** Weighted shuffle with variety enforcement.
+ *
+ *  Two-pass algorithm:
+ *  1. Score + random jitter → seed ranking (high-score items still get to
+ *     the top, but with enough noise that each page load feels different).
+ *  2. Greedy de-clumping pass: walk the seeded list and, if the next item
+ *     shares a clump key (player + champion or moment classification) with
+ *     either of the last two picks, look ahead up to LOOKAHEAD positions
+ *     for a different one and swap it forward.
+ *
+ *  Net effect: pentakills and high-highlight clips still surface fast, but
+ *  the user never gets 5 Caliste solo-kills in a row.
+ */
+function weightedShuffle(items: FeedItem[]): FeedItem[] {
+  if (items.length <= 2) return items;
+
+  // Pass 1 — score + jitter.
   const maxScore = Math.max(1, ...items.map((i) => i.score));
-  const jittered = items.map((item) => ({
-    item,
-    sortKey: item.score + Math.random() * maxScore * 0.5,
-  }));
-  jittered.sort((a, b) => b.sortKey - a.sortKey);
-  return jittered.map((j) => j.item);
+  const jittered = items
+    .map((item) => ({
+      item,
+      sortKey: item.score + Math.random() * maxScore * 0.5,
+    }))
+    .sort((a, b) => b.sortKey - a.sortKey)
+    .map((j) => j.item);
+
+  // Pass 2 — variety enforcement via lookahead swap.
+  const LOOKAHEAD = 6;
+  const out: FeedItem[] = [];
+  const remaining = [...jittered];
+  while (remaining.length > 0) {
+    const last1 = out[out.length - 1];
+    const last2 = out[out.length - 2];
+    const k1 = last1 ? clumpKey(last1) : null;
+    const k2 = last2 ? clumpKey(last2) : null;
+
+    let pickIndex = 0;
+    if (k1 || k2) {
+      for (let i = 0; i < Math.min(LOOKAHEAD, remaining.length); i++) {
+        const ck = clumpKey(remaining[i]);
+        if (ck !== k1 && ck !== k2) {
+          pickIndex = i;
+          break;
+        }
+      }
+    }
+    out.push(remaining.splice(pickIndex, 1)[0]);
+  }
+  return out;
+}
+
+/** Returns a stable string key used for de-clumping. Items sharing a key
+ *  shouldn't sit back-to-back in the feed. */
+function clumpKey(item: FeedItem): string {
+  if (item.kind === "video") {
+    return `v:${item.killerPlayerId ?? "?"}|${item.killerChampion}`;
+  }
+  if (item.kind === "moment") {
+    return `m:${item.classification}|${item.killCount}`;
+  }
+  // aggregate — fall back to player + champion combo
+  return `a:${item.kcPlayer.name}|${item.kcPlayer.champion}`;
 }
 
 // inferOpponent removed — lookup now inline in the map (includes kcWon)
