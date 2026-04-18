@@ -760,6 +760,7 @@ function MomentScrollItem({ item, index, total, shared }: { item: MomentFeedItem
         onChatClick={() => setShowComments(true)}
         rating={rating}
         shareTitle={`${cls.label} - ${item.killCount} kills`}
+        shareText={item.aiDescription ?? undefined}
         visible={visible}
       />
 
@@ -1098,6 +1099,7 @@ function VideoScrollItem({ item, index, total, shared }: { item: VideoFeedItem; 
         onChatClick={() => setShowComments(true)}
         rating={rating}
         shareTitle={`${item.killerChampion} kill ${item.victimChampion}`}
+        shareText={item.aiDescription ?? undefined}
         visible={visible}
       />
 
@@ -1331,6 +1333,7 @@ function RightSidebar({
   onChatClick,
   rating,
   shareTitle,
+  shareText,
   visible,
 }: {
   killId: string;
@@ -1338,6 +1341,10 @@ function RightSidebar({
   onChatClick: () => void;
   rating: number;
   shareTitle: string;
+  /** Optional descriptive body sent with Web Share — used by Discord/
+   *  WhatsApp/Twitter to pre-fill the message instead of just the URL.
+   *  When omitted, only the URL + title are shared (legacy behaviour). */
+  shareText?: string;
   visible: boolean;
 }) {
   const [showShareSheet, setShowShareSheet] = useState(false);
@@ -1345,12 +1352,28 @@ function RightSidebar({
 
   const shareUrl = typeof window !== "undefined" ? `${window.location.origin}/kill/${killId}` : "";
 
-  const handleShare = () => {
-    if (typeof navigator !== "undefined" && navigator.share) {
-      navigator.share({ url: shareUrl, title: shareTitle }).catch(() => {});
-    } else {
-      setShowShareSheet(true);
+  const handleShare = async (e: React.MouseEvent) => {
+    // Prevent the underlying tap-to-pause handler from firing.
+    e.stopPropagation();
+    if (typeof navigator !== "undefined" && typeof navigator.share === "function") {
+      try {
+        await navigator.share({
+          url: shareUrl,
+          title: shareTitle,
+          ...(shareText ? { text: shareText } : {}),
+        });
+        // Native sheet closed cleanly — no toast needed (the sheet IS the feedback).
+      } catch (err) {
+        // AbortError = user dismissed the native sheet, that's fine.
+        const name = (err as { name?: string })?.name;
+        if (name && name !== "AbortError") {
+          // Real failure — fall back to the desktop sheet so they can copy.
+          setShowShareSheet(true);
+        }
+      }
+      return;
     }
+    setShowShareSheet(true);
   };
 
   return (
