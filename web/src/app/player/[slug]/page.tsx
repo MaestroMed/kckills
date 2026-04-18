@@ -17,7 +17,7 @@ import {
   PlayerRadar,
   ChampionPerformanceChart,
   RecentFormChart,
-} from "@/components/PlayerCharts";
+} from "@/components/PlayerChartsLazy";
 import { getQuotesByPlayer } from "@/lib/quotes";
 import { QuoteRow } from "@/components/QuoteCard";
 
@@ -309,6 +309,7 @@ export default async function PlayerPage({ params }: Props) {
               alt={name}
               fill
               priority
+              sizes="(max-width: 768px) 55vw, (max-width: 1024px) 45vw, 40vw"
               className="object-contain object-bottom"
               style={{
                 filter: "drop-shadow(0 20px 80px rgba(200,170,110,0.25))",

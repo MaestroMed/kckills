@@ -407,7 +407,7 @@ export default async function HomePage() {
                 >
                   {/* Background — player photo or champion splash */}
                   {photo ? (
-                    <Image src={photo} alt={player.name} fill className="object-cover object-top transition-all duration-700 group-hover:scale-105 group-hover:brightness-110" />
+                    <Image src={photo} alt={player.name} fill sizes="(max-width: 768px) 100vw, 20vw" className="object-cover object-top transition-all duration-700 group-hover:scale-105 group-hover:brightness-110" />
                   ) : (
                     <Image
                       src={championSplashUrl(champ)}

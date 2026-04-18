@@ -46,7 +46,7 @@ export default function PlayersPage() {
                   {/* Photo background */}
                   <div className="relative h-48 overflow-hidden">
                     {photo ? (
-                      <Image src={photo} alt={player.name} fill className="object-cover object-top transition-transform duration-500 group-hover:scale-110" />
+                      <Image src={photo} alt={player.name} fill sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw" className="object-cover object-top transition-transform duration-500 group-hover:scale-110" />
                     ) : (
                       <div className="flex h-full items-center justify-center bg-[var(--bg-elevated)] text-5xl font-black text-[var(--gold)]/20">
                         {player.name[0]}

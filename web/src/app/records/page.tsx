@@ -172,6 +172,7 @@ export default function RecordsPage() {
                       src={PLAYER_PHOTOS[topScorer.name]}
                       alt={topScorer.name}
                       fill
+                      sizes="(max-width: 768px) 192px, 224px"
                       className="object-cover object-top"
                     />
                   </div>
@@ -596,6 +597,7 @@ function RosterRecordCard({
             src={photo}
             alt={player}
             fill
+            sizes="64px"
             className="object-cover object-top"
           />
         </div>
