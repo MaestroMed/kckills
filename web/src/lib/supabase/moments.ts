@@ -42,7 +42,6 @@ export async function getPublishedMoments(
        kc_involvement, gold_swing, participants_involved,
        start_time_seconds, end_time_seconds,
        clip_url_horizontal, clip_url_vertical, clip_url_vertical_low,
-       hls_master_url,
        thumbnail_url, moment_score, ai_tags, ai_description,
        avg_rating, rating_count, comment_count, impression_count,
        created_at`
