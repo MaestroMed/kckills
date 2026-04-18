@@ -165,9 +165,18 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   // they only appear once — keeps the index growing organically as new
   // metas roll through KC's pick pool.
   const championNames = new Set<string>();
+  // Track every (killer, victim) pair we've actually seen in the catalog so
+  // the sitemap only exposes matchup URLs that resolve to real content.
+  // Order-independent — we canonicalise to alpha order so /matchup/A/vs/B
+  // and /matchup/B/vs/A collapse to a single entry.
+  const matchupPairs = new Set<string>();
   for (const k of publishedKills) {
     if (k.killer_champion) championNames.add(k.killer_champion);
     if (k.victim_champion) championNames.add(k.victim_champion);
+    if (k.killer_champion && k.victim_champion && k.killer_champion !== k.victim_champion) {
+      const [a, b] = [k.killer_champion, k.victim_champion].sort();
+      matchupPairs.add(`${a}|${b}`);
+    }
   }
   const championPages: MetadataRoute.Sitemap = [...championNames].map((c) => ({
     url: `${SITE_URL}/champion/${encodeURIComponent(c)}`,
@@ -175,6 +184,16 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     changeFrequency: "weekly" as const,
     priority: 0.55,
   }));
+
+  const matchupPages: MetadataRoute.Sitemap = [...matchupPairs].map((pair) => {
+    const [a, b] = pair.split("|");
+    return {
+      url: `${SITE_URL}/matchup/${encodeURIComponent(a)}/vs/${encodeURIComponent(b)}`,
+      lastModified: now,
+      changeFrequency: "weekly" as const,
+      priority: 0.5,
+    };
+  });
 
   // Per-clip URLs — the actual content Google should index. Priority is
   // attenuated by highlight score so the index gets a quality signal.
@@ -198,6 +217,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     ...alumniPages,
     ...playerPages,
     ...championPages,
+    ...matchupPages,
     ...matchPages,
     ...clipPages,
   ];

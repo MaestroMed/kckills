@@ -230,7 +230,7 @@ export default async function ChampionPage({ params }: Props) {
               {topMatchups.map(([opp, count]) => (
                 <Link
                   key={opp}
-                  href={`/champion/${encodeURIComponent(opp)}`}
+                  href={`/matchup/${encodeURIComponent(champ)}/vs/${encodeURIComponent(opp)}`}
                   className="group flex items-center gap-3 rounded-2xl border border-[var(--border-gold)] bg-[var(--bg-surface)] p-3 transition-all hover:border-[var(--gold)]/55 hover:-translate-y-0.5"
                 >
                   <div className="relative h-14 w-14 rounded-xl overflow-hidden border border-[var(--gold)]/30 flex-shrink-0">
