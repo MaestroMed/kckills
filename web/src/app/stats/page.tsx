@@ -3,6 +3,7 @@ import { loadRealData, getTeamStats, getCurrentRoster, getMatchesSorted } from "
 import { getPublishedKills } from "@/lib/supabase/kills";
 import { AnimatedNumber } from "@/components/AnimatedNumber";
 import { PageHero } from "@/components/ui/PageHero";
+import { TaggingInsights } from "@/components/TaggingInsights";
 import type { Metadata } from "next";
 
 export const revalidate = 300;
@@ -123,6 +124,9 @@ export default async function StatsPage() {
           )}
         </div>
       </section>
+
+      {/* ═══ TAGGING INSIGHTS — distributions sur les 6 dimensions IA ═══ */}
+      <TaggingInsights />
 
       {/* ═══ ROSTER STATS ═══ */}
       <section className="space-y-4">
