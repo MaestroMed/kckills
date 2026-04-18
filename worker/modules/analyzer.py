@@ -94,9 +94,23 @@ Killer: {killer_champion} ({killer_name})
 Victime: {victim_champion} ({victim_name})
 Donnees factuelles: {context}
 
+GROUND TRUTH (calcule serveur — RESPECTE-LE, ne le contredis JAMAIS dans la description) :
+  fight_type = {fight_type_truth}
+  matchup_lane = {matchup_lane_truth}
+  lane_phase = {lane_phase_truth}
+  multi_kill = {multi_kill_truth}
+
+Si fight_type = solo_kill         : c'est un 1v1, le killer est SEUL face a la victime
+Si fight_type = skirmish_2v2/3v3  : c'est une petite escarmouche, plusieurs joueurs presents
+Si fight_type = teamfight_4v4/5v5 : c'est un teamfight, decris l'engagement collectif
+Si fight_type = gank              : un jungler / un autre rdle est venu aider, mentionne-le
+Si fight_type = pick              : c'est un isolement / kidnapping de la victime hors fight
+
 REGLE D'OR description_fr: chaque description doit contenir UN DETAIL CONCRET observe dans le clip
 (un spell, une position, un % HP, un objectif, une seconde tendue). Pas de paraphrase generique.
 Pas plus d'une phrase. Pas de point d'exclamation a la fin sauf si l'action est REELLEMENT explosive.
+
+INTERDIT ABSOLU : ecrire "1v1" ou "solo kill" si fight_type != solo_kill. Le ground truth est la verite.
 
 EXEMPLES de descriptions ATTENDUES (style + niveau de specificite cible) :
 - "Caliste reset son E sur le minion juste avant le R, Rakan n'a aucune chance"
@@ -156,8 +170,19 @@ async def analyze_kill(
     victim_champion: str,
     context: str = "",
     clip_path: str | None = None,
+    *,
+    fight_type_truth: str | None = None,
+    matchup_lane_truth: str | None = None,
+    lane_phase_truth: str | None = None,
+    multi_kill_truth: str | None = None,
 ) -> dict | None:
-    """Analyze a kill with Gemini. Returns parsed JSON dict or None."""
+    """Analyze a kill with Gemini. Returns parsed JSON dict or None.
+
+    The four `_truth` kwargs are server-computed ground truth (cf.
+    scripts/recompute_fight_type.py). Passed as input so Gemini doesn't
+    have to GUESS them from the 720p video frame — its description must
+    be CONSISTENT with these values and never contradict them.
+    """
     if not config.GEMINI_API_KEY:
         log.warn("gemini_no_api_key")
         return None
@@ -173,6 +198,10 @@ async def analyze_kill(
         victim_champion=victim_champion or "?",
         victim_name=victim_name or "?",
         context=context or "",
+        fight_type_truth=fight_type_truth or "unknown",
+        matchup_lane_truth=matchup_lane_truth or "unknown",
+        lane_phase_truth=lane_phase_truth or "unknown",
+        multi_kill_truth=multi_kill_truth or "none",
     )
 
     try:
@@ -275,6 +304,13 @@ async def analyze_kill_row(kill: dict, clip_path: str | None = None) -> dict | N
         victim_champion=kill.get("victim_champion") or "?",
         context=". ".join(parts),
         clip_path=clip_path,
+        # Server-computed ground truth (cf. recompute_fight_type.py).
+        # Gemini receives these as INPUT, must respect them in the
+        # description, can't contradict them.
+        fight_type_truth=kill.get("fight_type"),
+        matchup_lane_truth=kill.get("matchup_lane"),
+        lane_phase_truth=kill.get("lane_phase"),
+        multi_kill_truth=kill.get("multi_kill"),
     )
 
 

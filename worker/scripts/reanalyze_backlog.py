@@ -41,7 +41,7 @@ FIELDS = (
     "id, game_id, game_time_seconds, killer_champion, victim_champion, "
     "killer_player_id, victim_player_id, confidence, assistants, multi_kill, "
     "is_first_blood, tracked_team_involvement, shutdown_bounty, "
-    "clip_url_vertical, lane_phase"
+    "clip_url_vertical, lane_phase, fight_type, matchup_lane"
 )
 
 
@@ -116,6 +116,12 @@ async def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--limit", type=int, default=None, help="max kills to process")
     parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="re-run even on kills that already have lane_phase set "
+        "(useful after a prompt update like the fight_type ground-truth pass)",
+    )
     args = parser.parse_args()
 
     if not config.GEMINI_API_KEY:
@@ -123,7 +129,7 @@ async def main() -> int:
         return 1
 
     all_rows = safe_select("kills", FIELDS, status="published") or []
-    todo = _needs_refresh(all_rows)
+    todo = all_rows if args.force else _needs_refresh(all_rows)
     if args.limit:
         todo = todo[: args.limit]
 
