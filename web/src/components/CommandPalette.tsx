@@ -314,20 +314,42 @@ export function CommandPalette() {
   // Lazy-fetch the clip index on FIRST palette open. ~30KB payload,
   // cached client-side for the rest of the session, also CDN-cached
   // for 5min. Failure is non-fatal — search just falls back to the
-  // static index without clips.
+  // static index without clips. One automatic retry on 5xx / network
+  // failure (covers transient flaky-WiFi cases on mobile).
   useEffect(() => {
     if (!open || clipFetchedRef.current) return;
     clipFetchedRef.current = true;
-    fetch("/api/palette/clips")
-      .then((r) => (r.ok ? r.json() : []))
-      .then((rows: ClipPaletteRow[]) => {
+    const ac = new AbortController();
+    const fetchOnce = async (attempt: number): Promise<void> => {
+      try {
+        const res = await fetch("/api/palette/clips", { signal: ac.signal });
+        if (!res.ok) {
+          // Retry once on 5xx; 4xx is permanent.
+          if (res.status >= 500 && attempt === 0) {
+            await new Promise((r) => setTimeout(r, 500));
+            return fetchOnce(1);
+          }
+          return;
+        }
+        const rows = (await res.json()) as ClipPaletteRow[];
+        if (ac.signal.aborted) return;
         if (Array.isArray(rows) && rows.length > 0) {
           setClipEntries(rows.map(clipRowToEntry));
         }
-      })
-      .catch(() => {
-        // Silent fallback — palette still works without clips.
-      });
+      } catch (err) {
+        if ((err as { name?: string })?.name === "AbortError") return;
+        // Network error — retry once with backoff.
+        if (attempt === 0) {
+          await new Promise((r) => setTimeout(r, 500));
+          return fetchOnce(1);
+        }
+        // Two failures — give up. Palette still works without clips.
+        // Allow a manual retry on next open by resetting the ref.
+        clipFetchedRef.current = false;
+      }
+    };
+    fetchOnce(0);
+    return () => ac.abort();
   }, [open]);
 
   // Global ⌘K / Ctrl+K listener

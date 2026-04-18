@@ -1,8 +1,36 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { StarRating } from "@/components/star-rating";
 import Link from "next/link";
+
+// ─── Server-shape types ─────────────────────────────────────────────────
+// Minimal interfaces matching what /api/kills/[id]/comment returns. Keeping
+// them here (instead of as `Record<string, unknown>`) means a Supabase
+// schema change yields a TS error instead of a silent runtime null cascade.
+
+interface ApiProfile {
+  id?: string;
+  discord_username?: string | null;
+  discord_avatar_url?: string | null;
+  username?: string | null; // legacy field
+}
+
+interface ApiComment {
+  id: string;
+  content?: string | null;
+  body?: string | null; // legacy field
+  created_at?: string | null;
+  parent_id?: string | null;
+  profile?: ApiProfile | null;
+  replies?: ApiComment[];
+}
+
+interface ApiRateResponse {
+  avg_rating?: number | null;
+  rating_count?: number | null;
+  user_score?: number | null;
+}
 
 interface Comment {
   id: string;
@@ -11,6 +39,10 @@ interface Comment {
   text: string;
   time: string;
   replies?: Comment[];
+  /** Optimistic local insert flag — turns the bubble subtly translucent
+   *  while we wait for the server. Replaced when the server response
+   *  arrives, or rolled back on failure. */
+  pending?: boolean;
 }
 
 export function KillInteractions({ killId }: { killId: string }) {
@@ -22,6 +54,16 @@ export function KillInteractions({ killId }: { killId: string }) {
   const [loadingComments, setLoadingComments] = useState(true);
   const [authError, setAuthError] = useState(false);
   const [rateStatus, setRateStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const [commentStatus, setCommentStatus] = useState<"idle" | "submitting" | "error">("idle");
+  const [commentError, setCommentError] = useState<string | null>(null);
+  /** Guard against double-submit from spam Enter / spam click. */
+  const submittingRef = useRef(false);
+  /** Latest rate() request id — older responses are ignored if a newer
+   *  click already landed. Prevents stale-response races. */
+  const rateRequestIdRef = useRef(0);
+  /** Track the auto-clear timer so we don't pile them up. */
+  const rateStatusTimerRef = useRef<number | null>(null);
+  const commentErrorTimerRef = useRef<number | null>(null);
 
   // UUID check — only call APIs for real Supabase kills (not legacy aggregate IDs)
   const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(killId);
@@ -32,49 +74,62 @@ export function KillInteractions({ killId }: { killId: string }) {
       setLoadingComments(false);
       return;
     }
-    let cancelled = false;
+    const ac = new AbortController();
     (async () => {
       try {
-        const res = await fetch(`/api/kills/${killId}/comment`);
+        const res = await fetch(`/api/kills/${killId}/comment`, { signal: ac.signal });
         if (!res.ok) {
           setLoadingComments(false);
           return;
         }
-        const data = await res.json();
-        if (cancelled) return;
-        const mapComment = (c: Record<string, unknown>): Comment => ({
+        const data: unknown = await res.json();
+        if (ac.signal.aborted) return;
+        const mapComment = (c: ApiComment): Comment => ({
           id: String(c.id ?? ""),
-          user: String((c.profile as Record<string, unknown>)?.discord_username ?? (c.profile as Record<string, unknown>)?.username ?? "Anonyme"),
-          avatar: ((c.profile as Record<string, unknown>)?.discord_avatar_url as string | undefined) ?? undefined,
+          user: String(c.profile?.discord_username ?? c.profile?.username ?? "Anonyme"),
+          avatar: c.profile?.discord_avatar_url ?? undefined,
           text: String(c.content ?? c.body ?? ""),
           time: c.created_at
-            ? new Date(c.created_at as string).toLocaleDateString("fr-FR", { day: "numeric", month: "short" })
+            ? new Date(c.created_at).toLocaleDateString("fr-FR", { day: "numeric", month: "short" })
             : "",
-          replies: Array.isArray(c.replies)
-            ? (c.replies as Record<string, unknown>[]).map(mapComment)
-            : undefined,
+          replies: Array.isArray(c.replies) ? c.replies.map(mapComment) : undefined,
         });
-        const mapped = (Array.isArray(data) ? data : []).map(mapComment);
+        const mapped = Array.isArray(data) ? (data as ApiComment[]).map(mapComment) : [];
         setComments(mapped);
-      } catch {
+      } catch (err) {
+        if ((err as { name?: string })?.name === "AbortError") return;
         // Supabase/schema error — degrade gracefully
       }
-      setLoadingComments(false);
+      if (!ac.signal.aborted) setLoadingComments(false);
     })();
-    return () => { cancelled = true; };
+    return () => ac.abort();
   }, [killId, isUuid]);
+
+  // Cleanup timers on unmount
+  useEffect(() => () => {
+    if (rateStatusTimerRef.current != null) window.clearTimeout(rateStatusTimerRef.current);
+    if (commentErrorTimerRef.current != null) window.clearTimeout(commentErrorTimerRef.current);
+  }, []);
 
   // ─── Rate ────────────────────────────────────────────────────────────
   const handleRate = useCallback(async (score: number) => {
     setUserRating(score);
     if (!isUuid) return;
     setRateStatus("saving");
+    // Bump request id and capture for staleness check.
+    const reqId = ++rateRequestIdRef.current;
+    if (rateStatusTimerRef.current != null) {
+      window.clearTimeout(rateStatusTimerRef.current);
+      rateStatusTimerRef.current = null;
+    }
     try {
       const res = await fetch(`/api/kills/${killId}/rate`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ score }),
       });
+      // Ignore stale response — a more recent click already landed.
+      if (reqId !== rateRequestIdRef.current) return;
       if (res.status === 401) {
         setAuthError(true);
         setUserRating(0);
@@ -83,24 +138,31 @@ export function KillInteractions({ killId }: { killId: string }) {
       }
       if (!res.ok) {
         setRateStatus("error");
+        // Auto-clear after 3s so the UI doesn't stay stuck.
+        rateStatusTimerRef.current = window.setTimeout(() => setRateStatus("idle"), 3000);
         return;
       }
-      const data = await res.json();
-      setAvgRating(data.avg_rating ?? null);
-      setRatingCount(data.rating_count ?? 0);
+      const data: ApiRateResponse = await res.json();
+      if (reqId !== rateRequestIdRef.current) return;
+      setAvgRating(typeof data.avg_rating === "number" ? data.avg_rating : null);
+      setRatingCount(typeof data.rating_count === "number" ? data.rating_count : 0);
       setRateStatus("saved");
-      setTimeout(() => setRateStatus("idle"), 2000);
+      rateStatusTimerRef.current = window.setTimeout(() => setRateStatus("idle"), 2000);
     } catch {
+      if (reqId !== rateRequestIdRef.current) return;
       setRateStatus("error");
+      rateStatusTimerRef.current = window.setTimeout(() => setRateStatus("idle"), 3000);
     }
   }, [killId, isUuid]);
 
   // ─── Comment ─────────────────────────────────────────────────────────
   const handleComment = useCallback(async () => {
+    if (submittingRef.current) return; // double-submit guard
     const trimmed = commentText.trim();
     if (!trimmed) return;
+
     if (!isUuid) {
-      // Optimistic local-only for legacy kills
+      // Local-only for legacy kills — instant insert, no server.
       setComments((prev) => [
         { id: `local-${Date.now()}`, user: "Toi", text: trimmed, time: "maintenant" },
         ...prev,
@@ -108,6 +170,26 @@ export function KillInteractions({ killId }: { killId: string }) {
       setCommentText("");
       return;
     }
+
+    // ─── UUID kill: optimistic insert + rollback on failure ─────────
+    submittingRef.current = true;
+    setCommentStatus("submitting");
+    if (commentErrorTimerRef.current != null) {
+      window.clearTimeout(commentErrorTimerRef.current);
+      commentErrorTimerRef.current = null;
+    }
+    setCommentError(null);
+    const optimisticId = `opt-${Date.now()}`;
+    const optimistic: Comment = {
+      id: optimisticId,
+      user: "Toi",
+      text: trimmed,
+      time: "maintenant",
+      pending: true,
+    };
+    setComments((prev) => [optimistic, ...prev]);
+    setCommentText("");
+
     try {
       const res = await fetch(`/api/kills/${killId}/comment`, {
         method: "POST",
@@ -115,23 +197,57 @@ export function KillInteractions({ killId }: { killId: string }) {
         body: JSON.stringify({ text: trimmed }),
       });
       if (res.status === 401) {
+        // Rollback + show login prompt — typed string for the user.
+        setComments((prev) => prev.filter((c) => c.id !== optimisticId));
+        setCommentText(trimmed);
         setAuthError(true);
         return;
       }
-      if (!res.ok) return;
-      const data = await res.json();
-      setComments((prev) => [
-        {
-          id: String(data.id ?? `local-${Date.now()}`),
-          user: String(data.profile?.discord_username ?? data.profile?.username ?? "Toi"),
-          text: String(data.content ?? data.body ?? trimmed),
-          time: "maintenant",
-        },
-        ...prev,
-      ]);
-      setCommentText("");
+      if (!res.ok) {
+        let serverMsg: string | null = null;
+        try {
+          const errJson = (await res.json()) as { error?: string };
+          serverMsg = errJson.error ?? null;
+        } catch {
+          // ignore parse failure — fall back to generic
+        }
+        setComments((prev) => prev.filter((c) => c.id !== optimisticId));
+        setCommentText(trimmed);
+        setCommentStatus("error");
+        setCommentError(serverMsg ?? "Erreur du serveur");
+        commentErrorTimerRef.current = window.setTimeout(() => {
+          setCommentStatus("idle");
+          setCommentError(null);
+        }, 4000);
+        return;
+      }
+      const data: ApiComment = await res.json();
+      // Replace optimistic with the canonical server row.
+      setComments((prev) =>
+        prev.map((c) =>
+          c.id === optimisticId
+            ? {
+                id: String(data.id ?? optimisticId),
+                user: String(data.profile?.discord_username ?? data.profile?.username ?? "Toi"),
+                avatar: data.profile?.discord_avatar_url ?? undefined,
+                text: String(data.content ?? data.body ?? trimmed),
+                time: "maintenant",
+              }
+            : c,
+        ),
+      );
+      setCommentStatus("idle");
     } catch {
-      // Network error — silent fail
+      setComments((prev) => prev.filter((c) => c.id !== optimisticId));
+      setCommentText(trimmed);
+      setCommentStatus("error");
+      setCommentError("Probleme reseau");
+      commentErrorTimerRef.current = window.setTimeout(() => {
+        setCommentStatus("idle");
+        setCommentError(null);
+      }, 4000);
+    } finally {
+      submittingRef.current = false;
     }
   }, [killId, isUuid, commentText]);
 
@@ -188,19 +304,32 @@ export function KillInteractions({ killId }: { killId: string }) {
             type="text"
             value={commentText}
             onChange={(e) => setCommentText(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && handleComment()}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && commentStatus !== "submitting") {
+                e.preventDefault();
+                handleComment();
+              }
+            }}
             placeholder="Ajouter un commentaire..."
             maxLength={500}
-            className="flex-1 rounded-lg border border-[var(--border-gold)] bg-[var(--bg-primary)] px-3 py-2 text-sm text-[var(--text-primary)] placeholder-[var(--text-disabled)] outline-none focus:border-[var(--gold)]"
+            disabled={commentStatus === "submitting"}
+            className="flex-1 rounded-lg border border-[var(--border-gold)] bg-[var(--bg-primary)] px-3 py-2 text-sm text-[var(--text-primary)] placeholder-[var(--text-disabled)] outline-none focus:border-[var(--gold)] disabled:opacity-60"
           />
           <button
             onClick={handleComment}
-            disabled={!commentText.trim()}
+            disabled={!commentText.trim() || commentStatus === "submitting"}
             className="rounded-lg bg-[var(--gold)] px-4 py-2 text-sm font-semibold text-black disabled:opacity-40"
           >
-            Poster
+            {commentStatus === "submitting" ? "..." : "Poster"}
           </button>
         </div>
+
+        {/* Comment error toast — auto-clears after 4s. */}
+        {commentStatus === "error" && commentError && (
+          <p className="text-xs text-[var(--red)]" role="status" aria-live="polite">
+            {commentError}
+          </p>
+        )}
 
         {loadingComments && (
           <div className="py-6 text-center">
@@ -228,9 +357,9 @@ function CommentThread({ comment: c, depth }: { comment: Comment; depth: number 
 
   return (
     <div style={{ marginLeft: indent > 0 ? `${indent * 16}px` : 0 }}>
-      <div className={`rounded-lg bg-[var(--bg-primary)] border p-3 ${
+      <div className={`rounded-lg bg-[var(--bg-primary)] border p-3 transition-opacity ${
         depth === 0 ? "border-[var(--border-subtle)]" : "border-[var(--border-gold)]/20"
-      }`}>
+      } ${c.pending ? "opacity-55" : ""}`}>
         <div className="flex items-center gap-2 mb-1">
           {c.avatar ? (
             // eslint-disable-next-line @next/next/no-img-element
