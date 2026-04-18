@@ -34,6 +34,8 @@ import {
 } from "./FeedItem";
 import { FeedPlayerPool, type PoolItem } from "./FeedPlayerPool";
 import { useFeedGesture } from "./hooks/useFeedGesture";
+import { useNetworkQuality } from "./hooks/useNetworkQuality";
+import { useFeedBuffer } from "./hooks/useFeedBuffer";
 import type { FeedItem } from "@/components/scroll/ScrollFeed";
 
 interface Props {
@@ -46,10 +48,12 @@ export function ScrollFeedV2({ items, videoCount = 0, initialKillId }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [itemHeight, setItemHeight] = useState(0);
   const [muted, setMuted] = useState(true);
-  const [useLowQuality, setUseLowQuality] = useState(false);
   const [isDesktop, setIsDesktop] = useState(false);
   const [reducedMotion, setReducedMotion] = useState(false);
   const [brokenIds, setBrokenIds] = useState<Set<string>>(() => new Set());
+
+  // ─── Network-driven quality (Phase 3) ─────────────────────────────
+  const { quality, useLowQuality, effectiveType } = useNetworkQuality();
 
   // ─── Viewport sizing ──────────────────────────────────────────────
   useEffect(() => {
@@ -104,6 +108,18 @@ export function ScrollFeedV2({ items, videoCount = 0, initialKillId }: Props) {
     onActiveChange: handleActiveChange,
   });
 
+  // ─── Speculative thumbnail buffer (Phase 3) ───────────────────────
+  // Preloads thumbnails for items 3-10 ahead so fast flicks never
+  // reveal a blank poster. Skipped on "low" network quality.
+  useFeedBuffer({
+    items: visibleItems.map((it) => ({
+      id: it.id,
+      thumbnail: it.kind === "video" || it.kind === "moment" ? it.thumbnail : null,
+    })),
+    activeIndex,
+    quality,
+  });
+
   // ─── Apply initial deep-link jump once item heights are measured ──
   useEffect(() => {
     if (itemHeight > 0 && initialIndex > 0) {
@@ -129,18 +145,7 @@ export function ScrollFeedV2({ items, videoCount = 0, initialKillId }: Props) {
     return () => mq.removeEventListener("change", apply);
   }, []);
 
-  useEffect(() => {
-    type Conn = { effectiveType?: string; addEventListener?: (type: string, fn: () => void) => void; removeEventListener?: (type: string, fn: () => void) => void };
-    const conn = (navigator as unknown as { connection?: Conn }).connection;
-    if (!conn) return;
-    const check = () => {
-      const eff = conn.effectiveType ?? "";
-      setUseLowQuality(eff === "2g" || eff === "slow-2g" || eff === "3g");
-    };
-    check();
-    conn.addEventListener?.("change", check);
-    return () => conn.removeEventListener?.("change", check);
-  }, []);
+  // (network detection now lives in useNetworkQuality — Phase 3)
 
   // ─── Mute persistence ────────────────────────────────────────────
   useEffect(() => {
@@ -231,6 +236,7 @@ export function ScrollFeedV2({ items, videoCount = 0, initialKillId }: Props) {
           </span>
           <span className="font-data text-[9px] uppercase tracking-widest text-[var(--gold)]/50">
             v2 · {videoCount} clips
+            {effectiveType ? ` · ${effectiveType}` : ""}
           </span>
         </div>
         <button
