@@ -1,41 +1,67 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 
+/**
+ * LiveBanner — fixed top strip that surfaces "KC EN LIVE" during an
+ * active match. Polls the server-side /api/live proxy (NOT the
+ * LolEsports API directly — see api/live/route.ts for the rationale).
+ *
+ * Polling cadence: 2 minutes. The server endpoint is CDN-cached for
+ * 60s with a 30s SWR window, so even if every visitor polled at the
+ * same instant the upstream LolEsports API would still see at most
+ * one call per minute per region.
+ *
+ * Race protection: every fetch uses a fresh AbortController. The
+ * effect's cleanup aborts any pending request before unmount and
+ * before the next interval tick, so a slow response can never
+ * setState on an unmounted component or land out-of-order.
+ */
 export function LiveBanner() {
   const [isLive, setIsLive] = useState(false);
-  const [opponent, setOpponent] = useState("");
+  const [opponent, setOpponent] = useState<string | null>(null);
+  const failureCountRef = useRef(0);
 
   useEffect(() => {
+    let cancelled = false;
+    let intervalId: number | null = null;
+    let currentController: AbortController | null = null;
+
     const check = async () => {
+      // Cancel any in-flight request before starting a new one.
+      if (currentController) currentController.abort();
+      const ac = new AbortController();
+      currentController = ac;
       try {
-        const r = await fetch(
-          "https://esports-api.lolesports.com/persisted/gw/getLive?hl=en-US",
-          { headers: { "x-api-key": "0TvQnueqKa5mxJntVWt0w4LpLfEkrV1Ta8rQBb9Z" } }
-        );
-        const data = await r.json();
-        const events = data?.data?.schedule?.events ?? [];
-        for (const event of events) {
-          const teams = event?.match?.teams ?? [];
-          const isKc = teams.some(
-            (t: { code: string }) => t.code === "KC"
-          );
-          if (isKc && event.state === "inProgress") {
-            setIsLive(true);
-            const opp = teams.find((t: { code: string }) => t.code !== "KC");
-            setOpponent(opp?.code ?? "");
-            return;
-          }
+        const r = await fetch("/api/live", {
+          signal: ac.signal,
+          // Don't bypass the CDN cache — the whole point of the proxy.
+        });
+        if (cancelled || ac.signal.aborted) return;
+        if (!r.ok) {
+          failureCountRef.current += 1;
+          return;
         }
-        setIsLive(false);
-      } catch {
-        // silently fail
+        failureCountRef.current = 0;
+        const data: { isLive?: boolean; opponent?: string | null } = await r.json();
+        if (cancelled || ac.signal.aborted) return;
+        setIsLive(Boolean(data.isLive));
+        setOpponent(data.opponent ?? null);
+      } catch (err) {
+        if ((err as { name?: string })?.name === "AbortError") return;
+        failureCountRef.current += 1;
+        // Silent fallback — banner stays in its last-known state.
       }
     };
 
-    check();
-    const interval = setInterval(check, 120_000); // poll every 2 min
-    return () => clearInterval(interval);
+    void check();
+    intervalId = window.setInterval(check, 120_000); // 2 min
+
+    return () => {
+      cancelled = true;
+      if (intervalId != null) window.clearInterval(intervalId);
+      if (currentController) currentController.abort();
+    };
   }, []);
 
   if (!isLive) return null;
