@@ -96,13 +96,9 @@ export interface PublishedKillRow {
   } | null;
 }
 
-// NOTE: hls_master_url column comes from migration 007 (Phase 4 HLS).
-// It's INTENTIONALLY OMITTED from the SELECT until that migration is
-// applied in production — otherwise Supabase rejects the whole query
-// and /scroll falls back to the empty "splash mode" state.
-// The PublishedKillRow type still declares the field (defaults to null
-// in normalize()) so the frontend pool code is forward-compatible.
-// To enable: 1) apply migration 007 2) add `hls_master_url,` back here.
+// hls_master_url is populated by the worker's hls_packager (TBD ship).
+// Until that runs, the column stays NULL on all rows and the FeedPlayerPool
+// transparently falls back to clip_url_vertical (MP4) — zero regression.
 const KILL_SELECT = `
   id,
   killer_player_id,
@@ -115,6 +111,7 @@ const KILL_SELECT = `
   clip_url_horizontal,
   clip_url_vertical,
   clip_url_vertical_low,
+  hls_master_url,
   thumbnail_url,
   og_image_url,
   ai_description,
