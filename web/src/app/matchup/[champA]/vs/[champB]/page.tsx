@@ -80,6 +80,30 @@ export default async function MatchupPage({ params }: Props) {
     notFound();
   }
 
+  // ─── JSON-LD: tells Google this is a video collection about a specific
+  //     LoL champion match-up. Two CollectionPage facets per matchup, one
+  //     summarizing each side. Helps the rich-results crawler associate
+  //     videos with the correct entity instead of treating each /kill/ as
+  //     an island.
+  const allClips = [...aKillsB, ...bKillsA, ...bForKc, ...aAgainstKc];
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@type": "CollectionPage",
+    name: `${a} vs ${b} — Match-up KC`,
+    description: `Tous les clips de la confrontation ${a} contre ${b} côté Karmine Corp.`,
+    inLanguage: "fr-FR",
+    isPartOf: { "@type": "WebSite", name: "KCKILLS", url: "https://kckills.com" },
+    mainEntity: {
+      "@type": "ItemList",
+      numberOfItems: allClips.length,
+      itemListElement: allClips.slice(0, 12).map((k, i) => ({
+        "@type": "ListItem",
+        position: i + 1,
+        url: `https://kckills.com/kill/${k.id}`,
+      })),
+    },
+  };
+
   return (
     <div
       className="-mt-6"
@@ -92,6 +116,10 @@ export default async function MatchupPage({ params }: Props) {
         marginRight: "-50vw",
       }}
     >
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
       {/* ─── HERO — split-screen + cube morph ─── */}
       <section className="relative h-[70vh] min-h-[540px] w-full overflow-hidden bg-[var(--bg-primary)]">
         <Image
