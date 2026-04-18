@@ -33,7 +33,7 @@ import { ALUMNI } from "@/lib/alumni";
 
 // ─── Index types ────────────────────────────────────────────────────────────
 
-type Group = "era" | "player" | "match" | "page" | "champion";
+type Group = "era" | "player" | "match" | "page" | "champion" | "clip";
 
 interface Entry {
   id: string;
@@ -238,22 +238,56 @@ function scoreEntry(entry: Entry, query: string): number {
     else score += 10;
   }
   // Tiny boost per group so pages/eras rise above long match list
-  const groupBoost: Record<Group, number> = { era: 12, page: 8, player: 6, champion: 4, match: 2 };
+  const groupBoost: Record<Group, number> = { era: 12, page: 8, player: 6, champion: 4, clip: 3, match: 2 };
   return score + groupBoost[entry.group];
 }
 
-function search(query: string): Entry[] {
+function search(query: string, extra: Entry[]): Entry[] {
   if (!query.trim()) {
     // Empty query: show default suggestions (pages + a few eras)
     return [...PAGES.slice(0, 6), ...ERA_ENTRIES.slice(0, 6)];
   }
-  const scored = INDEX
+  const haystack = extra.length > 0 ? [...INDEX, ...extra] : INDEX;
+  const scored = haystack
     .map((e) => ({ e, s: scoreEntry(e, query) }))
     .filter((x) => x.s > 0)
     .sort((a, b) => b.s - a.s)
-    .slice(0, 24)
+    .slice(0, 30)
     .map((x) => x.e);
   return scored;
+}
+
+// ─── Lazy clip index (fetched async on first palette open) ──────────────────
+
+interface ClipPaletteRow {
+  id: string;
+  killer: string;
+  victim: string;
+  desc: string;
+  multi: string | null;
+  fb: boolean;
+  side: string | null;
+  score: number | null;
+}
+
+function clipRowToEntry(c: ClipPaletteRow): Entry {
+  // Build a search-friendly haystack: champion names, description, tags.
+  const tagText = [
+    c.multi ? `${c.multi} kill` : "",
+    c.fb ? "first blood" : "",
+    c.side === "team_killer" ? "kc kill" : c.side === "team_victim" ? "kc death" : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
+  return {
+    id: `clip-${c.id}`,
+    group: "clip",
+    label: `${c.killer} → ${c.victim}`,
+    subtitle: c.desc ? c.desc.slice(0, 80) : `${c.killer} kill on ${c.victim}`,
+    href: `/kill/${c.id}`,
+    hint: c.score != null ? c.score.toFixed(1) : undefined,
+    searchText: `${c.killer} ${c.victim} ${c.desc} ${tagText}`.toLowerCase(),
+  };
 }
 
 // ─── Component ──────────────────────────────────────────────────────────────
@@ -263,16 +297,38 @@ const GROUP_LABELS: Record<Group, string> = {
   era: "Epoques",
   player: "Joueurs",
   champion: "Champions",
+  clip: "Clips",
   match: "Matchs",
 };
-const GROUP_ORDER: Group[] = ["page", "era", "player", "champion", "match"];
+const GROUP_ORDER: Group[] = ["page", "era", "player", "champion", "clip", "match"];
 
 export function CommandPalette() {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [active, setActive] = useState(0);
+  const [clipEntries, setClipEntries] = useState<Entry[]>([]);
+  const clipFetchedRef = useRef(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
+
+  // Lazy-fetch the clip index on FIRST palette open. ~30KB payload,
+  // cached client-side for the rest of the session, also CDN-cached
+  // for 5min. Failure is non-fatal — search just falls back to the
+  // static index without clips.
+  useEffect(() => {
+    if (!open || clipFetchedRef.current) return;
+    clipFetchedRef.current = true;
+    fetch("/api/palette/clips")
+      .then((r) => (r.ok ? r.json() : []))
+      .then((rows: ClipPaletteRow[]) => {
+        if (Array.isArray(rows) && rows.length > 0) {
+          setClipEntries(rows.map(clipRowToEntry));
+        }
+      })
+      .catch(() => {
+        // Silent fallback — palette still works without clips.
+      });
+  }, [open]);
 
   // Global ⌘K / Ctrl+K listener
   useEffect(() => {
@@ -305,7 +361,7 @@ export function CommandPalette() {
     }
   }, [open]);
 
-  const results = useMemo(() => search(query), [query]);
+  const results = useMemo(() => search(query, clipEntries), [query, clipEntries]);
 
   // Keep active in bounds
   useEffect(() => {
@@ -314,7 +370,7 @@ export function CommandPalette() {
 
   // Group results for display
   const grouped = useMemo(() => {
-    const map: Record<Group, Entry[]> = { page: [], era: [], player: [], champion: [], match: [] };
+    const map: Record<Group, Entry[]> = { page: [], era: [], player: [], champion: [], clip: [], match: [] };
     for (const r of results) map[r.group].push(r);
     // Flat list order must match the visual order so keyboard nav is consistent
     const flat: Entry[] = [];
@@ -467,6 +523,7 @@ const GROUP_ICON: Record<Group, string> = {
   era: "E",
   player: "J",
   champion: "C",
+  clip: "K",
   match: "M",
 };
 
