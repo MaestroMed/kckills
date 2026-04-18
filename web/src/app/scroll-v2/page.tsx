@@ -25,11 +25,11 @@ import { getPublishedKills } from "@/lib/supabase/kills";
 import { getPublishedMoments } from "@/lib/supabase/moments";
 import { getTrackedRoster } from "@/lib/supabase/players";
 import {
-  ScrollFeed,
   type FeedItem,
   type VideoFeedItem,
   type MomentFeedItem,
 } from "@/components/scroll/ScrollFeed";
+import { ScrollFeedV2 } from "@/components/scroll/v2/ScrollFeedV2";
 import type { GridAxisId } from "@/lib/grid/axis-config";
 
 const FILTERABLE_AXES: ReadonlySet<string> = new Set<GridAxisId>([
@@ -229,20 +229,20 @@ export default async function ScrollV2Page({ searchParams }: ScrollPageProps) {
     : weightedShuffle(allClips);
   const clipCount = items.length;
 
-  // ─── Phase 0: passthrough to ScrollFeed v1 with a banner ────────────
-  // The actual TikTok-native player ships in Phase 1+ as ScrollFeedV2.
-  // For now we render the legacy feed so the route is comparable to /scroll.
+  // ─── Phase 1: ScrollFeedV2 with the new player pool ────────────────
+  // Chip filters / rosterChips not yet wired into v2 (Phase 5).
+  // The chip bar will land alongside pull-to-refresh + end-of-feed.
+  void rosterChips; // suppress unused warning during phase 1
+  void chipFilters;
   return (
     <>
       <div className="fixed top-0 left-0 right-0 z-[70] bg-[var(--gold)] text-black text-center text-[10px] font-bold py-1 uppercase tracking-widest">
-        Preview /scroll-v2 (Phase 0) · {clipCount} clips
+        Preview /scroll-v2 (Phase 1 — pool de 5) · {clipCount} clips
       </div>
-      <ScrollFeed
+      <ScrollFeedV2
         items={items}
         videoCount={clipCount}
         initialKillId={initialKillId}
-        chipFilters={chipFilters}
-        rosterChips={rosterChips}
       />
     </>
   );
