@@ -90,8 +90,32 @@ export default async function MultiKillsPage() {
   const totalMulti = all.length;
   const orderedTiers: RankKey[] = ["penta", "quadra", "triple", "double"];
 
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@type": "CollectionPage",
+    name: "Multi-kills Karmine Corp",
+    description:
+      "Tous les multi-kills KC : pentas, quadras, triples, doubles. Le contenu le plus rare et le plus regardé du catalogue.",
+    inLanguage: "fr-FR",
+    url: "https://kckills.com/multikills",
+    isPartOf: { "@type": "WebSite", name: "KCKILLS", url: "https://kckills.com" },
+    mainEntity: {
+      "@type": "ItemList",
+      numberOfItems: totalMulti,
+      itemListElement: all.slice(0, 20).map((c, i) => ({
+        "@type": "ListItem",
+        position: i + 1,
+        url: `https://kckills.com/kill/${c.id}`,
+      })),
+    },
+  };
+
   return (
     <div className="-mt-6">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
       <PageHero
         crumbs={[
           { label: "Accueil", href: "/" },

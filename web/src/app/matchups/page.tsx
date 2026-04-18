@@ -73,8 +73,33 @@ export default async function MatchupsIndexPage() {
   const featured = ordered.slice(0, 3);
   const rest = ordered.slice(3);
 
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@type": "CollectionPage",
+    name: "Match-ups Karmine Corp",
+    description:
+      "Index de toutes les confrontations champion contre champion vues dans les clips KC.",
+    inLanguage: "fr-FR",
+    url: "https://kckills.com/matchups",
+    isPartOf: { "@type": "WebSite", name: "KCKILLS", url: "https://kckills.com" },
+    mainEntity: {
+      "@type": "ItemList",
+      numberOfItems: ordered.length,
+      itemListElement: ordered.slice(0, 20).map((m, i) => ({
+        "@type": "ListItem",
+        position: i + 1,
+        url: `https://kckills.com/matchup/${encodeURIComponent(m.a)}/vs/${encodeURIComponent(m.b)}`,
+        name: `${m.a} vs ${m.b}`,
+      })),
+    },
+  };
+
   return (
     <div className="-mt-6">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
       <PageHero
         crumbs={[
           { label: "Accueil", href: "/" },

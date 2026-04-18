@@ -49,8 +49,32 @@ export default async function FirstBloodsPage() {
     .filter((c) => c.gameTimeSeconds > 0)
     .sort((a, b) => a.gameTimeSeconds - b.gameTimeSeconds)[0];
 
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@type": "CollectionPage",
+    name: "First Bloods Karmine Corp",
+    description:
+      "Tous les first bloods Karmine Corp en LEC. Le sang qui change le tempo : qui ouvre, qui se fait piquer, et à quelle minute.",
+    inLanguage: "fr-FR",
+    url: "https://kckills.com/first-bloods",
+    isPartOf: { "@type": "WebSite", name: "KCKILLS", url: "https://kckills.com" },
+    mainEntity: {
+      "@type": "ItemList",
+      numberOfItems: clips.length,
+      itemListElement: clips.slice(0, 20).map((c, i) => ({
+        "@type": "ListItem",
+        position: i + 1,
+        url: `https://kckills.com/kill/${c.id}`,
+      })),
+    },
+  };
+
   return (
     <div className="-mt-6">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
       <PageHero
         crumbs={[
           { label: "Accueil", href: "/" },
