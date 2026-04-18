@@ -202,7 +202,7 @@ export default async function MatchPage({ params }: Props) {
             <span className="h-2 w-2 rounded-full bg-[var(--gold)] animate-pulse" />
             <div className="flex-1">
               <p className="font-display text-sm font-bold text-[var(--gold)] uppercase tracking-widest">
-                {totalRealKills} clips vid\u00e9o disponibles
+                {totalRealKills} clips vidéo disponibles
               </p>
               <p className="text-[11px] text-[var(--text-muted)]">
                 Cliquer sur une pastille de la timeline pour voir le clip, ou {" "}
@@ -375,41 +375,94 @@ function RealKillTimeline({
   maxGameTime: number;
   opponentCode: string;
 }) {
+  // Two-row layout: KC kills above the baseline, opponent kills below.
+  // Reads at a glance whether the game was a KC stomp (gold cluster up
+  // top) or a death train (red cluster on the bottom).
+  const kcKills = kills.filter((k) => k.tracked_team_involvement === "team_killer");
+  const oppKills = kills.filter((k) => k.tracked_team_involvement === "team_victim");
+
+  // Tick marks every 5 minutes. Cap at 30 min — anything later collapses
+  // into the rightmost tick so the strip doesn't get sparse on long games.
+  const totalMinutes = Math.max(20, Math.ceil(maxGameTime / 60));
+  const tickInterval = totalMinutes <= 25 ? 5 : 10;
+  const ticks: number[] = [];
+  for (let m = 0; m <= totalMinutes; m += tickInterval) ticks.push(m);
+
   return (
-    <div className="relative h-10">
-      {/* Baseline */}
-      <div className="absolute left-0 right-0 top-1/2 h-px bg-[var(--border-gold)]" />
-      {kills.map((k) => {
+    <div className="relative h-20 select-none">
+      {/* Tick marks (vertical, behind dots) */}
+      {ticks.map((m) => {
+        const leftPct = Math.min(100, ((m * 60) / maxGameTime) * 100);
+        return (
+          <div
+            key={`t-${m}`}
+            className="absolute top-2 bottom-2 w-px bg-white/[0.04] pointer-events-none"
+            style={{ left: `${leftPct}%` }}
+          >
+            <span className="absolute -top-3 -translate-x-1/2 font-data text-[8px] uppercase tracking-widest text-white/30">
+              {m}&apos;
+            </span>
+          </div>
+        );
+      })}
+
+      {/* KC baseline (gold) */}
+      <div className="absolute left-0 right-0 top-[calc(50%-14px)] h-px bg-[var(--gold)]/35" />
+      {/* Opp baseline (red) */}
+      <div className="absolute left-0 right-0 top-[calc(50%+14px)] h-px bg-[var(--red)]/35" />
+
+      {/* KC dots (above) */}
+      {kcKills.map((k) => {
         const t = k.game_time_seconds ?? 0;
         const leftPct = Math.max(0, Math.min(100, (t / maxGameTime) * 100));
-        const isKc = k.tracked_team_involvement === "team_killer";
         const title = `T+${formatGameTime(t)} \u2014 ${k.killer_champion} \u2192 ${k.victim_champion}${k.multi_kill ? ` (${k.multi_kill})` : ""}${k.is_first_blood ? " [first blood]" : ""}`;
         return (
           <Link
             key={k.id}
             href={`/kill/${k.id}`}
-            className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 flex-shrink-0 transition-all hover:scale-150 hover:z-10"
+            className={`absolute top-[calc(50%-14px)] -translate-y-1/2 -translate-x-1/2 flex-shrink-0 transition-all hover:scale-150 hover:z-10 ${k.is_first_blood ? "animate-pulse" : ""}`}
             style={{ left: `${leftPct}%` }}
             title={title}
             aria-label={title}
           >
             <span
-              className={`block h-3 w-3 rounded-full border-2 ${
-                isKc
-                  ? "bg-[var(--gold)] border-[var(--gold)] shadow-[0_0_8px_rgba(200,170,110,0.6)]"
-                  : "bg-[var(--red)]/80 border-[var(--red)]/60"
-              } ${k.multi_kill ? "ring-2 ring-[var(--gold)]/30" : ""}`}
+              className={`block rounded-full border-2 bg-[var(--gold)] border-[var(--gold)] shadow-[0_0_10px_rgba(200,170,110,0.7)] ${
+                k.multi_kill
+                  ? "h-4 w-4 ring-2 ring-[var(--gold)]/40"
+                  : "h-3 w-3"
+              }`}
             />
           </Link>
         );
       })}
-      {/* Legend */}
-      <div className="absolute -bottom-0 left-0 right-0 flex justify-between text-[9px] text-[var(--text-disabled)] pointer-events-none">
-        <span>T+00:00</span>
-        <span>T+{formatGameTime(maxGameTime)}</span>
+
+      {/* Opp dots (below) */}
+      {oppKills.map((k) => {
+        const t = k.game_time_seconds ?? 0;
+        const leftPct = Math.max(0, Math.min(100, (t / maxGameTime) * 100));
+        const title = `T+${formatGameTime(t)} \u2014 ${k.killer_champion} \u2192 ${k.victim_champion}`;
+        return (
+          <Link
+            key={k.id}
+            href={`/kill/${k.id}`}
+            className="absolute top-[calc(50%+14px)] -translate-y-1/2 -translate-x-1/2 flex-shrink-0 transition-all hover:scale-150 hover:z-10"
+            style={{ left: `${leftPct}%` }}
+            title={title}
+            aria-label={title}
+          >
+            <span className="block h-3 w-3 rounded-full border-2 bg-[var(--red)]/80 border-[var(--red)]/60" />
+          </Link>
+        );
+      })}
+
+      {/* Side labels — left edge */}
+      <div className="absolute left-0 top-0 bottom-0 flex flex-col justify-between text-[8px] font-data uppercase tracking-widest pointer-events-none pl-1">
+        <span className="text-[var(--gold)]/65">KC</span>
+        <span className="text-[var(--red)]/65">{opponentCode}</span>
       </div>
+
       <div className="sr-only">
-        Timeline of {kills.length} real clips, KC in gold, {opponentCode} in red.
+        Timeline of {kills.length} kills, {kcKills.length} by KC and {oppKills.length} by {opponentCode}.
       </div>
     </div>
   );
