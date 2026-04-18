@@ -43,15 +43,31 @@ export default async function ChampionPage({ params }: Props) {
   const { name } = await params;
   const champ = decodeURIComponent(name);
 
-  // Pull a sample to verify the champion has any clips at all — bail
-  // with 404 if the catalog has nothing on it. Saves rendering an
-  // empty hero just to show "no clips found".
-  const sample = await getClipsFiltered({ killerChampion: champ }, 1);
-  const sampleVictim = await getClipsFiltered({ victimChampion: champ }, 1);
-  if (sample.length === 0 && sampleVictim.length === 0) notFound();
+  // Pull both sides upfront — we'll reuse for the matchup frequency
+  // computation so no extra RPC round trip.
+  const [asKiller, asVictim] = await Promise.all([
+    getClipsFiltered({ killerChampion: champ }, 60),
+    getClipsFiltered({ victimChampion: champ }, 60),
+  ]);
+  if (asKiller.length === 0 && asVictim.length === 0) notFound();
+  const totalAsKiller = asKiller.length;
+  const totalAsVictim = asVictim.length;
 
-  const totalAsKiller = sample.length > 0 ? (await getClipsFiltered({ killerChampion: champ }, 60)).length : 0;
-  const totalAsVictim = sampleVictim.length > 0 ? (await getClipsFiltered({ victimChampion: champ }, 60)).length : 0;
+  // Count opponent champions — who does this champion fight most often?
+  // Combines both directions so a champion the player meets frequently
+  // surfaces whether it's their kill OR their death.
+  const opponentCounts = new Map<string, number>();
+  for (const k of asKiller) {
+    const opp = k.victimChampion;
+    if (opp && opp !== champ) opponentCounts.set(opp, (opponentCounts.get(opp) ?? 0) + 1);
+  }
+  for (const k of asVictim) {
+    const opp = k.killerChampion;
+    if (opp && opp !== champ) opponentCounts.set(opp, (opponentCounts.get(opp) ?? 0) + 1);
+  }
+  const topMatchups = [...opponentCounts.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 6);
 
   return (
     <div
@@ -193,6 +209,69 @@ export default async function ChampionPage({ params }: Props) {
             limit={6}
             emptyState={null}
           />
+        )}
+
+        {/* ─── MATCHUPS — quels champions ce champion croise le plus ─── */}
+        {topMatchups.length > 0 && (
+          <section className="space-y-5">
+            <header>
+              <p className="font-data text-[10px] uppercase tracking-[0.3em] text-[var(--gold)]/70 mb-2">
+                Matchups frequents
+              </p>
+              <h2 className="font-display text-2xl md:text-3xl font-black text-[var(--text-primary)]">
+                {champ} face a...
+              </h2>
+              <p className="mt-1 text-sm text-[var(--text-muted)] max-w-2xl">
+                Les champions que {champ} croise le plus souvent dans le catalogue. Click pour
+                voir tous les clips de ce match-up.
+              </p>
+            </header>
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {topMatchups.map(([opp, count]) => (
+                <Link
+                  key={opp}
+                  href={`/champion/${encodeURIComponent(opp)}`}
+                  className="group flex items-center gap-3 rounded-2xl border border-[var(--border-gold)] bg-[var(--bg-surface)] p-3 transition-all hover:border-[var(--gold)]/55 hover:-translate-y-0.5"
+                >
+                  <div className="relative h-14 w-14 rounded-xl overflow-hidden border border-[var(--gold)]/30 flex-shrink-0">
+                    <Image
+                      src={championIconUrl(champ)}
+                      alt={champ}
+                      fill
+                      sizes="56px"
+                      className="object-cover"
+                    />
+                  </div>
+                  <span className="text-[var(--gold)]/55 text-2xl font-display">vs</span>
+                  <div className="relative h-14 w-14 rounded-xl overflow-hidden border border-[var(--red)]/40 flex-shrink-0">
+                    <Image
+                      src={championIconUrl(opp)}
+                      alt={opp}
+                      fill
+                      sizes="56px"
+                      className="object-cover"
+                    />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-display font-bold text-white truncate group-hover:text-[var(--gold)] transition-colors">
+                      {opp}
+                    </p>
+                    <p className="font-data text-[10px] uppercase tracking-widest text-white/50">
+                      {count} confrontation{count > 1 ? "s" : ""}
+                    </p>
+                  </div>
+                  <svg
+                    className="h-4 w-4 text-white/35 group-hover:text-[var(--gold)] transition-colors flex-shrink-0"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
+                  </svg>
+                </Link>
+              ))}
+            </div>
+          </section>
         )}
       </section>
     </div>
