@@ -30,6 +30,7 @@ import structlog
 from config import config
 from scheduler import scheduler
 from services import r2_client
+from services.clip_hash import content_hash, perceptual_hash
 from services.supabase_client import safe_select, safe_update
 
 log = structlog.get_logger()
@@ -285,7 +286,18 @@ async def clip_kill(
             "-y", thumb_path,
         ])
 
-        # ─── 6. Upload everything to R2 in parallel ─────────────────
+        # ─── 6. Compute canonical hashes (Phase 1 foundation) ────────
+        # SHA-256 dedups byte-identical re-encodes; pHash dedups visually
+        # identical clips at different bitrates (community resubmissions).
+        # Non-blocking: hash failures don't abort the upload.
+        c_hash = await asyncio.to_thread(content_hash, h_path)
+        p_hash = (
+            await asyncio.to_thread(perceptual_hash, thumb_path)
+            if os.path.exists(thumb_path)
+            else None
+        )
+
+        # ─── 7. Upload everything to R2 in parallel ─────────────────
         h_url, v_url, vl_url, thumb_url = await asyncio.gather(
             r2_client.upload_clip(kill_id, h_path, "h"),
             r2_client.upload_clip(kill_id, v_path, "v"),
@@ -297,6 +309,8 @@ async def clip_kill(
             "clip_done",
             kill_id=kill_id,
             h=bool(h_url), v=bool(v_url), vl=bool(vl_url), thumb=bool(thumb_url),
+            content_hash=c_hash[:12] + "..." if c_hash else None,
+            phash=p_hash,
         )
 
         return {
@@ -304,6 +318,8 @@ async def clip_kill(
             "clip_url_vertical": v_url,
             "clip_url_vertical_low": vl_url,
             "thumbnail_url": thumb_url,
+            "content_hash": c_hash,
+            "perceptual_hash": p_hash,
             # Local path kept alive for Gemini video analysis —
             # caller is responsible for cleanup via cleanup_local_files()
             "_local_h_path": h_path if os.path.exists(h_path) else None,
@@ -645,6 +661,10 @@ async def run() -> int:
         )
         if urls and urls.get("clip_url_horizontal"):
             payload = {**urls, "status": "clipped"}
+            # Strip the in-process file path before persisting — it's only
+            # there for the analyzer that runs after clipping, never a DB
+            # column.
+            payload.pop("_local_h_path", None)
             safe_update("kills", payload, "id", kill["id"])
             processed += 1
         else:

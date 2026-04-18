@@ -2,15 +2,27 @@ import type { MetadataRoute } from "next";
 import { ERAS } from "@/lib/eras";
 import { ALUMNI } from "@/lib/alumni";
 import { loadRealData, getKCRoster } from "@/lib/real-data";
+import { getPublishedKills } from "@/lib/supabase/kills";
 
 const SITE_URL =
   process.env.NEXT_PUBLIC_SITE_URL ??
   (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "https://kckills.com");
 
-export default function sitemap(): MetadataRoute.Sitemap {
+// Cap how many clip URLs we expose in the sitemap so it stays under
+// Google's 50K-entry / 50MB hard limit even at scale, and so the
+// sitemap fetch at build time doesn't pull the entire kills table.
+const SITEMAP_MAX_CLIPS = 500;
+
+export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const now = new Date();
   const data = loadRealData();
   const roster = getKCRoster(data);
+
+  // Pull the top published clips for indexation. Sorted by highlight_score
+  // server-side, so Google sees the best ones first. Falls back to []
+  // if Supabase is unreachable at build — the deploy still ships, just
+  // without per-clip URLs that build (ISR populates on first hit).
+  const publishedKills = await getPublishedKills(SITEMAP_MAX_CLIPS).catch(() => []);
 
   const staticPages: MetadataRoute.Sitemap = [
     {
@@ -129,5 +141,21 @@ export default function sitemap(): MetadataRoute.Sitemap {
     priority: 0.5,
   }));
 
-  return [...staticPages, ...eraPages, ...alumniPages, ...playerPages, ...matchPages];
+  // Per-clip URLs — the actual content Google should index. Priority is
+  // attenuated by highlight score so the index gets a quality signal.
+  const clipPages: MetadataRoute.Sitemap = publishedKills.map((k) => {
+    const score = typeof k.highlight_score === "number" ? k.highlight_score : 5;
+    // Map highlight 1-10 → priority 0.3-0.85 (top clips outrank generic
+    // landing pages but never beat the homepage).
+    const priority = Math.max(0.3, Math.min(0.85, 0.3 + (score / 10) * 0.55));
+    const lastModified = k.created_at ? new Date(k.created_at) : now;
+    return {
+      url: `${SITE_URL}/kill/${k.id}`,
+      lastModified,
+      changeFrequency: "weekly" as const,
+      priority,
+    };
+  });
+
+  return [...staticPages, ...eraPages, ...alumniPages, ...playerPages, ...matchPages, ...clipPages];
 }

@@ -24,6 +24,32 @@ export function Navbar() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [user, setUser] = useState<{ name: string; avatar: string } | null>(null);
 
+  // ── Mobile drawer UX hardening ──────────────────────────────────────
+  // - Esc closes the drawer (a11y)
+  // - Body scroll is locked while it's open so the underlying page
+  //   doesn't scroll behind it (KC fanbase is mostly mobile, this is
+  //   the one nav blocker called out in the 20-point audit)
+  // - Drawer auto-closes when the viewport is resized to >= md so
+  //   landscape rotation doesn't leave the menu open AND the desktop
+  //   nav both rendered.
+  useEffect(() => {
+    if (!mobileOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setMobileOpen(false);
+    };
+    const onResize = () => {
+      if (window.innerWidth >= 768) setMobileOpen(false);
+    };
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", onKey);
+    window.addEventListener("resize", onResize);
+    return () => {
+      document.body.style.overflow = "";
+      window.removeEventListener("keydown", onKey);
+      window.removeEventListener("resize", onResize);
+    };
+  }, [mobileOpen]);
+
   useEffect(() => {
     // Check auth state (when Supabase is connected)
     try {
@@ -98,11 +124,14 @@ export function Navbar() {
           </Link>
         </div>
 
-        {/* Mobile menu button */}
+        {/* Mobile menu button — meets WCAG 4.4 (target ≥ 44px on touch) */}
         <button
-          className="md:hidden"
-          onClick={() => setMobileOpen(!mobileOpen)}
-          aria-label="Menu"
+          type="button"
+          className="md:hidden flex h-11 w-11 items-center justify-center rounded-lg text-[var(--text-secondary)] hover:text-[var(--gold)] hover:bg-[var(--bg-elevated)] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--gold)]"
+          onClick={() => setMobileOpen((v) => !v)}
+          aria-label={mobileOpen ? "Fermer le menu" : "Ouvrir le menu"}
+          aria-expanded={mobileOpen}
+          aria-controls="mobile-nav"
         >
           <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             {mobileOpen ? (
@@ -116,7 +145,7 @@ export function Navbar() {
 
       {/* Mobile menu */}
       {mobileOpen && (
-        <div className="border-t border-[var(--border-gold)] px-4 py-3 md:hidden space-y-1">
+        <div id="mobile-nav" className="border-t border-[var(--border-gold)] px-4 py-3 md:hidden space-y-1">
           {NAV_LINKS.map((link) => (
             <Link
               key={link.href}

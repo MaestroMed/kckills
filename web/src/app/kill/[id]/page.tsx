@@ -4,11 +4,34 @@ import Image from "next/image";
 import { loadRealData, displayRole } from "@/lib/real-data";
 import { championIconUrl } from "@/lib/constants";
 import { computeKillScore } from "@/lib/feed-algorithm";
-import { getKillById, type PublishedKillRow } from "@/lib/supabase/kills";
+import { getKillById, getPublishedKills, type PublishedKillRow } from "@/lib/supabase/kills";
 import { KillInteractions } from "./interactions";
 import type { Metadata } from "next";
 
+// ISR: pre-render the top N clips at build time, regenerate every 10 min
+// so freshly-rated kills bubble up without a deploy.
 export const revalidate = 600;
+// Other ids fall back to on-demand SSG with the same revalidate window.
+export const dynamicParams = true;
+
+/**
+ * Pre-render the 100 top-scored published clips at build time. This is
+ * the V1 SEO requirement (cf. AUDIT.md §6.3 — Google must be able to
+ * index at least the top 100 clip pages on launch). Everything beyond
+ * the top 100 is rendered on first hit and cached for `revalidate`s.
+ *
+ * Fails open: if Supabase is unreachable at build (cold deploy on a
+ * fresh env), we return an empty list — every page still works via
+ * dynamicParams fallback, just without prerender benefit.
+ */
+export async function generateStaticParams(): Promise<{ id: string }[]> {
+  try {
+    const kills = await getPublishedKills(100);
+    return kills.map((k) => ({ id: k.id }));
+  } catch {
+    return [];
+  }
+}
 
 interface Props {
   params: Promise<{ id: string }>;
@@ -111,16 +134,32 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     if (kill) {
       const title = `${kill.killer_champion ?? "?"} \u2192 ${kill.victim_champion ?? "?"} \u2014 KCKILLS`;
       const description = kill.ai_description ?? `Highlight score ${kill.highlight_score?.toFixed(1) ?? "?"}/10`;
+      const canonicalPath = `/kill/${id}`;
       return {
         title,
         description,
+        alternates: { canonical: canonicalPath },
         openGraph: {
           title,
           description,
+          type: "video.other",
+          url: canonicalPath,
+          siteName: "KCKILLS",
+          locale: "fr_FR",
           images: kill.og_image_url ? [kill.og_image_url] : undefined,
+          videos: kill.clip_url_horizontal
+            ? [
+                {
+                  url: kill.clip_url_horizontal,
+                  width: 1920,
+                  height: 1080,
+                  type: "video/mp4",
+                },
+              ]
+            : undefined,
         },
         twitter: {
-          card: "summary_large_image",
+          card: "player",
           title,
           description,
           images: kill.og_image_url ? [kill.og_image_url] : undefined,
@@ -157,20 +196,65 @@ export default async function KillDetailPage({ params }: Props) {
       );
 
       // JSON-LD VideoObject for SEO — helps Google index clips as videos
+      // and surface them in the video search vertical. Schema.org spec:
+      // https://schema.org/VideoObject
+      const canonicalUrl = `https://kckills.com/kill/${id}`;
       const videoJsonLd = kill.clip_url_horizontal ? {
         "@context": "https://schema.org",
         "@type": "VideoObject",
         name: `${kill.killer_champion} \u2192 ${kill.victim_champion} \u2014 KC vs ${opponent.code}`,
-        description: kill.ai_description ?? `Kill highlight from KC vs ${opponent.code}`,
-        thumbnailUrl: kill.thumbnail_url ?? undefined,
+        description:
+          kill.ai_description ??
+          `Kill highlight from KC vs ${opponent.code} \u2014 ${kill.killer_champion} eliminates ${kill.victim_champion}.`,
+        thumbnailUrl: kill.thumbnail_url ?? kill.og_image_url ?? undefined,
         contentUrl: kill.clip_url_horizontal,
+        embedUrl: canonicalUrl,
         uploadDate: kill.created_at,
+        // Duration is best-effort: V1 clips average ~14-22s, we use a
+        // conservative 18s pending a `duration_seconds` column in the
+        // schema (Phase 1 metadata foundation).
         duration: "PT18S",
+        inLanguage: "fr-FR",
+        isFamilyFriendly: true,
+        keywords: [
+          "League of Legends",
+          "esport",
+          "Karmine Corp",
+          "KC",
+          "LEC",
+          kill.killer_champion ?? "",
+          kill.victim_champion ?? "",
+          ...(Array.isArray(kill.ai_tags) ? kill.ai_tags : []),
+        ].filter(Boolean).join(", "),
         publisher: {
           "@type": "Organization",
           name: "KCKILLS",
           url: "https://kckills.com",
+          logo: {
+            "@type": "ImageObject",
+            url: "https://kckills.com/icons/icon-512.png",
+          },
         },
+        ...(kill.rating_count > 0 && kill.avg_rating != null
+          ? {
+              aggregateRating: {
+                "@type": "AggregateRating",
+                ratingValue: kill.avg_rating.toFixed(1),
+                ratingCount: kill.rating_count,
+                bestRating: 5,
+                worstRating: 1,
+              },
+            }
+          : {}),
+        ...(kill.impression_count > 0
+          ? {
+              interactionStatistic: {
+                "@type": "InteractionCounter",
+                interactionType: { "@type": "WatchAction" },
+                userInteractionCount: kill.impression_count,
+              },
+            }
+          : {}),
       } : null;
 
       return (
