@@ -16,6 +16,23 @@ export interface PlayerRow {
   image_url: string | null;
 }
 
+/** Raw Supabase row shape — matches the SELECT clauses below. */
+interface RawPlayerRow {
+  id?: string | null;
+  ign?: string | null;
+  role?: string | null;
+  image_url?: string | null;
+}
+
+function normalizePlayer(row: RawPlayerRow): PlayerRow {
+  return {
+    id: String(row.id ?? ""),
+    ign: String(row.ign ?? "?"),
+    role: row.role ?? null,
+    image_url: row.image_url ?? null,
+  };
+}
+
 export async function getTrackedRoster(): Promise<PlayerRow[]> {
   try {
     const supabase = await createServerSupabase();
@@ -27,12 +44,7 @@ export async function getTrackedRoster(): Promise<PlayerRow[]> {
       console.warn("[supabase/players] getTrackedRoster error:", error.message);
       return [];
     }
-    return (data ?? []).map((r: Record<string, unknown>) => ({
-      id: String(r.id ?? ""),
-      ign: String(r.ign ?? "?"),
-      role: (r.role as string | null) ?? null,
-      image_url: (r.image_url as string | null) ?? null,
-    }));
+    return ((data ?? []) as RawPlayerRow[]).map(normalizePlayer);
   } catch (err) {
     rethrowIfDynamic(err);
     console.warn("[supabase/players] getTrackedRoster threw:", err);
@@ -57,14 +69,9 @@ export async function getPlayerByIgn(ign: string): Promise<PlayerRow | null> {
       console.warn("[supabase/players] getPlayerByIgn error:", error.message);
       return null;
     }
-    const row = (data ?? [])[0] as Record<string, unknown> | undefined;
+    const row = ((data ?? []) as RawPlayerRow[])[0];
     if (!row) return null;
-    return {
-      id: String(row.id ?? ""),
-      ign: String(row.ign ?? "?"),
-      role: (row.role as string | null) ?? null,
-      image_url: (row.image_url as string | null) ?? null,
-    };
+    return normalizePlayer(row);
   } catch (err) {
     rethrowIfDynamic(err);
     console.warn("[supabase/players] getPlayerByIgn threw:", err);

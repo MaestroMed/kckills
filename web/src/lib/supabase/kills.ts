@@ -134,15 +134,71 @@ const KILL_SELECT = `
   )
 `.trim();
 
-function normalize(row: Record<string, unknown>): PublishedKillRow {
-  // Supabase returns the joined games either as an object or an array depending
-  // on the version — collapse both cases so downstream code doesn't branch.
-  const rawGames = row.games;
-  const games = Array.isArray(rawGames) ? rawGames[0] ?? null : (rawGames as Record<string, unknown> | null);
+/**
+ * Raw row shape returned by the SELECT clause above. Mirrors the
+ * Supabase response one-to-one BEFORE normalisation. Defining this in
+ * code (instead of `Record<string, unknown>`) means a Supabase schema
+ * change makes us a TS error here, not a silent runtime null cascade
+ * downstream.
+ *
+ * Joined relations come back as object | array depending on the
+ * supabase-js version, hence the union types on `games` and
+ * `matches`. Normalize collapses both.
+ */
+interface RawKillSelect {
+  id?: string | null;
+  killer_player_id?: string | null;
+  killer_champion?: string | null;
+  victim_champion?: string | null;
+  game_time_seconds?: number | null;
+  highlight_score?: number | null;
+  avg_rating?: number | null;
+  rating_count?: number | null;
+  clip_url_horizontal?: string | null;
+  clip_url_vertical?: string | null;
+  clip_url_vertical_low?: string | null;
+  thumbnail_url?: string | null;
+  og_image_url?: string | null;
+  ai_description?: string | null;
+  ai_tags?: string[] | null;
+  multi_kill?: string | null;
+  is_first_blood?: boolean | null;
+  tracked_team_involvement?: string | null;
+  kill_visible?: boolean | null;
+  lane_phase?: LanePhase | null;
+  fight_type?: FightType | null;
+  objective_context?: ObjectiveContext | null;
+  matchup_lane?: MatchupLane | null;
+  champion_class?: ChampionClass | null;
+  game_minute_bucket?: MinuteBucket | null;
+  impression_count?: number | null;
+  comment_count?: number | null;
+  created_at?: string | null;
+  games?: RawGameSelect | RawGameSelect[] | null;
+}
+
+interface RawGameSelect {
+  external_id?: string | null;
+  game_number?: number | null;
+  matches?: RawMatchSelect | RawMatchSelect[] | null;
+}
+
+interface RawMatchSelect {
+  id?: string | null;
+  external_id?: string | null;
+  scheduled_at?: string | null;
+  stage?: string | null;
+  format?: string | null;
+}
+
+function normalize(row: RawKillSelect): PublishedKillRow {
+  // Joined relations come back as object | array depending on the
+  // supabase-js version — collapse both cases so downstream code
+  // doesn't branch.
+  const games = Array.isArray(row.games) ? row.games[0] ?? null : row.games ?? null;
   let gamesNormalized: PublishedKillRow["games"] = null;
   if (games) {
-    const rawMatches = games.matches;
-    const matches = Array.isArray(rawMatches) ? rawMatches[0] ?? null : (rawMatches as Record<string, unknown> | null);
+    const matches = Array.isArray(games.matches) ? games.matches[0] ?? null : games.matches ?? null;
     gamesNormalized = {
       external_id: String(games.external_id ?? ""),
       game_number: Number(games.game_number ?? 1),
@@ -150,39 +206,39 @@ function normalize(row: Record<string, unknown>): PublishedKillRow {
         ? {
             id: String(matches.id ?? ""),
             external_id: String(matches.external_id ?? ""),
-            scheduled_at: (matches.scheduled_at as string | null) ?? null,
-            stage: (matches.stage as string | null) ?? null,
-            format: (matches.format as string | null) ?? null,
+            scheduled_at: matches.scheduled_at ?? null,
+            stage: matches.stage ?? null,
+            format: matches.format ?? null,
           }
         : null,
     };
   }
   return {
     id: String(row.id ?? ""),
-    killer_player_id: (row.killer_player_id as string | null) ?? null,
-    killer_champion: (row.killer_champion as string | null) ?? null,
-    victim_champion: (row.victim_champion as string | null) ?? null,
-    game_time_seconds: (row.game_time_seconds as number | null) ?? null,
-    highlight_score: (row.highlight_score as number | null) ?? null,
-    avg_rating: (row.avg_rating as number | null) ?? null,
+    killer_player_id: row.killer_player_id ?? null,
+    killer_champion: row.killer_champion ?? null,
+    victim_champion: row.victim_champion ?? null,
+    game_time_seconds: row.game_time_seconds ?? null,
+    highlight_score: row.highlight_score ?? null,
+    avg_rating: row.avg_rating ?? null,
     rating_count: Number(row.rating_count ?? 0),
-    clip_url_horizontal: (row.clip_url_horizontal as string | null) ?? null,
-    clip_url_vertical: (row.clip_url_vertical as string | null) ?? null,
-    clip_url_vertical_low: (row.clip_url_vertical_low as string | null) ?? null,
-    thumbnail_url: (row.thumbnail_url as string | null) ?? null,
-    og_image_url: (row.og_image_url as string | null) ?? null,
-    ai_description: (row.ai_description as string | null) ?? null,
-    ai_tags: Array.isArray(row.ai_tags) ? (row.ai_tags as string[]) : [],
-    multi_kill: (row.multi_kill as string | null) ?? null,
+    clip_url_horizontal: row.clip_url_horizontal ?? null,
+    clip_url_vertical: row.clip_url_vertical ?? null,
+    clip_url_vertical_low: row.clip_url_vertical_low ?? null,
+    thumbnail_url: row.thumbnail_url ?? null,
+    og_image_url: row.og_image_url ?? null,
+    ai_description: row.ai_description ?? null,
+    ai_tags: Array.isArray(row.ai_tags) ? row.ai_tags : [],
+    multi_kill: row.multi_kill ?? null,
     is_first_blood: Boolean(row.is_first_blood),
-    tracked_team_involvement: (row.tracked_team_involvement as string | null) ?? null,
-    kill_visible: (row.kill_visible as boolean | null) ?? null,
-    lane_phase: (row.lane_phase as LanePhase | null) ?? null,
-    fight_type: (row.fight_type as FightType | null) ?? null,
-    objective_context: (row.objective_context as ObjectiveContext | null) ?? null,
-    matchup_lane: (row.matchup_lane as MatchupLane | null) ?? null,
-    champion_class: (row.champion_class as ChampionClass | null) ?? null,
-    game_minute_bucket: (row.game_minute_bucket as MinuteBucket | null) ?? null,
+    tracked_team_involvement: row.tracked_team_involvement ?? null,
+    kill_visible: row.kill_visible ?? null,
+    lane_phase: row.lane_phase ?? null,
+    fight_type: row.fight_type ?? null,
+    objective_context: row.objective_context ?? null,
+    matchup_lane: row.matchup_lane ?? null,
+    champion_class: row.champion_class ?? null,
+    game_minute_bucket: row.game_minute_bucket ?? null,
     impression_count: Number(row.impression_count ?? 0),
     comment_count: Number(row.comment_count ?? 0),
     created_at: String(row.created_at ?? ""),
@@ -222,7 +278,7 @@ export async function getPublishedKills(
       console.warn("[supabase/kills] getPublishedKills error:", error.message);
       return [];
     }
-    return (data ?? []).map((row) => normalize(row as unknown as Record<string, unknown>));
+    return (data ?? []).map((row) => normalize(row as unknown as RawKillSelect));
   } catch (err) {
     rethrowIfDynamic(err);
     console.warn("[supabase/kills] getPublishedKills threw:", err);
@@ -244,7 +300,7 @@ export async function getKillById(id: string): Promise<PublishedKillRow | null> 
       console.warn("[supabase/kills] getKillById error:", error.message);
       return null;
     }
-    return data ? normalize(data as unknown as Record<string, unknown>) : null;
+    return data ? normalize(data as unknown as RawKillSelect) : null;
   } catch (err) {
     rethrowIfDynamic(err);
     console.warn("[supabase/kills] getKillById threw:", err);
@@ -268,7 +324,7 @@ export async function getKillsByMatchExternalId(
       console.warn("[supabase/kills] getKillsByMatchExternalId error:", error.message);
       return [];
     }
-    return (data ?? []).map((row) => normalize(row as unknown as Record<string, unknown>));
+    return (data ?? []).map((row) => normalize(row as unknown as RawKillSelect));
   } catch (err) {
     rethrowIfDynamic(err);
     console.warn("[supabase/kills] getKillsByMatchExternalId threw:", err);
@@ -294,7 +350,7 @@ export async function getKillsByKillerChampion(
       console.warn("[supabase/kills] getKillsByKillerChampion error:", error.message);
       return [];
     }
-    return (data ?? []).map((row) => normalize(row as unknown as Record<string, unknown>));
+    return (data ?? []).map((row) => normalize(row as unknown as RawKillSelect));
   } catch (err) {
     rethrowIfDynamic(err);
     console.warn("[supabase/kills] getKillsByKillerChampion threw:", err);

@@ -36,15 +36,25 @@ export async function GET() {
 
     // Normalise to a tight wire format. Each row ~150-200 bytes — the
     // full payload is ~30KB, comfortably small for a Cmd-K open hit.
-    const out = (data ?? []).map((k: Record<string, unknown>) => ({
-      id: String(k.id),
-      killer: (k.killer_champion as string | null) ?? "?",
-      victim: (k.victim_champion as string | null) ?? "?",
-      desc: (k.ai_description as string | null) ?? "",
-      multi: (k.multi_kill as string | null) ?? null,
+    interface RawPaletteRow {
+      id?: string | null;
+      killer_champion?: string | null;
+      victim_champion?: string | null;
+      ai_description?: string | null;
+      multi_kill?: string | null;
+      is_first_blood?: boolean | null;
+      tracked_team_involvement?: string | null;
+      highlight_score?: number | null;
+    }
+    const out = ((data ?? []) as RawPaletteRow[]).map((k) => ({
+      id: String(k.id ?? ""),
+      killer: k.killer_champion ?? "?",
+      victim: k.victim_champion ?? "?",
+      desc: k.ai_description ?? "",
+      multi: k.multi_kill ?? null,
       fb: Boolean(k.is_first_blood),
-      side: (k.tracked_team_involvement as string | null) ?? null,
-      score: (k.highlight_score as number | null) ?? null,
+      side: k.tracked_team_involvement ?? null,
+      score: k.highlight_score ?? null,
     }));
     return NextResponse.json(out, {
       headers: { "Cache-Control": "public, s-maxage=300, stale-while-revalidate=60" },

@@ -105,40 +105,77 @@ function buildJsonbFilter(f: ClipFilter): Record<string, string | boolean> {
   return out;
 }
 
-function normalize(row: Record<string, unknown>): FilteredClip {
-  const tags = row.ai_tags;
+/** Raw row shape returned by `fn_get_clips_filtered` (migration 005). One
+ *  flat record — the RPC denormalises the joined tables into named columns
+ *  so we don't deal with nested arrays here. Schema drift fails typecheck
+ *  rather than silently nulling fields. */
+interface RawFilteredClipRow {
+  id?: string | null;
+  killer_player_id?: string | null;
+  victim_player_id?: string | null;
+  killer_champion?: string | null;
+  victim_champion?: string | null;
+  killer_name?: string | null;
+  victim_name?: string | null;
+  clip_url_horizontal?: string | null;
+  clip_url_vertical?: string | null;
+  clip_url_vertical_low?: string | null;
+  thumbnail_url?: string | null;
+  highlight_score?: number | null;
+  avg_rating?: number | null;
+  rating_count?: number | null;
+  ai_description?: string | null;
+  ai_tags?: string[] | null;
+  multi_kill?: string | null;
+  is_first_blood?: boolean | null;
+  tracked_team_involvement?: string | null;
+  fight_type?: string | null;
+  matchup_lane?: string | null;
+  lane_phase?: string | null;
+  minute_bucket?: string | null;
+  game_time_seconds?: number | null;
+  game_id?: string | null;
+  game_number?: number | null;
+  match_external_id?: string | null;
+  match_stage?: string | null;
+  match_date?: string | null;
+  opponent_code?: string | null;
+  created_at?: string | null;
+}
+
+function normalize(row: RawFilteredClipRow): FilteredClip {
   return {
-    id: String(row.id),
-    killerPlayerId: (row.killer_player_id as string | null) ?? null,
-    victimPlayerId: (row.victim_player_id as string | null) ?? null,
-    killerChampion: (row.killer_champion as string | null) ?? null,
-    victimChampion: (row.victim_champion as string | null) ?? null,
-    killerName: (row.killer_name as string | null) ?? null,
-    victimName: (row.victim_name as string | null) ?? null,
-    clipUrlHorizontal: (row.clip_url_horizontal as string | null) ?? null,
-    clipUrlVertical: (row.clip_url_vertical as string | null) ?? null,
-    clipUrlVerticalLow: (row.clip_url_vertical_low as string | null) ?? null,
-    thumbnailUrl: (row.thumbnail_url as string | null) ?? null,
-    highlightScore: (row.highlight_score as number | null) ?? null,
-    avgRating: (row.avg_rating as number | null) ?? null,
-    ratingCount: (row.rating_count as number | null) ?? 0,
-    aiDescription: (row.ai_description as string | null) ?? null,
-    aiTags: Array.isArray(tags) ? (tags as string[]) : [],
-    multiKill: (row.multi_kill as string | null) ?? null,
-    isFirstBlood: (row.is_first_blood as boolean | null) ?? false,
-    trackedTeamInvolvement: (row.tracked_team_involvement as string | null) ?? null,
-    fightType: (row.fight_type as string | null) ?? null,
-    matchupLane: (row.matchup_lane as string | null) ?? null,
-    lanePhase: (row.lane_phase as string | null) ?? null,
-    minuteBucket: (row.minute_bucket as string | null) ?? null,
-    gameTimeSeconds: (row.game_time_seconds as number | null) ?? 0,
-    gameId: (row.game_id as string | null) ?? null,
-    gameNumber: (row.game_number as number | null) ?? null,
-    matchExternalId: (row.match_external_id as string | null) ?? null,
-    matchStage: (row.match_stage as string | null) ?? null,
-    matchDate: (row.match_date as string | null) ?? null,
-    opponentCode: (row.opponent_code as string | null) ?? null,
-    createdAt: (row.created_at as string | null) ?? null,
+    id: String(row.id ?? ""),
+    killerPlayerId: row.killer_player_id ?? null,
+    victimPlayerId: row.victim_player_id ?? null,
+    killerChampion: row.killer_champion ?? null,
+    victimChampion: row.victim_champion ?? null,
+    killerName: row.killer_name ?? null,
+    victimName: row.victim_name ?? null,
+    clipUrlHorizontal: row.clip_url_horizontal ?? null,
+    clipUrlVertical: row.clip_url_vertical ?? null,
+    clipUrlVerticalLow: row.clip_url_vertical_low ?? null,
+    thumbnailUrl: row.thumbnail_url ?? null,
+    highlightScore: row.highlight_score ?? null,
+    avgRating: row.avg_rating ?? null,
+    ratingCount: row.rating_count ?? 0,
+    aiDescription: row.ai_description ?? null,
+    aiTags: Array.isArray(row.ai_tags) ? row.ai_tags : [],
+    multiKill: row.multi_kill ?? null,
+    isFirstBlood: row.is_first_blood ?? false,
+    trackedTeamInvolvement: row.tracked_team_involvement ?? null,
+    fightType: row.fight_type ?? null,
+    matchupLane: row.matchup_lane ?? null,
+    lanePhase: row.lane_phase ?? null,
+    minuteBucket: row.minute_bucket ?? null,
+    gameTimeSeconds: row.game_time_seconds ?? 0,
+    gameId: row.game_id ?? null,
+    gameNumber: row.game_number ?? null,
+    matchExternalId: row.match_external_id ?? null,
+    matchStage: row.match_stage ?? null,
+    matchDate: row.match_date ?? null,
+    opponentCode: row.opponent_code ?? null,
+    createdAt: row.created_at ?? null,
   };
 }
 
@@ -161,7 +198,7 @@ export async function getClipsFiltered(
       console.warn("[supabase/clips] fn_get_clips_filtered error:", error.message);
       return [];
     }
-    return (data ?? []).map((row: Record<string, unknown>) => normalize(row));
+    return ((data ?? []) as RawFilteredClipRow[]).map((row) => normalize(row));
   } catch (err) {
     rethrowIfDynamic(err);
     console.warn("[supabase/clips] fn_get_clips_filtered threw:", err);

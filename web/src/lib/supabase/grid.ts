@@ -24,13 +24,23 @@ export interface GridCellRow {
 }
 
 /**
+ * Filter values accepted by the grid RPC. The jsonb is intentionally
+ * loose because each axis defines its own filter keys, but each leaf
+ * value is constrained — an accidental object/array would crash the RPC
+ * silently. Catching that at the call site beats debugging a "no cells"
+ * empty grid in production.
+ */
+export type GridFilterValue = string | number | boolean | null;
+export type GridFilters = Record<string, GridFilterValue>;
+
+/**
  * Fetch one row per (cell_x, cell_y) bucket for the requested axis pair.
  * Returns [] on error so the grid can fall back to a skeleton state.
  */
 export async function getGridCells(
   axisX: GridAxisId,
   axisY: GridAxisId,
-  filters: Record<string, unknown> = {},
+  filters: GridFilters = {},
 ): Promise<GridCellRow[]> {
   try {
     const supabase = await createServerSupabase();
