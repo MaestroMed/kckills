@@ -24,6 +24,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import type { VideoFeedItem, MomentFeedItem } from "@/components/scroll/ScrollFeed";
+import { isDescriptionClean } from "@/lib/scroll/sanitize-description";
 
 interface SharedFeedItemProps {
   index: number;
@@ -139,7 +140,7 @@ export function FeedItemVideo({
           </p>
 
           {/* AI description */}
-          {item.aiDescription && (
+          {isDescriptionClean(item.aiDescription) && (
             <p className="text-sm md:text-base text-white/85 italic line-clamp-3 max-w-md">
               « {item.aiDescription} »
             </p>
@@ -235,7 +236,7 @@ export function FeedItemMoment({
               </span>
             )}
           </div>
-          {item.aiDescription && (
+          {isDescriptionClean(item.aiDescription) && (
             <p className="text-sm md:text-base text-white/85 italic line-clamp-3 max-w-md">
               « {item.aiDescription} »
             </p>

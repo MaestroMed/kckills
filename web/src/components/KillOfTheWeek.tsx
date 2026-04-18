@@ -2,6 +2,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { getPublishedKills, type PublishedKillRow } from "@/lib/supabase/kills";
 import { championIconUrl } from "@/lib/constants";
+import { isDescriptionClean } from "@/lib/scroll/sanitize-description";
 
 /**
  * Kill of the Week — auto-highlights the top-scored kill from the last 7 days.
@@ -87,8 +88,8 @@ export async function KillOfTheWeek() {
             </span>
           </div>
 
-          {/* AI description */}
-          {kill.ai_description && (
+          {/* AI description — guarded by isDescriptionClean (audit Opus 4.7) */}
+          {isDescriptionClean(kill.ai_description) && (
             <p className="text-sm text-white/80 italic mb-3 line-clamp-2">
               &laquo; {kill.ai_description} &raquo;
             </p>

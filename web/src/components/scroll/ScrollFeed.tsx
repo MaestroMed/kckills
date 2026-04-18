@@ -8,6 +8,7 @@ import { useToast } from "@/components/Toast";
 import { CommentPanel } from "@/components/CommentPanel";
 import { useScrollAutoplay } from "./useScrollAutoplay";
 import { ScrollChipBar, type ChipFilters } from "./ScrollChipBar";
+import { isDescriptionClean } from "@/lib/scroll/sanitize-description";
 
 // ─── Feed item types (discriminated union) ─────────────────────────────
 //
@@ -741,7 +742,7 @@ function MomentScrollItem({ item, index, total, shared }: { item: MomentFeedItem
           )}
 
           {/* AI description */}
-          {item.aiDescription && (
+          {isDescriptionClean(item.aiDescription) && (
             <p className="text-[13px] leading-snug text-white/90 italic">
               &laquo; {item.aiDescription} &raquo;
             </p>
@@ -1067,7 +1068,7 @@ function VideoScrollItem({ item, index, total, shared }: { item: VideoFeedItem; 
           </div>
 
           {/* AI description — the hyped caster line */}
-          {item.aiDescription && (
+          {isDescriptionClean(item.aiDescription) && (
             <p className="text-[13px] leading-snug text-white/90 italic">
               &laquo; {item.aiDescription} &raquo;
             </p>

@@ -6,6 +6,7 @@ import {
   RARITY_VISUAL,
   type RaritySignals,
 } from "@/lib/tcg/rarity";
+import { isDescriptionClean } from "@/lib/scroll/sanitize-description";
 
 interface ClipCardProps {
   /** Kill / clip signals — anything missing is treated as null. */
@@ -224,12 +225,12 @@ export function ClipCard({
           <span className="text-white/55 mx-1.5">→</span>
           <span className="text-white/85">{signals.victimChampion ?? "?"}</span>
         </p>
-        {variant === "feature" && signals.aiDescription && (
+        {variant === "feature" && isDescriptionClean(signals.aiDescription) && (
           <p className="mt-2 text-sm md:text-base text-white/85 italic max-w-3xl line-clamp-2">
             « {signals.aiDescription} »
           </p>
         )}
-        {variant !== "feature" && signals.aiDescription && (
+        {variant !== "feature" && isDescriptionClean(signals.aiDescription) && (
           <p className="mt-1 text-[11px] text-white/65 italic line-clamp-2">
             {signals.aiDescription}
           </p>

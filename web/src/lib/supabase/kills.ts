@@ -315,7 +315,13 @@ export async function getKillById(id: string): Promise<PublishedKillRow | null> 
   }
 }
 
-/** Get all published kills for a given match_external_id. */
+/** Get all published kills for a given match_external_id.
+ *
+ *  Filters kill_visible=true so the match-page reels never show clips
+ *  where Gemini's QC pass said the kill isn't actually visible on screen.
+ *  Direct deep-links via /kill/[id] still work via getKillById which
+ *  intentionally has no kill_visible filter (the user typed the URL).
+ */
 export async function getKillsByMatchExternalId(
   matchExternalId: string
 ): Promise<PublishedKillRow[]> {
@@ -325,6 +331,7 @@ export async function getKillsByMatchExternalId(
       .from("kills")
       .select(KILL_SELECT)
       .eq("status", "published")
+      .eq("kill_visible", true)
       .eq("games.matches.external_id", matchExternalId)
       .order("game_time_seconds", { ascending: true });
     if (error) {
@@ -339,7 +346,10 @@ export async function getKillsByMatchExternalId(
   }
 }
 
-/** Get published kills where a given champion is the killer. */
+/** Get published kills where a given champion is the killer.
+ *
+ *  Filters kill_visible=true (see getKillsByMatchExternalId for rationale).
+ */
 export async function getKillsByKillerChampion(
   championName: string,
   limit = 50
@@ -350,6 +360,7 @@ export async function getKillsByKillerChampion(
       .from("kills")
       .select(KILL_SELECT)
       .eq("status", "published")
+      .eq("kill_visible", true)
       .eq("killer_champion", championName)
       .order("highlight_score", { ascending: false, nullsFirst: false })
       .limit(limit);

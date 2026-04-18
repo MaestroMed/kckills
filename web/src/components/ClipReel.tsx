@@ -1,6 +1,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { getClipsFiltered, type ClipFilter, type FilteredClip } from "@/lib/supabase/clips";
+import { isDescriptionClean } from "@/lib/scroll/sanitize-description";
 
 interface ClipReelProps {
   /** Server-side filter — same shape as `ClipFilter` from supabase/clips. */
@@ -200,7 +201,11 @@ function ClipCard({ clip }: { clip: FilteredClip }) {
             {clip.victimChampion ?? "?"}
           </span>
         </p>
-        {clip.aiDescription && (
+        {/* Description: rendered ONLY if it passes the sanitize check.
+            Worker post-validation should already prevent corrupted text
+            from landing here, but this is the defense-in-depth path
+            for rows analyzed BEFORE the audit Opus 4.7 fixes shipped. */}
+        {isDescriptionClean(clip.aiDescription) && (
           <p className="mt-1 text-[11px] text-white/75 italic line-clamp-2">
             « {clip.aiDescription} »
           </p>

@@ -7,19 +7,30 @@ For each clipped kill:
 - description_fr (max 120 chars, commentateur style)
 - kill_visible (bool)
 - caster_hype_level (1–5)
-- Scroll Vivant structured dimensions (for the grid pivot axes):
-  lane_phase, fight_type, objective_context, matchup_lane, champion_class,
-  game_minute_bucket
 
 Exposes:
 - analyze_kill(...) low-level helper (text-only or with a local clip file)
+- analyze_kill_row(...) builds factual context from a DB kill row
 - run() daemon loop that scans kills in status='clipped' and analyses them
+
+Prompt v4 (18 avr 2026) — patch from Opus 4.7 audit on 340 published
+descriptions. Tightens credit attribution (KC roster pool), bans
+hallucinated spell names + LaTeX/HTML residues, requires anchored
+detail (HP / timestamp / objective / spell), enforces structural
+variety, and ranks the verbs to retire ("termine" / "achève" /
+"surprend" surutilisés).
+
+Post-validation pass added (audit Quick Wins 1+2):
+- Reject descriptions containing encoding artifacts ($, \\text{,
+  &eacute;, etc) or known hallucination phrases
+- Flag descriptions < 80 chars as suspicious (probable shallow output)
 """
 
 from __future__ import annotations
 
 import json
 import os
+import re
 import structlog
 
 from config import config
@@ -29,109 +40,28 @@ from services.supabase_client import safe_select, safe_update
 log = structlog.get_logger()
 
 
-# ─── Structured dimensions (Scroll Vivant V1 grid axes) ─────────────────────
+# ─── Roster reference (used in the prompt to enforce credit accuracy) ──
+# Pool snapshot used by the prompt. Updated when the LEC roster moves —
+# stale info here = wrong credits in descriptions, which is exactly what
+# we're patching out. Sources: kc_matches.json + audit Opus 4.7.
 
-LANE_PHASES = {"early", "mid", "late"}
-FIGHT_TYPES = {
-    "solo_kill", "gank", "skirmish_2v2", "skirmish_3v3",
-    "teamfight_4v4", "teamfight_5v5", "pick",
-}
-OBJECTIVE_CONTEXTS = {
-    "none", "dragon", "baron", "herald", "atakhan",
-    "tower", "inhibitor", "nexus",
-}
-MATCHUP_LANES = {"top", "jungle", "mid", "bot", "support", "cross_map"}
-CHAMPION_CLASSES = {
-    "assassin", "bruiser", "mage", "marksman",
-    "tank", "enchanter", "skirmisher",
-}
-MINUTE_BUCKETS = [
-    "0-5", "5-10", "10-15", "15-20",
-    "20-25", "25-30", "30-35", "35+",
-]
+ROSTER_POOL_HINT = """- Canna = TOP (KSante, Renekton, Jax, Gnar, Ambessa, Rumble, Aatrox, Sion, Aurora top)
+- Yike = JGL (Nocturne, Vi, Skarner, MonkeyKing/Wukong, Naafiri, XinZhao, Khazix, Maokai, Jax jungle)
+- Kyeahoo = MID (Ahri, Anivia, Orianna, Azir, Galio, Ryze, Viktor, Syndra, Sylas, Taliyah, Akali, Leblanc, Yasuo, Neeko, TwistedFate)
+- Caliste = ADC (Jhin, Varus, Caitlyn, Ashe, Corki, Ezreal, Kalista, Kaisa, Xayah, Zeri, Aphelios, Sivir, Lucian)
+- Busio = SUP (Rell, Nautilus, Rakan, Bard, Thresh, Seraphine, Nami, Leona, Alistar, Renata)"""
 
 
-def minute_bucket_from_seconds(seconds: int | None) -> str | None:
-    """Map a kill's game_time_seconds to its 5-minute bucket label.
+ANALYSIS_PROMPT = """<role>Analyste esport LoL specialise highlights. Tu commentes avec precision factuelle, registre commentateur (Drakos / Trobi / Doigby).</role>
 
-    Returns None if seconds is missing — the grid drops cells with null axes.
-    """
-    if seconds is None or seconds < 0:
-        return None
-    minute = seconds // 60
-    if minute < 5:
-        return "0-5"
-    if minute < 10:
-        return "5-10"
-    if minute < 15:
-        return "10-15"
-    if minute < 20:
-        return "15-20"
-    if minute < 25:
-        return "20-25"
-    if minute < 30:
-        return "25-30"
-    if minute < 35:
-        return "30-35"
-    return "35+"
-
-
-def _lane_phase_from_seconds(seconds: int | None) -> str | None:
-    """Deterministic early/mid/late phase from game time (<14min / 14-25 / >25)."""
-    if seconds is None or seconds < 0:
-        return None
-    minute = seconds // 60
-    if minute < 14:
-        return "early"
-    if minute <= 25:
-        return "mid"
-    return "late"
-
-
-ANALYSIS_PROMPT = """<role>Caster LoL francais (style Drakos / Maoke / Bri). Tu commentes avec PRECISION et VOIX.</role>
-<task>Regarde le clip et reponds en JSON.
+<task>Decris ce kill de match pro LoL en 1 phrase percutante, fr.
 Killer: {killer_champion} ({killer_name})
 Victime: {victim_champion} ({victim_name})
-Donnees factuelles: {context}
+Donnees factuelles (verite terrain, NE PAS contredire):
+{context}
 
-GROUND TRUTH (calcule serveur — RESPECTE-LE, ne le contredis JAMAIS dans la description) :
-  fight_type = {fight_type_truth}
-  matchup_lane = {matchup_lane_truth}
-  lane_phase = {lane_phase_truth}
-  multi_kill = {multi_kill_truth}
-
-Si fight_type = solo_kill         : c'est un 1v1, le killer est SEUL face a la victime
-Si fight_type = skirmish_2v2/3v3  : c'est une petite escarmouche, plusieurs joueurs presents
-Si fight_type = teamfight_4v4/5v5 : c'est un teamfight, decris l'engagement collectif
-Si fight_type = gank              : un jungler / un autre rdle est venu aider, mentionne-le
-Si fight_type = pick              : c'est un isolement / kidnapping de la victime hors fight
-
-REGLE D'OR description_fr: chaque description doit contenir UN DETAIL CONCRET observe dans le clip
-(un spell, une position, un % HP, un objectif, une seconde tendue). Pas de paraphrase generique.
-Pas plus d'une phrase. Pas de point d'exclamation a la fin sauf si l'action est REELLEMENT explosive.
-
-INTERDIT ABSOLU : ecrire "1v1" ou "solo kill" si fight_type != solo_kill. Le ground truth est la verite.
-
-EXEMPLES de descriptions ATTENDUES (style + niveau de specificite cible) :
-- "Caliste reset son E sur le minion juste avant le R, Rakan n'a aucune chance"
-- "Yike steal le drake d'un Smite a l'arrache, Vitality regarde le pixel s'envoler"
-- "Le Flash d'Ambessa la fait passer dans le mur, mais Canna l'attendait avec son W"
-- "Kyeahoo ulti dans la jungle, Sylas sortait pour reset, mauvais timing pour lui"
-- "Busio dive sous tour avec 80 hp pour finir le penta, le casino paie"
-- "Caliste full HP, Lucian au pixel, le 1v1 dure 4 secondes mais l'issue ne fait jamais de doute"
-- "Triple Flash de KC pour engage Baron, Yike est dans le pit avant que VIT comprenne"
-- "Canna split top pendant que ses 4 collegues meurent mid, mais il prend la nexus avec 50 hp"
-
-INTERDIT (descriptions vagues qu'on ne veut PLUS jamais voir) :
-- "X anihile Y dans un 1v1 impeccable" / "magistral" / "chirurgical" / "clinique"
-- "X termine Y, demonstration de maitrise"
-- "X execute Y proprement / sans bavure / sans aide"
-- "Solo kill propre" / "1v1 net" / "duel sans faille"
-- Adjectifs : impeccable, magistral, chirurgical, clinique, demonstration, maitrise totale, sans faille
-- Verbes plats sans contexte : anihile, atomise, terrasse, achieve, execute (sauf si verbe est juste)
-
-Si assistants presents : mentionne-les ("avec le peel de Busio", "couvert par le ralentissement de Yike").
 Reponds UNIQUEMENT en JSON valide.</task>
+
 <output_format>
 {{
     "highlight_score": <float 1.0-10.0>,
@@ -139,29 +69,138 @@ Reponds UNIQUEMENT en JSON valide.</task>
               "baron_fight","dragon_fight","flash_predict","1v2","1v3",
               "clutch","clean","mechanical","shutdown","comeback",
               "engage","peel","snipe","steal">],
-    "description_fr": "<une phrase, max 140 chars, ton caster FR avec UN detail concret>",
+    "description_fr": "<max 120 chars, fr, FACTUEL et VARIE>",
     "kill_visible_on_screen": true,
-    "caster_hype_level": <int 1-5>,
-    "lane_phase": "early"|"mid"|"late",
-    "fight_type": "solo_kill"|"gank"|"skirmish_2v2"|"skirmish_3v3"|"teamfight_4v4"|"teamfight_5v5"|"pick",
-    "objective_context": "none"|"dragon"|"baron"|"herald"|"atakhan"|"tower"|"inhibitor"|"nexus",
-    "matchup_lane": "top"|"jungle"|"mid"|"bot"|"support"|"cross_map",
-    "champion_class": "assassin"|"bruiser"|"mage"|"marksman"|"tank"|"enchanter"|"skirmisher",
-    "game_minute_bucket": "0-5"|"5-10"|"10-15"|"15-20"|"20-25"|"25-30"|"30-35"|"35+"
+    "caster_hype_level": <int 1-5>
 }}
 </output_format>
-<rules>
-- highlight_score : 1-3 routine kill / 4-6 interessant / 7-8 excellent (mecanique, contexte, propre) / 9-10 highlight historique (penta, baron steal, 1v3+, last-second clutch)
-- description_fr : UN detail observable obligatoire (spell + position OU HP + objectif OU sequence de timing). 0 description sans detail concret.
-- Si assistants : nomme la mecanique d'assistance, pas juste "avec X"
-- fight_type : 1v1 isole = solo_kill. 2 allies + 1 ennemi isole = gank. >=3 par camp = teamfight.
-- objective_context : "none" sauf objectif (drake/nashor/herald/atakhan/tour/inhib/nexus) conteste dans les 5s autour
-- matchup_lane : lane d'appartenance de la victime ("cross_map" si lanes differentes)
-- champion_class : classe du KILLER
-- TOUS les 6 champs structures OBLIGATOIRES — jamais null
-- JSON VALIDE uniquement, pas de texte avant/apres
-</rules>"""
 
+<roster_kc_lec_2026>
+{roster_pool_hint}
+
+REGLE: si killer OU victim est joue par un joueur KC, utilise le PSEUDO
+DU JOUEUR (pas le nom du champion) au moins une fois dans la description.
+Verifie que le champion correspond au pool ci-dessus avant d'attribuer.
+</roster_kc_lec_2026>
+
+<rules_dures_priorite_absolue>
+
+1. CREDIT JOUEUR — voir bloc roster ci-dessus.
+
+2. INTERDICTION ABSOLUE :
+   - Ne mentionne JAMAIS un champion qui n'est ni le killer ni la victim ci-dessus.
+   - Ne mentionne JAMAIS une equipe adverse specifique sauf si elle est
+     EXPLICITEMENT dans les donnees factuelles.
+   - N'invente JAMAIS de noms de sorts ("lance-tolet", "Essence of TF",
+     "Kaleidoscope fantome" — ce sont des hallucinations qu'on a vues).
+   - Pas de formules LaTeX ($, \\text{{}}), pas d'HTML entities (&eacute;,
+     &amp;), pas de caracteres d'echappement : uniquement texte UTF-8 propre.
+
+3. ANCRAGE CONCRET OBLIGATOIRE :
+   La description DOIT contenir AU MOINS UN de ces 4 elements :
+   - HP/PV chiffre ("a 134 HP", "20% de vie")
+   - timestamp ("a 11:00", "a 22 minutes", "minute 31")
+   - objectif precis (tour, dragon, Baron, Herald, Atakhan, inhibitor,
+     tri-brush, pit, river, raptor)
+   - sort nomme precisement (R = ultime nomme, ex "Grand Saut" pour
+     Pantheon, "Vault Breaker" pour Vi E)
+
+4. VARIETE STRUCTURELLE :
+   Ne commence PAS par "[Champion] termine/acheve/surprend [Victim]".
+   Ces 3 verbes sont SURUTILISES (33% de la base). Varie :
+   - parfois commencer par l'action mecanique
+   - parfois par la position
+   - parfois par l'objectif conteste
+   - parfois par le moment du match
+   Verbes recommandes pour finir un kill : pique, scelle, envoie au sol,
+   close, KO, met a terre, finish, expedie. Pour le sort : lance, pop,
+   balance, place, trigger, chain.
+
+5. MULTI-KILL ET FIRST BLOOD :
+   - Si MULTI-KILL (double/triple/quadra/penta) est dans le contexte,
+     la description DOIT le mentionner explicitement.
+   - Si FIRST BLOOD est dans le contexte, la description DOIT mentionner
+     "first blood" ou "premier sang".
+   - Sinon, ne pas inventer ces mentions.
+
+6. BANNIS (rejet automatique en post-validation) :
+   - "sans aucune aide", "sans aide", "sans assistance", "zero assist"
+     (redondant avec solo_kill dans les donnees structurees)
+   - "propre", "proprement", "parfait", "parfaite" : max 1 fois par
+     description, jamais 2
+   - "utilise son [sort]" : remplacer par "lance", "pop", "balance",
+     "place", "trigger"
+   - "petite mise a mort", "expedie en un clin d'oeil" : trop informel
+
+7. KILL_VISIBLE = FALSE (si dans contexte) :
+   Ne PAS affirmer le kill avec certitude. Utilise "KC force le fight",
+   "le setup mene a un pick", "l'engage retourne le tempo" — JAMAIS
+   "X termine Y" / "X acheve Y".
+
+</rules_dures_priorite_absolue>
+
+<rules_softer>
+- 1-3=routine, 4-6=interessant, 7-8=tres bon, 9-10=exceptionnel
+- description_fr: max 120 chars, percutante, FACTUELLE, VARIEE
+- Si assistants present: mentionne au moins un nom (ex: "avec l'assist de Yike")
+- JSON VALIDE uniquement, pas de texte avant/apres
+</rules_softer>"""
+
+
+# ─── Post-validation (Audit Quick Wins 1+2) ───────────────────────────
+# Reject descriptions containing encoding artifacts or known
+# hallucination phrases. Flag suspicious-looking outputs (too short).
+
+ENCODING_REJECT_PATTERNS = [
+    re.compile(r"\$"),                  # LaTeX dollar signs
+    re.compile(r"\\text\{"),            # \text{...}
+    re.compile(r"&[a-z]+;"),            # &eacute; &amp; &nbsp;
+    re.compile(r"\\u00[0-9a-f]{2}"),    # raw \u00e9 escapes
+    re.compile(r"<[a-z]+/?>"),          # stray HTML tags
+]
+
+KNOWN_HALLUCINATION_PATTERNS = [
+    re.compile(r"lance-tolet", re.IGNORECASE),
+    re.compile(r"essence of[A-Z]?", re.IGNORECASE),
+    re.compile(r"kal[ée]idoscope fant", re.IGNORECASE),
+]
+
+BANNED_PHRASE_PATTERNS = [
+    re.compile(r"\bsans aucune aide\b", re.IGNORECASE),
+    re.compile(r"\bsans aide\b", re.IGNORECASE),
+    re.compile(r"\bsans assistance\b", re.IGNORECASE),
+    re.compile(r"\bzero assist\b", re.IGNORECASE),
+]
+
+MIN_DESCRIPTION_CHARS = 80
+
+
+def validate_description(text: str | None) -> tuple[bool, str]:
+    """Return (is_acceptable, reason). False = description should be re-tried.
+
+    is_acceptable=True is the happy path. If False, the worker should
+    NOT save this description to kills.ai_description and should
+    instead leave the row in 'analyzed' status with needs_regen=true so
+    the next analyzer pass picks it up again.
+    """
+    if not text or not isinstance(text, str):
+        return False, "empty"
+    stripped = text.strip()
+    if len(stripped) < MIN_DESCRIPTION_CHARS:
+        return False, f"too_short ({len(stripped)} < {MIN_DESCRIPTION_CHARS} chars)"
+    for pat in ENCODING_REJECT_PATTERNS:
+        if pat.search(stripped):
+            return False, f"encoding_artifact ({pat.pattern!r})"
+    for pat in KNOWN_HALLUCINATION_PATTERNS:
+        if pat.search(stripped):
+            return False, f"known_hallucination ({pat.pattern!r})"
+    for pat in BANNED_PHRASE_PATTERNS:
+        if pat.search(stripped):
+            return False, f"banned_phrase ({pat.pattern!r})"
+    return True, "ok"
+
+
+# ─── Core call ──────────────────────────────────────────────────────────
 
 async def analyze_kill(
     killer_name: str,
@@ -170,18 +209,12 @@ async def analyze_kill(
     victim_champion: str,
     context: str = "",
     clip_path: str | None = None,
-    *,
-    fight_type_truth: str | None = None,
-    matchup_lane_truth: str | None = None,
-    lane_phase_truth: str | None = None,
-    multi_kill_truth: str | None = None,
 ) -> dict | None:
     """Analyze a kill with Gemini. Returns parsed JSON dict or None.
 
-    The four `_truth` kwargs are server-computed ground truth (cf.
-    scripts/recompute_fight_type.py). Passed as input so Gemini doesn't
-    have to GUESS them from the 720p video frame — its description must
-    be CONSISTENT with these values and never contradict them.
+    The result is NOT validated here — the caller is responsible for
+    running validate_description on result['description_fr'] and
+    deciding whether to save it.
     """
     if not config.GEMINI_API_KEY:
         log.warn("gemini_no_api_key")
@@ -198,10 +231,7 @@ async def analyze_kill(
         victim_champion=victim_champion or "?",
         victim_name=victim_name or "?",
         context=context or "",
-        fight_type_truth=fight_type_truth or "unknown",
-        matchup_lane_truth=matchup_lane_truth or "unknown",
-        lane_phase_truth=lane_phase_truth or "unknown",
-        multi_kill_truth=multi_kill_truth or "none",
+        roster_pool_hint=ROSTER_POOL_HINT,
     )
 
     try:
@@ -210,17 +240,16 @@ async def analyze_kill(
         log.warn("gemini_sdk_not_installed")
         return None
 
+    text = ""
     try:
         genai.configure(api_key=config.GEMINI_API_KEY)
         model = genai.GenerativeModel("gemini-2.5-flash-lite")
 
         if clip_path and os.path.exists(clip_path):
             video_file = genai.upload_file(clip_path)
-            # Wait for file to become ACTIVE before querying
             from services.gemini_client import _wait_for_file_active
             if not _wait_for_file_active(genai, video_file):
                 log.warn("gemini_file_not_active", clip=clip_path)
-                # Fall back to text-only analysis
                 response = model.generate_content(prompt)
             else:
                 response = model.generate_content([prompt, video_file])
@@ -243,7 +272,6 @@ async def analyze_kill(
 def _strip_code_fence(text: str) -> str:
     """Gemini sometimes wraps JSON in ```json ... ``` fences — unwrap them."""
     if text.startswith("```"):
-        # Take everything after the first fence
         parts = text.split("```")
         if len(parts) >= 2:
             inner = parts[1]
@@ -254,14 +282,33 @@ def _strip_code_fence(text: str) -> str:
 
 
 async def analyze_kill_row(kill: dict, clip_path: str | None = None) -> dict | None:
-    """Build rich factual context from a DB kill row and call analyze_kill."""
+    """Build rich factual context from a DB kill row and call analyze_kill.
+
+    Reads the ground-truth columns populated by the harvester +
+    server-side classifiers (fight_type, matchup_lane, lane_phase,
+    multi_kill, is_first_blood, kill_visible). Passes them as INPUT
+    to Gemini — NOT something to guess.
+    """
     parts: list[str] = []
 
-    # Kill type
+    # ─── Ground truth (server-side classified, NEVER guessed) ────────
     if kill.get("is_first_blood"):
-        parts.append("FIRST BLOOD")
+        parts.append("FIRST BLOOD = oui (description DOIT le mentionner)")
     if kill.get("multi_kill"):
-        parts.append(f"{str(kill['multi_kill']).upper()} KILL")
+        mk = str(kill["multi_kill"]).upper()
+        parts.append(f"MULTI-KILL = {mk} (description DOIT le mentionner)")
+
+    fight_type = kill.get("fight_type")
+    if fight_type:
+        parts.append(f"fight_type = {fight_type} (verite terrain — NE PAS contredire)")
+
+    lane = kill.get("matchup_lane")
+    if lane:
+        parts.append(f"lane = {lane}")
+
+    phase = kill.get("lane_phase")
+    if phase:
+        parts.append(f"phase = {phase}")
 
     # KC involvement
     involvement = kill.get("tracked_team_involvement") or ""
@@ -279,23 +326,27 @@ async def analyze_kill_row(kill: dict, clip_path: str | None = None) -> dict | N
             if isinstance(a, dict)
         ]
         if assist_names:
-            parts.append(f"Assistants: {', '.join(assist_names)} ({len(assist_names)} assist(s) = PAS un solo kill)")
+            parts.append(
+                f"Assistants: {', '.join(assist_names)} "
+                f"({len(assist_names)} assist(s) = PAS un solo kill)"
+            )
         else:
             parts.append(f"{len(assistants)} assistant(s) = PAS un solo kill")
     else:
-        parts.append("ZERO assist = vrai solo kill")
+        parts.append("ZERO assist")
 
     # Shutdown bounty
     bounty = kill.get("shutdown_bounty") or 0
     if bounty >= 400:
         parts.append(f"Shutdown bounty: {bounty}g")
 
-    # Confidence as proxy for fight type
-    confidence = kill.get("confidence") or "high"
-    if confidence == "medium":
-        parts.append("Confidence medium = probablement un teamfight ou skirmish, PAS un solo")
-    elif confidence == "high" and not (isinstance(assistants, list) and len(assistants) > 0):
-        parts.append("Confidence high + zero assists = 1v1 propre")
+    # kill_visible — if False, instruct Gemini to NOT affirm the kill
+    kv = kill.get("kill_visible")
+    if kv is False:
+        parts.append(
+            "kill_visible = FALSE (kill non visible a l'ecran — "
+            "NE PAS affirmer le kill, decrire le setup uniquement)"
+        )
 
     return await analyze_kill(
         killer_name=kill.get("_killer_name_hint") or kill.get("killer_name") or "KC player",
@@ -304,32 +355,33 @@ async def analyze_kill_row(kill: dict, clip_path: str | None = None) -> dict | N
         victim_champion=kill.get("victim_champion") or "?",
         context=". ".join(parts),
         clip_path=clip_path,
-        # Server-computed ground truth (cf. recompute_fight_type.py).
-        # Gemini receives these as INPUT, must respect them in the
-        # description, can't contradict them.
-        fight_type_truth=kill.get("fight_type"),
-        matchup_lane_truth=kill.get("matchup_lane"),
-        lane_phase_truth=kill.get("lane_phase"),
-        multi_kill_truth=kill.get("multi_kill"),
     )
 
 
-# ─── Daemon loop ────────────────────────────────────────────────────────────
+# ─── Daemon loop ────────────────────────────────────────────────────────
 
 async def run() -> int:
-    """Find kills in status='clipped' and run Gemini analysis."""
+    """Find kills in status='clipped' and run Gemini analysis.
+
+    Now reads the ground-truth columns (fight_type, matchup_lane,
+    lane_phase, kill_visible) so analyze_kill_row can pass them as
+    truth lines. Post-validates the description before saving — bad
+    descriptions stay in status='clipped' so the next pass retries.
+    """
     log.info("analyzer_scan_start")
 
     kills = safe_select(
         "kills",
         "id, killer_champion, victim_champion, is_first_blood, multi_kill, "
-        "tracked_team_involvement, game_time_seconds, assistants, confidence",
+        "tracked_team_involvement, fight_type, matchup_lane, lane_phase, "
+        "kill_visible, assistants, shutdown_bounty, retry_count",
         status="clipped",
     )
     if not kills:
         return 0
 
     analysed = 0
+    rejected = 0
     for kill in kills:
         remaining = scheduler.get_remaining("gemini")
         if remaining is not None and remaining <= 0:
@@ -340,11 +392,55 @@ async def run() -> int:
         if not result:
             continue
 
-        patch = _build_analysis_patch(result, kill)
+        desc = result.get("description_fr")
+        ok, reason = validate_description(desc)
+        if not ok:
+            log.warn(
+                "analyzer_desc_rejected",
+                kill_id=kill.get("id"),
+                reason=reason,
+                desc_preview=(desc or "")[:80],
+            )
+            rejected += 1
+            # Bump retry counter — if too many failures, give up and let
+            # human review handle it. Stays in 'clipped' status so the
+            # next analyzer pass picks it up again.
+            current_retries = int(kill.get("retry_count") or 0)
+            if current_retries >= 3:
+                log.warn(
+                    "analyzer_giving_up",
+                    kill_id=kill.get("id"),
+                    retries=current_retries,
+                )
+                # Move to manual_review so we don't loop forever on a
+                # row Gemini can't describe properly.
+                safe_update(
+                    "kills",
+                    {"status": "manual_review", "retry_count": current_retries + 1},
+                    "id",
+                    kill["id"],
+                )
+            else:
+                safe_update(
+                    "kills",
+                    {"retry_count": current_retries + 1},
+                    "id",
+                    kill["id"],
+                )
+            continue
+
+        patch = {
+            "highlight_score": _safe_float(result.get("highlight_score")),
+            "ai_tags": result.get("tags") or [],
+            "ai_description": desc,
+            "kill_visible": bool(result.get("kill_visible_on_screen", True)),
+            "caster_hype_level": _safe_int(result.get("caster_hype_level")),
+            "status": "analyzed",
+        }
         safe_update("kills", patch, "id", kill["id"])
         analysed += 1
 
-    log.info("analyzer_scan_done", analysed=analysed)
+    log.info("analyzer_scan_done", analysed=analysed, rejected=rejected)
     return analysed
 
 
@@ -360,47 +456,3 @@ def _safe_int(v) -> int | None:
         return int(v) if v is not None else None
     except (TypeError, ValueError):
         return None
-
-
-def _enum_or_none(value, allowed: set[str]) -> str | None:
-    """Accept the Gemini value only if it belongs to the allowed enum set.
-
-    Rejecting unknown values keeps the grid axes well-formed and makes hallucination
-    visible in the logs instead of corrupting the DB.
-    """
-    if not isinstance(value, str):
-        return None
-    v = value.strip().lower()
-    return v if v in allowed else None
-
-
-def _build_analysis_patch(result: dict, kill: dict) -> dict:
-    """Combine Gemini output with deterministic fallbacks before persisting.
-
-    game_minute_bucket and lane_phase are derived server-side from
-    game_time_seconds when Gemini disagrees or omits — the livestats frame
-    timestamp is ground truth.
-    """
-    seconds = kill.get("game_time_seconds")
-    deterministic_bucket = minute_bucket_from_seconds(seconds)
-    deterministic_phase = _lane_phase_from_seconds(seconds)
-
-    gemini_bucket = _enum_or_none(result.get("game_minute_bucket"), set(MINUTE_BUCKETS))
-    gemini_phase = _enum_or_none(result.get("lane_phase"), LANE_PHASES)
-
-    return {
-        "highlight_score": _safe_float(result.get("highlight_score")),
-        "ai_tags": result.get("tags") or [],
-        "ai_description": result.get("description_fr"),
-        "kill_visible": bool(result.get("kill_visible_on_screen", True)),
-        "caster_hype_level": _safe_int(result.get("caster_hype_level")),
-        "lane_phase": deterministic_phase or gemini_phase,
-        "fight_type": _enum_or_none(result.get("fight_type"), FIGHT_TYPES),
-        "objective_context": _enum_or_none(
-            result.get("objective_context"), OBJECTIVE_CONTEXTS
-        ) or "none",
-        "matchup_lane": _enum_or_none(result.get("matchup_lane"), MATCHUP_LANES),
-        "champion_class": _enum_or_none(result.get("champion_class"), CHAMPION_CLASSES),
-        "game_minute_bucket": deterministic_bucket or gemini_bucket,
-        "status": "analyzed",
-    }
