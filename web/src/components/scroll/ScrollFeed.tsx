@@ -495,6 +495,7 @@ function MomentScrollItem({ item, index, total, shared }: { item: MomentFeedItem
     useScrollAutoplay({
       index,
       currentIndexRef: shared.currentIndexRef,
+      itemId: item.id,
       onActivated: () => {
         if (!shared.reducedMotion && "vibrate" in navigator) navigator.vibrate(10);
       },
@@ -791,6 +792,7 @@ function VideoScrollItem({ item, index, total, shared }: { item: VideoFeedItem; 
     useScrollAutoplay({
       index,
       currentIndexRef: shared.currentIndexRef,
+      itemId: item.id,
       onActivated: () => {
         if (!shared.reducedMotion && "vibrate" in navigator) navigator.vibrate(10);
       },

@@ -43,6 +43,12 @@ interface Options {
   onActivated?: () => void;
   /** IntersectionObserver threshold. Default 0.6. */
   threshold?: number;
+  /** Item id to write into the URL via history.replaceState when this
+   *  item activates. Enables refresh-safe scroll positions: refreshing
+   *  /scroll?kill=<id> lands the user back on the same clip instead of
+   *  the top. Skips the write for index 0 to avoid an immediate URL
+   *  change on cold load. */
+  itemId?: string;
 }
 
 interface Result {
@@ -59,7 +65,7 @@ interface Result {
 }
 
 export function useScrollAutoplay(opts: Options): Result {
-  const { index, currentIndexRef, onActivated, threshold = 0.6 } = opts;
+  const { index, currentIndexRef, onActivated, threshold = 0.6, itemId } = opts;
   const containerRef = useRef<HTMLDivElement | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const [visible, setVisible] = useState(false);
@@ -139,6 +145,20 @@ export function useScrollAutoplay(opts: Options): Result {
         if (isVis) {
           currentIndexRef.current = index;
           onActivated?.();
+          // Refresh-safe URL: write ?kill=<id> via replaceState so reload
+          // lands on the same clip. Skip for index 0 — that's the initial
+          // load, no point dirtying the URL when the user hasn't moved.
+          if (itemId && index > 0 && typeof window !== "undefined") {
+            try {
+              const url = new URL(window.location.href);
+              if (url.searchParams.get("kill") !== itemId) {
+                url.searchParams.set("kill", itemId);
+                window.history.replaceState(window.history.state, "", url.toString());
+              }
+            } catch {
+              // Some sandboxed contexts disallow history mutation. Ignore.
+            }
+          }
           // Only seek to 0 on re-activation — the FIRST activation should
           // play from the natural start, so we don't trigger a seek before
           // the video has any data (which is what stalled the original
