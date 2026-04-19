@@ -121,12 +121,27 @@ export function useScrollAutoplay(opts: Options): Result {
   // asynchronously after hydration, we know item #0 is in view from the
   // start. Try to play immediately so the user never sees a frozen
   // poster on first paint.
+  // Aggressive autoplay for the first clip — retry on canplay + short delay
   useEffect(() => {
     if (index !== 0) return;
     const v = videoRef.current;
     if (!v) return;
     v.preload = "auto";
+    v.muted = true; // ensure muted for autoplay policy
+    // Try immediately
     tryPlay(v);
+    // Retry after a short delay (covers race where video element isn't
+    // fully wired into the DOM yet on hydration)
+    const retry = setTimeout(() => {
+      if (v.paused && v.readyState >= 2) tryPlay(v);
+    }, 500);
+    // Also retry on loadeddata (covers slow network first load)
+    const onLoaded = () => { if (v.paused) tryPlay(v); };
+    v.addEventListener("loadeddata", onLoaded, { once: true });
+    return () => {
+      clearTimeout(retry);
+      v.removeEventListener("loadeddata", onLoaded);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [index]);
 
@@ -145,9 +160,6 @@ export function useScrollAutoplay(opts: Options): Result {
         if (isVis) {
           currentIndexRef.current = index;
           onActivated?.();
-          // Refresh-safe URL: write ?kill=<id> via replaceState so reload
-          // lands on the same clip. Skip for index 0 — that's the initial
-          // load, no point dirtying the URL when the user hasn't moved.
           if (itemId && index > 0 && typeof window !== "undefined") {
             try {
               const url = new URL(window.location.href);
@@ -155,20 +167,17 @@ export function useScrollAutoplay(opts: Options): Result {
                 url.searchParams.set("kill", itemId);
                 window.history.replaceState(window.history.state, "", url.toString());
               }
-            } catch {
-              // Some sandboxed contexts disallow history mutation. Ignore.
-            }
+            } catch { /* sandboxed */ }
           }
-          // Only seek to 0 on re-activation — the FIRST activation should
-          // play from the natural start, so we don't trigger a seek before
-          // the video has any data (which is what stalled the original
-          // implementation on item #0).
-          if (hasPlayedOnceRef.current) {
-            try {
-              v.currentTime = 0;
-            } catch {
-              // Some browsers throw on seek before metadata. Ignore.
+          // PAUSE ALL OTHER VIDEOS — prevents audio overlap when two
+          // items are simultaneously intersecting during scroll transition
+          document.querySelectorAll("video").forEach((otherV) => {
+            if (otherV !== v && !otherV.paused) {
+              otherV.pause();
             }
+          });
+          if (hasPlayedOnceRef.current) {
+            try { v.currentTime = 0; } catch { /* pre-metadata */ }
           }
           v.preload = "auto";
           tryPlay(v);

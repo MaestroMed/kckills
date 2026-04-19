@@ -346,12 +346,15 @@ function videoMatchesFilter(
 function weightedShuffle(items: FeedItem[]): FeedItem[] {
   if (items.length <= 2) return items;
 
-  // Pass 1 — score + jitter.
+  // Pass 1 — score + STRONG jitter for real variety on each page load.
+  // Old: jitter = 0.5× max score → same top kills every time.
+  // New: jitter = 1.5× max score → high-score items still trend toward
+  // the top but the exact order is genuinely different each load.
   const maxScore = Math.max(1, ...items.map((i) => i.score));
   const jittered = items
     .map((item) => ({
       item,
-      sortKey: item.score + Math.random() * maxScore * 0.5,
+      sortKey: item.score + Math.random() * maxScore * 1.5,
     }))
     .sort((a, b) => b.sortKey - a.sortKey)
     .map((j) => j.item);
