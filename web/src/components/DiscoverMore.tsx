@@ -20,15 +20,14 @@ interface Tile {
   glyph: string;
 }
 
+// Clip-centric tiles only — sphere/champions hidden until polished
 const ALL_TILES: Tile[] = [
-  { href: "/scroll",       label: "Scroll feed",   blurb: "Mode TikTok plein \u00e9cran", accent: "var(--gold)",   glyph: "\u25BC" },
+  { href: "/scroll",       label: "Scroll feed",   blurb: "Mode TikTok plein ecran",  accent: "var(--gold)",   glyph: "\u25BC" },
   { href: "/best",         label: "Meilleurs",     blurb: "Curation IA + comm.",      accent: "var(--gold)",   glyph: "\u2605" },
   { href: "/multikills",   label: "Multi-kills",   blurb: "Pentas, quadras, triples", accent: "var(--orange)", glyph: "\u272E" },
   { href: "/first-bloods", label: "First Bloods",  blurb: "Le tempo des games",       accent: "var(--red)",    glyph: "\u2620" },
-  { href: "/matchups",     label: "Match-ups",     blurb: "Confrontations champ vs champ", accent: "var(--cyan)", glyph: "\u2693" },
-  { href: "/champions",    label: "Champions",     blurb: "Browse par champion",      accent: "var(--blue-kc)", glyph: "\u2756" },
   { href: "/recent",       label: "Derniers",      blurb: "Chronologique",            accent: "var(--green)",  glyph: "\u29BF" },
-  { href: "/sphere",       label: "Sphere 3D",     blurb: "Mode immersif",            accent: "var(--gold)",   glyph: "\u29BB" },
+  { href: "/players",      label: "Joueurs",       blurb: "Stats par joueur KC",      accent: "var(--blue-kc)", glyph: "\u2756" },
 ];
 
 export function DiscoverMore({

@@ -4,24 +4,16 @@ import Link from "next/link";
 import { useState, useEffect } from "react";
 import { CommandPaletteButton } from "./CommandPalette";
 
+// Clip-centric nav — only what matters for the core experience.
+// Pages like /hall-of-fame, /records, /stats, /compare, /sphere, /alumni
+// still exist but are hidden from nav until they're polished.
 const NAV_LINKS = [
   { href: "/", label: "Accueil" },
   { href: "/scroll", label: "Scroll" },
   { href: "/best", label: "Meilleurs" },
   { href: "/recent", label: "Derniers" },
-  { href: "/sphere", label: "Sphere \u2728" },
   { href: "/players", label: "Joueurs" },
-  { href: "/champions", label: "Champions" },
-  { href: "/alumni", label: "Alumni" },
   { href: "/matches", label: "Matchs" },
-  { href: "/hall-of-fame", label: "Hall of Fame" },
-  { href: "/records", label: "Records" },
-  { href: "/stats", label: "Stats" },
-  { href: "/compare", label: "Comparateur" },
-  // Game link only shown when NEXT_PUBLIC_GAME_ENABLED=true
-  ...(process.env.NEXT_PUBLIC_GAME_ENABLED === "true"
-    ? [{ href: "/game", label: "Blue Wall \uD83E\uDDF1" }]
-    : []),
 ];
 
 export function Navbar() {
