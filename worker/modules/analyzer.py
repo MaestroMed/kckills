@@ -374,7 +374,8 @@ async def run() -> int:
         "kills",
         "id, killer_champion, victim_champion, is_first_blood, multi_kill, "
         "tracked_team_involvement, fight_type, matchup_lane, lane_phase, "
-        "kill_visible, assistants, shutdown_bounty, retry_count",
+        "kill_visible, assistants, shutdown_bounty, retry_count, "
+        "clip_url_vertical, clip_url_horizontal",
         status="clipped",
     )
     if not kills:
@@ -388,7 +389,33 @@ async def run() -> int:
             log.warn("analyzer_daily_quota_reached")
             break
 
-        result = await analyze_kill_row(kill)
+        # Download clip from R2 for VIDEO analysis (not text-only)
+        clip_path = None
+        clip_url = kill.get("clip_url_vertical") or kill.get("clip_url_horizontal")
+        if clip_url:
+            import httpx as _httpx
+            _clip_dir = os.path.join(os.path.dirname(__file__), "..", "clips")
+            os.makedirs(_clip_dir, exist_ok=True)
+            clip_path = os.path.join(_clip_dir, f"qc_{kill['id'][:8]}.mp4")
+            try:
+                with _httpx.stream("GET", clip_url, follow_redirects=True, timeout=30) as resp:
+                    resp.raise_for_status()
+                    with open(clip_path, "wb") as f:
+                        for chunk in resp.iter_bytes():
+                            f.write(chunk)
+            except Exception as e:
+                log.warn("analyzer_clip_download_failed", kill_id=kill["id"][:8], error=str(e)[:60])
+                clip_path = None
+
+        result = await analyze_kill_row(kill, clip_path=clip_path)
+
+        # Clean up downloaded clip
+        if clip_path and os.path.exists(clip_path):
+            try:
+                os.remove(clip_path)
+            except Exception:
+                pass
+
         if not result:
             continue
 
