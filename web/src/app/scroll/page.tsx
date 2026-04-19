@@ -248,8 +248,11 @@ export default async function ScrollPage({ searchParams }: ScrollPageProps) {
   // ─── 5. Merge + weighted shuffle ─────────────────────────────────────
   // ONLY real clips — no more aggregate splash-art placeholders. If a row
   // doesn't have a verified clip + thumbnail, it doesn't enter the feed.
+  // Moments disabled — they duplicate individual kills without adding
+  // value (most are 1-kill "solo_kill" with no description). Re-enable
+  // once moment clips have unique multi-kill compilations.
   const allClips: FeedItem[] = [
-    ...filteredMoments,
+    // ...filteredMoments,
     ...filteredVideos,
   ];
 
