@@ -70,22 +70,28 @@ ROLE_TO_LANE = {
 }
 
 
-def classify_fight(total_in_window: int, multi_kill: str | None) -> str:
-    """Map concurrency-window cardinality + multi-kill flag to fight_type."""
-    # Multi-kill anchor: one player took several enemies down - this is
-    # someone's solo carry moment regardless of how many bodies fell.
-    # Penta is a special case: very often happens during a teamfight.
+def classify_fight(total_in_window: int, multi_kill: str | None, n_assists: int = 0) -> str:
+    """Map concurrency-window cardinality + assists + multi-kill to fight_type.
+
+    Key insight: a kill with 0 concurrent kills but 2 assists is a GANK,
+    not a solo kill. Only truly 0-assist isolated kills are solo kills.
+    """
     if multi_kill:
         mk = multi_kill.lower()
         if mk in {"triple", "quadra"}:
             return "solo_kill"
         if mk == "penta":
-            # If concurrent window is dense, it WAS a teamfight that the
-            # carry cleaned up. Otherwise treat as a solo_kill stomp.
             return "teamfight_5v5" if total_in_window >= 5 else "solo_kill"
         # double_kill: ambiguous, treat by window
+
+    # Use assists to distinguish solo kill from gank/pick
     if total_in_window <= 1:
-        return "solo_kill"
+        if n_assists == 0:
+            return "solo_kill"
+        elif n_assists == 1:
+            return "pick"  # 2v1 gank or pick
+        else:
+            return "gank"  # 3+ people involved
     if total_in_window == 2:
         return "skirmish_2v2"
     if total_in_window == 3:
@@ -135,7 +141,7 @@ def main() -> int:
     kills = safe_select(
         "kills",
         "id, game_id, game_time_seconds, multi_kill, fight_type, "
-        "matchup_lane, lane_phase, killer_player_id, victim_player_id",
+        "matchup_lane, lane_phase, killer_player_id, victim_player_id, assistants",
         status="published",
     ) or []
     if args.limit:
@@ -162,7 +168,9 @@ def main() -> int:
                 o for o in sorted_kills
                 if abs((o.get("game_time_seconds") or 0) - t) <= CONCURRENT_WINDOW_S
             ]
-            new_ft = classify_fight(len(window), k.get("multi_kill"))
+            assists = k.get("assistants") or []
+            n_assists = len(assists) if isinstance(assists, list) else 0
+            new_ft = classify_fight(len(window), k.get("multi_kill"), n_assists)
             old_ft = k.get("fight_type") or "NULL"
             transitions[(old_ft, new_ft)] += 1
 

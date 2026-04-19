@@ -16,12 +16,12 @@ import { createAnonSupabase, createServerSupabase, rethrowIfDynamic } from "./se
 export type LanePhase = "early" | "mid" | "late";
 export type FightType =
   | "solo_kill"
+  | "pick"
   | "gank"
   | "skirmish_2v2"
   | "skirmish_3v3"
   | "teamfight_4v4"
-  | "teamfight_5v5"
-  | "pick";
+  | "teamfight_5v5";
 export type ObjectiveContext =
   | "none"
   | "dragon"

@@ -362,6 +362,7 @@ def _diff_frames(
 
     new_killers: list[tuple[str, int]] = []
     new_victims: list[tuple[str, int]] = []
+    new_assistants: list[tuple[str, int]] = []  # players who gained +assist this frame
 
     for pid in curr:
         p_curr = curr[pid]
@@ -369,16 +370,36 @@ def _diff_frames(
 
         dk = p_curr.get("kills", 0) - p_prev.get("kills", 0)
         dd = p_curr.get("deaths", 0) - p_prev.get("deaths", 0)
+        da = p_curr.get("assists", 0) - p_prev.get("assists", 0)
 
         if dk > 0:
             new_killers.append((pid, dk))
         if dd > 0:
             new_victims.append((pid, dd))
+        if da > 0:
+            new_assistants.append((pid, da))
 
     if not new_killers and not new_victims:
         return []
 
     epoch = _parse_epoch_ms(frame_ts)
+
+    # ─── Build assistants list for each kill ──────────────────────────────
+    # Players who gained +1 assist in the same frame as the kill, on the
+    # SAME SIDE as the killer (and excluding the killer themselves).
+    def _find_assistants(killer_pid: str, killer_side: str) -> list[dict]:
+        result = []
+        for a_pid, _da in new_assistants:
+            if a_pid == killer_pid:
+                continue
+            a_info = participants.get(a_pid, {})
+            if a_info.get("side") == killer_side:
+                result.append({
+                    "participant_id": a_pid,
+                    "name": a_info.get("name"),
+                    "champion": a_info.get("champion"),
+                })
+        return result
 
     # ─── Case 1: simple 1v1 ────────────────────────────────────────────
     if len(new_killers) == 1 and len(new_victims) == 1:
@@ -392,6 +413,10 @@ def _diff_frames(
             if not kc_involvement:
                 return []
 
+            assists = _find_assistants(killer_pid, killer_info.get("side", ""))
+            # If there are assists, it's NOT a solo kill → medium confidence
+            conf = "high" if not assists else "medium"
+
             kills.append(KillEvent(
                 game_id=db_game_id,
                 event_epoch=epoch,
@@ -403,7 +428,8 @@ def _diff_frames(
                 victim_name=victim_info.get("name"),
                 victim_champion=victim_info.get("champion"),
                 victim_side=victim_info.get("side"),
-                confidence="high",
+                assistants=assists,
+                confidence=conf,
                 tracked_team_involvement=kc_involvement,
                 is_first_blood=(total_kills_before == 0),
                 multi_kill=_detect_multi_kill(dk),
@@ -427,6 +453,7 @@ def _diff_frames(
             kc_inv = _get_kc_involvement(killer_info, victim_info, kc_side)
             if not kc_inv:
                 continue
+            assists = _find_assistants(killer_pid, "blue")
             kills.append(KillEvent(
                 game_id=db_game_id,
                 event_epoch=epoch,
@@ -438,6 +465,7 @@ def _diff_frames(
                 victim_name=victim_info.get("name"),
                 victim_champion=victim_info.get("champion"),
                 victim_side="red",
+                assistants=assists,
                 confidence="medium",
                 tracked_team_involvement=kc_inv,
                 is_first_blood=(total_kills_before == 0 and len(kills) == 0),
@@ -455,6 +483,7 @@ def _diff_frames(
             kc_inv = _get_kc_involvement(killer_info, victim_info, kc_side)
             if not kc_inv:
                 continue
+            assists = _find_assistants(killer_pid, "red")
             kills.append(KillEvent(
                 game_id=db_game_id,
                 event_epoch=epoch,
@@ -466,6 +495,7 @@ def _diff_frames(
                 victim_name=victim_info.get("name"),
                 victim_champion=victim_info.get("champion"),
                 victim_side="blue",
+                assistants=assists,
                 confidence="medium",
                 tracked_team_involvement=kc_inv,
                 is_first_blood=(total_kills_before == 0 and len(kills) == 0),
