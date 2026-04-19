@@ -37,13 +37,11 @@ const HALLUCINATION_PATTERNS: RegExp[] = [
 ];
 
 const BANNED_PHRASES: RegExp[] = [
-  /\bsans aucune aide\b/i,
-  /\bsans aide\b/i,
-  /\bsans assistance\b/i,
-  /\bzero assist\b/i,
+  // Relaxed — only reject truly broken descriptions, not imperfect ones.
+  // The backoffice /review lets Mehdi fix individual descriptions manually.
 ];
 
-const MIN_LENGTH = 80;
+const MIN_LENGTH = 40;
 
 /** Returns true if the description is safe to display as-is. */
 export function isDescriptionClean(text: string | null | undefined): boolean {
