@@ -8,6 +8,7 @@ import { useToast } from "@/components/Toast";
 import { CommentPanel } from "@/components/CommentPanel";
 import { useScrollAutoplay } from "./useScrollAutoplay";
 import { ScrollChipBar, type ChipFilters } from "./ScrollChipBar";
+import { BgmPlayer } from "./BgmPlayer";
 import { isDescriptionClean } from "@/lib/scroll/sanitize-description";
 
 // ─── Feed item types (discriminated union) ─────────────────────────────
@@ -333,6 +334,8 @@ export function ScrollFeed({
       className="scroll-container fixed inset-0 z-[60] bg-black"
       onPointerDown={handleFirstInteraction}
     >
+      {/* Background music player */}
+      <BgmPlayer />
       {/* Top bar — minimal, safe-area aware */}
       <div className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-4 py-3" style={{ paddingTop: "max(0.75rem, env(safe-area-inset-top, 0.75rem))" }}>
         <Link href="/" className="flex h-9 w-9 items-center justify-center rounded-full bg-black/60 backdrop-blur-sm">
