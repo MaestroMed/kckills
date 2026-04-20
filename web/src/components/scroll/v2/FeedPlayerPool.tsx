@@ -242,29 +242,34 @@ export function FeedPlayerPool({
           key={`pool-slot-${slotIdx}`}
           ref={(el) => {
             videoRefs.current[slotIdx] = el;
+            // iOS Safari: explicitly set the legacy webkit attribute
+            // (camelCase doesn't always work, force lowercase via attr).
+            if (el) {
+              el.setAttribute("playsinline", "");
+              el.setAttribute("webkit-playsinline", "");
+              el.setAttribute("x-webkit-airplay", "allow");
+            }
           }}
-          // muted/playsInline/loop are required for cross-browser
-          // autoplay of muted videos. We keep these flags constant.
           muted={muted}
           loop
           playsInline
-          // Phase 1: progressive MP4. Phase 4 swaps in hls.js attach.
           preload="metadata"
           // Initially hidden — set opacity:1 once a slot is assigned.
+          // CRITICAL: height MUST be non-zero or video is invisible (audio plays).
+          // Falls back to 100dvh which is always > 0 on mobile.
           style={{
             position: "absolute",
             top: 0,
             left: 0,
             width: "100%",
-            height: itemHeight ? `${itemHeight}px` : "100%",
+            height: itemHeight && itemHeight > 0 ? `${itemHeight}px` : "100dvh",
             objectFit: "cover",
             opacity: 0,
             transform: "translate3d(0, 0, 0)",
-            // Compositor hint — these elements are GPU-painted,
-            // never trigger layout when transform changes.
             willChange: "transform",
-            // Reduce animation jank on mobile Safari.
             backfaceVisibility: "hidden",
+            // Belt-and-suspenders for iOS Safari WebKit
+            WebkitBackfaceVisibility: "hidden",
           }}
           onError={(e) => {
             const v = e.currentTarget;

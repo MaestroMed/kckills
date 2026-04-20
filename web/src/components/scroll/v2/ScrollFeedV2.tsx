@@ -78,18 +78,37 @@ export function ScrollFeedV2({
   const { quality, useLowQuality, effectiveType } = useNetworkQuality();
 
   // ─── Viewport sizing ──────────────────────────────────────────────
+  // CRITICAL: on mobile (iOS Safari especially), clientHeight can be 0
+  // at first mount if the container's height is computed via dvh/svh.
+  // ResizeObserver catches the value as soon as it's measurable, AND
+  // we fall back to window.innerHeight which is always non-zero.
   useEffect(() => {
     const update = () => {
       const el = containerRef.current;
-      const h = el?.clientHeight ?? window.innerHeight;
+      const measured = el?.clientHeight ?? 0;
+      // Always use a non-zero value — 0 makes videos invisible (audio-only bug)
+      const h = measured > 0 ? measured : window.innerHeight;
       setItemHeight(h);
     };
     update();
+    // Re-measure on next frame too (iOS Safari sometimes lies on first paint)
+    const raf = requestAnimationFrame(update);
     window.addEventListener("resize", update);
     window.addEventListener("orientationchange", update);
+
+    // ResizeObserver catches container height changes (including when
+    // dvh/svh values resolve after first paint on mobile)
+    let ro: ResizeObserver | null = null;
+    if (containerRef.current && typeof ResizeObserver !== "undefined") {
+      ro = new ResizeObserver(() => update());
+      ro.observe(containerRef.current);
+    }
+
     return () => {
+      cancelAnimationFrame(raf);
       window.removeEventListener("resize", update);
       window.removeEventListener("orientationchange", update);
+      ro?.disconnect();
     };
   }, []);
 
