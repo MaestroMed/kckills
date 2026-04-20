@@ -1,0 +1,149 @@
+[
+  {
+    "is_gameplay": true,
+    "kill_visible": false,
+    "kill_moment_timing": "not_visible",
+    "what_is_shown": "Un combat d'équipe intense avec de nombreux champions impliqués. Le clip se concentre sur la zone du dragon et montre plusieurs sorts utilisés, mais aucun kill de Corki sur Karma n'est clairement visible.",
+    "clip_quality": 3,
+    "issues": [
+      "kill_happens_off-screen",
+      "camera_shows_wrong_area",
+      "target_of_kill_not_clearly_identified",
+      "clip_does_not_show_intended_event"
+    ],
+    "verdict": "BAD",
+    "id": "8445aa83",
+    "kill": "Corki -> Karma",
+    "game_time": "23:09"
+  },
+  {
+    "is_gameplay": true,
+    "kill_visible": false,
+    "kill_moment_timing": "not_visible",
+    "what_is_shown": "Le clip montre un combat d'équipe intense mais le kill de Vi sur Yunara n'est pas visible à l'écran. On voit de nombreux sorts et interactions entre les champions, mais le moment précis du kill recherché est manquant.",
+    "clip_quality": 3,
+    "issues": [
+      "kill_not_visible_on_screen",
+      "camera_focus_on_wrong_champion_during_kill"
+    ],
+    "verdict": "BAD",
+    "id": "04d0ac49",
+    "kill": "Vi -> Yunara",
+    "game_time": "32:09"
+  },
+  {
+    "is_gameplay": true,
+    "kill_visible": false,
+    "kill_moment_timing": "not_visible",
+    "what_is_shown": "Le clip montre une séquence de combat d'équipe autour du dragon, mais le kill de Nocturne sur Annie n'est pas visible.",
+    "clip_quality": 4,
+    "issues": [
+      "kill_happens_off-screen",
+      "not_the_intended_highlight"
+    ],
+    "verdict": "BAD",
+    "id": "7d5c09fe",
+    "kill": "Nocturne -> Annie",
+    "game_time": "23:29"
+  },
+  {
+    "is_gameplay": true,
+    "kill_visible": false,
+    "kill_moment_timing": "not_visible",
+    "what_is_shown": "Le clip montre une séquence de combat d'équipe intense où plusieurs champions s'affrontent autour d'un objectif (probablement le Drake). Cependant, le kill spécifique de Galio sur Shen vers 09:09 n'est pas clairement visible à l'écran.",
+    "clip_quality": 3,
+    "issues": [
+      "kill_happens_off-screen",
+      "unclear_target_focus"
+    ],
+    "verdict": "BAD",
+    "id": "498b38f8",
+    "kill": "Galio -> Shen",
+    "game_time": "9:09"
+  },
+  {
+    "is_gameplay": true,
+    "kill_visible": false,
+    "kill_moment_timing": "not_visible",
+    "what_is_shown": "The clip shows a League of Legends match, focusing on a fight around the Infernal Drake. Several champions are visible, including Carzzy on Corki. The game time is around 23:59. There are mentions of Drake being slain, but no kill of Renekton by Aurora is depicted.",
+    "clip_quality": 3,
+    "issues": [
+      "The clip does not show the advertised kill (Aurora killing Renekton).",
+      "The focus is on a different part of the map and a different objective.",
+      "The kill moment is not visible at all.",
+      "The audio commentary is irrelevant to the supposed highlight."
+    ],
+    "verdict": "BAD",
+    "id": "ea0f4bbf",
+    "kill": "Aurora -> Renekton",
+    "game_time": "17:59"
+  },
+  {
+    "is_gameplay": true,
+    "kill_visible": true,
+    "kill_moment_timing": "good",
+    "what_is_shown": "Kalista attaque Yone dans la jungle, Yone tente de s'échapper mais Kalista utilise sa compétence ultime pour le ramener vers elle et le termine.",
+    "clip_quality": 7,
+    "issues": [],
+    "verdict": "GOOD",
+    "id": "34d45622",
+    "kill": "Kalista -> Yone",
+    "game_time": "19:59"
+  },
+  {
+    "is_gameplay": true,
+    "kill_visible": false,
+    "kill_moment_timing": "not_visible",
+    "what_is_shown": "Un clip de League of Legends montrant une bataille d'équipe où Sivir est supposée tuer Anivia. Cependant, le kill lui-même n'est pas visible à l'écran. On voit le champion KC Caliste (qui joue Anivia) se faire attaquer mais le moment exact où elle meurt n'est pas montré, ni l'intervention de Sivir.",
+    "clip_quality": 3,
+    "issues": [
+      "kill_happens_off-screen",
+      "main_event_not_visible"
+    ],
+    "verdict": "BAD",
+    "id": "4f9e1400",
+    "kill": "Sivir -> Anivia",
+    "game_time": "23:29"
+  },
+  {
+    "is_gameplay": true,
+    "kill_visible": false,
+    "kill_moment_timing": "not_visible",
+    "what_is_shown": "Le clip montre une partie d'une partie de League of Legends, avec des joueurs se déplaçant et lançant des sorts. Il y a des indicateurs de kills précédents pour d'autres joueurs et la prise du Baron Nashor, mais le kill spécifique d'Ambessa sur Jarvan IV n'est pas visible.",
+    "clip_quality": 4,
+    "issues": [
+      "kill_happens_off-screen",
+      "kill_is_not_visible"
+    ],
+    "verdict": "BAD",
+    "id": "4977889d",
+    "kill": "Ambessa -> JarvanIV",
+    "game_time": "31:59"
+  },
+  {
+    "is_gameplay": true,
+    "kill_visible": true,
+    "kill_moment_timing": "good",
+    "what_is_shown": "Une séquence de combat d'équipe où Xayah (pas nommée directement comme 'Xayah' mais identifiée par son icône et son skin) élimine Yunara.",
+    "clip_quality": 7,
+    "issues": [
+      "Le nom de Xayah n'est pas explicitement affiché à l'écran pour le kill de Yunara, mais l'action est visible et correspond au moment indiqué."
+    ],
+    "verdict": "ACCEPTABLE",
+    "id": "68033dac",
+    "kill": "Xayah -> Yunara",
+    "game_time": "24:19"
+  },
+  {
+    "is_gameplay": true,
+    "kill_visible": true,
+    "kill_moment_timing": "good",
+    "what_is_shown": "Kalista tue Gwen durant un teamfight, suivi d'un double kill et la destruction d'une tourelle. Le clip se termine sur des séquences de joueurs et de spectateurs célébrant.",
+    "clip_quality": 8,
+    "issues": [],
+    "verdict": "GOOD",
+    "id": "e32fbb9b",
+    "kill": "Kalista -> Gwen",
+    "game_time": "25:19"
+  }
+]

@@ -1,0 +1,737 @@
+[
+  {
+    "id": "ca7e53f6",
+    "kill": "Ryze->Taliyah",
+    "old": "solo_kill",
+    "new": "pick",
+    "assists": 1
+  },
+  {
+    "id": "d8f4db75",
+    "kill": "DrMundo->Ryze",
+    "old": "solo_kill",
+    "new": "pick",
+    "assists": 1
+  },
+  {
+    "id": "1bd24fb9",
+    "kill": "Gwen->Yasuo",
+    "old": "solo_kill",
+    "new": "pick",
+    "assists": 1
+  },
+  {
+    "id": "8390b5c3",
+    "kill": "DrMundo->Gwen",
+    "old": "solo_kill",
+    "new": "skirmish_2v2",
+    "assists": 2
+  },
+  {
+    "id": "8390b5c3",
+    "kill": "Ashe->Gwen",
+    "old": "solo_kill",
+    "new": "skirmish_2v2",
+    "assists": 3
+  },
+  {
+    "id": "fdc2a812",
+    "kill": "DrMundo->Karma",
+    "old": "skirmish_2v2",
+    "new": "gank",
+    "assists": 2
+  },
+  {
+    "id": "2298b870",
+    "kill": "DrMundo->Gwen",
+    "old": "solo_kill",
+    "new": "skirmish_3v3",
+    "assists": 4
+  },
+  {
+    "id": "2298b870",
+    "kill": "Ashe->Gwen",
+    "old": "solo_kill",
+    "new": "skirmish_3v3",
+    "assists": 4
+  },
+  {
+    "id": "2298b870",
+    "kill": "Ryze->Taliyah",
+    "old": "solo_kill",
+    "new": "skirmish_3v3",
+    "assists": 1
+  },
+  {
+    "id": "c8784354",
+    "kill": "Pantheon->Rumble",
+    "old": "skirmish_2v2",
+    "new": "pick",
+    "assists": 1
+  },
+  {
+    "id": "650f73b7",
+    "kill": "MonkeyKing->Sylas",
+    "old": "solo_kill",
+    "new": "gank",
+    "assists": 2
+  },
+  {
+    "id": "4c045e4d",
+    "kill": "Ahri->Pantheon",
+    "old": "solo_kill",
+    "new": "skirmish_2v2",
+    "assists": 2
+  },
+  {
+    "id": "4c045e4d",
+    "kill": "Ahri->Rell",
+    "old": "solo_kill",
+    "new": "pick",
+    "assists": 1
+  },
+  {
+    "id": "c30d24b5",
+    "kill": "Rumble->Sylas",
+    "old": "solo_kill",
+    "new": "skirmish_3v3",
+    "assists": 3
+  },
+  {
+    "id": "1da240cd",
+    "kill": "Pantheon->Rumble",
+    "old": "teamfight_5v5",
+    "new": "skirmish_3v3",
+    "assists": 2
+  },
+  {
+    "id": "1da240cd",
+    "kill": "Corki->Rumble",
+    "old": "teamfight_5v5",
+    "new": "skirmish_3v3",
+    "assists": 1
+  },
+  {
+    "id": "1da240cd",
+    "kill": "Rumble->Pantheon",
+    "old": "teamfight_5v5",
+    "new": "skirmish_3v3",
+    "assists": 3
+  },
+  {
+    "id": "a30e394d",
+    "kill": "Syndra->Viktor",
+    "old": "solo_kill",
+    "new": "gank",
+    "assists": 2
+  },
+  {
+    "id": "23593bf3",
+    "kill": "Vi->Renata",
+    "old": "solo_kill",
+    "new": "pick",
+    "assists": 1
+  },
+  {
+    "id": "dfdfdc09",
+    "kill": "Syndra->Viktor",
+    "old": "solo_kill",
+    "new": "gank",
+    "assists": 3
+  },
+  {
+    "id": "3723fb43",
+    "kill": "Anivia->Maokai",
+    "old": "solo_kill",
+    "new": "skirmish_2v2",
+    "assists": 3
+  },
+  {
+    "id": "3723fb43",
+    "kill": "Sivir->Kaisa",
+    "old": "solo_kill",
+    "new": "skirmish_2v2",
+    "assists": 2
+  },
+  {
+    "id": "af0d8bae",
+    "kill": "Skarner->Sion",
+    "old": "solo_kill",
+    "new": "gank",
+    "assists": 2
+  },
+  {
+    "id": "32b3c592",
+    "kill": "Maokai->Kled",
+    "old": "solo_kill",
+    "new": "gank",
+    "assists": 2
+  },
+  {
+    "id": "4f9e1400",
+    "kill": "Sivir->Anivia",
+    "old": "solo_kill",
+    "new": "gank",
+    "assists": 3
+  },
+  {
+    "id": "22c7819a",
+    "kill": "Sion->Kaisa",
+    "old": "teamfight_5v5",
+    "new": "gank",
+    "assists": 4
+  },
+  {
+    "id": "2bcde724",
+    "kill": "Kaisa->Maokai",
+    "old": "solo_kill",
+    "new": "gank",
+    "assists": 2
+  },
+  {
+    "id": "30fdd590",
+    "kill": "Skarner->Aurora",
+    "old": "solo_kill",
+    "new": "pick",
+    "assists": 1
+  },
+  {
+    "id": "99b91f53",
+    "kill": "Anivia->Maokai",
+    "old": "skirmish_2v2",
+    "new": "pick",
+    "assists": 1
+  },
+  {
+    "id": "5d59d0ec",
+    "kill": "Aurora->Kaisa",
+    "old": "solo_kill",
+    "new": "gank",
+    "assists": 2
+  },
+  {
+    "id": "471e80f9",
+    "kill": "Anivia->Maokai",
+    "old": "teamfight_5v5",
+    "new": "teamfight_4v4",
+    "assists": 2
+  },
+  {
+    "id": "471e80f9",
+    "kill": "Kaisa->Maokai",
+    "old": "teamfight_5v5",
+    "new": "teamfight_4v4",
+    "assists": 1
+  },
+  {
+    "id": "471e80f9",
+    "kill": "Aurora->Kaisa",
+    "old": "teamfight_5v5",
+    "new": "teamfight_4v4",
+    "assists": 4
+  },
+  {
+    "id": "471e80f9",
+    "kill": "Alistar->Kaisa",
+    "old": "teamfight_5v5",
+    "new": "teamfight_4v4",
+    "assists": 4
+  },
+  {
+    "id": "47ef0d94",
+    "kill": "Galio->Orianna",
+    "old": "gank",
+    "new": "skirmish_2v2",
+    "assists": 4
+  },
+  {
+    "id": "47ef0d94",
+    "kill": "Varus->Orianna",
+    "old": "gank",
+    "new": "skirmish_2v2",
+    "assists": 4
+  },
+  {
+    "id": "99c483ae",
+    "kill": "Gwen->Zaahen",
+    "old": "teamfight_4v4",
+    "new": "pick",
+    "assists": 1
+  },
+  {
+    "id": "d32c18c6",
+    "kill": "Gwen->Sion",
+    "old": "solo_kill",
+    "new": "teamfight_4v4",
+    "assists": 4
+  },
+  {
+    "id": "d32c18c6",
+    "kill": "Taliyah->Sion",
+    "old": "solo_kill",
+    "new": "teamfight_4v4",
+    "assists": 4
+  },
+  {
+    "id": "d32c18c6",
+    "kill": "Sion->Gwen",
+    "old": "solo_kill",
+    "new": "teamfight_4v4",
+    "assists": 3
+  },
+  {
+    "id": "d32c18c6",
+    "kill": "Zaahen->Gwen",
+    "old": "solo_kill",
+    "new": "teamfight_4v4",
+    "assists": 2
+  },
+  {
+    "id": "379b8731",
+    "kill": "Ezreal->Gwen",
+    "old": "solo_kill",
+    "new": "teamfight_4v4",
+    "assists": 2
+  },
+  {
+    "id": "c657a8ce",
+    "kill": "Aphelios->Xayah",
+    "old": "solo_kill",
+    "new": "skirmish_2v2",
+    "assists": 3
+  },
+  {
+    "id": "2bc14254",
+    "kill": "Naafiri->Gnar",
+    "old": "solo_kill",
+    "new": "pick",
+    "assists": 1
+  },
+  {
+    "id": "c79330c0",
+    "kill": "Vi->Naafiri",
+    "old": "solo_kill",
+    "new": "skirmish_2v2",
+    "assists": 1
+  },
+  {
+    "id": "c79330c0",
+    "kill": "Naafiri->Karma",
+    "old": "solo_kill",
+    "new": "skirmish_2v2",
+    "assists": 1
+  },
+  {
+    "id": "39a3bb95",
+    "kill": "Xayah->Aphelios",
+    "old": "solo_kill",
+    "new": "gank",
+    "assists": 3
+  },
+  {
+    "id": "80337fa1",
+    "kill": "Naafiri->Gnar",
+    "old": "solo_kill",
+    "new": "gank",
+    "assists": 2
+  },
+  {
+    "id": "cecc00c7",
+    "kill": "Aphelios->Rakan",
+    "old": "solo_kill",
+    "new": "gank",
+    "assists": 2
+  },
+  {
+    "id": "5c770776",
+    "kill": "Aphelios->Naafiri",
+    "old": "solo_kill",
+    "new": "gank",
+    "assists": 2
+  },
+  {
+    "id": "f578e7bf",
+    "kill": "Xayah->Vi",
+    "old": "solo_kill",
+    "new": "skirmish_2v2",
+    "assists": 4
+  },
+  {
+    "id": "f74392d6",
+    "kill": "Neeko->Corki",
+    "old": "solo_kill",
+    "new": "pick",
+    "assists": 1
+  },
+  {
+    "id": "0aebbc65",
+    "kill": "Vi->Ahri",
+    "old": "skirmish_2v2",
+    "new": "pick",
+    "assists": 1
+  },
+  {
+    "id": "47b76618",
+    "kill": "Corki->Poppy",
+    "old": "solo_kill",
+    "new": "gank",
+    "assists": 3
+  },
+  {
+    "id": "90648cd8",
+    "kill": "Gnar->Ahri",
+    "old": "solo_kill",
+    "new": "skirmish_2v2",
+    "assists": 4
+  },
+  {
+    "id": "90648cd8",
+    "kill": "Vi->Ahri",
+    "old": "solo_kill",
+    "new": "skirmish_2v2",
+    "assists": 4
+  },
+  {
+    "id": "6290ac62",
+    "kill": "Gnar->Neeko",
+    "old": "solo_kill",
+    "new": "pick",
+    "assists": 1
+  },
+  {
+    "id": "3090e507",
+    "kill": "Kalista->Lucian",
+    "old": "solo_kill",
+    "new": "pick",
+    "assists": 1
+  },
+  {
+    "id": "cff78383",
+    "kill": "Akali->KSante",
+    "old": "solo_kill",
+    "new": "gank",
+    "assists": 3
+  },
+  {
+    "id": "34d45622",
+    "kill": "Kalista->Yone",
+    "old": "solo_kill",
+    "new": "gank",
+    "assists": 2
+  },
+  {
+    "id": "41ed41f1",
+    "kill": "Akali->Milio",
+    "old": "solo_kill",
+    "new": "gank",
+    "assists": 3
+  },
+  {
+    "id": "17dc59de",
+    "kill": "Kalista->Yone",
+    "old": "skirmish_2v2",
+    "new": "gank",
+    "assists": 4
+  },
+  {
+    "id": "e32fbb9b",
+    "kill": "Kalista->Gwen",
+    "old": "skirmish_2v2",
+    "new": "gank",
+    "assists": 2
+  },
+  {
+    "id": "63260a44",
+    "kill": "Lucian->Bard",
+    "old": "solo_kill",
+    "new": "pick",
+    "assists": 1
+  },
+  {
+    "id": "06adfb29",
+    "kill": "Aatrox->JarvanIV",
+    "old": "solo_kill",
+    "new": "gank",
+    "assists": 2
+  },
+  {
+    "id": "beab678c",
+    "kill": "Orianna->Ambessa",
+    "old": "teamfight_5v5",
+    "new": "skirmish_2v2",
+    "assists": 3
+  },
+  {
+    "id": "beab678c",
+    "kill": "Caitlyn->Ambessa",
+    "old": "teamfight_5v5",
+    "new": "skirmish_2v2",
+    "assists": 3
+  },
+  {
+    "id": "ac8c11df",
+    "kill": "Lulu->Ashe",
+    "old": "solo_kill",
+    "new": "skirmish_2v2",
+    "assists": 1
+  },
+  {
+    "id": "ac8c11df",
+    "kill": "Seraphine->Yunara",
+    "old": "solo_kill",
+    "new": "skirmish_2v2",
+    "assists": 1
+  },
+  {
+    "id": "23f0d82a",
+    "kill": "Ryze->Zaahen",
+    "old": "solo_kill",
+    "new": "skirmish_2v2",
+    "assists": 4
+  },
+  {
+    "id": "23f0d82a",
+    "kill": "Ashe->Zaahen",
+    "old": "solo_kill",
+    "new": "skirmish_2v2",
+    "assists": 3
+  },
+  {
+    "id": "8b4f1b81",
+    "kill": "Renekton->Aurora",
+    "old": "skirmish_2v2",
+    "new": "pick",
+    "assists": 1
+  },
+  {
+    "id": "b6e2a01a",
+    "kill": "XinZhao->Bard",
+    "old": "skirmish_2v2",
+    "new": "pick",
+    "assists": 1
+  },
+  {
+    "id": "d1042f91",
+    "kill": "Aatrox->XinZhao",
+    "old": "teamfight_4v4",
+    "new": "gank",
+    "assists": 2
+  },
+  {
+    "id": "faecb93a",
+    "kill": "Caitlyn->Galio",
+    "old": "teamfight_4v4",
+    "new": "gank",
+    "assists": 3
+  },
+  {
+    "id": "e8ca3942",
+    "kill": "Caitlyn->XinZhao",
+    "old": "skirmish_2v2",
+    "new": "gank",
+    "assists": 2
+  },
+  {
+    "id": "db9b1594",
+    "kill": "XinZhao->Orianna",
+    "old": "teamfight_4v4",
+    "new": "gank",
+    "assists": 3
+  },
+  {
+    "id": "b1dc02fd",
+    "kill": "Caitlyn->XinZhao",
+    "old": "teamfight_4v4",
+    "new": "gank",
+    "assists": 2
+  },
+  {
+    "id": "717c1ec6",
+    "kill": "Renekton->Aurora",
+    "old": "teamfight_4v4",
+    "new": "solo_kill",
+    "assists": 0
+  },
+  {
+    "id": "e23b0a24",
+    "kill": "Renekton->Aurora",
+    "old": "teamfight_5v5",
+    "new": "teamfight_4v4",
+    "assists": 3
+  },
+  {
+    "id": "7c04d03a",
+    "kill": "Aatrox->Aurora",
+    "old": "teamfight_5v5",
+    "new": "teamfight_4v4",
+    "assists": 4
+  },
+  {
+    "id": "7c04d03a",
+    "kill": "Orianna->Aurora",
+    "old": "teamfight_5v5",
+    "new": "teamfight_4v4",
+    "assists": 3
+  },
+  {
+    "id": "67c47bf2",
+    "kill": "Ashe->Aatrox",
+    "old": "teamfight_5v5",
+    "new": "teamfight_4v4",
+    "assists": 2
+  },
+  {
+    "id": "99953b70",
+    "kill": "Varus->Leona",
+    "old": "skirmish_2v2",
+    "new": "gank",
+    "assists": 2
+  },
+  {
+    "id": "3197eb4d",
+    "kill": "MonkeyKing->Rakan",
+    "old": "skirmish_3v3",
+    "new": "gank",
+    "assists": 2
+  },
+  {
+    "id": "bce2f5b6",
+    "kill": "MonkeyKing->Varus",
+    "old": "teamfight_4v4",
+    "new": "gank",
+    "assists": 2
+  },
+  {
+    "id": "dabbf14b",
+    "kill": "Leona->Leblanc",
+    "old": "skirmish_2v2",
+    "new": "pick",
+    "assists": 1
+  },
+  {
+    "id": "0efd6556",
+    "kill": "Jax->Azir",
+    "old": "skirmish_3v3",
+    "new": "teamfight_4v4",
+    "assists": 3
+  },
+  {
+    "id": "0efd6556",
+    "kill": "Ambessa->Jax",
+    "old": "skirmish_3v3",
+    "new": "teamfight_4v4",
+    "assists": 4
+  },
+  {
+    "id": "0efd6556",
+    "kill": "MonkeyKing->Jax",
+    "old": "skirmish_3v3",
+    "new": "teamfight_4v4",
+    "assists": 4
+  },
+  {
+    "id": "0efd6556",
+    "kill": "Ezreal->Jax",
+    "old": "skirmish_3v3",
+    "new": "teamfight_4v4",
+    "assists": 4
+  },
+  {
+    "id": "0efd6556",
+    "kill": "Leona->Jax",
+    "old": "skirmish_3v3",
+    "new": "teamfight_4v4",
+    "assists": 4
+  },
+  {
+    "id": "3e10b87d",
+    "kill": "Varus->Ambessa",
+    "old": "skirmish_2v2",
+    "new": "gank",
+    "assists": 4
+  },
+  {
+    "id": "e9a73edb",
+    "kill": "Leblanc->Ezreal",
+    "old": "skirmish_2v2",
+    "new": "gank",
+    "assists": 3
+  },
+  {
+    "id": "1a6c36fa",
+    "kill": "Varus->MonkeyKing",
+    "old": "teamfight_5v5",
+    "new": "teamfight_4v4",
+    "assists": 4
+  },
+  {
+    "id": "78df6a9d",
+    "kill": "Ambessa->Jax",
+    "old": "teamfight_5v5",
+    "new": "teamfight_4v4",
+    "assists": 3
+  },
+  {
+    "id": "182e935c",
+    "kill": "MonkeyKing->Jax",
+    "old": "teamfight_5v5",
+    "new": "teamfight_4v4",
+    "assists": 4
+  },
+  {
+    "id": "182e935c",
+    "kill": "Ezreal->Jax",
+    "old": "teamfight_5v5",
+    "new": "teamfight_4v4",
+    "assists": 3
+  },
+  {
+    "id": "a1d7e40a",
+    "kill": "Ahri->KSante",
+    "old": "teamfight_5v5",
+    "new": "skirmish_2v2",
+    "assists": 3
+  },
+  {
+    "id": "f1ccfefc",
+    "kill": "Jhin->Nami",
+    "old": "teamfight_4v4",
+    "new": "gank",
+    "assists": 2
+  },
+  {
+    "id": "7d5c09fe",
+    "kill": "Nocturne->Annie",
+    "old": "teamfight_4v4",
+    "new": "gank",
+    "assists": 3
+  },
+  {
+    "id": "45f8eb7b",
+    "kill": "KSante->Nocturne",
+    "old": "skirmish_3v3",
+    "new": "teamfight_4v4",
+    "assists": 2
+  },
+  {
+    "id": "45f8eb7b",
+    "kill": "Nocturne->KSante",
+    "old": "skirmish_3v3",
+    "new": "teamfight_4v4",
+    "assists": 4
+  },
+  {
+    "id": "45f8eb7b",
+    "kill": "Ahri->KSante",
+    "old": "skirmish_3v3",
+    "new": "teamfight_4v4",
+    "assists": 4
+  },
+  {
+    "id": "45f8eb7b",
+    "kill": "Corki->KSante",
+    "old": "skirmish_3v3",
+    "new": "teamfight_4v4",
+    "assists": 4
+  }
+]

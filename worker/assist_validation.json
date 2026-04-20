@@ -1,0 +1,206 @@
+[
+  {
+    "game_time": 506,
+    "killer": "TH Ice",
+    "killer_champ": "Ziggs",
+    "victim": "KC Caliste",
+    "victim_champ": "Ashe",
+    "assists": [
+      "TH Sheo",
+      "TH Way"
+    ],
+    "n_assists": 2,
+    "classification": "GANK (3v1)"
+  },
+  {
+    "game_time": 799,
+    "killer": "KC Yike",
+    "killer_champ": "XinZhao",
+    "victim": "TH Sheo",
+    "victim_champ": "Vi",
+    "assists": [
+      "KC kyeahoo",
+      "KC Caliste",
+      "KC Busio"
+    ],
+    "n_assists": 3,
+    "classification": "SKIRMISH (3 kills)"
+  },
+  {
+    "game_time": 799,
+    "killer": "KC Caliste",
+    "killer_champ": "Ashe",
+    "victim": "TH Sheo",
+    "victim_champ": "Vi",
+    "assists": [
+      "KC Yike",
+      "KC kyeahoo",
+      "KC Busio"
+    ],
+    "n_assists": 3,
+    "classification": "SKIRMISH (3 kills)"
+  },
+  {
+    "game_time": 799,
+    "killer": "KC Busio",
+    "killer_champ": "Seraphine",
+    "victim": "TH Sheo",
+    "victim_champ": "Vi",
+    "assists": [
+      "KC Yike",
+      "KC kyeahoo",
+      "KC Caliste"
+    ],
+    "n_assists": 3,
+    "classification": "SKIRMISH (3 kills)"
+  },
+  {
+    "game_time": 999,
+    "killer": "KC Busio",
+    "killer_champ": "Seraphine",
+    "victim": "TH Sheo",
+    "victim_champ": "Vi",
+    "assists": [
+      "KC kyeahoo",
+      "KC Caliste"
+    ],
+    "n_assists": 2,
+    "classification": "GANK (3v1)"
+  },
+  {
+    "game_time": 1002,
+    "killer": "KC Yike",
+    "killer_champ": "XinZhao",
+    "victim": "TH Ice",
+    "victim_champ": "Ziggs",
+    "assists": [
+      "KC Canna",
+      "KC Caliste"
+    ],
+    "n_assists": 2,
+    "classification": "GANK (3v1)"
+  },
+  {
+    "game_time": 1102,
+    "killer": "KC Canna",
+    "killer_champ": "Gnar",
+    "victim": "TH Sheo",
+    "victim_champ": "Vi",
+    "assists": [
+      "KC Busio"
+    ],
+    "n_assists": 1,
+    "classification": "PICK (2v1)"
+  },
+  {
+    "game_time": 1199,
+    "killer": "TH Tracyn",
+    "killer_champ": "Ambessa",
+    "victim": "KC kyeahoo",
+    "victim_champ": "Ahri",
+    "assists": [
+      "TH Serin"
+    ],
+    "n_assists": 1,
+    "classification": "SKIRMISH (3 kills)"
+  },
+  {
+    "game_time": 1199,
+    "killer": "KC Caliste",
+    "killer_champ": "Ashe",
+    "victim": "TH Tracyn",
+    "victim_champ": "Ambessa",
+    "assists": [
+      "KC Yike",
+      "KC kyeahoo",
+      "KC Busio"
+    ],
+    "n_assists": 3,
+    "classification": "SKIRMISH (3 kills)"
+  },
+  {
+    "game_time": 1199,
+    "killer": "KC Busio",
+    "killer_champ": "Seraphine",
+    "victim": "TH Tracyn",
+    "victim_champ": "Ambessa",
+    "assists": [
+      "KC Yike",
+      "KC kyeahoo",
+      "KC Caliste"
+    ],
+    "n_assists": 3,
+    "classification": "SKIRMISH (3 kills)"
+  },
+  {
+    "game_time": 1299,
+    "killer": "KC kyeahoo",
+    "killer_champ": "Ahri",
+    "victim": "TH Sheo",
+    "victim_champ": "Vi",
+    "assists": [
+      "KC Yike",
+      "KC Busio"
+    ],
+    "n_assists": 2,
+    "classification": "GANK (3v1)"
+  },
+  {
+    "game_time": 1299,
+    "killer": "KC Caliste",
+    "killer_champ": "Ashe",
+    "victim": "TH Sheo",
+    "victim_champ": "Vi",
+    "assists": [
+      "KC Yike",
+      "KC Busio"
+    ],
+    "n_assists": 2,
+    "classification": "GANK (3v1)"
+  },
+  {
+    "game_time": 1399,
+    "killer": "KC Yike",
+    "killer_champ": "XinZhao",
+    "victim": "TH Tracyn",
+    "victim_champ": "Ambessa",
+    "assists": [
+      "KC Canna",
+      "KC kyeahoo",
+      "KC Caliste",
+      "KC Busio"
+    ],
+    "n_assists": 4,
+    "classification": "GANK (5v1)"
+  },
+  {
+    "game_time": 1399,
+    "killer": "KC Busio",
+    "killer_champ": "Seraphine",
+    "victim": "TH Tracyn",
+    "victim_champ": "Ambessa",
+    "assists": [
+      "KC Canna",
+      "KC Yike",
+      "KC kyeahoo",
+      "KC Caliste"
+    ],
+    "n_assists": 4,
+    "classification": "GANK (5v1)"
+  },
+  {
+    "game_time": 1402,
+    "killer": "KC Caliste",
+    "killer_champ": "Ashe",
+    "victim": "TH Serin",
+    "victim_champ": "Galio",
+    "assists": [
+      "KC Canna",
+      "KC Yike",
+      "KC kyeahoo",
+      "KC Busio"
+    ],
+    "n_assists": 4,
+    "classification": "GANK (5v1)"
+  }
+]

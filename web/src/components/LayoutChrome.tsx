@@ -11,6 +11,12 @@ import { LiveBanner } from "@/components/LiveBanner";
 export function LayoutChrome({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const isImmersive = pathname === "/scroll";
+  const isAdmin = pathname.startsWith("/admin");
+
+  // Admin routes use their own layout (sidebar-based). Skip public chrome entirely.
+  if (isAdmin) {
+    return <>{children}</>;
+  }
 
   if (isImmersive) {
     // Full-screen immersive mode: just render children (the scroll feed).
