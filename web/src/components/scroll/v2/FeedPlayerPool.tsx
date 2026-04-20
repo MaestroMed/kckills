@@ -234,8 +234,10 @@ export function FeedPlayerPool({
     <div
       className="pointer-events-none absolute inset-0 overflow-hidden"
       aria-hidden
-      // The pool itself sits below the FeedItem overlays in z-order.
-      style={{ zIndex: 0 }}
+      // Pool sits ABOVE poster Images (z=1) but BELOW interactive overlays
+      // (z=10+ for text, buttons, sidebar). This is the layer the user
+      // actually sees the live video on.
+      style={{ zIndex: 5 }}
     >
       {slots.map((slotIdx) => (
         <video
