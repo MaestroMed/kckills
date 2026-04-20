@@ -254,21 +254,23 @@ export function FeedPlayerPool({
           loop
           playsInline
           preload="metadata"
-          // Initially hidden — set opacity:1 once a slot is assigned.
+          // Video sizing:
+          // - Mobile (portrait 9:16): cover fills the viewport perfectly
+          // - Desktop (landscape 16:9): contain shows the full 9:16 clip
+          //   with black bars on sides (like TikTok on desktop).
           // CRITICAL: height MUST be non-zero or video is invisible (audio plays).
-          // Falls back to 100dvh which is always > 0 on mobile.
           style={{
             position: "absolute",
             top: 0,
             left: 0,
             width: "100%",
             height: itemHeight && itemHeight > 0 ? `${itemHeight}px` : "100dvh",
-            objectFit: "cover",
+            objectFit: isDesktop ? "contain" : "cover",
+            backgroundColor: "#000",
             opacity: 0,
             transform: "translate3d(0, 0, 0)",
             willChange: "transform",
             backfaceVisibility: "hidden",
-            // Belt-and-suspenders for iOS Safari WebKit
             WebkitBackfaceVisibility: "hidden",
           }}
           onError={(e) => {
@@ -289,9 +291,10 @@ export function FeedPlayerPool({
 
 // ─── Helpers ───────────────────────────────────────────────────────────
 
-function pickSrc(item: PoolItem, isDesktop: boolean, useLowQuality: boolean): string {
-  // Desktop landscape preference, fallback to vertical.
-  if (isDesktop && item.clipHorizontal) return item.clipHorizontal;
+function pickSrc(item: PoolItem, _isDesktop: boolean, useLowQuality: boolean): string {
+  // Always prefer the vertical 1080p clip — it matches TikTok-style
+  // portrait UX even on desktop (shown letterboxed via object-fit:contain).
+  // Low-quality variant only for data-saver/slow networks.
   if (useLowQuality && item.clipVerticalLow) return item.clipVerticalLow;
   return item.clipVertical;
 }
