@@ -28,6 +28,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
+import { BgmPlayer } from "../BgmPlayer";
 import {
   FeedItemVideo,
   FeedItemMoment,
@@ -260,6 +261,8 @@ export function ScrollFeedV2({
       // Touch-action: pan-y so the browser doesn't fight the drag.
       style={{ touchAction: "pan-y", overscrollBehavior: "contain" }}
     >
+      {/* Background music player */}
+      <BgmPlayer />
       {/* Top bar — outside the motion container so it doesn't translate. */}
       <div
         className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-4 py-3"
