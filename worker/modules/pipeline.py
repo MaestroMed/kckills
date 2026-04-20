@@ -414,7 +414,8 @@ async def run_for_match(match_external_id: str) -> dict:
         try:
             top_kills = safe_select(
                 "kills",
-                "id, killer_champion, victim_champion, ai_description, highlight_score, thumbnail_url",
+                "id, killer_champion, victim_champion, ai_description, highlight_score, "
+                "thumbnail_url, multi_kill, is_first_blood, fight_type",
                 status="published",
             )
             top_kills.sort(key=lambda k: float(k.get("highlight_score") or 0), reverse=True)
@@ -427,6 +428,9 @@ async def run_for_match(match_external_id: str) -> dict:
                     thumbnail_url=k.get("thumbnail_url"),
                     kill_id=k["id"],
                     match_info=f"Match {match_external_id}",
+                    multi_kill=k.get("multi_kill"),
+                    is_first_blood=bool(k.get("is_first_blood")),
+                    fight_type=k.get("fight_type"),
                 )
         except Exception:
             pass  # never let Discord notification crash the pipeline

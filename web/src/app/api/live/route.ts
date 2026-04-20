@@ -66,8 +66,36 @@ export async function GET() {
       const kcOnSide = teams.some((t) => t.code === "KC");
       if (kcOnSide && event.state === "inProgress") {
         const opp = teams.find((t) => t.code !== "KC");
+        // Pull additional info: scores + first available stream URL
+        const kcTeam = teams.find((t) => t.code === "KC") as (LolEsportsTeam & { result?: { gameWins?: number } }) | undefined;
+        const oppTeam = opp as (LolEsportsTeam & { result?: { gameWins?: number } }) | undefined;
+        const eventFull = event as LolEsportsEvent & {
+          streams?: Array<{ provider?: string; parameter?: string; locale?: string }>;
+          blockName?: string;
+          match?: { id?: string; teams?: LolEsportsTeam[]; strategy?: { type?: string; count?: number } };
+        };
+        const stream = eventFull.streams?.find((s) => s.locale === "fr-FR")
+          ?? eventFull.streams?.find((s) => s.provider === "twitch")
+          ?? eventFull.streams?.[0];
+        const streamUrl = stream
+          ? stream.provider === "twitch"
+            ? `https://twitch.tv/${stream.parameter}`
+            : stream.provider === "youtube"
+              ? `https://youtube.com/watch?v=${stream.parameter}`
+              : null
+          : null;
         return NextResponse.json(
-          { isLive: true, opponent: opp?.code ?? null },
+          {
+            isLive: true,
+            opponent: opp?.code ?? null,
+            opponentName: opp?.name ?? null,
+            kcScore: kcTeam?.result?.gameWins ?? 0,
+            oppScore: oppTeam?.result?.gameWins ?? 0,
+            block: eventFull.blockName ?? null,
+            format: eventFull.match?.strategy ? `BO${eventFull.match.strategy.count}` : null,
+            streamUrl,
+            matchId: eventFull.match?.id ?? null,
+          },
           { headers: cacheHeaders(60) },
         );
       }
