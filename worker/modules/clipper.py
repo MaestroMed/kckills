@@ -624,6 +624,13 @@ def _safe_remove(path: str):
 
 MAX_RETRY_COUNT = 3
 
+# Cap how many kills we attempt per pass so the daemon yields control to
+# other modules (analyzer, og_generator, heartbeat) periodically. With a
+# 300s daemon interval + ~30s/clip, 20 clips = 10 min per pass. The
+# interval timer keeps ticking during the pass, so the next run fires
+# immediately after if there's still a backlog.
+BATCH_SIZE = 20
+
 
 async def run() -> int:
     """Find kills in status='vod_found' OR 'clip_error' (retry_count<3) and clip them.
@@ -655,7 +662,10 @@ async def run() -> int:
     ]
 
     # Fresh first so new arrivals don't starve behind a long retry queue.
-    kills = fresh_kills + retry_kills
+    all_kills = fresh_kills + retry_kills
+
+    # Batch cap — see BATCH_SIZE docstring above.
+    kills = all_kills[:BATCH_SIZE]
 
     if not kills:
         log.info("clipper_no_pending")
@@ -665,6 +675,8 @@ async def run() -> int:
         "clipper_queue",
         fresh=len(fresh_kills),
         retry=len(retry_kills),
+        processing=len(kills),
+        remaining=max(0, len(all_kills) - len(kills)),
     )
 
     processed = 0
