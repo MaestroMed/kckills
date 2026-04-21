@@ -1,11 +1,28 @@
+import type { Metadata } from "next";
 import { getPublishedKills } from "@/lib/supabase/kills";
 import { loadRealData } from "@/lib/real-data";
 import { ClipsGrid, type ClipCard, type InitialFilters } from "./clips-grid";
 
 export const revalidate = 60;
-export const metadata = {
+
+export const metadata: Metadata = {
   title: "Clips — KCKILLS",
-  description: "Tous les clips Karmine Corp. Filtrer par joueur, équipe adverse, type de fight, multi-kills, first bloods.",
+  description:
+    "Tous les clips Karmine Corp. Filtrer par joueur, équipe adverse, type de fight, multi-kills, first bloods. Mise à jour live.",
+  alternates: { canonical: "/clips" },
+  openGraph: {
+    title: "Tous les clips KC — KCKILLS",
+    description:
+      "Catalogue complet des clips Karmine Corp en LEC. Filtrable, classable par score IA.",
+    type: "website",
+    siteName: "KCKILLS",
+    locale: "fr_FR",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Tous les clips KC — KCKILLS",
+    description: "Catalogue complet. Filtre, trie, partage.",
+  },
 };
 
 interface SearchParams {

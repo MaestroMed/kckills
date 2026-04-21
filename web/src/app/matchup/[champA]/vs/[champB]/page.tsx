@@ -6,6 +6,7 @@ import { championIconUrl, championLoadingUrl, championSplashUrl } from "@/lib/co
 import { ClipReel } from "@/components/ClipReel";
 import { PortraitCubeMorph } from "@/components/PortraitCubeMorph";
 import { getClipsFiltered } from "@/lib/supabase/clips";
+import { Breadcrumb } from "@/components/Breadcrumb";
 
 export const revalidate = 600;
 
@@ -120,6 +121,17 @@ export default async function MatchupPage({ params }: Props) {
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
       />
+      {/* Breadcrumb — overlays hero top-left */}
+      <div className="absolute top-6 left-0 right-0 z-30 max-w-7xl mx-auto px-6">
+        <Breadcrumb
+          items={[
+            { label: "Accueil", href: "/" },
+            { label: "Matchups", href: "/clips" },
+            { label: `${a} vs ${b}` },
+          ]}
+        />
+      </div>
+
       {/* ─── HERO — split-screen + cube morph ─── */}
       <section className="relative h-[70vh] min-h-[540px] w-full overflow-hidden bg-[var(--bg-primary)]">
         <Image

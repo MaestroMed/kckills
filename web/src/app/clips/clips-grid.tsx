@@ -6,6 +6,7 @@ import Image from "next/image";
 import { championIconUrl } from "@/lib/constants";
 import { TEAM_LOGOS } from "@/lib/kc-assets";
 import { isDescriptionClean } from "@/lib/scroll/sanitize-description";
+import { Breadcrumb } from "@/components/Breadcrumb";
 
 export interface ClipCard {
   id: string;
@@ -137,6 +138,13 @@ export function ClipsGrid({ initialCards, initialFilters }: { initialCards: Clip
 
   return (
     <div className="space-y-6">
+      <Breadcrumb
+        items={[
+          { label: "Accueil", href: "/" },
+          { label: "Clips" },
+        ]}
+      />
+
       {/* Header */}
       <header className="flex items-end justify-between gap-4 flex-wrap">
         <div>

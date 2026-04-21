@@ -5,7 +5,10 @@ import { createServerSupabase } from "@/lib/supabase/server";
 export async function GET(request: NextRequest) {
   const { searchParams, origin } = new URL(request.url);
   const code = searchParams.get("code");
-  const redirectTo = searchParams.get("redirect") ?? "/";
+  // Accept both ?next= (the new /login flow) and ?redirect= (legacy).
+  // Only allow in-site paths to prevent open-redirect attacks.
+  const rawNext = searchParams.get("next") ?? searchParams.get("redirect") ?? "/";
+  const redirectTo = rawNext.startsWith("/") && !rawNext.startsWith("//") ? rawNext : "/";
 
   if (!code) {
     return NextResponse.redirect(`${origin}${redirectTo}`);

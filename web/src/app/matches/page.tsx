@@ -1,11 +1,26 @@
 import Link from "next/link";
+import type { Metadata } from "next";
 import { loadRealData, getMatchesSorted } from "@/lib/real-data";
 import { getPublishedKills } from "@/lib/supabase/kills";
 import { createAnonSupabase } from "@/lib/supabase/server";
 import { MatchesAccordion } from "./matches-accordion";
 
 export const revalidate = 300;
-export const metadata = { title: "Matchs KC \u2014 KCKILLS" };
+
+export const metadata: Metadata = {
+  title: "Matchs KC — KCKILLS",
+  description:
+    "Tous les matchs Karmine Corp en LEC. Scores, résultats, timeline des kills et clips vidéo par game.",
+  alternates: { canonical: "/matches" },
+  openGraph: {
+    title: "Matchs Karmine Corp — KCKILLS",
+    description:
+      "Historique complet des matchs KC en LEC avec scores, timelines et clips.",
+    type: "website",
+    siteName: "KCKILLS",
+    locale: "fr_FR",
+  },
+};
 
 export default async function MatchesPage() {
   const sb = await createAnonSupabase();

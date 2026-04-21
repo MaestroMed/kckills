@@ -211,8 +211,8 @@ export default async function ChampionPage({ params }: Props) {
               minHighlight: 5,
             }}
             limit={9}
-            ctaHref={`/scroll?axis=killer_player_id&value=`}
-            ctaLabel="Tout voir dans le scroll"
+            ctaHref={`/clips?q=${encodeURIComponent(champ)}&sort=score`}
+            ctaLabel="Tout voir dans /clips"
             emptyState={null}
           />
         )}

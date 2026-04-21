@@ -4,6 +4,7 @@ import type { Metadata } from "next";
 import { getPublishedKills, type PublishedKillRow } from "@/lib/supabase/kills";
 import { championIconUrl } from "@/lib/constants";
 import { isDescriptionClean } from "@/lib/scroll/sanitize-description";
+import { Breadcrumb } from "@/components/Breadcrumb";
 
 /**
  * /records — "Records Absolus" hall-of-fame.
@@ -173,8 +174,18 @@ export default async function RecordsPage() {
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
       />
 
+      {/* Breadcrumb — discreet top-left overlay */}
+      <div className="relative z-20 max-w-7xl mx-auto px-6 pt-6">
+        <Breadcrumb
+          items={[
+            { label: "Accueil", href: "/" },
+            { label: "Records Absolus" },
+          ]}
+        />
+      </div>
+
       {/* ─── HERO ──────────────────────────────────────────────────── */}
-      <section className="relative py-20 px-6 md:py-28 bg-gradient-to-b from-[var(--bg-primary)] via-[var(--bg-surface)] to-[var(--bg-primary)] overflow-hidden">
+      <section className="relative py-16 px-6 md:py-24 bg-gradient-to-b from-[var(--bg-primary)] via-[var(--bg-surface)] to-[var(--bg-primary)] overflow-hidden">
         {/* Subtle gold radial */}
         <div
           className="absolute inset-0 pointer-events-none"

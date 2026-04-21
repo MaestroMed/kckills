@@ -12,8 +12,31 @@ import { championSplashUrl } from "@/lib/constants";
 
 export const metadata: Metadata = {
   title: "Alumni — KCKILLS",
-  description: "Les legendes qui ont porte le maillot KC : Rekkles, xMatty, Cabochard, Targamas, et les autres ancetres.",
+  description:
+    "Les légendes qui ont porté le maillot Karmine Corp : Rekkles, xMatty, Cabochard, Targamas, Yike, Saken, Vetheo et les autres ancêtres.",
   alternates: { canonical: "/alumni" },
+  openGraph: {
+    title: "Alumni KC — Hall of Legends",
+    description:
+      "Les légendes qui ont porté le maillot Karmine Corp.",
+    type: "website",
+    siteName: "KCKILLS",
+    locale: "fr_FR",
+    images: [
+      // Rekkles Jinx penta = the most iconic KC moment pre-LEC.
+      {
+        url: championSplashUrl("Jinx"),
+        width: 1215,
+        height: 717,
+        alt: "Alumni KC",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Alumni KC — Hall of Legends",
+    description: "Les légendes qui ont porté le maillot Karmine Corp.",
+  },
 };
 
 const ROLE_LABEL: Record<string, string> = {
