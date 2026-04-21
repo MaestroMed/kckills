@@ -125,7 +125,7 @@ function CommentItem({
         )}
       </div>
 
-      <p className="mt-1.5 text-sm leading-relaxed">{comment.body}</p>
+      <p className="mt-1.5 text-sm leading-relaxed">{comment.content}</p>
 
       <div className="mt-2 flex items-center gap-3">
         <span className="text-xs text-[var(--text-muted)]">
@@ -178,7 +178,7 @@ function CommentItem({
                   {getTimeAgo(reply.created_at)}
                 </span>
               </div>
-              <p className="mt-0.5 text-sm">{reply.body}</p>
+              <p className="mt-0.5 text-sm">{reply.content}</p>
             </div>
           ))}
         </div>

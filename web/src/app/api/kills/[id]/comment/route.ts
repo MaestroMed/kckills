@@ -4,6 +4,16 @@ import { createServerSupabase } from "@/lib/supabase/server";
 const PROFILE_SELECT = "id, discord_username, discord_avatar_url, badges";
 const COMMENT_SELECT = `*, profile:profiles(${PROFILE_SELECT})`;
 
+/**
+ * GET — return approved comments for a kill, plus the current user's own
+ * pending comments (so they see immediate feedback while the Haiku worker
+ * processes them in the background).
+ *
+ * Two queries are needed because the public RLS policy on `comments` only
+ * exposes `moderation_status='approved'`. The pending slice runs scoped to
+ * `auth.uid() = user_id`, which the "Own comment update" policy already
+ * permits at SELECT time once we attach the user JWT.
+ */
 export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -11,7 +21,9 @@ export async function GET(
   const { id } = await params;
   const supabase = await createServerSupabase();
 
-  const { data, error } = await supabase
+  const { data: { user } } = await supabase.auth.getUser();
+
+  const approvedQ = supabase
     .from("comments")
     .select(COMMENT_SELECT)
     .eq("kill_id", id)
@@ -19,12 +31,36 @@ export async function GET(
     .eq("moderation_status", "approved")
     .order("created_at", { ascending: false });
 
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  const pendingQ = user
+    ? supabase
+        .from("comments")
+        .select(COMMENT_SELECT)
+        .eq("kill_id", id)
+        .eq("is_deleted", false)
+        .eq("moderation_status", "pending")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false })
+    : null;
+
+  const [approvedRes, pendingRes] = await Promise.all([
+    approvedQ,
+    pendingQ ?? Promise.resolve({ data: [], error: null } as { data: unknown[]; error: null }),
+  ]);
+
+  if (approvedRes.error) {
+    return NextResponse.json({ error: approvedRes.error.message }, { status: 500 });
   }
 
-  const topLevel = (data ?? []).filter((c) => !c.parent_id);
-  const replies = (data ?? []).filter((c) => c.parent_id);
+  // Tag pending rows so the client can render a "en modération…" pill.
+  type CommentRow = Record<string, unknown> & { id: string; parent_id: string | null };
+  const pending: CommentRow[] = ((pendingRes.data as CommentRow[] | null) ?? []).map((c) => ({
+    ...c,
+    _pending: true,
+  }));
+  const merged: CommentRow[] = [...pending, ...((approvedRes.data as CommentRow[] | null) ?? [])];
+
+  const topLevel = merged.filter((c) => !c.parent_id);
+  const replies = merged.filter((c) => c.parent_id);
 
   const threaded = topLevel.map((comment) => ({
     ...comment,
@@ -34,6 +70,14 @@ export async function GET(
   return NextResponse.json(threaded);
 }
 
+/**
+ * POST — insert a new comment as `pending`. The Haiku moderator daemon
+ * (worker/modules/moderator.py, polled every 180s) flips it to
+ * `approved` / `flagged` / `rejected`.
+ *
+ * The author still sees their own comment immediately via GET's pending
+ * branch — the rest of the world waits for Haiku.
+ */
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -60,9 +104,6 @@ export async function POST(
     return NextResponse.json({ error: "Commentaire trop long (max 500)" }, { status: 400 });
   }
 
-  // TODO(moderation): route through Claude Haiku before approval per spec §5.8.
-  // Auto-approve until the moderation worker is wired in — otherwise the RLS
-  // policy hides every comment and the feature is invisible.
   const { data, error } = await supabase
     .from("comments")
     .insert({
@@ -70,7 +111,7 @@ export async function POST(
       user_id: user.id,
       parent_id: parentId || null,
       content: text.trim(),
-      moderation_status: "approved",
+      moderation_status: "pending",
     })
     .select(COMMENT_SELECT)
     .single();
@@ -79,5 +120,6 @@ export async function POST(
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  return NextResponse.json(data);
+  // Echo the pending flag so the client knows to badge it.
+  return NextResponse.json({ ...data, _pending: true });
 }

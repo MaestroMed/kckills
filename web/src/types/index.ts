@@ -143,17 +143,23 @@ export interface Comment {
   user_id: string;
   profile?: Profile;
   parent_id: string | null;
-  body: string;
+  /** DB column is `content` (max 500 chars) — see migration 001. */
+  content: string;
   upvotes: number;
   is_edited: boolean;
+  /** Set client-side when GET returns the author's own pending comments. */
+  _pending?: boolean;
   created_at: string;
   replies?: Comment[];
 }
 
 export interface Profile {
   id: string;
-  username: string;
-  avatar_url: string | null;
+  /** Source of truth field is `discord_username` (see profiles table). */
+  username?: string;
+  discord_username?: string;
+  avatar_url?: string | null;
+  discord_avatar_url?: string | null;
   total_ratings: number;
   total_comments: number;
   badges: string[];

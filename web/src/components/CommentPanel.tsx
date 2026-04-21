@@ -4,10 +4,13 @@ import { useState, useEffect, useRef, useCallback } from "react";
 
 interface Comment {
   id: string;
-  body: string;
+  /** Renamed from `body` — DB schema uses `content`. */
+  content: string;
   created_at: string;
   profile?: { username?: string; avatar_url?: string } | null;
   replies?: Comment[];
+  /** Set by the API when the comment is still in Haiku moderation queue. */
+  _pending?: boolean;
 }
 
 interface CommentPanelProps {
@@ -227,6 +230,11 @@ function CommentItem({ comment }: { comment: Comment }) {
         <div className="flex items-center gap-2">
           <span className="text-xs font-bold text-white/80 truncate">{username}</span>
           <span className="text-[10px] text-[var(--text-muted)]">{timeAgo}</span>
+          {comment._pending && (
+            <span className="rounded-full bg-[var(--gold)]/15 border border-[var(--gold)]/30 px-1.5 py-px text-[9px] font-bold uppercase tracking-wider text-[var(--gold)]">
+              modération…
+            </span>
+          )}
           <button
             onClick={handleReport}
             disabled={reported || reporting}
@@ -236,7 +244,7 @@ function CommentItem({ comment }: { comment: Comment }) {
             {reported ? "✓ signalé" : "⚐"}
           </button>
         </div>
-        <p className="text-sm text-white/70 mt-0.5 break-words">{comment.body}</p>
+        <p className={`text-sm mt-0.5 break-words ${comment._pending ? "text-white/40 italic" : "text-white/70"}`}>{comment.content}</p>
 
         {/* Replies */}
         {comment.replies && comment.replies.length > 0 && (
