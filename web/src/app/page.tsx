@@ -18,7 +18,9 @@ import { AnimatedNumber } from "@/components/AnimatedNumber";
 import { MacronEasterEgg } from "@/components/MacronEasterEgg";
 import { HeroClipBackground } from "@/components/HeroClipBackground";
 import { NextMatchOverlay } from "@/components/NextMatchOverlay";
-// ScrollVivantSection import removed — component hidden until polished
+// ScrollVivantSection deleted (2026-04-20) — was a dead grid prototype that
+// never made it to production. The /scroll v2 player handles the live feed
+// and /clips handles the cards-grid use case it was meant to fill.
 
 /** Iconic clips that play in the hero background, one after the other.
  *
@@ -412,9 +414,6 @@ export default async function HomePage() {
           Not endorsed by Riot Games. League of Legends &copy; Riot Games.
         </p>
       </section>
-
-      {/* ScrollVivantSection hidden — needs full polish before re-enabling */}
-      {/* <ScrollVivantSection /> */}
 
       {/* ═══ KILL OF THE WEEK — surface the featured clip first ═════════ */}
       <KillOfTheWeek />

@@ -21,7 +21,7 @@ export default function PlayersPage() {
     <div className="space-y-10">
       <nav className="flex items-center gap-2 text-sm text-[var(--text-muted)]">
         <Link href="/" className="hover:text-[var(--gold)]">Accueil</Link>
-        <span className="text-[var(--gold)]/30">\u25C6</span>
+        <span className="text-[var(--gold)]/30">{"\u25C6"}</span>
         <span>Joueurs</span>
       </nav>
 
