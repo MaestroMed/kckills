@@ -1,20 +1,49 @@
 import Link from "next/link";
 import Image from "next/image";
-import { getPublishedKills, type PublishedKillRow } from "@/lib/supabase/kills";
+import { getPublishedKills, getKillById } from "@/lib/supabase/kills";
+import { createAnonSupabase } from "@/lib/supabase/server";
 import { championIconUrl } from "@/lib/constants";
 import { isDescriptionClean } from "@/lib/scroll/sanitize-description";
 
 /**
- * Kill of the Week — auto-highlights the top-scored kill from the last 7 days.
+ * Kill of the Week — Editorial-curated featured clip if set, otherwise
+ * auto-picks the top-scored kill.
  *
- * Server component (RSC). Falls back to nothing if no kills exist or
- * Supabase is unreachable. Shown on the homepage above the clips showcase.
+ * Priority order:
+ *   1. featured_clips row for today (admin-set in /admin/featured)
+ *   2. Top highlight_score from getPublishedKills
+ *
+ * Server component (RSC). Falls back to nothing if no kills exist.
  */
-export async function KillOfTheWeek() {
-  const kills = await getPublishedKills(1);
-  if (kills.length === 0) return null;
+async function fetchFeaturedToday() {
+  try {
+    const today = new Date().toISOString().slice(0, 10);
+    const sb = await createAnonSupabase();
+    const { data } = await sb
+      .from("featured_clips")
+      .select("kill_id")
+      .eq("feature_date", today)
+      .maybeSingle();
+    if (!data?.kill_id) return null;
+    return await getKillById(data.kill_id);
+  } catch {
+    return null;
+  }
+}
 
-  const kill = kills[0]; // already sorted by highlight_score desc
+export async function KillOfTheWeek() {
+  // Try featured first
+  let kill = await fetchFeaturedToday();
+  let isFeatured = !!kill;
+
+  // Fallback: top highlight score
+  if (!kill) {
+    const kills = await getPublishedKills(1);
+    if (kills.length === 0) return null;
+    kill = kills[0];
+    isFeatured = false;
+  }
+  if (!kill) return null;
   const isKc = kill.tracked_team_involvement === "team_killer";
   const gt = kill.game_time_seconds ?? 0;
   const mm = Math.floor(gt / 60);
@@ -54,7 +83,7 @@ export async function KillOfTheWeek() {
           <div className="flex items-center gap-2 mb-3">
             <span className="h-2 w-2 rounded-full bg-[var(--gold)] animate-pulse" />
             <span className="font-data text-[10px] uppercase tracking-[0.3em] font-bold text-[var(--gold)]">
-              Kill of the week
+              {isFeatured ? "★ Clip vedette du jour" : "Kill of the week"}
             </span>
             {kill.highlight_score != null && (
               <span className="ml-auto font-data text-lg font-black text-[var(--gold)]">
