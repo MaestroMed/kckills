@@ -209,11 +209,37 @@ export function ScrollFeedV2({
   // Pro mode bindings: J/K next/prev, Space, M mute, L like, C comments,
   // S share, ? help overlay, Esc close. See useKeyboardShortcuts for
   // the full table — the overlay component renders the cheatsheet.
+  const [shareToast, setShareToast] = useState<string | null>(null);
+
+  const shareActiveItem = async () => {
+    const active = visibleItems[activeIndex];
+    if (!active || typeof window === "undefined") return;
+    const url = `${window.location.origin}/scroll?kill=${active.id}`;
+    const title = "KCKILLS — clip à voir";
+    try {
+      if (typeof navigator !== "undefined" && typeof navigator.share === "function") {
+        await navigator.share({ title, url });
+        return;
+      }
+    } catch {
+      return; // user cancelled
+    }
+    try {
+      await navigator.clipboard.writeText(url);
+      setShareToast("Lien copié !");
+      window.setTimeout(() => setShareToast(null), 1800);
+    } catch {
+      setShareToast("Copie impossible");
+      window.setTimeout(() => setShareToast(null), 1800);
+    }
+  };
+
   const { showHelp, setShowHelp } = useKeyboardShortcuts({
     onNext: () => jumpTo(activeIndex + 1),
     onPrev: () => jumpTo(activeIndex - 1),
     onToggleMute: toggleMute,
-    // L / C / S not yet wired — those depend on per-item handlers that
+    onShare: shareActiveItem,
+    // L / C not yet wired — those depend on per-item handlers that
     // live in the right sidebar (Phase 7 will hoist them up to here).
     // Esc closes the help overlay (handled inside the hook).
   });
@@ -456,6 +482,14 @@ export function ScrollFeedV2({
 
       {/* Keyboard help overlay — toggled by ? on desktop */}
       <KeyboardHelpOverlay open={showHelp} onClose={() => setShowHelp(false)} />
+
+      {/* Share toast — fires from S keyboard shortcut when clipboard fallback
+          kicks in (desktop, no Web Share API). Top-centered, auto-dismisses. */}
+      {shareToast && (
+        <div className="pointer-events-none fixed top-20 left-1/2 -translate-x-1/2 z-[200] rounded-full bg-black/85 backdrop-blur-sm px-4 py-2 text-xs font-bold text-[var(--gold)] shadow-lg">
+          {shareToast}
+        </div>
+      )}
 
       {/* Discreet "?" hint pill — only on desktop, hidden on mobile.
           Lets the user discover the keyboard shortcuts without poking
