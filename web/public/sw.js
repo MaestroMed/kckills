@@ -1,6 +1,11 @@
 // LoLTok Service Worker — PWA + Push Notifications
+//
+// Bumped to v3 (2026-04-20) when sw.js dropped the broken /icon-192.png
+// reference. A version bump is mandatory because old installations cling
+// to the previous CACHE_NAME until activate fires; without it, returning
+// users hit the stale 404 from cache for days.
 
-const CACHE_NAME = "loltok-v2";
+const CACHE_NAME = "loltok-v3";
 const PRECACHE = ["/scroll", "/", "/manifest.json", "/offline.html"];
 
 // Install: precache shell
@@ -71,8 +76,8 @@ self.addEventListener("push", (event) => {
   const title = data.title || "LoLTok";
   const options = {
     body: data.body || "Nouveau kill KC !",
-    icon: "/icon-192.png",
-    badge: "/icon-192.png",
+    icon: "/icons/icon-192x192.png",
+    badge: "/icons/icon-192x192.png",
     data: { url: data.url || "/scroll" },
     actions: [
       { action: "view", title: "Voir le clip" },

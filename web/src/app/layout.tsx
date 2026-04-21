@@ -54,6 +54,19 @@ export const metadata: Metadata = {
       "max-snippet": -1,
     },
   },
+  // Explicit icons block — Next.js will only auto-discover /favicon.ico,
+  // but browsers also probe /icon.svg and the PNG sizes; declaring them
+  // upfront kills the 404 chain in DevTools and lets the SVG (vector,
+  // crisper at any DPI) win on modern targets.
+  icons: {
+    icon: [
+      { url: "/favicon.ico", sizes: "192x192", type: "image/png" },
+      { url: "/icon.svg", type: "image/svg+xml" },
+      { url: "/icons/icon-192x192.png", sizes: "192x192", type: "image/png" },
+      { url: "/icons/icon-512x512.png", sizes: "512x512", type: "image/png" },
+    ],
+    apple: [{ url: "/icons/icon-192x192.png", sizes: "192x192", type: "image/png" }],
+  },
 };
 
 export const viewport: Viewport = {

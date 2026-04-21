@@ -14,9 +14,9 @@
       "opponent": {
         "name": "Fnatic",
         "code": "FNC",
-        "image": "http://static.lolesports.com/teams/1631819669150_fnc-2021-worlds.png"
+        "image": "https://static.lolesports.com/teams/1631819669150_fnc-2021-worlds.png"
       },
-      "kc_image": "http://static.lolesports.com/teams/1704714951336_KC.png",
+      "kc_image": "https://static.lolesports.com/teams/1704714951336_KC.png",
       "kc_won": true,
       "kc_score": 1,
       "opp_score": 0,
@@ -199,9 +199,9 @@
       "opponent": {
         "name": "Shifters",
         "code": "SHFT",
-        "image": "http://static.lolesports.com/teams/1765897071435_600px-Shifters_allmode.png"
+        "image": "https://static.lolesports.com/teams/1765897071435_600px-Shifters_allmode.png"
       },
-      "kc_image": "http://static.lolesports.com/teams/1704714951336_KC.png",
+      "kc_image": "https://static.lolesports.com/teams/1704714951336_KC.png",
       "kc_won": true,
       "kc_score": 1,
       "opp_score": 0,
@@ -384,9 +384,9 @@
       "opponent": {
         "name": "GIANTX",
         "code": "GX",
-        "image": "http://static.lolesports.com/teams/1765897105091_GIANTX-logotype-white.png"
+        "image": "https://static.lolesports.com/teams/1765897105091_GIANTX-logotype-white.png"
       },
-      "kc_image": "http://static.lolesports.com/teams/1704714951336_KC.png",
+      "kc_image": "https://static.lolesports.com/teams/1704714951336_KC.png",
       "kc_won": true,
       "kc_score": 1,
       "opp_score": 0,
@@ -569,9 +569,9 @@
       "opponent": {
         "name": "Team Heretics",
         "code": "TH",
-        "image": "http://static.lolesports.com/teams/1672933861879_Heretics-Full-Color.png"
+        "image": "https://static.lolesports.com/teams/1672933861879_Heretics-Full-Color.png"
       },
-      "kc_image": "http://static.lolesports.com/teams/1704714951336_KC.png",
+      "kc_image": "https://static.lolesports.com/teams/1704714951336_KC.png",
       "kc_won": false,
       "kc_score": 0,
       "opp_score": 1,
@@ -754,9 +754,9 @@
       "opponent": {
         "name": "GIANTX",
         "code": "GX",
-        "image": "http://static.lolesports.com/teams/1765897105091_GIANTX-logotype-white.png"
+        "image": "https://static.lolesports.com/teams/1765897105091_GIANTX-logotype-white.png"
       },
-      "kc_image": "http://static.lolesports.com/teams/1704714951336_KC.png",
+      "kc_image": "https://static.lolesports.com/teams/1704714951336_KC.png",
       "kc_won": true,
       "kc_score": 2,
       "opp_score": 0,
@@ -1115,9 +1115,9 @@
       "opponent": {
         "name": "G2 Esports",
         "code": "G2",
-        "image": "http://static.lolesports.com/teams/G2-FullonDark.png"
+        "image": "https://static.lolesports.com/teams/G2-FullonDark.png"
       },
-      "kc_image": "http://static.lolesports.com/teams/1704714951336_KC.png",
+      "kc_image": "https://static.lolesports.com/teams/1704714951336_KC.png",
       "kc_won": false,
       "kc_score": 0,
       "opp_score": 2,
@@ -1476,9 +1476,9 @@
       "opponent": {
         "name": "Team Vitality",
         "code": "VIT",
-        "image": "http://static.lolesports.com/teams/1675865863968_Vitality_FullColor.png"
+        "image": "https://static.lolesports.com/teams/1675865863968_Vitality_FullColor.png"
       },
-      "kc_image": "http://static.lolesports.com/teams/1704714951336_KC.png",
+      "kc_image": "https://static.lolesports.com/teams/1704714951336_KC.png",
       "kc_won": true,
       "kc_score": 2,
       "opp_score": 1,
@@ -1666,9 +1666,9 @@
       "opponent": {
         "name": "GIANTX",
         "code": "GX",
-        "image": "http://static.lolesports.com/teams/1765897105091_GIANTX-logotype-white.png"
+        "image": "https://static.lolesports.com/teams/1765897105091_GIANTX-logotype-white.png"
       },
-      "kc_image": "http://static.lolesports.com/teams/1704714951336_KC.png",
+      "kc_image": "https://static.lolesports.com/teams/1704714951336_KC.png",
       "kc_won": true,
       "kc_score": 3,
       "opp_score": 0,
@@ -2017,9 +2017,9 @@
       "opponent": {
         "name": "Movistar KOI",
         "code": "MKOI",
-        "image": "http://static.lolesports.com/teams/1734012609283_MKOI_FullColor_Blue.png"
+        "image": "https://static.lolesports.com/teams/1734012609283_MKOI_FullColor_Blue.png"
       },
-      "kc_image": "http://static.lolesports.com/teams/1704714951336_KC.png",
+      "kc_image": "https://static.lolesports.com/teams/1704714951336_KC.png",
       "kc_won": true,
       "kc_score": 3,
       "opp_score": 2,
@@ -2378,9 +2378,9 @@
       "opponent": {
         "name": "G2 Esports",
         "code": "G2",
-        "image": "http://static.lolesports.com/teams/G2-FullonDark.png"
+        "image": "https://static.lolesports.com/teams/G2-FullonDark.png"
       },
-      "kc_image": "http://static.lolesports.com/teams/1704714951336_KC.png",
+      "kc_image": "https://static.lolesports.com/teams/1704714951336_KC.png",
       "kc_won": false,
       "kc_score": 2,
       "opp_score": 3,
@@ -2749,9 +2749,9 @@
       "opponent": {
         "name": "Team Vitality",
         "code": "VIT",
-        "image": "http://static.lolesports.com/teams/1675865863968_Vitality_FullColor.png"
+        "image": "https://static.lolesports.com/teams/1675865863968_Vitality_FullColor.png"
       },
-      "kc_image": "http://static.lolesports.com/teams/1704714951336_KC.png",
+      "kc_image": "https://static.lolesports.com/teams/1704714951336_KC.png",
       "kc_won": true,
       "kc_score": 2,
       "opp_score": 1,
@@ -3100,9 +3100,9 @@
       "opponent": {
         "name": "Team Heretics",
         "code": "TH",
-        "image": "http://static.lolesports.com/teams/1672933861879_Heretics-Full-Color.png"
+        "image": "https://static.lolesports.com/teams/1672933861879_Heretics-Full-Color.png"
       },
-      "kc_image": "http://static.lolesports.com/teams/1704714951336_KC.png",
+      "kc_image": "https://static.lolesports.com/teams/1704714951336_KC.png",
       "kc_won": true,
       "kc_score": 3,
       "opp_score": 1,
@@ -3461,9 +3461,9 @@
       "opponent": {
         "name": "Fnatic",
         "code": "FNC",
-        "image": "http://static.lolesports.com/teams/1631819669150_fnc-2021-worlds.png"
+        "image": "https://static.lolesports.com/teams/1631819669150_fnc-2021-worlds.png"
       },
-      "kc_image": "http://static.lolesports.com/teams/1704714951336_KC.png",
+      "kc_image": "https://static.lolesports.com/teams/1704714951336_KC.png",
       "kc_won": true,
       "kc_score": 3,
       "opp_score": 0,
@@ -3822,9 +3822,9 @@
       "opponent": {
         "name": "Movistar KOI",
         "code": "MKOI",
-        "image": "http://static.lolesports.com/teams/1734012609283_MKOI_FullColor_Blue.png"
+        "image": "https://static.lolesports.com/teams/1734012609283_MKOI_FullColor_Blue.png"
       },
-      "kc_image": "http://static.lolesports.com/teams/1704714951336_KC.png",
+      "kc_image": "https://static.lolesports.com/teams/1704714951336_KC.png",
       "kc_won": false,
       "kc_score": 2,
       "opp_score": 3,
@@ -4183,9 +4183,9 @@
       "opponent": {
         "name": "Natus Vincere",
         "code": "NAVI",
-        "image": "http://static.lolesports.com/teams/1752746833620_NAVI_FullColor.png"
+        "image": "https://static.lolesports.com/teams/1752746833620_NAVI_FullColor.png"
       },
-      "kc_image": "http://static.lolesports.com/teams/1704714951336_KC.png",
+      "kc_image": "https://static.lolesports.com/teams/1704714951336_KC.png",
       "kc_won": true,
       "kc_score": 2,
       "opp_score": 0,
@@ -4544,9 +4544,9 @@
       "opponent": {
         "name": "GIANTX",
         "code": "GX",
-        "image": "http://static.lolesports.com/teams/1765897105091_GIANTX-logotype-white.png"
+        "image": "https://static.lolesports.com/teams/1765897105091_GIANTX-logotype-white.png"
       },
-      "kc_image": "http://static.lolesports.com/teams/1704714951336_KC.png",
+      "kc_image": "https://static.lolesports.com/teams/1704714951336_KC.png",
       "kc_won": true,
       "kc_score": 2,
       "opp_score": 1,
@@ -4915,9 +4915,9 @@
       "opponent": {
         "name": "Movistar KOI",
         "code": "MKOI",
-        "image": "http://static.lolesports.com/teams/1734012609283_MKOI_FullColor_Blue.png"
+        "image": "https://static.lolesports.com/teams/1734012609283_MKOI_FullColor_Blue.png"
       },
-      "kc_image": "http://static.lolesports.com/teams/1704714951336_KC.png",
+      "kc_image": "https://static.lolesports.com/teams/1704714951336_KC.png",
       "kc_won": true,
       "kc_score": 2,
       "opp_score": 1,
@@ -5276,9 +5276,9 @@
       "opponent": {
         "name": "Team Vitality",
         "code": "VIT",
-        "image": "http://static.lolesports.com/teams/1675865863968_Vitality_FullColor.png"
+        "image": "https://static.lolesports.com/teams/1675865863968_Vitality_FullColor.png"
       },
-      "kc_image": "http://static.lolesports.com/teams/1704714951336_KC.png",
+      "kc_image": "https://static.lolesports.com/teams/1704714951336_KC.png",
       "kc_won": false,
       "kc_score": 1,
       "opp_score": 2,
@@ -5637,9 +5637,9 @@
       "opponent": {
         "name": "G2 Esports",
         "code": "G2",
-        "image": "http://static.lolesports.com/teams/G2-FullonDark.png"
+        "image": "https://static.lolesports.com/teams/G2-FullonDark.png"
       },
-      "kc_image": "http://static.lolesports.com/teams/1704714951336_KC.png",
+      "kc_image": "https://static.lolesports.com/teams/1704714951336_KC.png",
       "kc_won": false,
       "kc_score": 1,
       "opp_score": 3,
@@ -5983,9 +5983,9 @@
       "opponent": {
         "name": "Team Vitality",
         "code": "VIT",
-        "image": "http://static.lolesports.com/teams/1675865863968_Vitality_FullColor.png"
+        "image": "https://static.lolesports.com/teams/1675865863968_Vitality_FullColor.png"
       },
-      "kc_image": "http://static.lolesports.com/teams/1704714951336_KC.png",
+      "kc_image": "https://static.lolesports.com/teams/1704714951336_KC.png",
       "kc_won": true,
       "kc_score": 3,
       "opp_score": 1,
@@ -6334,9 +6334,9 @@
       "opponent": {
         "name": "Fnatic",
         "code": "FNC",
-        "image": "http://static.lolesports.com/teams/1631819669150_fnc-2021-worlds.png"
+        "image": "https://static.lolesports.com/teams/1631819669150_fnc-2021-worlds.png"
       },
-      "kc_image": "http://static.lolesports.com/teams/1704714951336_KC.png",
+      "kc_image": "https://static.lolesports.com/teams/1704714951336_KC.png",
       "kc_won": false,
       "kc_score": 1,
       "opp_score": 3,
@@ -6529,9 +6529,9 @@
       "opponent": {
         "name": "Karmine Corp Blue",
         "code": "KCB",
-        "image": "http://static.lolesports.com/teams/1765897112519_WHITE.png"
+        "image": "https://static.lolesports.com/teams/1765897112519_WHITE.png"
       },
-      "kc_image": "http://static.lolesports.com/teams/1704714951336_KC.png",
+      "kc_image": "https://static.lolesports.com/teams/1704714951336_KC.png",
       "kc_won": true,
       "kc_score": 1,
       "opp_score": 0,
@@ -6709,9 +6709,9 @@
       "opponent": {
         "name": "Movistar KOI",
         "code": "MKOI",
-        "image": "http://static.lolesports.com/teams/1734012609283_MKOI_FullColor_Blue.png"
+        "image": "https://static.lolesports.com/teams/1734012609283_MKOI_FullColor_Blue.png"
       },
-      "kc_image": "http://static.lolesports.com/teams/1704714951336_KC.png",
+      "kc_image": "https://static.lolesports.com/teams/1704714951336_KC.png",
       "kc_won": false,
       "kc_score": 0,
       "opp_score": 1,
@@ -6894,9 +6894,9 @@
       "opponent": {
         "name": "Los Ratones",
         "code": "LR",
-        "image": "http://static.lolesports.com/teams/1736206905390_LR1.png"
+        "image": "https://static.lolesports.com/teams/1736206905390_LR1.png"
       },
-      "kc_image": "http://static.lolesports.com/teams/1704714951336_KC.png",
+      "kc_image": "https://static.lolesports.com/teams/1704714951336_KC.png",
       "kc_won": true,
       "kc_score": 1,
       "opp_score": 0,
@@ -7079,9 +7079,9 @@
       "opponent": {
         "name": "SK Gaming",
         "code": "SK",
-        "image": "http://static.lolesports.com/teams/1643979272144_SK_Monochrome.png"
+        "image": "https://static.lolesports.com/teams/1643979272144_SK_Monochrome.png"
       },
-      "kc_image": "http://static.lolesports.com/teams/1704714951336_KC.png",
+      "kc_image": "https://static.lolesports.com/teams/1704714951336_KC.png",
       "kc_won": true,
       "kc_score": 1,
       "opp_score": 0,
@@ -7264,9 +7264,9 @@
       "opponent": {
         "name": "G2 Esports",
         "code": "G2",
-        "image": "http://static.lolesports.com/teams/G2-FullonDark.png"
+        "image": "https://static.lolesports.com/teams/G2-FullonDark.png"
       },
-      "kc_image": "http://static.lolesports.com/teams/1704714951336_KC.png",
+      "kc_image": "https://static.lolesports.com/teams/1704714951336_KC.png",
       "kc_won": true,
       "kc_score": 1,
       "opp_score": 0,
@@ -7449,9 +7449,9 @@
       "opponent": {
         "name": "Natus Vincere",
         "code": "NAVI",
-        "image": "http://static.lolesports.com/teams/1752746833620_NAVI_FullColor.png"
+        "image": "https://static.lolesports.com/teams/1752746833620_NAVI_FullColor.png"
       },
-      "kc_image": "http://static.lolesports.com/teams/1704714951336_KC.png",
+      "kc_image": "https://static.lolesports.com/teams/1704714951336_KC.png",
       "kc_won": true,
       "kc_score": 1,
       "opp_score": 0,
@@ -7634,9 +7634,9 @@
       "opponent": {
         "name": "Team Vitality",
         "code": "VIT",
-        "image": "http://static.lolesports.com/teams/1675865863968_Vitality_FullColor.png"
+        "image": "https://static.lolesports.com/teams/1675865863968_Vitality_FullColor.png"
       },
-      "kc_image": "http://static.lolesports.com/teams/1704714951336_KC.png",
+      "kc_image": "https://static.lolesports.com/teams/1704714951336_KC.png",
       "kc_won": false,
       "kc_score": 0,
       "opp_score": 1,
@@ -7819,9 +7819,9 @@
       "opponent": {
         "name": "Team Heretics",
         "code": "TH",
-        "image": "http://static.lolesports.com/teams/1672933861879_Heretics-Full-Color.png"
+        "image": "https://static.lolesports.com/teams/1672933861879_Heretics-Full-Color.png"
       },
-      "kc_image": "http://static.lolesports.com/teams/1704714951336_KC.png",
+      "kc_image": "https://static.lolesports.com/teams/1704714951336_KC.png",
       "kc_won": true,
       "kc_score": 1,
       "opp_score": 0,
@@ -7999,9 +7999,9 @@
       "opponent": {
         "name": "Team Vitality",
         "code": "VIT",
-        "image": "http://static.lolesports.com/teams/1675865863968_Vitality_FullColor.png"
+        "image": "https://static.lolesports.com/teams/1675865863968_Vitality_FullColor.png"
       },
-      "kc_image": "http://static.lolesports.com/teams/1704714951336_KC.png",
+      "kc_image": "https://static.lolesports.com/teams/1704714951336_KC.png",
       "kc_won": true,
       "kc_score": 1,
       "opp_score": 0,
@@ -8164,9 +8164,9 @@
       "opponent": {
         "name": "Fnatic",
         "code": "FNC",
-        "image": "http://static.lolesports.com/teams/1631819669150_fnc-2021-worlds.png"
+        "image": "https://static.lolesports.com/teams/1631819669150_fnc-2021-worlds.png"
       },
-      "kc_image": "http://static.lolesports.com/teams/1704714951336_KC.png",
+      "kc_image": "https://static.lolesports.com/teams/1704714951336_KC.png",
       "kc_won": false,
       "kc_score": 0,
       "opp_score": 1,
@@ -8344,9 +8344,9 @@
       "opponent": {
         "name": "Shifters",
         "code": "SHFT",
-        "image": "http://static.lolesports.com/teams/1765897071435_600px-Shifters_allmode.png"
+        "image": "https://static.lolesports.com/teams/1765897071435_600px-Shifters_allmode.png"
       },
-      "kc_image": "http://static.lolesports.com/teams/1704714951336_KC.png",
+      "kc_image": "https://static.lolesports.com/teams/1704714951336_KC.png",
       "kc_won": false,
       "kc_score": 0,
       "opp_score": 1,
@@ -8524,9 +8524,9 @@
       "opponent": {
         "name": "Team Vitality",
         "code": "VIT",
-        "image": "http://static.lolesports.com/teams/1675865863968_Vitality_FullColor.png"
+        "image": "https://static.lolesports.com/teams/1675865863968_Vitality_FullColor.png"
       },
-      "kc_image": "http://static.lolesports.com/teams/1704714951336_KC.png",
+      "kc_image": "https://static.lolesports.com/teams/1704714951336_KC.png",
       "kc_won": true,
       "kc_score": 2,
       "opp_score": 0,
@@ -8865,9 +8865,9 @@
       "opponent": {
         "name": "Movistar KOI",
         "code": "MKOI",
-        "image": "http://static.lolesports.com/teams/1734012609283_MKOI_FullColor_Blue.png"
+        "image": "https://static.lolesports.com/teams/1734012609283_MKOI_FullColor_Blue.png"
       },
-      "kc_image": "http://static.lolesports.com/teams/1704714951336_KC.png",
+      "kc_image": "https://static.lolesports.com/teams/1704714951336_KC.png",
       "kc_won": true,
       "kc_score": 2,
       "opp_score": 0,
@@ -9206,9 +9206,9 @@
       "opponent": {
         "name": "G2 Esports",
         "code": "G2",
-        "image": "http://static.lolesports.com/teams/G2-FullonDark.png"
+        "image": "https://static.lolesports.com/teams/G2-FullonDark.png"
       },
-      "kc_image": "http://static.lolesports.com/teams/1704714951336_KC.png",
+      "kc_image": "https://static.lolesports.com/teams/1704714951336_KC.png",
       "kc_won": false,
       "kc_score": 1,
       "opp_score": 3,
@@ -9547,9 +9547,9 @@
       "opponent": {
         "name": "Fnatic",
         "code": "FNC",
-        "image": "http://static.lolesports.com/teams/1631819669150_fnc-2021-worlds.png"
+        "image": "https://static.lolesports.com/teams/1631819669150_fnc-2021-worlds.png"
       },
-      "kc_image": "http://static.lolesports.com/teams/1704714951336_KC.png",
+      "kc_image": "https://static.lolesports.com/teams/1704714951336_KC.png",
       "kc_won": true,
       "kc_score": 3,
       "opp_score": 2,
@@ -9888,9 +9888,9 @@
       "opponent": {
         "name": "G2 Esports",
         "code": "G2",
-        "image": "http://static.lolesports.com/teams/G2-FullonDark.png"
+        "image": "https://static.lolesports.com/teams/G2-FullonDark.png"
       },
-      "kc_image": "http://static.lolesports.com/teams/1704714951336_KC.png",
+      "kc_image": "https://static.lolesports.com/teams/1704714951336_KC.png",
       "kc_won": true,
       "kc_score": 3,
       "opp_score": 0,
@@ -10224,9 +10224,9 @@
       "opponent": {
         "name": "Movistar KOI",
         "code": "MKOI",
-        "image": "http://static.lolesports.com/teams/1734012609283_MKOI_FullColor_Blue.png"
+        "image": "https://static.lolesports.com/teams/1734012609283_MKOI_FullColor_Blue.png"
       },
-      "kc_image": "http://static.lolesports.com/teams/1704714951336_KC.png",
+      "kc_image": "https://static.lolesports.com/teams/1704714951336_KC.png",
       "kc_won": true,
       "kc_score": 2,
       "opp_score": 1,
@@ -10585,9 +10585,9 @@
       "opponent": {
         "name": "Shifters",
         "code": "SHFT",
-        "image": "http://static.lolesports.com/teams/1765897071435_600px-Shifters_allmode.png"
+        "image": "https://static.lolesports.com/teams/1765897071435_600px-Shifters_allmode.png"
       },
-      "kc_image": "http://static.lolesports.com/teams/1704714951336_KC.png",
+      "kc_image": "https://static.lolesports.com/teams/1704714951336_KC.png",
       "kc_won": true,
       "kc_score": 2,
       "opp_score": 0,
@@ -10936,9 +10936,9 @@
       "opponent": {
         "name": "Fnatic",
         "code": "FNC",
-        "image": "http://static.lolesports.com/teams/1631819669150_fnc-2021-worlds.png"
+        "image": "https://static.lolesports.com/teams/1631819669150_fnc-2021-worlds.png"
       },
-      "kc_image": "http://static.lolesports.com/teams/1704714951336_KC.png",
+      "kc_image": "https://static.lolesports.com/teams/1704714951336_KC.png",
       "kc_won": false,
       "kc_score": 1,
       "opp_score": 2,
@@ -11297,9 +11297,9 @@
       "opponent": {
         "name": "SK Gaming",
         "code": "SK",
-        "image": "http://static.lolesports.com/teams/1643979272144_SK_Monochrome.png"
+        "image": "https://static.lolesports.com/teams/1643979272144_SK_Monochrome.png"
       },
-      "kc_image": "http://static.lolesports.com/teams/1704714951336_KC.png",
+      "kc_image": "https://static.lolesports.com/teams/1704714951336_KC.png",
       "kc_won": true,
       "kc_score": 2,
       "opp_score": 0,
@@ -11487,9 +11487,9 @@
       "opponent": {
         "name": "Team Heretics",
         "code": "TH",
-        "image": "http://static.lolesports.com/teams/1672933861879_Heretics-Full-Color.png"
+        "image": "https://static.lolesports.com/teams/1672933861879_Heretics-Full-Color.png"
       },
-      "kc_image": "http://static.lolesports.com/teams/1704714951336_KC.png",
+      "kc_image": "https://static.lolesports.com/teams/1704714951336_KC.png",
       "kc_won": true,
       "kc_score": 2,
       "opp_score": 1,
@@ -11858,9 +11858,9 @@
       "opponent": {
         "name": "GIANTX",
         "code": "GX",
-        "image": "http://static.lolesports.com/teams/1765897105091_GIANTX-logotype-white.png"
+        "image": "https://static.lolesports.com/teams/1765897105091_GIANTX-logotype-white.png"
       },
-      "kc_image": "http://static.lolesports.com/teams/1704714951336_KC.png",
+      "kc_image": "https://static.lolesports.com/teams/1704714951336_KC.png",
       "kc_won": true,
       "kc_score": 2,
       "opp_score": 1,
@@ -12229,9 +12229,9 @@
       "opponent": {
         "name": "Rogue",
         "code": "RGE",
-        "image": "http://static.lolesports.com/teams/1705054928404_RGE.png"
+        "image": "https://static.lolesports.com/teams/1705054928404_RGE.png"
       },
-      "kc_image": "http://static.lolesports.com/teams/1704714951336_KC.png",
+      "kc_image": "https://static.lolesports.com/teams/1704714951336_KC.png",
       "kc_won": true,
       "kc_score": 2,
       "opp_score": 0,
@@ -12585,9 +12585,9 @@
       "opponent": {
         "name": "Team Vitality",
         "code": "VIT",
-        "image": "http://static.lolesports.com/teams/1675865863968_Vitality_FullColor.png"
+        "image": "https://static.lolesports.com/teams/1675865863968_Vitality_FullColor.png"
       },
-      "kc_image": "http://static.lolesports.com/teams/1704714951336_KC.png",
+      "kc_image": "https://static.lolesports.com/teams/1704714951336_KC.png",
       "kc_won": true,
       "kc_score": 2,
       "opp_score": 1,
@@ -12770,9 +12770,9 @@
       "opponent": {
         "name": "G2 Esports",
         "code": "G2",
-        "image": "http://static.lolesports.com/teams/G2-FullonDark.png"
+        "image": "https://static.lolesports.com/teams/G2-FullonDark.png"
       },
-      "kc_image": "http://static.lolesports.com/teams/1704714951336_KC.png",
+      "kc_image": "https://static.lolesports.com/teams/1704714951336_KC.png",
       "kc_won": true,
       "kc_score": 2,
       "opp_score": 1,
@@ -13131,9 +13131,9 @@
       "opponent": {
         "name": "Movistar KOI",
         "code": "MKOI",
-        "image": "http://static.lolesports.com/teams/1734012609283_MKOI_FullColor_Blue.png"
+        "image": "https://static.lolesports.com/teams/1734012609283_MKOI_FullColor_Blue.png"
       },
-      "kc_image": "http://static.lolesports.com/teams/1704714951336_KC.png",
+      "kc_image": "https://static.lolesports.com/teams/1704714951336_KC.png",
       "kc_won": false,
       "kc_score": 2,
       "opp_score": 3,
@@ -13492,9 +13492,9 @@
       "opponent": {
         "name": "Team Heretics",
         "code": "TH",
-        "image": "http://static.lolesports.com/teams/1672933861879_Heretics-Full-Color.png"
+        "image": "https://static.lolesports.com/teams/1672933861879_Heretics-Full-Color.png"
       },
-      "kc_image": "http://static.lolesports.com/teams/1704714951336_KC.png",
+      "kc_image": "https://static.lolesports.com/teams/1704714951336_KC.png",
       "kc_won": false,
       "kc_score": 0,
       "opp_score": 1,
@@ -13642,9 +13642,9 @@
       "opponent": {
         "name": "Shifters",
         "code": "SHFT",
-        "image": "http://static.lolesports.com/teams/1765897071435_600px-Shifters_allmode.png"
+        "image": "https://static.lolesports.com/teams/1765897071435_600px-Shifters_allmode.png"
       },
-      "kc_image": "http://static.lolesports.com/teams/1704714951336_KC.png",
+      "kc_image": "https://static.lolesports.com/teams/1704714951336_KC.png",
       "kc_won": false,
       "kc_score": 0,
       "opp_score": 1,
@@ -13792,9 +13792,9 @@
       "opponent": {
         "name": "G2 Esports",
         "code": "G2",
-        "image": "http://static.lolesports.com/teams/G2-FullonDark.png"
+        "image": "https://static.lolesports.com/teams/G2-FullonDark.png"
       },
-      "kc_image": "http://static.lolesports.com/teams/1704714951336_KC.png",
+      "kc_image": "https://static.lolesports.com/teams/1704714951336_KC.png",
       "kc_won": false,
       "kc_score": 0,
       "opp_score": 1,
@@ -13942,9 +13942,9 @@
       "opponent": {
         "name": "Team Vitality",
         "code": "VIT",
-        "image": "http://static.lolesports.com/teams/1675865863968_Vitality_FullColor.png"
+        "image": "https://static.lolesports.com/teams/1675865863968_Vitality_FullColor.png"
       },
-      "kc_image": "http://static.lolesports.com/teams/1704714951336_KC.png",
+      "kc_image": "https://static.lolesports.com/teams/1704714951336_KC.png",
       "kc_won": true,
       "kc_score": 1,
       "opp_score": 0,
@@ -14092,9 +14092,9 @@
       "opponent": {
         "name": "SK Gaming",
         "code": "SK",
-        "image": "http://static.lolesports.com/teams/1643979272144_SK_Monochrome.png"
+        "image": "https://static.lolesports.com/teams/1643979272144_SK_Monochrome.png"
       },
-      "kc_image": "http://static.lolesports.com/teams/1704714951336_KC.png",
+      "kc_image": "https://static.lolesports.com/teams/1704714951336_KC.png",
       "kc_won": false,
       "kc_score": 0,
       "opp_score": 1,
@@ -14242,9 +14242,9 @@
       "opponent": {
         "name": "GIANTX",
         "code": "GX",
-        "image": "http://static.lolesports.com/teams/1765897105091_GIANTX-logotype-white.png"
+        "image": "https://static.lolesports.com/teams/1765897105091_GIANTX-logotype-white.png"
       },
-      "kc_image": "http://static.lolesports.com/teams/1704714951336_KC.png",
+      "kc_image": "https://static.lolesports.com/teams/1704714951336_KC.png",
       "kc_won": true,
       "kc_score": 1,
       "opp_score": 0,
@@ -14392,9 +14392,9 @@
       "opponent": {
         "name": "G2 Esports",
         "code": "G2",
-        "image": "http://static.lolesports.com/teams/G2-FullonDark.png"
+        "image": "https://static.lolesports.com/teams/G2-FullonDark.png"
       },
-      "kc_image": "http://static.lolesports.com/teams/1704714951336_KC.png",
+      "kc_image": "https://static.lolesports.com/teams/1704714951336_KC.png",
       "kc_won": false,
       "kc_score": 0,
       "opp_score": 2,
@@ -14542,9 +14542,9 @@
       "opponent": {
         "name": "Movistar KOI",
         "code": "MKOI",
-        "image": "http://static.lolesports.com/teams/1734012609283_MKOI_FullColor_Blue.png"
+        "image": "https://static.lolesports.com/teams/1734012609283_MKOI_FullColor_Blue.png"
       },
-      "kc_image": "http://static.lolesports.com/teams/1704714951336_KC.png",
+      "kc_image": "https://static.lolesports.com/teams/1704714951336_KC.png",
       "kc_won": true,
       "kc_score": 2,
       "opp_score": 0,
@@ -14692,9 +14692,9 @@
       "opponent": {
         "name": "SK Gaming",
         "code": "SK",
-        "image": "http://static.lolesports.com/teams/1643979272144_SK_Monochrome.png"
+        "image": "https://static.lolesports.com/teams/1643979272144_SK_Monochrome.png"
       },
-      "kc_image": "http://static.lolesports.com/teams/1704714951336_KC.png",
+      "kc_image": "https://static.lolesports.com/teams/1704714951336_KC.png",
       "kc_won": true,
       "kc_score": 2,
       "opp_score": 1,
@@ -14842,9 +14842,9 @@
       "opponent": {
         "name": "Shifters",
         "code": "SHFT",
-        "image": "http://static.lolesports.com/teams/1765897071435_600px-Shifters_allmode.png"
+        "image": "https://static.lolesports.com/teams/1765897071435_600px-Shifters_allmode.png"
       },
-      "kc_image": "http://static.lolesports.com/teams/1704714951336_KC.png",
+      "kc_image": "https://static.lolesports.com/teams/1704714951336_KC.png",
       "kc_won": false,
       "kc_score": 2,
       "opp_score": 3,
@@ -15123,9 +15123,9 @@
       "opponent": {
         "name": "G2 Esports",
         "code": "G2",
-        "image": "http://static.lolesports.com/teams/G2-FullonDark.png"
+        "image": "https://static.lolesports.com/teams/G2-FullonDark.png"
       },
-      "kc_image": "http://static.lolesports.com/teams/1704714951336_KC.png",
+      "kc_image": "https://static.lolesports.com/teams/1704714951336_KC.png",
       "kc_won": true,
       "kc_score": 1,
       "opp_score": 0,
@@ -15288,9 +15288,9 @@
       "opponent": {
         "name": "Movistar KOI",
         "code": "MKOI",
-        "image": "http://static.lolesports.com/teams/1734012609283_MKOI_FullColor_Blue.png"
+        "image": "https://static.lolesports.com/teams/1734012609283_MKOI_FullColor_Blue.png"
       },
-      "kc_image": "http://static.lolesports.com/teams/1704714951336_KC.png",
+      "kc_image": "https://static.lolesports.com/teams/1704714951336_KC.png",
       "kc_won": true,
       "kc_score": 1,
       "opp_score": 0,
@@ -15453,9 +15453,9 @@
       "opponent": {
         "name": "GIANTX",
         "code": "GX",
-        "image": "http://static.lolesports.com/teams/1765897105091_GIANTX-logotype-white.png"
+        "image": "https://static.lolesports.com/teams/1765897105091_GIANTX-logotype-white.png"
       },
-      "kc_image": "http://static.lolesports.com/teams/1704714951336_KC.png",
+      "kc_image": "https://static.lolesports.com/teams/1704714951336_KC.png",
       "kc_won": false,
       "kc_score": 0,
       "opp_score": 1,
@@ -15618,9 +15618,9 @@
       "opponent": {
         "name": "SK Gaming",
         "code": "SK",
-        "image": "http://static.lolesports.com/teams/1643979272144_SK_Monochrome.png"
+        "image": "https://static.lolesports.com/teams/1643979272144_SK_Monochrome.png"
       },
-      "kc_image": "http://static.lolesports.com/teams/1704714951336_KC.png",
+      "kc_image": "https://static.lolesports.com/teams/1704714951336_KC.png",
       "kc_won": true,
       "kc_score": 1,
       "opp_score": 0,
@@ -15798,9 +15798,9 @@
       "opponent": {
         "name": "Rogue",
         "code": "RGE",
-        "image": "http://static.lolesports.com/teams/1705054928404_RGE.png"
+        "image": "https://static.lolesports.com/teams/1705054928404_RGE.png"
       },
-      "kc_image": "http://static.lolesports.com/teams/1704714951336_KC.png",
+      "kc_image": "https://static.lolesports.com/teams/1704714951336_KC.png",
       "kc_won": true,
       "kc_score": 1,
       "opp_score": 0,
@@ -15978,9 +15978,9 @@
       "opponent": {
         "name": "GIANTX",
         "code": "GX",
-        "image": "http://static.lolesports.com/teams/1765897105091_GIANTX-logotype-white.png"
+        "image": "https://static.lolesports.com/teams/1765897105091_GIANTX-logotype-white.png"
       },
-      "kc_image": "http://static.lolesports.com/teams/1704714951336_KC.png",
+      "kc_image": "https://static.lolesports.com/teams/1704714951336_KC.png",
       "kc_won": true,
       "kc_score": 1,
       "opp_score": 0,
@@ -16133,9 +16133,9 @@
       "opponent": {
         "name": "Fnatic",
         "code": "FNC",
-        "image": "http://static.lolesports.com/teams/1631819669150_fnc-2021-worlds.png"
+        "image": "https://static.lolesports.com/teams/1631819669150_fnc-2021-worlds.png"
       },
-      "kc_image": "http://static.lolesports.com/teams/1704714951336_KC.png",
+      "kc_image": "https://static.lolesports.com/teams/1704714951336_KC.png",
       "kc_won": false,
       "kc_score": 0,
       "opp_score": 1,
@@ -16288,9 +16288,9 @@
       "opponent": {
         "name": "G2 Esports",
         "code": "G2",
-        "image": "http://static.lolesports.com/teams/G2-FullonDark.png"
+        "image": "https://static.lolesports.com/teams/G2-FullonDark.png"
       },
-      "kc_image": "http://static.lolesports.com/teams/1704714951336_KC.png",
+      "kc_image": "https://static.lolesports.com/teams/1704714951336_KC.png",
       "kc_won": false,
       "kc_score": 0,
       "opp_score": 1,
@@ -16443,9 +16443,9 @@
       "opponent": {
         "name": "Rogue",
         "code": "RGE",
-        "image": "http://static.lolesports.com/teams/1705054928404_RGE.png"
+        "image": "https://static.lolesports.com/teams/1705054928404_RGE.png"
       },
-      "kc_image": "http://static.lolesports.com/teams/1704714951336_KC.png",
+      "kc_image": "https://static.lolesports.com/teams/1704714951336_KC.png",
       "kc_won": false,
       "kc_score": 0,
       "opp_score": 1,
@@ -16598,9 +16598,9 @@
       "opponent": {
         "name": "Movistar KOI",
         "code": "MKOI",
-        "image": "http://static.lolesports.com/teams/1734012609283_MKOI_FullColor_Blue.png"
+        "image": "https://static.lolesports.com/teams/1734012609283_MKOI_FullColor_Blue.png"
       },
-      "kc_image": "http://static.lolesports.com/teams/1704714951336_KC.png",
+      "kc_image": "https://static.lolesports.com/teams/1704714951336_KC.png",
       "kc_won": true,
       "kc_score": 1,
       "opp_score": 0,
@@ -16753,9 +16753,9 @@
       "opponent": {
         "name": "SK Gaming",
         "code": "SK",
-        "image": "http://static.lolesports.com/teams/1643979272144_SK_Monochrome.png"
+        "image": "https://static.lolesports.com/teams/1643979272144_SK_Monochrome.png"
       },
-      "kc_image": "http://static.lolesports.com/teams/1704714951336_KC.png",
+      "kc_image": "https://static.lolesports.com/teams/1704714951336_KC.png",
       "kc_won": false,
       "kc_score": 0,
       "opp_score": 1,
@@ -16908,9 +16908,9 @@
       "opponent": {
         "name": "Team Vitality",
         "code": "VIT",
-        "image": "http://static.lolesports.com/teams/1675865863968_Vitality_FullColor.png"
+        "image": "https://static.lolesports.com/teams/1675865863968_Vitality_FullColor.png"
       },
-      "kc_image": "http://static.lolesports.com/teams/1704714951336_KC.png",
+      "kc_image": "https://static.lolesports.com/teams/1704714951336_KC.png",
       "kc_won": false,
       "kc_score": 0,
       "opp_score": 1,
@@ -17063,9 +17063,9 @@
       "opponent": {
         "name": "Team Heretics",
         "code": "TH",
-        "image": "http://static.lolesports.com/teams/1672933861879_Heretics-Full-Color.png"
+        "image": "https://static.lolesports.com/teams/1672933861879_Heretics-Full-Color.png"
       },
-      "kc_image": "http://static.lolesports.com/teams/1704714951336_KC.png",
+      "kc_image": "https://static.lolesports.com/teams/1704714951336_KC.png",
       "kc_won": false,
       "kc_score": 0,
       "opp_score": 1,
@@ -17218,9 +17218,9 @@
       "opponent": {
         "name": "Shifters",
         "code": "SHFT",
-        "image": "http://static.lolesports.com/teams/1765897071435_600px-Shifters_allmode.png"
+        "image": "https://static.lolesports.com/teams/1765897071435_600px-Shifters_allmode.png"
       },
-      "kc_image": "http://static.lolesports.com/teams/1704714951336_KC.png",
+      "kc_image": "https://static.lolesports.com/teams/1704714951336_KC.png",
       "kc_won": false,
       "kc_score": 0,
       "opp_score": 1,
@@ -17373,9 +17373,9 @@
       "opponent": {
         "name": "Fnatic",
         "code": "FNC",
-        "image": "http://static.lolesports.com/teams/1631819669150_fnc-2021-worlds.png"
+        "image": "https://static.lolesports.com/teams/1631819669150_fnc-2021-worlds.png"
       },
-      "kc_image": "http://static.lolesports.com/teams/1704714951336_KC.png",
+      "kc_image": "https://static.lolesports.com/teams/1704714951336_KC.png",
       "kc_won": false,
       "kc_score": 0,
       "opp_score": 1,
@@ -17523,9 +17523,9 @@
       "opponent": {
         "name": "Movistar KOI",
         "code": "MKOI",
-        "image": "http://static.lolesports.com/teams/1734012609283_MKOI_FullColor_Blue.png"
+        "image": "https://static.lolesports.com/teams/1734012609283_MKOI_FullColor_Blue.png"
       },
-      "kc_image": "http://static.lolesports.com/teams/1704714951336_KC.png",
+      "kc_image": "https://static.lolesports.com/teams/1704714951336_KC.png",
       "kc_won": true,
       "kc_score": 1,
       "opp_score": 0,
@@ -17673,9 +17673,9 @@
       "opponent": {
         "name": "Rogue",
         "code": "RGE",
-        "image": "http://static.lolesports.com/teams/1705054928404_RGE.png"
+        "image": "https://static.lolesports.com/teams/1705054928404_RGE.png"
       },
-      "kc_image": "http://static.lolesports.com/teams/1704714951336_KC.png",
+      "kc_image": "https://static.lolesports.com/teams/1704714951336_KC.png",
       "kc_won": true,
       "kc_score": 1,
       "opp_score": 0,
@@ -17823,9 +17823,9 @@
       "opponent": {
         "name": "Fnatic",
         "code": "FNC",
-        "image": "http://static.lolesports.com/teams/1631819669150_fnc-2021-worlds.png"
+        "image": "https://static.lolesports.com/teams/1631819669150_fnc-2021-worlds.png"
       },
-      "kc_image": "http://static.lolesports.com/teams/1704714951336_KC.png",
+      "kc_image": "https://static.lolesports.com/teams/1704714951336_KC.png",
       "kc_won": false,
       "kc_score": 0,
       "opp_score": 1,
@@ -17978,9 +17978,9 @@
       "opponent": {
         "name": "G2 Esports",
         "code": "G2",
-        "image": "http://static.lolesports.com/teams/G2-FullonDark.png"
+        "image": "https://static.lolesports.com/teams/G2-FullonDark.png"
       },
-      "kc_image": "http://static.lolesports.com/teams/1704714951336_KC.png",
+      "kc_image": "https://static.lolesports.com/teams/1704714951336_KC.png",
       "kc_won": false,
       "kc_score": 0,
       "opp_score": 1,
@@ -18133,9 +18133,9 @@
       "opponent": {
         "name": "Movistar KOI",
         "code": "MKOI",
-        "image": "http://static.lolesports.com/teams/1734012609283_MKOI_FullColor_Blue.png"
+        "image": "https://static.lolesports.com/teams/1734012609283_MKOI_FullColor_Blue.png"
       },
-      "kc_image": "http://static.lolesports.com/teams/1704714951336_KC.png",
+      "kc_image": "https://static.lolesports.com/teams/1704714951336_KC.png",
       "kc_won": false,
       "kc_score": 0,
       "opp_score": 1,
@@ -18288,9 +18288,9 @@
       "opponent": {
         "name": "GIANTX",
         "code": "GX",
-        "image": "http://static.lolesports.com/teams/1765897105091_GIANTX-logotype-white.png"
+        "image": "https://static.lolesports.com/teams/1765897105091_GIANTX-logotype-white.png"
       },
-      "kc_image": "http://static.lolesports.com/teams/1704714951336_KC.png",
+      "kc_image": "https://static.lolesports.com/teams/1704714951336_KC.png",
       "kc_won": false,
       "kc_score": 0,
       "opp_score": 1,
@@ -18443,9 +18443,9 @@
       "opponent": {
         "name": "Team Vitality",
         "code": "VIT",
-        "image": "http://static.lolesports.com/teams/1675865863968_Vitality_FullColor.png"
+        "image": "https://static.lolesports.com/teams/1675865863968_Vitality_FullColor.png"
       },
-      "kc_image": "http://static.lolesports.com/teams/1704714951336_KC.png",
+      "kc_image": "https://static.lolesports.com/teams/1704714951336_KC.png",
       "kc_won": false,
       "kc_score": 0,
       "opp_score": 1,
@@ -18598,9 +18598,9 @@
       "opponent": {
         "name": "Team Heretics",
         "code": "TH",
-        "image": "http://static.lolesports.com/teams/1672933861879_Heretics-Full-Color.png"
+        "image": "https://static.lolesports.com/teams/1672933861879_Heretics-Full-Color.png"
       },
-      "kc_image": "http://static.lolesports.com/teams/1704714951336_KC.png",
+      "kc_image": "https://static.lolesports.com/teams/1704714951336_KC.png",
       "kc_won": false,
       "kc_score": 0,
       "opp_score": 1,
@@ -18753,9 +18753,9 @@
       "opponent": {
         "name": "Rogue",
         "code": "RGE",
-        "image": "http://static.lolesports.com/teams/1705054928404_RGE.png"
+        "image": "https://static.lolesports.com/teams/1705054928404_RGE.png"
       },
-      "kc_image": "http://static.lolesports.com/teams/1704714951336_KC.png",
+      "kc_image": "https://static.lolesports.com/teams/1704714951336_KC.png",
       "kc_won": false,
       "kc_score": 0,
       "opp_score": 1,
@@ -18908,9 +18908,9 @@
       "opponent": {
         "name": "SK Gaming",
         "code": "SK",
-        "image": "http://static.lolesports.com/teams/1643979272144_SK_Monochrome.png"
+        "image": "https://static.lolesports.com/teams/1643979272144_SK_Monochrome.png"
       },
-      "kc_image": "http://static.lolesports.com/teams/1704714951336_KC.png",
+      "kc_image": "https://static.lolesports.com/teams/1704714951336_KC.png",
       "kc_won": true,
       "kc_score": 1,
       "opp_score": 0,
@@ -19063,9 +19063,9 @@
       "opponent": {
         "name": "Shifters",
         "code": "SHFT",
-        "image": "http://static.lolesports.com/teams/1765897071435_600px-Shifters_allmode.png"
+        "image": "https://static.lolesports.com/teams/1765897071435_600px-Shifters_allmode.png"
       },
-      "kc_image": "http://static.lolesports.com/teams/1704714951336_KC.png",
+      "kc_image": "https://static.lolesports.com/teams/1704714951336_KC.png",
       "kc_won": true,
       "kc_score": 1,
       "opp_score": 0,
