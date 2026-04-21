@@ -211,6 +211,20 @@ export default async function RecordsPage() {
               </a>
             ))}
           </nav>
+
+          {/* Weekly recap cross-link — "records absolus" is all-time, but
+              users looking for "what's new" need the 7-day window. */}
+          <div className="mt-6">
+            <Link
+              href="/week"
+              className="inline-flex items-center gap-2 rounded-full border border-[var(--cyan)]/30 bg-[var(--cyan)]/5 px-4 py-1.5 text-[11px] font-bold uppercase tracking-widest text-[var(--cyan)] hover:bg-[var(--cyan)]/15 transition-all"
+            >
+              <span>▽ Voir cette semaine</span>
+              <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M9 5l7 7-7 7" />
+              </svg>
+            </Link>
+          </div>
         </div>
       </section>
 
