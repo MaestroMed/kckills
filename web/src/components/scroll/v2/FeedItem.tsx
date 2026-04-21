@@ -21,6 +21,7 @@
  * translate3d offsets.
  */
 
+import { useCallback, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import type { VideoFeedItem, MomentFeedItem } from "@/components/scroll/ScrollFeed";
@@ -91,6 +92,11 @@ export function FeedItemVideo({
       >
         #{index + 1} / {total}
       </Link>
+
+      {/* Share button — top-right. Tries Web Share API first (mobile
+          native share sheet), falls back to clipboard copy with a toast. */}
+      <ShareFab killId={item.id} />
+
 
       {/* Bottom overlay */}
       <div
@@ -252,5 +258,69 @@ export function FeedItemMoment({
         </div>
       </div>
     </div>
+  );
+}
+
+// ─── Share button (Fab in top-right corner) ────────────────────────────
+
+/**
+ * Share a single kill from the /scroll feed.
+ *
+ * - navigator.share (mobile native sheet) if available
+ * - navigator.clipboard fallback with a brief confirm toast
+ *
+ * The URL is /scroll?kill=<id> so when shared, the recipient lands on
+ * the feed already pinned to the exact clip — not the top of the shuffle.
+ */
+function ShareFab({ killId }: { killId: string }) {
+  const [toast, setToast] = useState<string | null>(null);
+
+  const onShare = useCallback(
+    async (e: React.MouseEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const url = `${window.location.origin}/scroll?kill=${killId}`;
+      const title = "KCKILLS — clip à voir";
+      try {
+        if (typeof navigator !== "undefined" && typeof navigator.share === "function") {
+          await navigator.share({ title, url });
+          return;
+        }
+      } catch {
+        // user cancelled share sheet — fall through silently
+        return;
+      }
+      // Clipboard fallback
+      try {
+        await navigator.clipboard.writeText(url);
+        setToast("Lien copié !");
+        window.setTimeout(() => setToast(null), 1800);
+      } catch {
+        setToast("Copie impossible");
+        window.setTimeout(() => setToast(null), 1800);
+      }
+    },
+    [killId],
+  );
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={onShare}
+        aria-label="Partager ce clip"
+        title="Partager"
+        className="absolute top-28 right-4 z-20 flex h-10 w-10 items-center justify-center rounded-full bg-black/40 backdrop-blur-sm text-white/80 hover:bg-[var(--gold)]/30 hover:text-[var(--gold)] transition-all active:scale-95"
+      >
+        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+        </svg>
+      </button>
+      {toast && (
+        <div className="pointer-events-none fixed top-20 left-1/2 -translate-x-1/2 z-[70] rounded-full bg-black/85 backdrop-blur-sm px-4 py-2 text-xs font-bold text-[var(--gold)] shadow-lg animate-pulse">
+          {toast}
+        </div>
+      )}
+    </>
   );
 }
