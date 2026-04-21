@@ -9,6 +9,7 @@ import { HomeFilteredContent } from "@/components/HomeFilteredContent";
 import { HomeRareCards } from "@/components/HomeRareCards";
 import { HomeYouTubeShowcase } from "@/components/HomeYouTubeShowcase";
 import { KillOfTheWeek } from "@/components/KillOfTheWeek";
+import { HomeRecentClips } from "@/components/HomeRecentClips";
 import { QuoteCard } from "@/components/QuoteCard";
 import { QUOTES } from "@/lib/quotes";
 import { EraComparisonChart } from "@/components/EraComparison";
@@ -196,12 +197,12 @@ export default async function HomePage() {
                 Matchs
               </Link>
               <Link
-                href="/#highlights"
+                href="/clips"
                 className="rounded-xl border border-white/15 bg-black/20 backdrop-blur-sm px-6 py-4 font-display text-sm font-bold uppercase tracking-widest text-white/70 transition-all hover:border-white/40 hover:text-white"
               >
                 <span className="inline-flex items-center gap-2">
-                  <span className="text-red-500">&#9654;</span>
-                  Clips YouTube
+                  <span className="text-[var(--gold)]">&#9658;</span>
+                  Tous les clips
                 </span>
               </Link>
             </div>
@@ -387,6 +388,14 @@ export default async function HomePage() {
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
           </svg>
         </div>
+
+        {/* Riot disclaimer — discrete, bottom of hero */}
+        <p
+          aria-label="Riot Games disclaimer"
+          className="pointer-events-none absolute inset-x-0 bottom-1 z-10 px-4 text-center text-[8px] uppercase tracking-widest text-white/30"
+        >
+          Not endorsed by Riot Games. League of Legends &copy; Riot Games.
+        </p>
       </section>
 
       {/* ScrollVivantSection hidden — needs full polish before re-enabling */}
@@ -491,6 +500,9 @@ export default async function HomePage() {
 
       {/* ═══ KILL OF THE WEEK ═══════════════════════════════════════════ */}
       <KillOfTheWeek />
+
+      {/* ═══ DERNIERS CLIPS — strip horizontal des 8 plus récents ═══════ */}
+      <HomeRecentClips />
 
       {/* ═══ CARTES LEGENDAIRES — TCG visual layer en showcase home ═════ */}
       <HomeRareCards />

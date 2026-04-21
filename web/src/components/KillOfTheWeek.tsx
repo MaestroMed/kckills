@@ -54,7 +54,7 @@ export async function KillOfTheWeek() {
       <div className="flex flex-col md:flex-row items-stretch">
         {/* Video thumbnail / preview */}
         <Link
-          href={`/kill/${kill.id}`}
+          href={`/scroll?kill=${kill.id}`}
           className="group relative w-full md:w-80 aspect-video md:aspect-auto flex-shrink-0 overflow-hidden"
         >
           {kill.thumbnail_url ? (
@@ -129,7 +129,7 @@ export async function KillOfTheWeek() {
             <span>T+{mm.toString().padStart(2, "0")}:{ss.toString().padStart(2, "0")}</span>
             {kill.games?.matches?.stage && <span>&middot; {kill.games.matches.stage}</span>}
             <Link
-              href={`/kill/${kill.id}`}
+              href={`/scroll?kill=${kill.id}`}
               className="ml-auto inline-flex items-center gap-1.5 rounded-lg border border-[var(--gold)]/30 bg-[var(--gold)]/10 px-3 py-1.5 text-[10px] font-bold text-[var(--gold)] uppercase tracking-wider hover:bg-[var(--gold)]/20 transition-colors"
             >
               Voir le clip
