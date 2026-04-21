@@ -117,6 +117,12 @@ export default async function HomePage() {
   const isEmpty = data.total_matches === 0;
   const HERO_CLIPS = await buildHeroClips();
 
+  // Live clip count from Supabase (KC team_killer + visible only)
+  const allKills = await getPublishedKills(500);
+  const clipCount = allKills.filter(
+    (k) => k.tracked_team_involvement === "team_killer" && k.kill_visible !== false,
+  ).length;
+
   // Champion splash for the #1 player (most kills)
   const topPlayer = [...roster].sort((a, b) => b.totalKills - a.totalKills)[0];
   const heroChamp = topPlayer?.champions[0] ?? "Jhin";
@@ -335,7 +341,15 @@ export default async function HomePage() {
                     />
                     <span className="text-[9px] uppercase tracking-wider text-white/40">WR</span>
                   </span>
-                  {/* Clip count will show once we have published kills */}
+                  {clipCount > 0 && (
+                    <>
+                      <span className="text-white/15">&bull;</span>
+                      <span className="flex items-baseline gap-1">
+                        <AnimatedNumber value={clipCount} duration={1.8} className="text-[var(--cyan)] font-bold text-lg" />
+                        <span className="text-[9px] uppercase tracking-wider text-white/40">CLIPS</span>
+                      </span>
+                    </>
+                  )}
                 </div>
               </div>
             )}
