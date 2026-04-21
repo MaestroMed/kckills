@@ -81,10 +81,10 @@ export async function HomeRareCards() {
 
         <div className="mt-8 flex justify-center">
           <Link
-            href="/best"
+            href="/clips"
             className="group inline-flex items-center gap-3 rounded-full border border-[var(--gold)]/35 bg-[var(--bg-surface)]/70 backdrop-blur-md px-6 py-3 font-display text-xs font-bold uppercase tracking-[0.25em] text-[var(--gold)] transition-all hover:bg-[var(--gold)]/10 hover:border-[var(--gold)]/60 hover:scale-[1.02]"
           >
-            Voir tous les meilleurs clips
+            Explorer tous les clips
             <svg
               className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5"
               fill="none"

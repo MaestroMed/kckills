@@ -5,7 +5,7 @@ import { championIconUrl, championSplashUrl } from "@/lib/constants";
 import { PLAYER_PHOTOS, TEAM_LOGOS, KC_LOGO } from "@/lib/kc-assets";
 import { getPublishedKills } from "@/lib/supabase/kills";
 import { AudioPlayer } from "@/components/AudioPlayer";
-import { HomeFilteredContent } from "@/components/HomeFilteredContent";
+// HomeFilteredContent removed — was a duplicate of /matches page
 import { HomeRareCards } from "@/components/HomeRareCards";
 import { HomeYouTubeShowcase } from "@/components/HomeYouTubeShowcase";
 import { KillOfTheWeek } from "@/components/KillOfTheWeek";
@@ -404,7 +404,7 @@ export default async function HomePage() {
       {/* ═══ ROSTER — Full width, tall bands ════════════════════════════ */}
       {roster.length > 0 && (
         <section className="relative overflow-hidden py-2">
-          <div className="flex h-[70vh] min-h-[500px]">
+          <div className="flex flex-col md:flex-row md:h-[70vh] md:min-h-[500px]">
             {roster.map((player, i) => {
               const photo = PLAYER_PHOTOS[player.name];
               const champ = player.champions[0] ?? "Jhin";
@@ -412,7 +412,7 @@ export default async function HomePage() {
                 <Link
                   key={player.name}
                   href={`/player/${encodeURIComponent(player.name)}`}
-                  className="roster-band group relative flex-1 overflow-hidden border-r border-[var(--border-gold)] last:border-r-0 transition-all duration-700 hover:flex-[2] hover:z-10"
+                  className="roster-band group relative flex-1 h-48 md:h-auto overflow-hidden border-b md:border-b-0 md:border-r border-[var(--border-gold)] last:border-r-0 last:border-b-0 transition-all duration-700 md:hover:flex-[2] md:hover:z-10"
                 >
                   {/* Background — player photo or champion splash */}
                   {photo ? (
@@ -448,8 +448,8 @@ export default async function HomePage() {
                     </p>
                     <p className="text-xs uppercase tracking-[0.2em] text-white/50 mt-1">{displayRole(player.role)}</p>
 
-                    {/* Stats — appear on hover */}
-                    <div className="mt-3 overflow-hidden max-h-0 group-hover:max-h-40 transition-all duration-500">
+                    {/* Stats — always visible on mobile (no hover), hidden by default on desktop and revealed on hover */}
+                    <div className="mt-3 overflow-hidden max-h-40 md:max-h-0 md:group-hover:max-h-40 transition-all duration-500">
                       <div className="flex gap-4 text-sm font-data">
                         <div>
                           <span className="text-[var(--green)] font-bold">{player.totalKills}</span>
@@ -559,8 +559,7 @@ export default async function HomePage() {
         );
       })()}
 
-      {/* ═══ TIMELINE + MATCHES (filtered) ═══════════════════════════════ */}
-      <HomeFilteredContent allMatches={allMatches} />
+      {/* HomeFilteredContent removed — duplicate of /matches page */}
 
       {/* ═══ LAST MATCH — Full section ══════════════════════════════════ */}
       {allMatches.length > 0 && allMatches[0].games.length > 0 && (() => {
