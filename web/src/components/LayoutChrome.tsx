@@ -56,6 +56,7 @@ export function LayoutChrome({ children }: { children: React.ReactNode }) {
             <div className="flex flex-wrap gap-x-5 gap-y-2 text-xs text-[var(--text-muted)]">
               <a href="/scroll" className="hover:text-[var(--gold)]">Scroll</a>
               <a href="/clips" className="hover:text-[var(--gold)]">Clips</a>
+              <a href="/records" className="hover:text-[var(--gold)]">Records</a>
               <a href="/players" className="hover:text-[var(--gold)]">Joueurs</a>
               <a href="/matches" className="hover:text-[var(--gold)]">Matchs</a>
               <a href="/privacy" className="hover:text-[var(--gold)]">Confidentialit&eacute;</a>

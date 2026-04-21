@@ -138,13 +138,27 @@ export function ClipsGrid({ initialCards, initialFilters }: { initialCards: Clip
   return (
     <div className="space-y-6">
       {/* Header */}
-      <header>
-        <h1 className="font-display text-3xl font-black uppercase">
-          Tous les <span className="text-gold-gradient">clips</span>
-        </h1>
-        <p className="text-sm text-[var(--text-muted)] mt-2">
-          {filtered.length} clips {hasActiveFilter ? "filtrés" : "publiés"} · {initialCards.length} au total
-        </p>
+      <header className="flex items-end justify-between gap-4 flex-wrap">
+        <div>
+          <h1 className="font-display text-3xl font-black uppercase">
+            Tous les <span className="text-gold-gradient">clips</span>
+          </h1>
+          <p className="text-sm text-[var(--text-muted)] mt-2">
+            {filtered.length} clips {hasActiveFilter ? "filtrés" : "publiés"} · {initialCards.length} au total
+          </p>
+        </div>
+        {/* Hall-of-Fame cross-link — discoverability from the main catalog.
+            /records curates the top clips by category, which is a natural
+            next step when someone arrives here looking for "the best". */}
+        <Link
+          href="/records"
+          className="group rounded-xl border border-[var(--gold)]/30 bg-[var(--gold)]/5 px-4 py-2 text-xs font-display font-bold uppercase tracking-widest text-[var(--gold)] hover:bg-[var(--gold)]/15 hover:border-[var(--gold)]/60 transition-all inline-flex items-center gap-2"
+        >
+          <span>★ Records Absolus</span>
+          <svg className="h-3 w-3 transition-transform group-hover:translate-x-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M9 5l7 7-7 7" />
+          </svg>
+        </Link>
       </header>
 
       {/* Filters bar */}
