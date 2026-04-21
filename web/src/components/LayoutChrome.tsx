@@ -75,7 +75,7 @@ export function LayoutChrome({ children }: { children: React.ReactNode }) {
             Riot Games does not endorse or sponsor this project.
           </p>
           <p className="text-[10px] text-[var(--text-disabled)] text-center mt-2">
-            Construit par Mehdi (Numelite) avec Claude (Kairos). &copy; 2026
+            Site communautaire fan-made. Pas affili&eacute; &agrave; Karmine Corp. &copy; 2026
           </p>
         </div>
       </footer>

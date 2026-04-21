@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from "react";
 /**
  * useScrollAutoplay — robust autoplay hook for the TikTok-style /scroll feed.
  *
- * Symptoms it fixes (reported live by Mehdi 18 Apr 2026):
+ * Symptoms it fixes (reported 18 Apr 2026):
  *   • First clip stuck on the poster frame, never starts.
  *   • Browser autoplay policy silently blocks play() with no retry.
  *   • Race: v.currentTime = 0 fires before the video has loaded any data,

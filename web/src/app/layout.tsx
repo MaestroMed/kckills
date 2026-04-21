@@ -20,7 +20,7 @@ export const metadata: Metadata = {
   description:
     "Le TikTok des kills LoL. Scroll, rate, et partage chaque kill Karmine Corp de la LEC.",
   applicationName: "KCKILLS",
-  authors: [{ name: "Mehdi Numelite" }],
+  authors: [{ name: "KCKILLS" }],
   keywords: [
     "Karmine Corp",
     "KC",

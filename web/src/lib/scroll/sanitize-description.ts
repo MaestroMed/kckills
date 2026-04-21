@@ -38,7 +38,7 @@ const HALLUCINATION_PATTERNS: RegExp[] = [
 
 const BANNED_PHRASES: RegExp[] = [
   // Relaxed — only reject truly broken descriptions, not imperfect ones.
-  // The backoffice /review lets Mehdi fix individual descriptions manually.
+  // The backoffice /review lets the admin fix individual descriptions manually.
 ];
 
 const MIN_LENGTH = 40;

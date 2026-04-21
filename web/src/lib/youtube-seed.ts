@@ -4,7 +4,7 @@
  * cold deploy). The carousel merges these with live RSS results, dedupes
  * by videoId, then ranks the union.
  *
- * Editorial note: every entry here is a clip Mehdi has personally vouched
+ * Editorial note: every entry here is a clip the admin has personally vouched
  * for as showcase-worthy. They're never auto-pruned. To rotate: edit this
  * file. (V2 will gain a backoffice editor — see the handoff.)
  */
