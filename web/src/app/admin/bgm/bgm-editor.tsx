@@ -10,6 +10,12 @@ export function BgmEditor({ initial }: { initial: BgmTrack[] }) {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Native HTML5 drag-and-drop state — index of the row being dragged
+  // (so onDragOver knows whether to show the drop indicator) and the
+  // index where the drop will land. Kept in component state rather than
+  // refs because we need to re-render the visual indicator.
+  const [dragIdx, setDragIdx] = useState<number | null>(null);
+  const [dropIdx, setDropIdx] = useState<number | null>(null);
 
   // Add track form state
   const [newUrl, setNewUrl] = useState("");
@@ -78,6 +84,27 @@ export function BgmEditor({ initial }: { initial: BgmTrack[] }) {
     });
   };
 
+  /**
+   * Reorder via native HTML5 drag-and-drop.
+   *
+   * `from` is the index of the dragged item, `to` is the desired final
+   * insertion index. We splice the dragged element out first, then
+   * insert it — the second splice doesn't need to worry about index
+   * shifting because the array length already dropped by 1.
+   */
+  const moveTo = (from: number, to: number) => {
+    if (from === to || from < 0) return;
+    setTracks((prev) => {
+      const next = [...prev];
+      const [moved] = next.splice(from, 1);
+      // Adjust insertion index if dragging downward — splicing out
+      // shifts every later index up by one.
+      const adjusted = to > from ? to - 1 : to;
+      next.splice(adjusted, 0, moved);
+      return next;
+    });
+  };
+
   const save = async () => {
     setSaving(true);
     setError(null);
@@ -123,55 +150,104 @@ export function BgmEditor({ initial }: { initial: BgmTrack[] }) {
         {tracks.length === 0 ? (
           <p className="p-6 text-center text-sm text-[var(--text-muted)]">Aucun track. Ajoute-en un ci-dessous.</p>
         ) : (
-          tracks.map((track, idx) => (
-            <div key={track.id} className="p-3 flex items-center gap-3">
-              <div className="flex flex-col gap-0.5">
-                <button
-                  onClick={() => moveUp(idx)}
-                  disabled={idx === 0}
-                  className="text-[10px] text-[var(--text-muted)] hover:text-[var(--gold)] disabled:opacity-20"
-                  title="Monter"
+          tracks.map((track, idx) => {
+            const isDragging = dragIdx === idx;
+            const showDropAbove = dropIdx === idx && dragIdx !== null && dragIdx !== idx;
+            return (
+              <div
+                key={track.id}
+                draggable
+                onDragStart={(e) => {
+                  setDragIdx(idx);
+                  e.dataTransfer.effectAllowed = "move";
+                  // Some browsers need a payload to enter drag mode.
+                  e.dataTransfer.setData("text/plain", String(idx));
+                }}
+                onDragEnd={() => {
+                  setDragIdx(null);
+                  setDropIdx(null);
+                }}
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  e.dataTransfer.dropEffect = "move";
+                  // Decide whether to drop above or below this row based
+                  // on which half of the row the cursor is in.
+                  const rect = e.currentTarget.getBoundingClientRect();
+                  const above = e.clientY - rect.top < rect.height / 2;
+                  setDropIdx(above ? idx : idx + 1);
+                }}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  if (dragIdx !== null && dropIdx !== null) moveTo(dragIdx, dropIdx);
+                  setDragIdx(null);
+                  setDropIdx(null);
+                }}
+                className={`p-3 flex items-center gap-3 cursor-grab active:cursor-grabbing transition-all relative ${
+                  isDragging ? "opacity-30" : ""
+                }`}
+              >
+                {showDropAbove && (
+                  <div className="absolute -top-px left-0 right-0 h-0.5 bg-[var(--gold)] z-10 shadow-[0_0_8px_var(--gold)]" />
+                )}
+                {/* Drag handle — six-dot grid is the universal "movable" affordance */}
+                <span
+                  aria-hidden
+                  className="text-[var(--text-muted)] text-lg select-none leading-none"
+                  title="Glisser pour réordonner"
                 >
-                  ▲
-                </button>
-                <button
-                  onClick={() => moveDown(idx)}
-                  disabled={idx === tracks.length - 1}
-                  className="text-[10px] text-[var(--text-muted)] hover:text-[var(--gold)] disabled:opacity-20"
-                  title="Descendre"
+                  ⋮⋮
+                </span>
+                <div className="flex flex-col gap-0.5">
+                  <button
+                    onClick={() => moveUp(idx)}
+                    disabled={idx === 0}
+                    className="text-[10px] text-[var(--text-muted)] hover:text-[var(--gold)] disabled:opacity-20"
+                    title="Monter"
+                  >
+                    ▲
+                  </button>
+                  <button
+                    onClick={() => moveDown(idx)}
+                    disabled={idx === tracks.length - 1}
+                    className="text-[10px] text-[var(--text-muted)] hover:text-[var(--gold)] disabled:opacity-20"
+                    title="Descendre"
+                  >
+                    ▼
+                  </button>
+                </div>
+                <span className="font-mono text-xs text-[var(--text-muted)] w-6">{idx + 1}.</span>
+                {/* YouTube thumbnail */}
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={`https://img.youtube.com/vi/${track.youtubeId}/default.jpg`}
+                  alt=""
+                  className="h-12 w-16 rounded object-cover pointer-events-none"
+                />
+                <div className="flex-1 min-w-0 pointer-events-none">
+                  <p className="font-bold text-sm truncate">{track.title}</p>
+                  <p className="text-xs text-[var(--text-muted)] truncate">
+                    {track.artist} · <span className="font-mono">{track.youtubeId}</span> · {track.genre}
+                  </p>
+                </div>
+                <a
+                  href={`https://www.youtube.com/watch?v=${track.youtubeId}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-xs text-[var(--cyan)] hover:underline"
+                  draggable={false}
+                  onClick={(e) => e.stopPropagation()}
                 >
-                  ▼
+                  YouTube
+                </a>
+                <button
+                  onClick={() => removeTrack(track.id)}
+                  className="text-xs text-[var(--red)] hover:opacity-80 px-2"
+                >
+                  Supprimer
                 </button>
               </div>
-              <span className="font-mono text-xs text-[var(--text-muted)] w-6">{idx + 1}.</span>
-              {/* YouTube thumbnail */}
-              <img
-                src={`https://img.youtube.com/vi/${track.youtubeId}/default.jpg`}
-                alt=""
-                className="h-12 w-16 rounded object-cover"
-              />
-              <div className="flex-1 min-w-0">
-                <p className="font-bold text-sm truncate">{track.title}</p>
-                <p className="text-xs text-[var(--text-muted)] truncate">
-                  {track.artist} · <span className="font-mono">{track.youtubeId}</span> · {track.genre}
-                </p>
-              </div>
-              <a
-                href={`https://www.youtube.com/watch?v=${track.youtubeId}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-xs text-[var(--cyan)] hover:underline"
-              >
-                YouTube
-              </a>
-              <button
-                onClick={() => removeTrack(track.id)}
-                className="text-xs text-[var(--red)] hover:opacity-80 px-2"
-              >
-                Supprimer
-              </button>
-            </div>
-          ))
+            );
+          })
         )}
       </section>
 
