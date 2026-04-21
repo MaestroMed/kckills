@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState, useCallback } from "react";
 import Link from "next/link";
 import { ScoreChip } from "@/components/admin/ScoreChip";
+import { ClipDetailDrawer } from "@/components/admin/ClipDetailDrawer";
 
 interface ClipRow {
   id: string;
@@ -70,6 +71,7 @@ export function ClipsLibrary() {
   const [sort, setSort] = useState("score_desc");
   const [limit, setLimit] = useState(100);
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [openClipId, setOpenClipId] = useState<string | null>(null);
   const [activeView, setActiveView] = useState("all");
 
   // Debounce search
@@ -333,24 +335,47 @@ export function ClipsLibrary() {
               <tr><td colSpan={11} className="px-4 py-8 text-center text-[var(--text-muted)]">Aucun clip</td></tr>
             ) : (
               clips.map((c) => (
-                <ClipRowView key={c.id} clip={c} selected={selected.has(c.id)} onToggle={() => toggleSelect(c.id)} />
+                <ClipRowView
+                  key={c.id}
+                  clip={c}
+                  selected={selected.has(c.id)}
+                  onToggle={() => toggleSelect(c.id)}
+                  onOpen={() => setOpenClipId(c.id)}
+                />
               ))
             )}
           </tbody>
         </table>
       </div>
+
+      {/* Edit drawer */}
+      <ClipDetailDrawer
+        clipId={openClipId}
+        onClose={() => setOpenClipId(null)}
+        onSaved={() => fetchClips()}
+        onPrev={() => {
+          if (!openClipId) return;
+          const idx = clips.findIndex((c) => c.id === openClipId);
+          if (idx > 0) setOpenClipId(clips[idx - 1].id);
+        }}
+        onNext={() => {
+          if (!openClipId) return;
+          const idx = clips.findIndex((c) => c.id === openClipId);
+          if (idx < clips.length - 1) setOpenClipId(clips[idx + 1].id);
+        }}
+      />
     </div>
   );
 }
 
-function ClipRowView({ clip, selected, onToggle }: { clip: ClipRow; selected: boolean; onToggle: () => void }) {
+function ClipRowView({ clip, selected, onToggle, onOpen }: { clip: ClipRow; selected: boolean; onToggle: () => void; onOpen: () => void }) {
   const gt = clip.game_time_seconds ?? 0;
   const match = clip.games?.matches;
   const date = match?.scheduled_at?.slice(0, 10) ?? "—";
 
   return (
-    <tr className={`border-b border-[var(--border-gold)]/20 hover:bg-[var(--bg-elevated)]/40 ${selected ? "bg-[var(--gold)]/5" : ""}`}>
-      <td className="px-2 py-2">
+    <tr className={`border-b border-[var(--border-gold)]/20 hover:bg-[var(--bg-elevated)]/40 cursor-pointer ${selected ? "bg-[var(--gold)]/5" : ""}`} onClick={onOpen}>
+      <td className="px-2 py-2" onClick={(e) => e.stopPropagation()}>
         <input type="checkbox" checked={selected} onChange={onToggle} className="accent-[var(--gold)]" />
       </td>
       <td className="px-2 py-2">
@@ -399,8 +424,8 @@ function ClipRowView({ clip, selected, onToggle }: { clip: ClipRow; selected: bo
           <span className="text-[var(--green)] text-xs" title="Visible">●</span>
         )}
       </td>
-      <td className="px-2 py-2">
-        <Link href={`/admin/clips/${clip.id}`} className="text-[var(--gold)] hover:underline text-xs">Editer</Link>
+      <td className="px-2 py-2" onClick={(e) => e.stopPropagation()}>
+        <Link href={`/admin/clips/${clip.id}`} className="text-[var(--gold)]/60 hover:text-[var(--gold)] text-xs" title="Page complète">↗</Link>
       </td>
     </tr>
   );
