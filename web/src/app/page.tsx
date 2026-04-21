@@ -4,8 +4,7 @@ import { loadRealData, getCurrentRoster, getTeamStats, getMatchesSorted, display
 import { championIconUrl, championSplashUrl } from "@/lib/constants";
 import { PLAYER_PHOTOS, TEAM_LOGOS, KC_LOGO } from "@/lib/kc-assets";
 import { getPublishedKills } from "@/lib/supabase/kills";
-// AudioPlayer disabled on homepage — BGM player on /scroll covers ambiance
-// import { AudioPlayer } from "@/components/AudioPlayer";
+import { AudioPlayer } from "@/components/AudioPlayer";
 // HomeFilteredContent removed — was a duplicate of /matches page
 import { HomeRareCards } from "@/components/HomeRareCards";
 import { HomeYouTubeShowcase } from "@/components/HomeYouTubeShowcase";
@@ -149,7 +148,11 @@ export default async function HomePage() {
         marginRight: "-50vw",
       }}
     >
-      {/* AudioPlayer removed — was intrusive on first visit */}
+      {/* BCC Vibes ambient player — auto-arms on first visit, fires on
+          first user gesture (click/touch/keydown anywhere), floating
+          FAB bottom-right with quick-dismiss ×. Hint bubble shows for
+          6s on first visit to tell user what's about to happen. */}
+      <AudioPlayer />
 
       {/* ═══ HERO — 2-col layout with clip rotator (full-bleed via parent) ═══ */}
       <section className="relative min-h-[100vh] md:min-h-[92vh] overflow-hidden">
