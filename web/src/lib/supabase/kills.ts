@@ -11,6 +11,7 @@
  */
 
 import "server-only";
+import { cache } from "react";
 import { createAnonSupabase, createServerSupabase, rethrowIfDynamic } from "./server";
 
 export type LanePhase = "early" | "mid" | "late";
@@ -266,7 +267,17 @@ function normalize(row: RawKillSelect): PublishedKillRow {
  * is identical — the kills RLS policy is `Public kills` (status =
  * published), so no auth is needed.
  */
-export async function getPublishedKills(
+/**
+ * React-cached fetch — `cache()` dedupes identical (limit, buildTime)
+ * calls within a single render pass. The homepage alone hits Supabase
+ * 5×/render via KillOfTheWeek, HomeRecentClips, HomeRareCards,
+ * TaggingInsights and the page itself; without this dedup we'd burn
+ * ~5 separate egress reads per visitor for largely overlapping data.
+ *
+ * Different limit values still hit the network independently — that's
+ * intentional, callers ask for tighter slices for a reason.
+ */
+export const getPublishedKills = cache(async function getPublishedKills(
   limit = 50,
   opts: { buildTime?: boolean } = {},
 ): Promise<PublishedKillRow[]> {
@@ -294,7 +305,7 @@ export async function getPublishedKills(
     console.warn("[supabase/kills] getPublishedKills threw:", err);
     return [];
   }
-}
+});
 
 /** Get a single published kill by id. */
 export async function getKillById(id: string): Promise<PublishedKillRow | null> {
