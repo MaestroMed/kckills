@@ -12,7 +12,12 @@ import { createServerSupabase } from "@/lib/supabase/server";
  * Cached aggressively (s-maxage=300) because the palette doesn't need
  * second-by-second freshness — every page load already calls this at
  * most once per session.
+ *
+ * Forced dynamic because createServerSupabase() reads cookies for the
+ * RLS-aware session — Next would otherwise try to prerender it at build
+ * and throw "Dynamic server usage" because cookies aren't available.
  */
+export const dynamic = "force-dynamic";
 export const revalidate = 300;
 
 export async function GET() {
