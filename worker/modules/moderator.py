@@ -54,3 +54,59 @@ async def moderate_comment(username: str, content: str) -> dict:
     except Exception as e:
         log.error("haiku_error", error=str(e))
         return {"action": "approve", "reason": f"error: {e}", "toxicity": 0}
+
+
+# ─── Daemon loop ─────────────────────────────────────────────────────────
+
+async def run() -> int:
+    """Process all comments in moderation_status='pending'.
+
+    Reads username from profile if available, else uses the user_id
+    fragment as fallback identifier.
+    """
+    from services.supabase_client import safe_select, safe_update
+
+    log.info("moderator_scan_start")
+
+    pending = safe_select(
+        "comments",
+        "id, content, user_id, kill_id",
+        moderation_status="pending",
+    ) or []
+    if not pending:
+        return 0
+
+    # Optional: fetch profiles for usernames
+    profiles_raw = safe_select("profiles", "id,discord_username") or []
+    profile_lookup = {p["id"]: p.get("discord_username") for p in profiles_raw}
+
+    moderated = 0
+    for comment in pending:
+        username = profile_lookup.get(comment.get("user_id"), "user")
+        result = await moderate_comment(username, comment.get("content") or "")
+
+        new_status_map = {
+            "approve": "approved",
+            "flag": "flagged",
+            "reject": "rejected",
+        }
+        new_status = new_status_map.get(result.get("action"), "flagged")
+
+        toxicity = result.get("toxicity")
+        try:
+            toxicity_val = float(toxicity) if toxicity is not None else None
+        except (TypeError, ValueError):
+            toxicity_val = None
+
+        patch = {
+            "moderation_status": new_status,
+            "moderation_reason": result.get("reason"),
+        }
+        if toxicity_val is not None:
+            patch["toxicity_score"] = toxicity_val
+
+        safe_update("comments", patch, "id", comment["id"])
+        moderated += 1
+
+    log.info("moderator_scan_done", moderated=moderated)
+    return moderated

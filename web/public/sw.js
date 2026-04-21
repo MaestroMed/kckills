@@ -38,12 +38,18 @@ self.addEventListener("fetch", (event) => {
   event.respondWith(
     fetch(event.request)
       .then((response) => {
-        // Only cache successful responses
-        if (response.status === 200) {
+        // Only cache successful, basic (same-origin) responses.
+        // Cross-origin opaque responses can't be cached safely and
+        // throw NetworkError on cache.put().
+        if (
+          response.status === 200 &&
+          response.type === "basic" &&
+          (event.request.method === "GET" || event.request.method === "HEAD")
+        ) {
           const clone = response.clone();
           caches.open(CACHE_NAME).then((cache) => {
-            try { cache.put(event.request, clone); } catch { /* ignore */ }
-          });
+            cache.put(event.request, clone).catch(() => { /* ignore */ });
+          }).catch(() => { /* ignore */ });
         }
         return response;
       })

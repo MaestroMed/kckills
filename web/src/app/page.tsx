@@ -16,7 +16,7 @@ import { AnimatedNumber } from "@/components/AnimatedNumber";
 import { MacronEasterEgg } from "@/components/MacronEasterEgg";
 import { HeroClipBackground } from "@/components/HeroClipBackground";
 import { NextMatchOverlay } from "@/components/NextMatchOverlay";
-import { ScrollVivantSection } from "@/components/grid/ScrollVivantSection";
+// ScrollVivantSection import removed — component hidden until polished
 
 /** Iconic clips that play in the hero background, one after the other.
  *

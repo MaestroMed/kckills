@@ -48,6 +48,7 @@ DAEMON_MODULES: list[tuple[str, int, str]] = [
     ("clipper",       300,   "modules.clipper"),       # 5 min
     ("analyzer",      600,   "modules.analyzer"),      # 10 min
     ("og_generator",  900,   "modules.og_generator"),  # 15 min
+    ("moderator",     180,   "modules.moderator"),     # 3 min — Haiku comment moderation
     ("job_runner",    30,    "modules.job_runner"),    # 30s — admin-triggered jobs
     ("heartbeat",     21600, "modules.heartbeat"),     # 6h
     ("watchdog",      1800,  "modules.watchdog"),      # 30 min
