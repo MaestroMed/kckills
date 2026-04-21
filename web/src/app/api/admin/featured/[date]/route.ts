@@ -45,6 +45,38 @@ export async function PUT(
     after: { kill_id: killId, notes },
   });
 
+  // Notify Discord (only for today's featured)
+  const today = new Date().toISOString().slice(0, 10);
+  if (date === today) {
+    const webhook = process.env.DISCORD_WEBHOOK_URL;
+    if (webhook) {
+      const { data: kill } = await sb
+        .from("kills")
+        .select("killer_champion,victim_champion,ai_description,thumbnail_url,highlight_score")
+        .eq("id", killId)
+        .maybeSingle();
+      if (kill) {
+        try {
+          await fetch(webhook, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              embeds: [{
+                title: `★ Clip vedette du jour : ${kill.killer_champion} → ${kill.victim_champion}`,
+                description: kill.ai_description ?? "",
+                url: `https://kckills.com/scroll?kill=${killId}`,
+                color: 0xFFD700,
+                thumbnail: kill.thumbnail_url ? { url: kill.thumbnail_url } : undefined,
+                footer: { text: `Score ${kill.highlight_score?.toFixed(1) ?? "?"}/10 · KCKILLS` },
+                timestamp: new Date().toISOString(),
+              }],
+            }),
+          });
+        } catch { /* discord failure is non-blocking */ }
+      }
+    }
+  }
+
   return NextResponse.json({ ok: true });
 }
 
