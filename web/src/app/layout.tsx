@@ -38,11 +38,23 @@ export const metadata: Metadata = {
     siteName: "KCKILLS",
     locale: "fr_FR",
     url: SITE_URL,
+    // 1920x1280 hero shot — Discord/Twitter scale to 1200x630 in preview
+    // cards but accept larger originals. Per-page metadata can override
+    // this with kill-specific OG images (see /api/og/[id]).
+    images: [
+      {
+        url: "/images/hero-bg.jpg",
+        width: 1920,
+        height: 1280,
+        alt: "KCKILLS — clips Karmine Corp esport LoL",
+      },
+    ],
   },
   twitter: {
     card: "summary_large_image",
     title: "KCKILLS",
     description: "Le TikTok des kills LoL esport.",
+    images: ["/images/hero-bg.jpg"],
   },
   robots: {
     index: true,
