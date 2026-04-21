@@ -1,4 +1,5 @@
 import { createServerSupabase } from "@/lib/supabase/server";
+import { AuditRow } from "./audit-row";
 
 export const dynamic = "force-dynamic";
 export const metadata = {
@@ -93,31 +94,7 @@ export default async function AuditPage({ searchParams }: { searchParams: Promis
       ) : (
         <div className="rounded-xl border border-[var(--border-gold)] bg-[var(--bg-surface)] divide-y divide-[var(--border-gold)]/30 overflow-hidden">
           {rows.map((row) => (
-            <details key={row.id} className="group">
-              <summary className="cursor-pointer px-3 py-2 flex items-center gap-3 text-xs hover:bg-[var(--bg-elevated)]">
-                <span className="font-mono text-[var(--gold)] w-32 flex-shrink-0">{row.action}</span>
-                <span className="rounded bg-[var(--bg-elevated)] px-2 py-0.5 text-[10px] uppercase tracking-widest text-[var(--text-muted)]">
-                  {row.entity_type}
-                </span>
-                <span className="font-mono text-[10px] text-[var(--text-disabled)] truncate flex-1">
-                  {row.entity_id ? row.entity_id.slice(0, 16) : "—"}
-                </span>
-                <span className="text-[var(--text-muted)] text-[10px] whitespace-nowrap">
-                  {row.actor_label ?? "?"} · {new Date(row.created_at).toLocaleString("fr-FR")}
-                </span>
-              </summary>
-              <div className="px-3 py-3 bg-[var(--bg-primary)] grid grid-cols-2 gap-3 text-[10px] font-mono">
-                <div>
-                  <p className="text-[var(--text-muted)] uppercase tracking-widest mb-1">Before</p>
-                  <pre className="rounded bg-[var(--bg-elevated)] p-2 overflow-x-auto">{JSON.stringify(row.before, null, 2) || "null"}</pre>
-                </div>
-                <div>
-                  <p className="text-[var(--text-muted)] uppercase tracking-widest mb-1">After</p>
-                  <pre className="rounded bg-[var(--bg-elevated)] p-2 overflow-x-auto">{JSON.stringify(row.after, null, 2) || "null"}</pre>
-                </div>
-                {row.notes && <p className="col-span-2 text-[var(--text-muted)]">{row.notes}</p>}
-              </div>
-            </details>
+            <AuditRow key={row.id} row={row} />
           ))}
         </div>
       )}
