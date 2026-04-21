@@ -109,7 +109,12 @@ const YOUTUBE_HERO_CLIPS = [
   },
 ];
 
-export const revalidate = 60;
+// Bumped from 60s to 300s for scale — the homepage doesn't change by the
+// second (kill-of-the-week, stats, roster all stable for minutes). 5-min
+// cache reduces Vercel function invokes + Supabase egress by 5x under
+// traffic. The Live Banner + NextMatchOverlay still poll separately for
+// sub-minute freshness.
+export const revalidate = 300;
 
 export default async function HomePage() {
   const data = loadRealData();

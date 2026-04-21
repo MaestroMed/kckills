@@ -32,7 +32,11 @@ const FILTERABLE_AXES: ReadonlySet<string> = new Set<GridAxisId>([
   "fight_type",
 ]);
 
-export const revalidate = 60;
+// 300s cache — the feed payload (500 kills + 300 moments + roster) is
+// ~250 KB and would be a stampede risk at 60s if 10k users arrive in
+// the same minute after a cache miss. ISR SWR keeps the old page live
+// while the rebuild happens so no visitor ever waits.
+export const revalidate = 300;
 export const metadata = {
   title: "Scroll — KCKILLS",
   description: "Scroll les kills KC comme sur TikTok. Vrais clips video des matchs LEC, generes automatiquement.",

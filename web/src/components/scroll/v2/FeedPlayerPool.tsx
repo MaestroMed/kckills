@@ -257,9 +257,10 @@ export function FeedPlayerPool({
           playsInline
           preload="metadata"
           // Video sizing:
-          // - Mobile (portrait 9:16): cover fills the viewport perfectly
-          // - Desktop (landscape 16:9): contain shows the full 9:16 clip
-          //   with black bars on sides (like TikTok on desktop).
+          // - Mobile (portrait 9:16): cover on the 9:16 vertical clip
+          // - Desktop (landscape 16:9): contain on the 16:9 horizontal
+          //   clip so the whole frame shows (no top/bottom crop). pickSrc
+          //   already swapped the source to clipHorizontal on desktop.
           // CRITICAL: height MUST be non-zero or video is invisible (audio plays).
           style={{
             position: "absolute",
@@ -267,7 +268,7 @@ export function FeedPlayerPool({
             left: 0,
             width: "100%",
             height: itemHeight && itemHeight > 0 ? `${itemHeight}px` : "100dvh",
-            objectFit: isDesktop ? "contain" : "cover",
+            objectFit: "contain",
             backgroundColor: "#000",
             opacity: 0,
             transform: "translate3d(0, 0, 0)",
@@ -293,11 +294,14 @@ export function FeedPlayerPool({
 
 // ─── Helpers ───────────────────────────────────────────────────────────
 
-function pickSrc(item: PoolItem, _isDesktop: boolean, useLowQuality: boolean): string {
-  // Always prefer the vertical 1080p clip — it matches TikTok-style
-  // portrait UX even on desktop (shown letterboxed via object-fit:contain).
+function pickSrc(item: PoolItem, isDesktop: boolean, useLowQuality: boolean): string {
+  // Desktop wants the native 16:9 landscape clip — letterboxing a 9:16
+  // vertical inside a 16:9 viewport leaves black bars on 2/3 of the
+  // screen and feels like a broken layout. Mobile stays on vertical
+  // since viewport IS 9:16.
   // Low-quality variant only for data-saver/slow networks.
   if (useLowQuality && item.clipVerticalLow) return item.clipVerticalLow;
+  if (isDesktop && item.clipHorizontal) return item.clipHorizontal;
   return item.clipVertical;
 }
 

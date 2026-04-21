@@ -41,7 +41,10 @@ const nextConfig: NextConfig = {
       { protocol: "https", hostname: "i.ytimg.com" },
       { protocol: "https", hostname: "cdn.discordapp.com" },
       { protocol: "https", hostname: "clips.kckills.com" },
-      { protocol: "http", hostname: "static.lolesports.com" },
+      // Migré en https via fix mixed-content (commit fa9a428). Next
+      // Image bloque le legacy http:// désormais, toutes les URLs
+      // passent par https:// maintenant.
+      { protocol: "https", hostname: "static.lolesports.com" },
     ],
   },
   async headers() {

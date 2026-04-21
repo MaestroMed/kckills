@@ -3,7 +3,9 @@ import { getPublishedKills } from "@/lib/supabase/kills";
 import { loadRealData } from "@/lib/real-data";
 import { ClipsGrid, type ClipCard, type InitialFilters } from "./clips-grid";
 
-export const revalidate = 60;
+// 300s cache — /clips pulls 500 kills and filters client-side. The
+// catalog doesn't churn per-minute; 5-min ISR is plenty.
+export const revalidate = 300;
 
 export const metadata: Metadata = {
   title: "Clips — KCKILLS",
