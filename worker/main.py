@@ -42,14 +42,15 @@ log = structlog.get_logger()
 # analyzer tags them → og_generator publishes them.
 DAEMON_MODULES: list[tuple[str, int, str]] = [
     # (name, interval_seconds, dotted import path)
-    ("sentinel",     300,   "modules.sentinel"),      # 5 min
-    ("harvester",    600,   "modules.harvester"),     # 10 min
-    ("clipper",      300,   "modules.clipper"),       # 5 min
-    ("analyzer",     600,   "modules.analyzer"),      # 10 min
-    ("og_generator", 900,   "modules.og_generator"),  # 15 min
-    ("job_runner",   30,    "modules.job_runner"),    # 30s — admin-triggered jobs
-    ("heartbeat",    21600, "modules.heartbeat"),     # 6h
-    ("watchdog",     1800,  "modules.watchdog"),      # 30 min
+    ("sentinel",      300,   "modules.sentinel"),      # 5 min
+    ("harvester",     600,   "modules.harvester"),     # 10 min
+    ("transitioner",  300,   "modules.transitioner"),  # 5 min — raw -> vod_found
+    ("clipper",       300,   "modules.clipper"),       # 5 min
+    ("analyzer",      600,   "modules.analyzer"),      # 10 min
+    ("og_generator",  900,   "modules.og_generator"),  # 15 min
+    ("job_runner",    30,    "modules.job_runner"),    # 30s — admin-triggered jobs
+    ("heartbeat",     21600, "modules.heartbeat"),     # 6h
+    ("watchdog",      1800,  "modules.watchdog"),      # 30 min
 ]
 
 RESTART_DELAY = 10  # seconds between a module crash and its next attempt
