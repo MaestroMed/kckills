@@ -9,8 +9,25 @@ import {
   type UpcomingMatch,
 } from "@/lib/next-match";
 
+interface ApiMatch {
+  kickoffISO: string;
+  kickoffMs: number;
+  msUntil: number;
+  format: string;
+  opponentCode: string;
+  opponentName: string;
+  stage: string;
+  isLive: boolean;
+}
+
 /**
  * Floating "next rendez-vous" overlay anchored to the homepage hero.
+ *
+ * Data source: tries `/api/next-match` first (server-side LoL Esports API
+ * pull, CDN-cached 5 min), then falls back to the hand-curated
+ * `lib/next-match.ts` list when offline / API down. Means the overlay
+ * stays accurate without manual curation, but never ghost-renders a
+ * stale match if both sources are exhausted.
  *
  * State machine:
  *  - LIVE  → red pulse dot, "EN LIVE" label, links into /scroll for the
@@ -31,11 +48,32 @@ export function NextMatchOverlay() {
   const [now, setNow] = useState<Date | null>(null);
   const [reducedMotion, setReducedMotion] = useState(false);
   const [dismissed, setDismissed] = useState(false);
+  const [apiMatch, setApiMatch] = useState<ApiMatch | null>(null);
 
   useEffect(() => {
     setNow(new Date());
     const id = window.setInterval(() => setNow(new Date()), 30_000);
     return () => window.clearInterval(id);
+  }, []);
+
+  // Pull the dynamic next-match API once on mount + every 5 min.
+  // The route itself is CDN-cached 5 min so this is essentially free.
+  useEffect(() => {
+    const ac = new AbortController();
+    const fetchNext = async () => {
+      try {
+        const r = await fetch("/api/next-match", { signal: ac.signal });
+        if (!r.ok) return;
+        const d = await r.json();
+        if (d?.next?.kickoffISO) setApiMatch(d.next as ApiMatch);
+      } catch { /* fallback to static list */ }
+    };
+    fetchNext();
+    const id = window.setInterval(fetchNext, 5 * 60_000);
+    return () => {
+      ac.abort();
+      window.clearInterval(id);
+    };
   }, []);
 
   useEffect(() => {
@@ -50,8 +88,10 @@ export function NextMatchOverlay() {
   // always blank so SSR doesn't ship a "wrong now" copy that flickers.
   if (!now || dismissed) return null;
 
-  const live = getLiveMatch(now);
-  const next = live ?? getNextMatch(now);
+  // Prefer the live API match (real LEC schedule). Fall back to the
+  // curated list when the API hasn't returned yet or had no match.
+  const next: { kickoffISO: string; opponentCode: string; opponentName: string; stage: string } | null =
+    apiMatch ?? (getLiveMatch(now) ?? getNextMatch(now));
   if (!next) return null;
 
   const kickoff = new Date(next.kickoffISO);
