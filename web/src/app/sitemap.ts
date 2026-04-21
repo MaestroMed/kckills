@@ -25,6 +25,10 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   // buildTime: true so cookies() isn't called from sitemap-build context.
   const publishedKills = await getPublishedKills(SITEMAP_MAX_CLIPS, { buildTime: true }).catch(() => []);
 
+  // Only canonical routes here — any path that just redirect()s to
+  // another URL (e.g. /best, /top, /recent, /hall-of-fame) is dropped
+  // so we don't waste Google's crawl budget on 308 redirects. The
+  // target routes carry the weight instead.
   const staticPages: MetadataRoute.Sitemap = [
     {
       url: `${SITE_URL}/`,
@@ -39,16 +43,16 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       priority: 0.9,
     },
     {
-      url: `${SITE_URL}/best`,
-      lastModified: now,
-      changeFrequency: "daily",
-      priority: 0.85,
-    },
-    {
-      url: `${SITE_URL}/recent`,
+      url: `${SITE_URL}/clips`,
       lastModified: now,
       changeFrequency: "hourly",
-      priority: 0.85,
+      priority: 0.9,
+    },
+    {
+      url: `${SITE_URL}/records`,
+      lastModified: now,
+      changeFrequency: "daily",
+      priority: 0.8,
     },
     {
       url: `${SITE_URL}/matches`,
@@ -63,64 +67,10 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       priority: 0.8,
     },
     {
-      url: `${SITE_URL}/champions`,
+      url: `${SITE_URL}/alumni`,
       lastModified: now,
-      changeFrequency: "weekly",
-      priority: 0.7,
-    },
-    {
-      url: `${SITE_URL}/matchups`,
-      lastModified: now,
-      changeFrequency: "weekly",
-      priority: 0.7,
-    },
-    {
-      url: `${SITE_URL}/multikills`,
-      lastModified: now,
-      changeFrequency: "weekly",
-      priority: 0.75,
-    },
-    {
-      url: `${SITE_URL}/first-bloods`,
-      lastModified: now,
-      changeFrequency: "weekly",
-      priority: 0.7,
-    },
-    {
-      url: `${SITE_URL}/top`,
-      lastModified: now,
-      changeFrequency: "daily",
-      priority: 0.7,
-    },
-    {
-      url: `${SITE_URL}/community`,
-      lastModified: now,
-      changeFrequency: "weekly",
-      priority: 0.6,
-    },
-    {
-      url: `${SITE_URL}/hall-of-fame`,
-      lastModified: now,
-      changeFrequency: "weekly",
-      priority: 0.6,
-    },
-    {
-      url: `${SITE_URL}/records`,
-      lastModified: now,
-      changeFrequency: "weekly",
-      priority: 0.6,
-    },
-    {
-      url: `${SITE_URL}/stats`,
-      lastModified: now,
-      changeFrequency: "daily",
-      priority: 0.7,
-    },
-    {
-      url: `${SITE_URL}/compare`,
-      lastModified: now,
-      changeFrequency: "weekly",
-      priority: 0.5,
+      changeFrequency: "monthly",
+      priority: 0.65,
     },
     {
       url: `${SITE_URL}/api-docs`,
@@ -149,20 +99,13 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     priority: 0.7,
   }));
 
-  const alumniPages: MetadataRoute.Sitemap = [
-    {
-      url: `${SITE_URL}/alumni`,
-      lastModified: now,
-      changeFrequency: "monthly",
-      priority: 0.6,
-    },
-    ...ALUMNI.map((a) => ({
-      url: `${SITE_URL}/alumni/${a.slug}`,
-      lastModified: now,
-      changeFrequency: "monthly" as const,
-      priority: 0.55,
-    })),
-  ];
+  // /alumni is already in staticPages; here we just add the per-alumni detail.
+  const alumniPages: MetadataRoute.Sitemap = ALUMNI.map((a) => ({
+    url: `${SITE_URL}/alumni/${a.slug}`,
+    lastModified: now,
+    changeFrequency: "monthly" as const,
+    priority: 0.55,
+  }));
 
   const playerPages: MetadataRoute.Sitemap = roster.map((player) => ({
     url: `${SITE_URL}/player/${encodeURIComponent(player.name)}`,
