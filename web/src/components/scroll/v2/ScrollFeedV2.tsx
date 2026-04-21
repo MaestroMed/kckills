@@ -28,9 +28,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
-// BgmPlayer disabled — Invidious URL blocked by CSP. Re-enable once
-// we host MP3s on R2 (clips.kckills.com is already CSP-allowed).
-// import { BgmPlayer } from "../BgmPlayer";
+import { BgmPlayer } from "../BgmPlayer";
 import {
   FeedItemVideo,
   FeedItemMoment,
@@ -282,7 +280,7 @@ export function ScrollFeedV2({
       // Touch-action: pan-y so the browser doesn't fight the drag.
       style={{ touchAction: "pan-y", overscrollBehavior: "contain" }}
     >
-      {/* BgmPlayer disabled — see import comment */}
+      <BgmPlayer />
       {/* Top bar — outside the motion container so it doesn't translate. */}
       <div
         className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-4 py-3"
