@@ -1,6 +1,6 @@
 import { getPublishedKills } from "@/lib/supabase/kills";
 import { loadRealData } from "@/lib/real-data";
-import { ClipsGrid, type ClipCard } from "./clips-grid";
+import { ClipsGrid, type ClipCard, type InitialFilters } from "./clips-grid";
 
 export const revalidate = 60;
 export const metadata = {
@@ -8,7 +8,26 @@ export const metadata = {
   description: "Tous les clips Karmine Corp. Filtrer par joueur, équipe adverse, type de fight, multi-kills, first bloods.",
 };
 
-export default async function ClipsPage() {
+interface SearchParams {
+  multi?: string;
+  fb?: string;
+  fight?: string;
+  opp?: string;
+  sort?: string;
+  q?: string;
+}
+
+export default async function ClipsPage({ searchParams }: { searchParams?: Promise<SearchParams> }) {
+  const sp = (await searchParams) ?? {};
+  const initialFilters: InitialFilters = {
+    multiKillsOnly: sp.multi === "1" || sp.multi === "true",
+    firstBloodOnly: sp.fb === "1" || sp.fb === "true",
+    fightType: sp.fight ?? null,
+    opponent: sp.opp ?? null,
+    sort: (sp.sort as InitialFilters["sort"]) ?? "recent",
+    search: sp.q ?? "",
+  };
+
   const [kills, data] = await Promise.all([
     getPublishedKills(500),
     Promise.resolve(loadRealData()),
@@ -51,5 +70,5 @@ export default async function ClipsPage() {
     // Default: chronological (most recent first by match date)
     .sort((a, b) => (b.matchDate ?? "").localeCompare(a.matchDate ?? ""));
 
-  return <ClipsGrid initialCards={cards} />;
+  return <ClipsGrid initialCards={cards} initialFilters={initialFilters} />;
 }

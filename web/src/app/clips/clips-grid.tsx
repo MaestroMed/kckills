@@ -37,6 +37,15 @@ export interface ClipCard {
 
 type SortKey = "recent" | "score" | "rating" | "impressions";
 
+export interface InitialFilters {
+  multiKillsOnly: boolean;
+  firstBloodOnly: boolean;
+  fightType: string | null;
+  opponent: string | null;
+  sort: SortKey;
+  search: string;
+}
+
 const SORT_LABELS: Record<SortKey, string> = {
   recent: "Récents",
   score: "Meilleurs",
@@ -54,13 +63,13 @@ const FIGHT_TYPE_LABELS: Record<string, string> = {
   teamfight_5v5: "TF 5v5",
 };
 
-export function ClipsGrid({ initialCards }: { initialCards: ClipCard[] }) {
-  const [sortKey, setSortKey] = useState<SortKey>("recent");
-  const [opponentFilter, setOpponentFilter] = useState<string | null>(null);
-  const [fightTypeFilter, setFightTypeFilter] = useState<string | null>(null);
-  const [multiKillsOnly, setMultiKillsOnly] = useState(false);
-  const [firstBloodOnly, setFirstBloodOnly] = useState(false);
-  const [search, setSearch] = useState("");
+export function ClipsGrid({ initialCards, initialFilters }: { initialCards: ClipCard[]; initialFilters?: InitialFilters }) {
+  const [sortKey, setSortKey] = useState<SortKey>(initialFilters?.sort ?? "recent");
+  const [opponentFilter, setOpponentFilter] = useState<string | null>(initialFilters?.opponent ?? null);
+  const [fightTypeFilter, setFightTypeFilter] = useState<string | null>(initialFilters?.fightType ?? null);
+  const [multiKillsOnly, setMultiKillsOnly] = useState(initialFilters?.multiKillsOnly ?? false);
+  const [firstBloodOnly, setFirstBloodOnly] = useState(initialFilters?.firstBloodOnly ?? false);
+  const [search, setSearch] = useState(initialFilters?.search ?? "");
   const [visibleCount, setVisibleCount] = useState(60);
 
   // Distinct opponents for the chip bar
