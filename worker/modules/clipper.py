@@ -622,18 +622,50 @@ def _safe_remove(path: str):
 
 # ─── Daemon loop: pick up kills that need clipping ─────────────────────────
 
+MAX_RETRY_COUNT = 3
+
+
 async def run() -> int:
-    """Find kills in status='vod_found' and clip them. Returns clip count."""
+    """Find kills in status='vod_found' OR 'clip_error' (retry_count<3) and clip them.
+
+    The clip_error branch lets transient failures (YouTube throttle, network
+    blips, ffmpeg hiccups) self-heal without a human requeue. Each failed
+    attempt bumps retry_count; once it hits MAX_RETRY_COUNT the kill stops
+    being picked up and needs manual attention via /admin/clips.
+
+    Returns the number of kills successfully clipped this pass.
+    """
     log.info("clipper_scan_start")
 
-    kills = safe_select(
+    # Primary queue: never-tried kills
+    fresh_kills = safe_select(
         "kills",
-        "id, game_id, game_time_seconds, status",
+        "id, game_id, game_time_seconds, status, retry_count",
         status="vod_found",
-    )
+    ) or []
+
+    # Retry queue: kills that failed but haven't exhausted their attempts
+    retry_kills = [
+        k for k in (safe_select(
+            "kills",
+            "id, game_id, game_time_seconds, status, retry_count",
+            status="clip_error",
+        ) or [])
+        if int(k.get("retry_count") or 0) < MAX_RETRY_COUNT
+    ]
+
+    # Fresh first so new arrivals don't starve behind a long retry queue.
+    kills = fresh_kills + retry_kills
+
     if not kills:
         log.info("clipper_no_pending")
         return 0
+
+    log.info(
+        "clipper_queue",
+        fresh=len(fresh_kills),
+        retry=len(retry_kills),
+    )
 
     processed = 0
     for kill in kills:
