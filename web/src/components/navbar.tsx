@@ -4,14 +4,11 @@ import Link from "next/link";
 import { useState, useEffect } from "react";
 import { CommandPaletteButton } from "./CommandPalette";
 
-// Clip-centric nav — only what matters for the core experience.
-// Pages like /hall-of-fame, /records, /stats, /compare, /sphere, /alumni
-// still exist but are hidden from nav until they're polished.
+// Clip-centric nav — only what matters. Logo links to home, no "Accueil" item.
+// /best and /recent merged into /clips (filterable + chronological by default).
 const NAV_LINKS = [
-  { href: "/", label: "Accueil" },
   { href: "/scroll", label: "Scroll" },
-  { href: "/best", label: "Meilleurs" },
-  { href: "/recent", label: "Derniers" },
+  { href: "/clips", label: "Clips" },
   { href: "/players", label: "Joueurs" },
   { href: "/matches", label: "Matchs" },
 ];

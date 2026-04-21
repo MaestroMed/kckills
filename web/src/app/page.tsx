@@ -389,8 +389,8 @@ export default async function HomePage() {
         </div>
       </section>
 
-      {/* ═══ SCROLL VIVANT — grid 4 axes ════════════════════════════════ */}
-      <ScrollVivantSection />
+      {/* ScrollVivantSection hidden — needs full polish before re-enabling */}
+      {/* <ScrollVivantSection /> */}
 
       {/* ═══ ROSTER — Full width, tall bands ════════════════════════════ */}
       {roster.length > 0 && (
