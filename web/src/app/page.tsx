@@ -4,7 +4,8 @@ import { loadRealData, getCurrentRoster, getTeamStats, getMatchesSorted, display
 import { championIconUrl, championSplashUrl } from "@/lib/constants";
 import { PLAYER_PHOTOS, TEAM_LOGOS, KC_LOGO } from "@/lib/kc-assets";
 import { getPublishedKills } from "@/lib/supabase/kills";
-import { AudioPlayer } from "@/components/AudioPlayer";
+// AudioPlayer disabled on homepage — BGM player on /scroll covers ambiance
+// import { AudioPlayer } from "@/components/AudioPlayer";
 // HomeFilteredContent removed — was a duplicate of /matches page
 import { HomeRareCards } from "@/components/HomeRareCards";
 import { HomeYouTubeShowcase } from "@/components/HomeYouTubeShowcase";
@@ -135,7 +136,7 @@ export default async function HomePage() {
         marginRight: "-50vw",
       }}
     >
-      <AudioPlayer />
+      {/* AudioPlayer removed — was intrusive on first visit */}
 
       {/* ═══ HERO — 2-col layout with clip rotator (full-bleed via parent) ═══ */}
       <section className="relative min-h-[100vh] md:min-h-[92vh] overflow-hidden">
@@ -401,6 +402,12 @@ export default async function HomePage() {
       {/* ScrollVivantSection hidden — needs full polish before re-enabling */}
       {/* <ScrollVivantSection /> */}
 
+      {/* ═══ KILL OF THE WEEK — surface the featured clip first ═════════ */}
+      <KillOfTheWeek />
+
+      {/* ═══ DERNIERS CLIPS — strip horizontal des 8 plus récents ═══════ */}
+      <HomeRecentClips />
+
       {/* ═══ ROSTER — Full width, tall bands ════════════════════════════ */}
       {roster.length > 0 && (
         <section className="relative overflow-hidden py-2">
@@ -497,12 +504,6 @@ export default async function HomePage() {
           </section>
         );
       })()}
-
-      {/* ═══ KILL OF THE WEEK ═══════════════════════════════════════════ */}
-      <KillOfTheWeek />
-
-      {/* ═══ DERNIERS CLIPS — strip horizontal des 8 plus récents ═══════ */}
-      <HomeRecentClips />
 
       {/* ═══ CARTES LEGENDAIRES — TCG visual layer en showcase home ═════ */}
       <HomeRareCards />
