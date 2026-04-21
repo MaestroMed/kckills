@@ -336,7 +336,14 @@ export default async function HomePage() {
                   <span className="text-white/15">&bull;</span>
                   <span className="flex items-baseline gap-1">
                     <AnimatedNumber
-                      value={(stats.wins / (stats.wins + stats.losses)) * 100}
+                      // Guard against an empty roster (no matches) — division
+                      // would yield NaN and render "NaN%". Showing 0% reads
+                      // cleaner on the cold-start case.
+                      value={
+                        stats.wins + stats.losses > 0
+                          ? (stats.wins / (stats.wins + stats.losses)) * 100
+                          : 0
+                      }
                       duration={1.8}
                       format="percent1"
                       className="text-[var(--gold)] font-bold text-lg"
