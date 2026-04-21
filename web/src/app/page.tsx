@@ -428,6 +428,63 @@ export default async function HomePage() {
       {/* ═══ DERNIERS CLIPS — strip horizontal des 8 plus récents ═══════ */}
       <HomeRecentClips />
 
+      {/* ═══ DISCOVERY STRIP — 3 curated entry points to go deeper ═════ */}
+      <section className="max-w-7xl mx-auto px-4 md:px-6 py-6">
+        <div className="grid gap-3 md:grid-cols-3">
+          <Link
+            href="/week"
+            className="group flex items-center gap-3 rounded-xl border border-[var(--cyan)]/30 bg-gradient-to-br from-[var(--cyan)]/10 via-[var(--bg-surface)] to-[var(--bg-surface)] p-4 hover:border-[var(--cyan)]/60 transition-all hover:-translate-y-0.5"
+          >
+            <span className="text-2xl">▽</span>
+            <div className="flex-1 min-w-0">
+              <p className="font-data text-[9px] uppercase tracking-[0.25em] text-[var(--cyan)]/70">
+                Hebdomadaire
+              </p>
+              <p className="font-display text-sm font-bold text-white group-hover:text-[var(--cyan)] transition-colors">
+                Cette semaine
+              </p>
+            </div>
+            <svg className="h-4 w-4 text-[var(--cyan)]/40 group-hover:text-[var(--cyan)] group-hover:translate-x-0.5 transition-all" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
+            </svg>
+          </Link>
+          <Link
+            href="/records"
+            className="group flex items-center gap-3 rounded-xl border border-[var(--gold)]/30 bg-gradient-to-br from-[var(--gold)]/10 via-[var(--bg-surface)] to-[var(--bg-surface)] p-4 hover:border-[var(--gold)]/60 transition-all hover:-translate-y-0.5"
+          >
+            <span className="text-2xl">★</span>
+            <div className="flex-1 min-w-0">
+              <p className="font-data text-[9px] uppercase tracking-[0.25em] text-[var(--gold)]/70">
+                Hall of Fame
+              </p>
+              <p className="font-display text-sm font-bold text-white group-hover:text-[var(--gold)] transition-colors">
+                Records Absolus
+              </p>
+            </div>
+            <svg className="h-4 w-4 text-[var(--gold)]/40 group-hover:text-[var(--gold)] group-hover:translate-x-0.5 transition-all" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
+            </svg>
+          </Link>
+          <Link
+            href="/clips?multi=1&sort=score"
+            className="group flex items-center gap-3 rounded-xl border border-[var(--orange)]/30 bg-gradient-to-br from-[var(--orange)]/10 via-[var(--bg-surface)] to-[var(--bg-surface)] p-4 hover:border-[var(--orange)]/60 transition-all hover:-translate-y-0.5"
+          >
+            <span className="text-2xl">⚡</span>
+            <div className="flex-1 min-w-0">
+              <p className="font-data text-[9px] uppercase tracking-[0.25em] text-[var(--orange)]/70">
+                Highlights
+              </p>
+              <p className="font-display text-sm font-bold text-white group-hover:text-[var(--orange)] transition-colors">
+                Pentakills & Multi
+              </p>
+            </div>
+            <svg className="h-4 w-4 text-[var(--orange)]/40 group-hover:text-[var(--orange)] group-hover:translate-x-0.5 transition-all" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
+            </svg>
+          </Link>
+        </div>
+      </section>
+
       {/* ═══ ROSTER — Full width, tall bands ════════════════════════════ */}
       {roster.length > 0 && (
         <section className="relative overflow-hidden py-2">
