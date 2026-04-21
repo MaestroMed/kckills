@@ -191,9 +191,27 @@ function CommentItem({ comment }: { comment: Comment }) {
   const username = comment.profile?.username ?? "Anonyme";
   const avatar = comment.profile?.avatar_url;
   const timeAgo = getTimeAgo(comment.created_at);
+  const [reported, setReported] = useState(false);
+  const [reporting, setReporting] = useState(false);
+
+  const handleReport = async () => {
+    if (reported || reporting) return;
+    if (!confirm("Signaler ce commentaire comme inapproprié ?")) return;
+    setReporting(true);
+    try {
+      const r = await fetch(`/api/comments/${comment.id}/report`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reason: "toxic" }),
+      });
+      if (r.ok || r.status === 401) setReported(true);
+    } finally {
+      setReporting(false);
+    }
+  };
 
   return (
-    <div className="flex gap-3">
+    <div className="flex gap-3 group">
       {/* Avatar */}
       <div className="h-8 w-8 shrink-0 rounded-full bg-[var(--bg-elevated)] overflow-hidden">
         {avatar ? (
@@ -209,6 +227,14 @@ function CommentItem({ comment }: { comment: Comment }) {
         <div className="flex items-center gap-2">
           <span className="text-xs font-bold text-white/80 truncate">{username}</span>
           <span className="text-[10px] text-[var(--text-muted)]">{timeAgo}</span>
+          <button
+            onClick={handleReport}
+            disabled={reported || reporting}
+            className="ml-auto text-[10px] text-[var(--text-muted)] hover:text-[var(--red)] opacity-0 group-hover:opacity-100 transition-opacity disabled:opacity-50"
+            title="Signaler"
+          >
+            {reported ? "✓ signalé" : "⚐"}
+          </button>
         </div>
         <p className="text-sm text-white/70 mt-0.5 break-words">{comment.body}</p>
 
