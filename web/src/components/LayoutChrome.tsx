@@ -3,6 +3,7 @@
 import { usePathname } from "next/navigation";
 import { Navbar } from "@/components/navbar";
 import { LiveBanner } from "@/components/LiveBanner";
+import { PushOptIn } from "@/components/PushOptIn";
 
 /**
  * Conditionally renders the site chrome (navbar, footer) based on pathname.
@@ -52,12 +53,11 @@ export function LayoutChrome({ children }: { children: React.ReactNode }) {
               </p>
               <p className="text-xs text-[var(--text-muted)] mt-1">Every kill. Rated. Remembered.</p>
             </div>
-            <div className="flex gap-6 text-xs text-[var(--text-muted)]">
-              <a href="/" className="hover:text-[var(--gold)]">Accueil</a>
+            <div className="flex flex-wrap gap-x-5 gap-y-2 text-xs text-[var(--text-muted)]">
               <a href="/scroll" className="hover:text-[var(--gold)]">Scroll</a>
+              <a href="/clips" className="hover:text-[var(--gold)]">Clips</a>
               <a href="/players" className="hover:text-[var(--gold)]">Joueurs</a>
               <a href="/matches" className="hover:text-[var(--gold)]">Matchs</a>
-              <a href="/top" className="hover:text-[var(--gold)]">Top</a>
               <a href="/community" className="hover:text-[var(--gold)]">Community</a>
               <a href="/api-docs" className="hover:text-[var(--gold)]">API</a>
               <a href="/privacy" className="hover:text-[var(--gold)]">Confidentialit&eacute;</a>
@@ -79,6 +79,7 @@ export function LayoutChrome({ children }: { children: React.ReactNode }) {
           </p>
         </div>
       </footer>
+      <PushOptIn />
     </>
   );
 }
