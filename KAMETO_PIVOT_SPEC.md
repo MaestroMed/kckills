@@ -1,6 +1,7 @@
 # Pivot Kameto VOD-only — Spec d'architecture
 
-> Statut : draft v1, 22 avril 2026
+> Statut : draft v2 — smoke tests run, scope ajusté
+> Mise à jour : 23 avril 2026
 > Cible : remplacer la chaîne d'acquisition VOD officielle LEC par les VODs Kameto (chaîne YouTube principale + clips) pour pouvoir backfill toutes les games KC depuis sa création (2021).
 > Suppose que le pilote actuel (340 clips KC LEC 2025-2026) est en working grade — c'est l'étape "vrai produit" pour LOLTOK.
 
@@ -185,15 +186,54 @@
 
 ---
 
-## 8. Pour démarrer immédiatement
+## 8. Smoke tests — RÉSULTATS (23 avril 2026)
+
+### ✅ yt-dlp / channels disponibles
+
+3 chaînes YouTube exploitables identifiées + leurs UC IDs résolus :
+
+| Chaîne | UC ID | Volume | Usage |
+|---|---|---|---|
+| **`@LEC`** (LEC officiel) | `UCWWZjhmokTbezUQr1kbbEYQ` | Highlights 10-15min/game, **TOUS les matchs LEC 2024+** | Source primaire highlights post-2024 |
+| **`Karmine Corp`** (officiel KC) | `UCW5Ma_xnAweFIXCGOAZECAA` | Voicecomms, debriefs, content non-game | Source emotional / hero clips |
+| **`Kameto Clips`** | `UCoNvmftvPAAlozI-DTUrAng` | Clips courts Kameto réactions, ~1-3min | Source secondaire emotional + hero |
+| `Loleventvods` | `UCQJT7rpynlR7SSdn3OyuI_Q` | Game replays full LCK/LCS/LEC | **2 matchs KC seulement sur 200 récents** — pas viable comme source primaire KC |
+
+⚠️ **Aucune chaîne YouTube ne contient les full game replays KC pre-2024.** Pour le backfill historique (LFL 2021-2023, EU Masters), il faut soit :
+- Twitch VODs (Kameto stream perso, ratings limités à ~60j)
+- Subscription paid (Riot Watch, parfois LolEsports.com)
+- Demander archive directement à KC (longshot)
+
+### Implication scope révisée
+
+Le pivot ORIGINAL prévoyait d'avoir des full VODs Kameto avec 3-5 games concaténées + un VOD_SPLITTER pour les couper. **Trouvaille smoke test** : `@LEC` poste DÉJÀ chaque game séparément → **VOD_SPLITTER devient inutile pour LEC 2024+**.
+
+Le nouveau scope :
+- ❌ VOD_SPLITTER supprimé pour LEC 2024+ (à garder pour backfill historique LFL via Twitch éventuellement)
+- ❌ CALIBRATOR drift correction simplifié (les highlights LEC sont game-pure, pas de pré/post à clip out)
+- ✅ KAMETO_DISCOVERER devient **CHANNEL_DISCOVERER** générique : itère sur N channels configurés (LEC + KC officiel + Kameto Clips + …)
+- ✅ Reconciliation game↔match via parsing du titre (`"SK vs KC | HIGHLIGHTS | 2026 #LEC Spring - Week 4 Day 3"` est très standardisé)
+
+**Effort dev révisé** : ~10 jours-homme (vs 20 dans la v1 spec).
+**Couverture LEC 2024-2026** : facile via @LEC (~80 matchs × 3 games = ~240 highlights).
+**Couverture pré-2024** : reste un problème — soit on accepte le gap, soit on attaque Twitch séparément.
+
+### À tester encore
+
+- **Oracle's Elixir CSV** : non testé. Faut pull le CSV LEC 2024-2026 + valider qu'on a les player+champion par game. Probablement OK (source standard scene esport).
+- **OCR timer in-game** : non testé puisque VOD_SPLITTER pas requis pour LEC 2024+. À tester si on attaque le backfill historique via Twitch.
+- **Tesseract / EasyOCR install** : tesseract pas dans le PATH du PC actuel. EasyOCR (Python pur) probablement plus simple à installer si on en a besoin.
+
+### Path révisé pour démarrer
 
 Quand tu donnes le go, on attaque dans cet ordre :
 
-1. **Smoke test yt-dlp** : `yt-dlp -F https://youtube.com/@KametoCorp/videos --dateafter 20260101` pour voir combien de VODs on a sous la main
-2. **Smoke test Oracle's Elixir** : pull du CSV LEC 2026 via leur Drive
-3. **Smoke test OCR** : lance `pytesseract` sur 3 frames d'une VOD Kameto pour vérifier la lisibilité du timer in-game
+1. **K-Phase 0 simplifié** : migration 010 (`channel_videos` table avec UC ID + classification) + module `CHANNEL_DISCOVERER` qui scrape `@LEC` + filtre KC matches
+2. **K-Phase 1** : reconciliation title → (match_external_id, game_number) via regex + score check vs kc_matches.json
+3. **K-Phase 2** : adapter CLIPPER pour utiliser le YouTube ID de @LEC au lieu du VOD officiel lolesports
+4. **K-Phase 3** : backfill 2024-2026 (~240 highlights → ~7000 clips estimés)
 
-Si les 3 smokes passent, on attaque K-Phase 0 en 1 PR.
+Coverage 2021-2023 = chantier séparé via Twitch, pas bloquant pour shipper.
 
 ---
 

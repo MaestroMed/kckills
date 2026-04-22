@@ -35,6 +35,32 @@ MAX_PER_RUN = 5
 HLS_DIR = os.path.join(os.path.dirname(__file__), "..", "hls_temp")
 
 
+async def _source_has_audio(src_path: str) -> bool:
+    """Return True if the source file contains at least one audio stream.
+
+    Uses ffprobe (shipped with ffmpeg). Falls back to True on probe
+    failure — better to crash on the encode and learn than to silently
+    drop audio when it was actually present.
+    """
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            "ffprobe",
+            "-v", "error",
+            "-select_streams", "a",
+            "-show_entries", "stream=codec_type",
+            "-of", "csv=p=0",
+            src_path,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=10)
+        return b"audio" in (stdout or b"")
+    except Exception:
+        # Probe failed — assume present. The encode either works or
+        # surfaces the real issue in its stderr.
+        return True
+
+
 async def package_clip(kill_id: str, mp4_url: str) -> str | None:
     """Download MP4 + run ffmpeg HLS encode + upload to R2.
 
@@ -57,18 +83,55 @@ async def package_clip(kill_id: str, mp4_url: str) -> str | None:
         # 3 variants: 240p / 480p / 720p
         log.info("hls_encode_start", kill_id=kill_id[:8])
         master_path = os.path.join(work_dir, "master.m3u8")
+        # Detect audio presence — drives the var_stream_map syntax.
+        has_audio = await _source_has_audio(src_path)
+
+        # ffmpeg 5+ HLS multi-variant — use -filter_complex split instead
+        # of -map 0:v:0 repeated. The old approach blew up on libx264
+        # with "Variant stream info update failed / incorrect codec
+        # parameters" because var_stream_map could not resolve the
+        # repeated source maps cleanly.
+        # Fix: split the source video into 3 labelled outputs, scale each
+        # to its target height, then map each label as its own variant.
+        # Audio is mapped 3 times (one per variant) when present so the
+        # var_stream_map a:0/a:1/a:2 references resolve correctly.
+
         cmd = [
             "ffmpeg", "-y", "-i", src_path,
-            "-map", "0:v:0", "-map", "0:v:0", "-map", "0:v:0",
-            "-map", "0:a?",
-            "-c:v", "libx264", "-c:a", "aac",
-            "-filter:v:0", "scale=-2:240", "-b:v:0", "400k", "-maxrate:v:0", "600k", "-bufsize:v:0", "800k",
-            "-filter:v:1", "scale=-2:480", "-b:v:1", "1000k", "-maxrate:v:1", "1500k", "-bufsize:v:1", "2000k",
-            "-filter:v:2", "scale=-2:720", "-b:v:2", "2500k", "-maxrate:v:2", "3500k", "-bufsize:v:2", "5000k",
-            "-hls_time", "2", "-hls_playlist_type", "vod",
+            "-filter_complex",
+            "[0:v]split=3[v1][v2][v3];"
+            "[v1]scale=-2:240[v1out];"
+            "[v2]scale=-2:480[v2out];"
+            "[v3]scale=-2:720[v3out]",
+            # Variant 0 — 240p
+            "-map", "[v1out]", "-c:v:0", "libx264",
+            "-b:v:0", "400k", "-maxrate:v:0", "600k", "-bufsize:v:0", "800k",
+            # Variant 1 — 480p
+            "-map", "[v2out]", "-c:v:1", "libx264",
+            "-b:v:1", "1000k", "-maxrate:v:1", "1500k", "-bufsize:v:1", "2000k",
+            # Variant 2 — 720p
+            "-map", "[v3out]", "-c:v:2", "libx264",
+            "-b:v:2", "2500k", "-maxrate:v:2", "3500k", "-bufsize:v:2", "5000k",
+        ]
+        if has_audio:
+            cmd += [
+                # Audio mapped once per variant — var_stream_map needs
+                # one a:N per a:N reference.
+                "-map", "a:0", "-map", "a:0", "-map", "a:0",
+                "-c:a", "aac", "-b:a", "96k", "-ac", "2",
+            ]
+        cmd += [
+            # Force keyframe alignment for clean 2s segments — without
+            # this ffmpeg may produce mis-aligned segments that the
+            # player chokes on at variant switch.
+            "-g", "48", "-keyint_min", "48", "-sc_threshold", "0",
+            "-f", "hls",
+            "-hls_time", "2",
+            "-hls_playlist_type", "vod",
             "-hls_segment_filename", os.path.join(work_dir, "v%v_%03d.ts"),
             "-master_pl_name", "master.m3u8",
-            "-var_stream_map", "v:0,a:0 v:1,a:0 v:2,a:0",
+            "-var_stream_map",
+            ("v:0,a:0 v:1,a:1 v:2,a:2" if has_audio else "v:0 v:1 v:2"),
             os.path.join(work_dir, "v%v.m3u8"),
         ]
         proc = await asyncio.create_subprocess_exec(
