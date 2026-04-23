@@ -235,10 +235,114 @@ export function ClipDetailEditor({ clip }: Props) {
             </Link>
           </div>
 
+          {/* QC button — enqueues a clip_qc.verify job that reads
+              the in-game timer at the clip's mid-point and returns
+              the drift. Useful when the clip looks wrong vs the
+              expected game_time_seconds. Costs 1 Gemini call. */}
+          <QcButton killId={clip.id} />
+
           {savedAt && <p className="text-xs text-[var(--green)] text-center">✓ Sauvegardé à {savedAt.toLocaleTimeString("fr-FR")}</p>}
           {error && <p className="text-xs text-[var(--red)] text-center">{error}</p>}
         </div>
       </div>
+    </div>
+  );
+}
+
+interface QcResult {
+  is_ok?: boolean;
+  drift_seconds?: number;
+  needs_reclip?: boolean;
+  expected_game_time?: number;
+}
+
+function QcButton({ killId }: { killId: string }) {
+  const [status, setStatus] = useState<"idle" | "queued" | "running" | "done" | "error">("idle");
+  const [result, setResult] = useState<QcResult | null>(null);
+  const [jobId, setJobId] = useState<string | null>(null);
+
+  const enqueue = async () => {
+    setStatus("queued");
+    setResult(null);
+    try {
+      const res = await fetch(`/api/admin/clips/${killId}/qc`, { method: "POST" });
+      if (!res.ok) {
+        setStatus("error");
+        return;
+      }
+      const data = await res.json();
+      setJobId(data.job_id);
+      setStatus("running");
+      // Poll the job status every 3s until completed
+      const start = Date.now();
+      const poll = async () => {
+        if (Date.now() - start > 60_000) {
+          setStatus("error");
+          return;
+        }
+        const r = await fetch(`/api/admin/clips/${killId}/qc?job_id=${data.job_id}`);
+        if (!r.ok) {
+          setStatus("error");
+          return;
+        }
+        const j = await r.json();
+        if (j.status === "completed") {
+          setResult(j.result ?? null);
+          setStatus("done");
+          return;
+        }
+        if (j.status === "failed") {
+          setStatus("error");
+          return;
+        }
+        setTimeout(poll, 3000);
+      };
+      setTimeout(poll, 3000);
+    } catch {
+      setStatus("error");
+    }
+  };
+
+  return (
+    <div className="rounded-lg border border-[var(--cyan)]/30 bg-[var(--cyan)]/5 p-3 mt-2">
+      <div className="flex items-center justify-between gap-2">
+        <div>
+          <p className="text-xs font-bold text-[var(--cyan)]">QC clip timing</p>
+          <p className="text-[10px] text-[var(--text-muted)]">
+            Lit le timer in-game via Gemini, calcule le drift vs expected.
+          </p>
+        </div>
+        <button
+          onClick={enqueue}
+          disabled={status === "queued" || status === "running"}
+          className="rounded-lg bg-[var(--cyan)]/20 border border-[var(--cyan)]/40 px-3 py-1.5 text-xs font-bold text-[var(--cyan)] hover:bg-[var(--cyan)]/30 disabled:opacity-50"
+        >
+          {status === "idle" || status === "done" || status === "error"
+            ? "Lancer QC"
+            : status === "queued"
+            ? "En queue…"
+            : "Analyse…"}
+        </button>
+      </div>
+      {result && (
+        <div className="mt-2 text-[11px] space-y-0.5">
+          <p>
+            <span className="text-[var(--text-muted)]">Expected: </span>
+            T+{result.expected_game_time}s
+          </p>
+          <p>
+            <span className="text-[var(--text-muted)]">Drift: </span>
+            <span className={result.is_ok ? "text-[var(--green)]" : "text-[var(--orange)]"}>
+              {result.drift_seconds}s
+            </span>
+            {" "}
+            {result.is_ok ? "✓ OK" : result.needs_reclip ? "⚠️ re-clip recommended" : "marginal"}
+          </p>
+        </div>
+      )}
+      {status === "error" && (
+        <p className="mt-1 text-[11px] text-[var(--red)]">QC failed — check job logs</p>
+      )}
     </div>
   );
 }

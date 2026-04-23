@@ -277,14 +277,55 @@ async def clip_kill(
         ]):
             log.warn("ffmpeg_low_failed", kill_id=kill_id)  # non-fatal
 
-        # ─── 5. Extract thumbnail at kill moment ────────────────────
-        await _ffmpeg([
-            "-ss", str(before),
-            "-i", v_path,
-            "-vframes", "1",
-            "-q:v", "2",
-            "-y", thumb_path,
-        ])
+        # ─── 5. Smart thumbnail extraction — best of 3 frames ─────
+        # Extract 3 candidate frames at -1s, +0.5s, +2s around the
+        # kill moment. Pick the one with highest luminance variance
+        # (= most visual info, least likely to be a black/loading
+        # frame or kill-cam transition).
+        # The kill-cam usually fades to black for ~0.3s right after
+        # the kill animation, so picking exact-moment often yields
+        # a near-black thumbnail. The +1s offset captures the post-
+        # kill victory pose / reaction shot which is much more
+        # readable as a poster.
+        thumb_candidates = []
+        for offset_s, suffix in [(-1.0, "a"), (0.5, "b"), (2.0, "c")]:
+            cand_path = os.path.join(
+                config.THUMBNAILS_DIR, f"{kill_id}_thumb_{suffix}.jpg",
+            )
+            try:
+                await _ffmpeg([
+                    "-ss", str(max(0, before + offset_s)),
+                    "-i", v_path,
+                    "-vframes", "1",
+                    "-q:v", "2",
+                    "-y", cand_path,
+                ])
+                if os.path.exists(cand_path) and os.path.getsize(cand_path) > 1000:
+                    thumb_candidates.append(cand_path)
+            except Exception:
+                pass
+
+        chosen = await asyncio.to_thread(_pick_best_thumbnail, thumb_candidates)
+        if chosen and chosen != thumb_path:
+            try:
+                # Rename winner to canonical thumb_path
+                if os.path.exists(thumb_path):
+                    os.remove(thumb_path)
+                os.rename(chosen, thumb_path)
+            except OSError:
+                # Fall back to copy if rename fails (cross-device)
+                import shutil
+                try:
+                    shutil.copy2(chosen, thumb_path)
+                except OSError:
+                    pass
+        # Cleanup the losers
+        for cand in thumb_candidates:
+            if cand != thumb_path and os.path.exists(cand):
+                try:
+                    os.remove(cand)
+                except OSError:
+                    pass
 
         # ─── 6. Compute canonical hashes (Phase 1 foundation) ────────
         # SHA-256 dedups byte-identical re-encodes; pHash dedups visually
@@ -618,6 +659,51 @@ def _safe_remove(path: str):
             os.remove(path)
     except Exception:
         pass
+
+
+def _pick_best_thumbnail(candidates: list[str]) -> str | None:
+    """From a list of candidate thumbnail paths, return the one with
+    the highest "informative-ness" score.
+
+    Score = mean luminance × variance (capped). High score = bright
+    AND high contrast = readable poster. Low score = mostly black or
+    mostly uniform = boring placeholder.
+
+    Returns None if all candidates fail PIL load (unlikely but safe).
+    """
+    if not candidates:
+        return None
+    if len(candidates) == 1:
+        return candidates[0]
+
+    try:
+        from PIL import Image, ImageStat
+    except ImportError:
+        # PIL absent — just return the first candidate (still better
+        # than nothing). PIL is part of `Pillow` which is in worker
+        # requirements.txt, so this should never trigger.
+        return candidates[0]
+
+    scored: list[tuple[float, str]] = []
+    for path in candidates:
+        try:
+            with Image.open(path) as img:
+                gray = img.convert("L")
+                stats = ImageStat.Stat(gray)
+                mean_lum = stats.mean[0]      # 0-255
+                stddev = stats.stddev[0]      # spread = visual info
+                # Penalty for too-dark (likely loading screen) or
+                # too-bright (likely white flash on kill)
+                if mean_lum < 30 or mean_lum > 240:
+                    score = stddev * 0.3
+                else:
+                    score = stddev * (1.0 - abs(mean_lum - 128) / 200.0)
+                scored.append((score, path))
+        except Exception:
+            scored.append((0.0, path))
+
+    scored.sort(key=lambda x: x[0], reverse=True)
+    return scored[0][1] if scored else candidates[0]
 
 
 # ─── Daemon loop: pick up kills that need clipping ─────────────────────────

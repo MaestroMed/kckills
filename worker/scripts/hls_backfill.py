@@ -45,8 +45,14 @@ from modules.hls_packager import package_clip
 log = structlog.get_logger()
 
 
-def fetch_pending(limit: int | None) -> list[dict]:
-    """Get every published kill that has an MP4 but no HLS master URL."""
+def fetch_pending(limit: int | None, force_reencode: bool) -> list[dict]:
+    """Get published kills needing HLS encoding.
+
+    `force_reencode=True` includes ALL published clips (not just ones
+    with hls_master_url IS NULL) — used when the encoding pipeline
+    changed (e.g. added a 4th variant 1080p in PR2) and the existing
+    HLS need a refresh.
+    """
     db = get_db()
     if not db:
         raise SystemExit("ERROR: no Supabase config")
@@ -55,14 +61,15 @@ def fetch_pending(limit: int | None) -> list[dict]:
     offset = 0
     page_size = 200
     while True:
-        params = {
-            "select": "id,clip_url_vertical,killer_champion,victim_champion,highlight_score",
+        params: dict = {
+            "select": "id,clip_url_vertical,killer_champion,victim_champion,highlight_score,hls_master_url",
             "status": "eq.published",
-            "hls_master_url": "is.null",
             "limit": page_size,
             "offset": offset,
             "order": "highlight_score.desc.nullslast",
         }
+        if not force_reencode:
+            params["hls_master_url"] = "is.null"
         r = httpx.get(f"{db.base}/kills", headers=db.headers, params=params, timeout=30.0)
         r.raise_for_status()
         page = r.json()
@@ -111,9 +118,10 @@ async def process_one(
             print(f"{prefix} FAIL {elapsed:5.1f}s  (returned None)")
 
 
-async def main_async(limit: int | None, dry_run: bool, workers: int):
-    pending = fetch_pending(limit)
-    print(f"Found {len(pending)} clips without HLS (limit={limit or 'none'}, workers={workers})")
+async def main_async(limit: int | None, dry_run: bool, workers: int, force_reencode: bool):
+    pending = fetch_pending(limit, force_reencode)
+    mode = "FORCE-REENCODE all" if force_reencode else "without HLS"
+    print(f"Found {len(pending)} clips {mode} (limit={limit or 'none'}, workers={workers})")
     if pending:
         print(f"\nFirst 5 candidates:")
         for k in pending[:5]:
@@ -161,12 +169,16 @@ def main():
     ap.add_argument("--dry-run", action="store_true",
                     help="List candidates without encoding.")
     ap.add_argument("--workers", type=int, default=6,
-                    help="Number of parallel ffmpeg workers (default: 6). "
-                         "Each instance uses ~1.5 cores. "
-                         "Bump to 8-10 on a 12+ core machine.")
+                    help="Number of parallel ffmpeg workers (default: 6).")
+    ap.add_argument("--force-reencode", action="store_true",
+                    help="Re-encode ALL published clips, not just ones "
+                         "missing HLS. Use after the encoding ladder "
+                         "changes (e.g. 3-variant → 4-variant 1080p). "
+                         "Doubles R2 cost — old segments overwritten "
+                         "by new at same path hls/<id>/.")
     args = ap.parse_args()
 
-    asyncio.run(main_async(args.limit, args.dry_run, args.workers))
+    asyncio.run(main_async(args.limit, args.dry_run, args.workers, args.force_reencode))
 
 
 if __name__ == "__main__":
