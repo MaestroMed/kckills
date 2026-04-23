@@ -30,6 +30,7 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { championIconUrl } from "@/lib/constants";
+import { Description } from "@/components/i18n/Description";
 
 interface CinematicKillProps {
   kill: {
@@ -42,6 +43,10 @@ interface CinematicKillProps {
     clip_url_vertical?: string | null;
     thumbnail_url?: string | null;
     ai_description?: string | null;
+    ai_description_fr?: string | null;
+    ai_description_en?: string | null;
+    ai_description_ko?: string | null;
+    ai_description_es?: string | null;
     ai_tags?: string[] | null;
     highlight_score?: number | null;
     avg_rating?: number | null;
@@ -410,9 +415,9 @@ export function KillCinematicView({
       </section>
 
       {/* ─── DESCRIPTION + TAGS ───────────────────────────────────────── */}
-      {(kill.ai_description || (kill.ai_tags && kill.ai_tags.length > 0)) && (
+      {((kill.ai_description || kill.ai_description_fr || kill.ai_description_en) || (kill.ai_tags && kill.ai_tags.length > 0)) && (
         <section className="relative max-w-4xl mx-auto px-6 py-12">
-          {kill.ai_description && (
+          {(kill.ai_description || kill.ai_description_fr || kill.ai_description_en) && (
             <blockquote className="relative">
               {/* Big decorative quote mark */}
               <span
@@ -420,9 +425,11 @@ export function KillCinematicView({
               >
                 &ldquo;
               </span>
-              <p className="relative font-display text-xl md:text-3xl font-medium text-white/95 leading-snug italic px-4">
-                {kill.ai_description}
-              </p>
+              <Description
+                kill={kill}
+                as="p"
+                className="relative font-display text-xl md:text-3xl font-medium text-white/95 leading-snug italic px-4"
+              />
               <span
                 className="absolute -bottom-12 right-0 font-display text-7xl md:text-8xl leading-none text-[var(--gold)]/20 select-none pointer-events-none"
               >

@@ -137,13 +137,21 @@ const jsonLdSportsTeam = {
   },
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  // PR19 — resolve the user's language server-side (cookie → Accept-Language
+  // → fr fallback). Passed to <Providers> so the very first paint matches
+  // their preference (no flash of French content for an English user).
+  const { getServerLang } = await import("@/lib/i18n/server");
+  const { LANG_META } = await import("@/lib/i18n/lang");
+  const initialLang = await getServerLang();
+  const htmlLang = LANG_META[initialLang].htmlLang;
+
   return (
-    <html lang="fr">
+    <html lang={htmlLang}>
       <head>
         <link rel="manifest" href="/manifest.json" />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -173,7 +181,7 @@ export default function RootLayout({
         <a href="#main-content" className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[100] focus:rounded-lg focus:bg-[var(--gold)] focus:px-4 focus:py-2 focus:text-black focus:text-sm focus:font-bold">
           Aller au contenu
         </a>
-        <Providers>
+        <Providers initialLang={initialLang}>
         <LayoutChrome>
           {children}
         </LayoutChrome>

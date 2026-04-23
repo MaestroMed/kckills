@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState, useEffect } from "react";
 import { CommandPaletteButton } from "./CommandPalette";
+import { LangSwitcher } from "./i18n/LangSwitcher";
 
 // Clip-centric nav — only what matters. Logo links to home, no "Accueil" item.
 // /best and /recent merged into /clips (filterable + chronological by default).
@@ -85,9 +86,10 @@ export function Navbar() {
           ))}
         </div>
 
-        {/* Right side — Search + CTA + Auth */}
+        {/* Right side — Search + Lang + CTA + Auth */}
         <div className="hidden items-center gap-3 md:flex">
           <CommandPaletteButton />
+          <LangSwitcher />
           {user ? (
             <Link href="/settings" className="flex items-center gap-2 rounded-lg border border-[var(--border-gold)] bg-[var(--bg-surface)] px-3 py-1.5 text-xs font-medium text-[var(--text-secondary)] hover:border-[var(--gold)]/40">
               {user.avatar ? (
@@ -149,6 +151,10 @@ export function Navbar() {
               {link.label}
             </Link>
           ))}
+          {/* Lang switcher (full width on mobile) */}
+          <div className="pt-2 pb-1 flex justify-center">
+            <LangSwitcher variant="full" />
+          </div>
           <div className="pt-2 flex gap-2">
             <Link
               href="/login"

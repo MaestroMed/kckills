@@ -70,6 +70,10 @@ export interface PublishedKillRow {
   thumbnail_url: string | null;
   og_image_url: string | null;
   ai_description: string | null;
+  ai_description_fr: string | null;
+  ai_description_en: string | null;
+  ai_description_ko: string | null;
+  ai_description_es: string | null;
   ai_tags: string[];
   multi_kill: string | null;
   is_first_blood: boolean;
@@ -116,6 +120,10 @@ const KILL_SELECT = `
   thumbnail_url,
   og_image_url,
   ai_description,
+  ai_description_fr,
+  ai_description_en,
+  ai_description_ko,
+  ai_description_es,
   ai_tags,
   multi_kill,
   is_first_blood,
@@ -170,6 +178,10 @@ interface RawKillSelect {
   thumbnail_url?: string | null;
   og_image_url?: string | null;
   ai_description?: string | null;
+  ai_description_fr?: string | null;
+  ai_description_en?: string | null;
+  ai_description_ko?: string | null;
+  ai_description_es?: string | null;
   ai_tags?: string[] | null;
   multi_kill?: string | null;
   is_first_blood?: boolean | null;
@@ -239,6 +251,10 @@ function normalize(row: RawKillSelect): PublishedKillRow {
     thumbnail_url: row.thumbnail_url ?? null,
     og_image_url: row.og_image_url ?? null,
     ai_description: row.ai_description ?? null,
+    ai_description_fr: row.ai_description_fr ?? null,
+    ai_description_en: row.ai_description_en ?? null,
+    ai_description_ko: row.ai_description_ko ?? null,
+    ai_description_es: row.ai_description_es ?? null,
     ai_tags: Array.isArray(row.ai_tags) ? row.ai_tags : [],
     multi_kill: row.multi_kill ?? null,
     is_first_blood: Boolean(row.is_first_blood),
