@@ -40,6 +40,75 @@ class Config:
     #   "0"    : force libx264 (debug or non-GPU machines)
     USE_NVENC = os.getenv("KCKILLS_USE_NVENC", "auto")
 
+    # ─── Gemini model selection (PR12 — premium quality, April 2026) ─
+    # Per-stage model selection.
+    #
+    # April 2026 state of play (research-confirmed) :
+    #   * Gemini 3.1 Pro Preview : SOTA video (87.6% Video-MMMU) — but
+    #     PREVIEW = shutdown risk (Gemini 3 Pro got killed Mar 9, 2026
+    #     with no migration). NOT recommended for backfill work that
+    #     must persist.
+    #   * Gemini 2.5 Pro        : GA, paid-only since Apr 1, 2026.
+    #     $1.25/$10 per M tokens. 87%+ video benchmarks. SAFE choice.
+    #   * Gemini 3 Flash        : GA, frontier-class at $0.30/$2.50.
+    #   * Gemini 3.1 Flash-Lite : GA, $0.25/$1.50. Better than 2.5
+    #     Flash-Lite at same price tier. Default for QC / cheap reads.
+    #
+    # Recommended €45 KC-catalog backfill config (1 line in .env):
+    #   GEMINI_TIER=premium
+    # (Equivalent to:
+    #   GEMINI_MODEL_ANALYZER=gemini-2.5-pro
+    #   GEMINI_MODEL_QC=gemini-2.5-flash-lite
+    #   GEMINI_MODEL_OFFSET=gemini-2.5-flash-lite
+    # )
+    #
+    # Free-tier-only fallback (KCKILLS_GEMINI_TIER not set):
+    #   All three = gemini-2.5-flash-lite (the safe, free, default).
+
+    _GEMINI_TIER = (os.getenv("KCKILLS_GEMINI_TIER", "free") or "free").lower()
+    _TIER_DEFAULTS = {
+        "free": {  # all free-tier models
+            "analyzer": "gemini-2.5-flash-lite",
+            "qc":       "gemini-2.5-flash-lite",
+            "offset":   "gemini-2.5-flash-lite",
+        },
+        "balanced": {  # paid Flash 3 for descriptions, free Lite for QC
+            "analyzer": "gemini-3-flash",
+            "qc":       "gemini-2.5-flash-lite",
+            "offset":   "gemini-2.5-flash-lite",
+        },
+        "premium": {  # Pro 2.5 for descriptions (the €45 KC config)
+            "analyzer": "gemini-2.5-pro",
+            "qc":       "gemini-2.5-flash-lite",
+            "offset":   "gemini-2.5-flash-lite",
+        },
+        "experimental": {  # Pro 3.1 Preview (shutdown risk!)
+            "analyzer": "gemini-3.1-pro-preview",
+            "qc":       "gemini-3.1-flash-lite",
+            "offset":   "gemini-3.1-flash-lite",
+        },
+    }
+    _TIER = _TIER_DEFAULTS.get(_GEMINI_TIER, _TIER_DEFAULTS["free"])
+
+    # Per-stage env vars override the tier preset.
+    GEMINI_MODEL_ANALYZER = os.getenv(
+        "GEMINI_MODEL_ANALYZER",
+        os.getenv("GEMINI_MODEL", _TIER["analyzer"]),
+    )
+    GEMINI_MODEL_QC = os.getenv(
+        "GEMINI_MODEL_QC",
+        os.getenv("GEMINI_MODEL", _TIER["qc"]),
+    )
+    GEMINI_MODEL_OFFSET = os.getenv(
+        "GEMINI_MODEL_OFFSET",
+        os.getenv("GEMINI_MODEL", _TIER["offset"]),
+    )
+
+    # Video token resolution. "default" = 300 tokens/sec (best quality),
+    # "low" = 100 tokens/sec (3x cheaper, good enough for short clips).
+    # Set to "low" if you want to halve cost on Pro 2.5 / Pro 3.1.
+    GEMINI_MEDIA_RESOLUTION = os.getenv("KCKILLS_GEMINI_MEDIA_RES", "default")
+
     # ─── Discord ─────────────────────────────────────────────
     DISCORD_WEBHOOK_URL: str = os.getenv("DISCORD_WEBHOOK_URL", "")
 

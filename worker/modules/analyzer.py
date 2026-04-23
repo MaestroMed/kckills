@@ -252,7 +252,7 @@ async def analyze_kill(
     text = ""
     try:
         genai.configure(api_key=config.GEMINI_API_KEY)
-        model = genai.GenerativeModel("gemini-2.5-flash-lite")
+        model = genai.GenerativeModel(config.GEMINI_MODEL_ANALYZER)
 
         if clip_path and os.path.exists(clip_path):
             video_file = genai.upload_file(clip_path)

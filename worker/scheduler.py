@@ -6,6 +6,7 @@ This ensures we never exceed rate limits on any service.
 """
 
 import asyncio
+import os
 import time
 from datetime import datetime, timezone
 
@@ -38,8 +39,22 @@ class LoLTokScheduler:
         "r2": 0.5,
     }
 
+    # Daily call budgets. The default 950 keeps us inside Gemini's 1000
+    # RPD free tier with a 5% margin.
+    #
+    # PR12 — when Pro 2.5 is enabled (paid tier), KCKILLS_GEMINI_DAILY_CAP
+    # overrides this. Math : Pro 2.5 ≈ $0.0115/clip → 250 calls/day = ~$3
+    # = €2.80/day = €84/month max. Set the env var to whatever fits your
+    # Google Cloud budget alert. The scheduler enforces this regardless
+    # of the API tier — protects you from runaway spend on a bug loop.
+    #
+    # User explicit budget (€45 one-shot): cap at 250/day = ~15 days to
+    # drain the 2,021-clip catalog at €27 total.
     DAILY_QUOTAS: dict[str, int] = {
-        "gemini": 950,       # 5% margin on 1000 RPD
+        "gemini": int(os.environ.get(
+            "KCKILLS_GEMINI_DAILY_CAP",
+            os.environ.get("GEMINI_DAILY_CAP", "950"),
+        )),
         "youtube_search": 95,  # margin on 100
     }
 

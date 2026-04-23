@@ -264,3 +264,98 @@ qc_sampler against the in-game clock.
 
 If a clip fails post-publish QC (drift detected), it auto-retracts
 from `/scroll` within 5 minutes via the event_publisher loop.
+
+---
+
+## 💰 Budget tier system (PR12, April 2026)
+
+The Gemini model used at each pipeline stage is selectable via env var,
+with sensible tier presets in `worker/config.py`. The default ("free")
+is what the daemon ran on for free-tier deployment.
+
+```
+KCKILLS_GEMINI_TIER=free          # default — gemini-2.5-flash-lite everywhere
+KCKILLS_GEMINI_TIER=balanced      # gemini-3-flash for descriptions
+KCKILLS_GEMINI_TIER=premium       # gemini-2.5-pro for descriptions  ← €45 KC config
+KCKILLS_GEMINI_TIER=experimental  # gemini-3.1-pro-preview (shutdown risk)
+```
+
+Per-stage env-var overrides win over the tier preset :
+```
+GEMINI_MODEL_ANALYZER=gemini-2.5-pro
+GEMINI_MODEL_QC=gemini-2.5-flash-lite
+GEMINI_MODEL_OFFSET=gemini-2.5-flash-lite
+```
+
+### €45 budget plan (premium tier on the entire 2,021-kill KC catalog)
+
+| Stage | Model | Cost |
+|---|---|---|
+| Description / tags / score (every clip) | Gemini 2.5 Pro default | €37.50 |
+| Timer QC (qc_sampler @ 20/cycle × 24/day) | Gemini 2.5 Flash-Lite | ~€2 |
+| VOD offset validation (91 quarantined games) | Gemini 2.5 Flash-Lite | ~€0.50 |
+| Buffer (retries + 30 days of new clips) | — | ~€5 |
+| **Total** | | **~€45** ✅ |
+
+### Hard daily cap (defense in depth)
+
+`worker/scheduler.py` enforces `DAILY_QUOTAS["gemini"]` via the
+`KCKILLS_GEMINI_DAILY_CAP` env var. Default 950 (free-tier safe). Set
+to 250 with the premium tier to spread the €45 spend over ~10 days
+(€3/day burn rate, fully drains the catalog without scary spikes).
+
+```
+KCKILLS_GEMINI_DAILY_CAP=250
+```
+
+When hit, the analyzer / QC / offset modules log
+`gemini_daily_quota_reached` and idle until 07:00 UTC reset (Google's
+quota window). Pipeline doesn't crash — just paces itself.
+
+### Re-analysis script (upgrade existing descriptions)
+
+```bash
+# Dry-run — list candidates, no API calls
+python worker/scripts/reanalyze_with_premium.py --dry-run
+
+# Live — process candidates serially, respect daily cap
+python worker/scripts/reanalyze_with_premium.py --commit
+```
+
+Refuses to run if `GEMINI_MODEL_ANALYZER` is still flash-lite (no point
+spending to upgrade a description with the same model that wrote it).
+Idempotent : tracks `kills.reanalyzed_at` / `reanalyzed_model` so re-runs
+skip already-upgraded clips.
+
+### Persistence guarantees
+
+| What | Persisted to | Survives reset ? |
+|---|---|---|
+| Description / tags / score | Supabase `kills.ai_description` etc. | ✅ |
+| Premium-tier flag | Supabase `kills.reanalyzed_at` / `reanalyzed_model` | ✅ |
+| Generated clips | Cloudflare R2 | ✅ |
+| OG images | R2 | ✅ |
+| QC verification history | Supabase `worker_jobs.result` (clip_qc.verify) | ✅ |
+| Code (model selection logic) | Git commit | ✅ |
+| Migration 015 (reanalyzed_at column) | Supabase schema | ✅ once you apply it |
+| Gemini API key + billing | Google Cloud project (separate from the worker) | ✅ — tied to the project, not the code |
+
+**Practical : if you nuke `D:/kckills_worker/`, restart Docker, reset
+the daemon — the work survives.** All you need to keep is :
+1. The Google Cloud project with billing enabled (one-time setup)
+2. The Supabase project (your DB — migrations + data persist)
+3. The R2 bucket (clips + OG images)
+4. The git repo (code)
+
+No API token paid for premium-tier work is "burnt" by a daemon restart.
+
+### One-time billing setup (4 steps, ~5 min)
+
+1. Go to https://aistudio.google.com → API keys
+2. Click your existing key → "Manage in Google Cloud Console"
+3. In Google Cloud → Billing → link a payment method to the API project
+4. Billing → Budgets & alerts → Create budget : amount **€45**, alert
+   thresholds at 50% / 75% / 90% / 100%
+
+After step 4, Google emails you when you hit each threshold, and the
+worker's hard cap (`KCKILLS_GEMINI_DAILY_CAP=250`) prevents overshoot.

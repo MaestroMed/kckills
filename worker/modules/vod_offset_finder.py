@@ -249,9 +249,7 @@ async def _read_timer_at(youtube_id: str, vod_seconds: int) -> int | None:
         import google.generativeai as genai  # type: ignore
         from services.gemini_client import _wait_for_file_active
         genai.configure(api_key=config.GEMINI_API_KEY)
-        model = genai.GenerativeModel(
-            os.environ.get("GEMINI_MODEL", "gemini-2.5-flash-lite"),
-        )
+        model = genai.GenerativeModel(config.GEMINI_MODEL_OFFSET)
         img = genai.upload_file(frame_path)
         _wait_for_file_active(genai, img, timeout=30)
         resp = model.generate_content([
