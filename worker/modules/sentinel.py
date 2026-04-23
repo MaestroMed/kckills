@@ -84,17 +84,35 @@ async def run() -> int:
             vod_offset: int | None = None
 
             # Prefer en-US locale (clean English cast), fall back to any YouTube VOD
+            # CRITICAL : vod.offset is the seconds-into-VOD where the game
+            # begins. If the lolesports API doesn't return it (common — many
+            # match feeds omit the offset), we MUST store NULL not 0. A
+            # zero offset poisons the clipper into pulling content from the
+            # very start of the YouTube video — which on a full LEC broadcast
+            # is the panel + champion select + intro, NOT the gameplay. Clips
+            # produced this way show drafts/interviews instead of kills.
+            # The vod_offset_finder module (PR7-A2) handles NULL offsets via
+            # Live Stats epoch alignment.
+            def _parse_offset(raw):
+                if raw is None or raw == "":
+                    return None
+                try:
+                    val = int(raw)
+                    return val if val > 0 else None  # 0 is treated as missing
+                except (TypeError, ValueError):
+                    return None
+
             vods = game.get("vods", []) or []
             for vod in vods:
                 if vod.get("provider") == "youtube" and str(vod.get("locale", "")).startswith("en"):
                     vod_youtube_id = vod.get("parameter")
-                    vod_offset = int(vod.get("offset") or 0)
+                    vod_offset = _parse_offset(vod.get("offset"))
                     break
             if not vod_youtube_id:
                 for vod in vods:
                     if vod.get("provider") == "youtube":
                         vod_youtube_id = vod.get("parameter")
-                        vod_offset = int(vod.get("offset") or 0)
+                        vod_offset = _parse_offset(vod.get("offset"))
                         break
 
             game_payload = {
