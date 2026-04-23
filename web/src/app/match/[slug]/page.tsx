@@ -4,6 +4,7 @@ import { championIconUrl } from "@/lib/constants";
 import { KC_LOGO, TEAM_LOGOS } from "@/lib/kc-assets";
 import { getKillsByMatchExternalId, type PublishedKillRow } from "@/lib/supabase/kills";
 import { ClipReel } from "@/components/ClipReel";
+import { MatchHero } from "@/components/match/MatchHero";
 import Image from "next/image";
 import Link from "next/link";
 import type { Metadata } from "next";
@@ -123,27 +124,22 @@ export default async function MatchPage({ params }: Props) {
         <span>KC vs {match.opponent.code}</span>
       </nav>
 
-      {/* Header */}
-      <div className="flex items-center gap-6">
-        <Image src={KC_LOGO} alt="KC" width={56} height={56} className="rounded-xl" />
-        <div className="text-3xl font-bold text-[var(--text-muted)]">vs</div>
-        {TEAM_LOGOS[match.opponent.code] ? (
-          <Image src={TEAM_LOGOS[match.opponent.code]} alt={match.opponent.code} width={56} height={56} className="rounded-xl" />
-        ) : (
-          <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-[var(--bg-elevated)] text-xl font-black">{match.opponent.code}</div>
-        )}
-        <div>
-          <h1 className="text-2xl font-bold">
-            KC vs {match.opponent.name}
-            <span className={`ml-3 text-lg font-bold ${match.kc_won ? "text-[var(--green)]" : "text-[var(--red)]"}`}>
-              {match.kc_won ? "Victoire" : "D\u00e9faite"} {match.kc_score}-{match.opp_score}
-            </span>
-          </h1>
-          <p className="text-sm text-[var(--text-muted)]">
-            {match.league} &middot; {match.stage} &middot; Bo{match.best_of} &middot; {date.toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" })}
-          </p>
-        </div>
-      </div>
+      {/* Cinematic match hero — replaces the old 56px-logo header.
+          Animates the score on mount, gradient flexes win/loss/upcoming. */}
+      <MatchHero
+        kcLogoSrc={KC_LOGO}
+        opponentName={match.opponent.name}
+        opponentCode={match.opponent.code}
+        opponentLogoSrc={TEAM_LOGOS[match.opponent.code] ?? null}
+        kcScore={match.kc_score}
+        opponentScore={match.opp_score}
+        kcWon={match.kc_won}
+        league={match.league}
+        stage={match.stage}
+        bestOf={match.best_of}
+        date={match.date}
+        publishedClipCount={totalRealKills}
+      />
 
       {/* Stats globales */}
       <div className="grid grid-cols-2 gap-4 md:grid-cols-4">

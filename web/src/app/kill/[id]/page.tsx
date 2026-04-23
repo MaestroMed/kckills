@@ -4,8 +4,9 @@ import Image from "next/image";
 import { loadRealData, displayRole } from "@/lib/real-data";
 import { championIconUrl } from "@/lib/constants";
 import { computeKillScore } from "@/lib/feed-algorithm";
-import { getKillById, getPublishedKills, type PublishedKillRow } from "@/lib/supabase/kills";
+import { getKillById, getKillsByMatchExternalId, getPublishedKills, type PublishedKillRow } from "@/lib/supabase/kills";
 import { KillInteractions } from "./interactions";
+import { KillCinematicView } from "@/components/kill/KillCinematicView";
 import type { Metadata } from "next";
 
 // ISR: pre-render the top N clips at build time, regenerate every 10 min
@@ -263,6 +264,37 @@ export default async function KillDetailPage({ params }: Props) {
           : {}),
       } : null;
 
+      // Fetch sibling clips from the same match for the carousel.
+      // Cap to 12 (we render in a horizontal scroller; more is wasted egress).
+      // Filter out the current kill itself, then sort by highlight_score desc
+      // so the strongest neighbors surface first.
+      const matchExtIdForRelated = kill.games?.matches?.external_id;
+      let relatedKills: Array<{
+        id: string;
+        killer_champion: string | null;
+        victim_champion: string | null;
+        thumbnail_url: string | null;
+        highlight_score: number | null;
+        multi_kill: string | null;
+        is_first_blood: boolean | null;
+      }> = [];
+      if (matchExtIdForRelated) {
+        const all = await getKillsByMatchExternalId(matchExtIdForRelated).catch(() => []);
+        relatedKills = all
+          .filter((k) => k.id !== id && k.thumbnail_url)
+          .sort((a, b) => (b.highlight_score ?? 0) - (a.highlight_score ?? 0))
+          .slice(0, 12)
+          .map((k) => ({
+            id: k.id,
+            killer_champion: k.killer_champion,
+            victim_champion: k.victim_champion,
+            thumbnail_url: k.thumbnail_url,
+            highlight_score: k.highlight_score,
+            multi_kill: k.multi_kill,
+            is_first_blood: k.is_first_blood,
+          }));
+      }
+
       return (
         <>
           {videoJsonLd && (
@@ -271,7 +303,16 @@ export default async function KillDetailPage({ params }: Props) {
               dangerouslySetInnerHTML={{ __html: JSON.stringify(videoJsonLd) }}
             />
           )}
-          <VideoKillDetail kill={kill} opponent={opponent} id={id} />
+          <KillCinematicView
+            kill={kill}
+            opponent={opponent}
+            relatedKills={relatedKills}
+          >
+            {/* Interactions block (rate / comment / share / inline auth)
+                lives inside the cinematic shell so it's pinned in the
+                same column rhythm as everything else. */}
+            <KillInteractions killId={id} />
+          </KillCinematicView>
         </>
       );
     }

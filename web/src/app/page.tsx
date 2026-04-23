@@ -12,6 +12,7 @@ import { KillOfTheWeek } from "@/components/KillOfTheWeek";
 import { HomeRecentClips } from "@/components/HomeRecentClips";
 import { QuoteCard } from "@/components/QuoteCard";
 import { QUOTES } from "@/lib/quotes";
+import { HomeQuoteRotator } from "@/components/HomeQuoteRotator";
 import { EraComparisonChart } from "@/components/EraComparison";
 import { AnimatedNumber } from "@/components/AnimatedNumber";
 import { MacronEasterEgg } from "@/components/MacronEasterEgg";
@@ -571,24 +572,21 @@ export default async function HomePage() {
         </section>
       )}
 
-      {/* ═══ QUOTE OF THE DAY ═══════════════════════════════════════════ */}
-      {(() => {
-        // Deterministic "random" based on day of year so it changes daily
-        const dayOfYear = Math.floor((Date.now() - new Date(new Date().getFullYear(), 0, 0).getTime()) / 86400000);
-        const quote = QUOTES[dayOfYear % QUOTES.length];
-        return (
-          <section>
-            <div className="flex items-center gap-3 mb-4">
-              <span className="h-px flex-1 bg-[var(--border-gold)]" />
-              <span className="font-data text-[9px] uppercase tracking-[0.3em] text-[var(--text-muted)]">
-                Citation du jour
-              </span>
-              <span className="h-px flex-1 bg-[var(--border-gold)]" />
-            </div>
-            <QuoteCard quote={quote} />
-          </section>
-        );
-      })()}
+      {/* ═══ ROTATING CITATIONS — slow rotation, particle dissolve ═════ */}
+      {/* Replaces the daily QuoteCard. Real verified quotes from KC players,
+          casters and staff. Each quote types in (≈40ms/char), holds for
+          ~10s, then dissolves into a particle drift before the next one
+          appears. prefers-reduced-motion is respected — text shows up
+          instantly without animation for users who opted out. */}
+      <section
+        className="-mx-6 md:-mx-8 lg:-mx-12 my-8"
+        style={{
+          background:
+            "linear-gradient(180deg, transparent, rgba(15,29,54,0.4) 30%, rgba(15,29,54,0.4) 70%, transparent)",
+        }}
+      >
+        <HomeQuoteRotator quotes={QUOTES} />
+      </section>
 
       {/* ═══ CARTES LEGENDAIRES — TCG visual layer en showcase home ═════ */}
       <HomeRareCards />
