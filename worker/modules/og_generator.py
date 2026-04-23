@@ -20,6 +20,7 @@ from PIL import Image, ImageDraw, ImageFont
 
 from config import config
 from services import r2_client
+from services.supabase_batch import batched_safe_update, get_writer
 from services.supabase_client import safe_select, safe_update
 
 log = structlog.get_logger()
@@ -167,11 +168,16 @@ async def run() -> int:
         return 0
 
     # Fast-path : kills that already have og_image_url just need a
-    # status flip. Batch them serially to avoid 200 parallel REST writes.
+    # status flip. PR10-A2: batched_safe_update collapses ALL of them
+    # into ONE PostgREST PATCH (id=in.(...)) since the body is identical
+    # — was 340 serial PATCHes (~5min), now ~1 second.
     already = [k for k in kills if k.get("og_image_url")]
     todo = [k for k in kills if not k.get("og_image_url")]
-    for k in already:
-        safe_update("kills", {"status": "published"}, "id", k["id"])
+    if already:
+        await get_writer().start_background_flusher()
+        for k in already:
+            await batched_safe_update("kills", {"status": "published"}, "id", k["id"])
+        await get_writer().flush_now()
 
     if not todo:
         log.info("og_generator_scan_done", generated=0, status_only=len(already))

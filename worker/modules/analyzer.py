@@ -390,107 +390,200 @@ async def run() -> int:
     if not kills:
         return 0
 
-    analysed = 0
-    rejected = 0
-    for kill in kills:
-        remaining = scheduler.get_remaining("gemini")
-        if remaining is not None and remaining <= 0:
-            log.warn("analyzer_daily_quota_reached")
-            break
+    # PR10-C : pipelined producer/consumer.
+    # While clip N is being analyzed by Gemini (5s call + 4s rate-limit
+    # wait), clip N+1 is already downloading from R2 (~5-10s). Effective
+    # cadence drops to max(download, gemini) per clip ≈ 9-10s instead of
+    # ~12-15s serial. ~1.3-2x throughput at zero quota cost.
+    #
+    # Architecture (see ANALYZER_PIPELINE_SPEC.md) :
+    #   - bounded asyncio.Queue (8 slots) provides backpressure when
+    #     Gemini stalls — downloaders block on put() instead of filling
+    #     disk
+    #   - 5 download workers parallelise R2 GETs
+    #   - 1 Gemini consumer drains the queue serially (Gemini's 4s rate
+    #     limit + 950 RPD daily cap make a single consumer the natural
+    #     bottleneck)
+    return await _run_pipelined(kills)
 
-        # Download clip from R2 for VIDEO analysis (not text-only)
-        # Uses the configured CLIPS_DIR (D:/kckills_worker/clips by default
-        # on the user's Gen5 NVMe). The qc_ prefix avoids collisions with
-        # active clipper raw downloads in the same dir.
-        clip_path = None
-        clip_url = kill.get("clip_url_vertical") or kill.get("clip_url_horizontal")
-        if clip_url:
-            import httpx as _httpx
-            _clip_dir = config.CLIPS_DIR
-            os.makedirs(_clip_dir, exist_ok=True)
-            clip_path = os.path.join(_clip_dir, f"qc_{kill['id'][:8]}.mp4")
-            try:
-                with _httpx.stream("GET", clip_url, follow_redirects=True, timeout=30) as resp:
-                    resp.raise_for_status()
-                    with open(clip_path, "wb") as f:
-                        for chunk in resp.iter_bytes():
-                            f.write(chunk)
-            except Exception as e:
-                log.warn("analyzer_clip_download_failed", kill_id=kill["id"][:8], error=str(e)[:60])
-                clip_path = None
 
-        result = await analyze_kill_row(kill, clip_path=clip_path)
+# ─── Pipelined run ─────────────────────────────────────────────────────────
 
-        # Clean up downloaded clip
-        if clip_path and os.path.exists(clip_path):
-            try:
-                os.remove(clip_path)
-            except Exception:
-                pass
+QUEUE_MAX = 8
+DOWNLOAD_WORKERS = 5
+SENTINEL: object = object()
 
-        if not result:
-            continue
 
-        desc = result.get("description_fr")
-        ok, reason = validate_description(desc)
-        if not ok:
-            log.warn(
-                "analyzer_desc_rejected",
-                kill_id=kill.get("id"),
-                reason=reason,
-                desc_preview=(desc or "")[:80],
-            )
-            rejected += 1
-            # Bump retry counter — if too many failures, give up and let
-            # human review handle it. Stays in 'clipped' status so the
-            # next analyzer pass picks it up again.
-            current_retries = int(kill.get("retry_count") or 0)
-            if current_retries >= 3:
-                log.warn(
-                    "analyzer_giving_up",
-                    kill_id=kill.get("id"),
-                    retries=current_retries,
-                )
-                # Move to manual_review so we don't loop forever on a
-                # row Gemini can't describe properly.
-                safe_update(
-                    "kills",
-                    {"status": "manual_review", "retry_count": current_retries + 1},
-                    "id",
-                    kill["id"],
-                )
-            else:
-                safe_update(
-                    "kills",
-                    {"retry_count": current_retries + 1},
-                    "id",
-                    kill["id"],
-                )
-            continue
+async def _download_clip_async(kill: dict) -> tuple[dict, str | None]:
+    """Async wrapper around the blocking httpx.stream download.
 
-        kill_visible_flag = bool(result.get("kill_visible_on_screen", True))
-        patch = {
-            "highlight_score": _safe_float(result.get("highlight_score")),
-            "ai_tags": result.get("tags") or [],
-            "ai_description": desc,
-            "kill_visible": kill_visible_flag,
-            "caster_hype_level": _safe_int(result.get("caster_hype_level")),
-            "status": "analyzed",
-        }
-        safe_update("kills", patch, "id", kill["id"])
-        # PR6-C : tick the canonical event's "described" + "visible" gates.
-        # No-op if event_mapper hasn't caught up yet — next mapping cycle
-        # picks up the same state via the proxy logic.
+    Returns (kill, clip_path_or_None). On failure, clip_path is None and
+    the consumer falls back to text-only Gemini analysis.
+    """
+    clip_url = kill.get("clip_url_vertical") or kill.get("clip_url_horizontal")
+    if not clip_url:
+        return kill, None
+    _clip_dir = config.CLIPS_DIR
+    os.makedirs(_clip_dir, exist_ok=True)
+    clip_path = os.path.join(_clip_dir, f"qc_{kill['id'][:8]}.mp4")
+
+    def _blocking() -> bool:
+        import httpx as _httpx
         try:
-            from services.event_qc import tick_qc_described, tick_qc_visible
-            tick_qc_described(kill["id"])
-            tick_qc_visible(kill["id"], kill_visible_flag)
-        except Exception as _e:
-            log.warn("event_qc_tick_failed", kill_id=kill["id"][:8], stage="analyzed", error=str(_e)[:120])
-        analysed += 1
+            with _httpx.stream("GET", clip_url, follow_redirects=True, timeout=30) as resp:
+                resp.raise_for_status()
+                with open(clip_path, "wb") as f:
+                    for chunk in resp.iter_bytes():
+                        f.write(chunk)
+            return True
+        except Exception as e:
+            log.warn("analyzer_clip_download_failed",
+                     kill_id=kill["id"][:8], error=str(e)[:60])
+            return False
 
-    log.info("analyzer_scan_done", analysed=analysed, rejected=rejected)
-    return analysed
+    ok = await asyncio.to_thread(_blocking)
+    return kill, (clip_path if ok else None)
+
+
+async def _download_worker(in_q: "asyncio.Queue", out_q: "asyncio.Queue") -> None:
+    while True:
+        item = await in_q.get()
+        if item is SENTINEL:
+            in_q.task_done()
+            await out_q.put(SENTINEL)
+            break
+        try:
+            pair = await _download_clip_async(item)
+            await out_q.put(pair)
+        finally:
+            in_q.task_done()
+
+
+def _cleanup_clip(path: str | None) -> None:
+    if path and os.path.exists(path):
+        try:
+            os.remove(path)
+        except OSError:
+            pass
+
+
+async def _process_one(kill: dict, clip_path: str | None,
+                       counters: dict) -> None:
+    """Run Gemini + commit results for a single kill. Mirrors the
+    pre-refactor inline loop body.
+    """
+    result = await analyze_kill_row(kill, clip_path=clip_path)
+    _cleanup_clip(clip_path)
+
+    if not result:
+        return
+
+    desc = result.get("description_fr")
+    ok, reason = validate_description(desc)
+    if not ok:
+        log.warn(
+            "analyzer_desc_rejected",
+            kill_id=kill.get("id"),
+            reason=reason,
+            desc_preview=(desc or "")[:80],
+        )
+        counters["rejected"] += 1
+        current_retries = int(kill.get("retry_count") or 0)
+        if current_retries >= 3:
+            log.warn("analyzer_giving_up",
+                     kill_id=kill.get("id"), retries=current_retries)
+            safe_update(
+                "kills",
+                {"status": "manual_review", "retry_count": current_retries + 1},
+                "id", kill["id"],
+            )
+        else:
+            safe_update(
+                "kills", {"retry_count": current_retries + 1},
+                "id", kill["id"],
+            )
+        return
+
+    kill_visible_flag = bool(result.get("kill_visible_on_screen", True))
+    patch = {
+        "highlight_score": _safe_float(result.get("highlight_score")),
+        "ai_tags": result.get("tags") or [],
+        "ai_description": desc,
+        "kill_visible": kill_visible_flag,
+        "caster_hype_level": _safe_int(result.get("caster_hype_level")),
+        "status": "analyzed",
+    }
+    safe_update("kills", patch, "id", kill["id"])
+    try:
+        from services.event_qc import tick_qc_described, tick_qc_visible
+        tick_qc_described(kill["id"])
+        tick_qc_visible(kill["id"], kill_visible_flag)
+    except Exception as _e:
+        log.warn("event_qc_tick_failed",
+                 kill_id=kill["id"][:8], stage="analyzed", error=str(_e)[:120])
+    counters["analysed"] += 1
+
+
+async def _gemini_consumer(out_q: "asyncio.Queue", n_producers: int,
+                           counters: dict) -> None:
+    sentinels_seen = 0
+    while sentinels_seen < n_producers:
+        item = await out_q.get()
+        try:
+            if item is SENTINEL:
+                sentinels_seen += 1
+                continue
+            kill, clip_path = item
+            remaining = scheduler.get_remaining("gemini")
+            if remaining is not None and remaining <= 0:
+                log.warn("analyzer_daily_quota_reached")
+                _cleanup_clip(clip_path)
+                # Drain any in-flight items from downloaders so they
+                # can exit cleanly. Don't analyze them.
+                continue
+            try:
+                await _process_one(kill, clip_path, counters)
+            except Exception as e:
+                log.error("analyzer_consumer_error",
+                          kill_id=kill.get("id", "?")[:8], error=str(e)[:200])
+                _cleanup_clip(clip_path)
+        finally:
+            out_q.task_done()
+
+
+async def _run_pipelined(kills: list[dict]) -> int:
+    """Producer/consumer pipeline. See module-level run() for design notes."""
+    in_q: asyncio.Queue = asyncio.Queue(maxsize=QUEUE_MAX)
+    out_q: asyncio.Queue = asyncio.Queue(maxsize=QUEUE_MAX)
+    counters = {"analysed": 0, "rejected": 0}
+
+    log.info("analyzer_pipelined_start",
+             kills=len(kills), workers=DOWNLOAD_WORKERS)
+
+    producers = [
+        asyncio.create_task(_download_worker(in_q, out_q),
+                            name=f"analyzer_dl_{i}")
+        for i in range(DOWNLOAD_WORKERS)
+    ]
+    consumer = asyncio.create_task(
+        _gemini_consumer(out_q, DOWNLOAD_WORKERS, counters),
+        name="analyzer_gemini_consumer",
+    )
+
+    # Feed the queue. The bound (QUEUE_MAX) provides natural backpressure
+    # — if Gemini stalls, this loop blocks on put().
+    for k in kills:
+        await in_q.put(k)
+    for _ in range(DOWNLOAD_WORKERS):
+        await in_q.put(SENTINEL)
+
+    await asyncio.gather(*producers)
+    await consumer
+
+    log.info("analyzer_scan_done",
+             analysed=counters["analysed"], rejected=counters["rejected"],
+             pipelined=True)
+    return counters["analysed"]
 
 
 def _safe_float(v) -> float | None:

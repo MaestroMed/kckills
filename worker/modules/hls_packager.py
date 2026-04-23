@@ -119,6 +119,13 @@ async def package_clip(kill_id: str, mp4_url: str) -> str | None:
         from services.ffmpeg_ops import _resolve_encoder
         vcodec = _resolve_encoder("auto")
 
+        # 3-variant ladder (480/720/1080). The 240p variant was dropped
+        # because for vertical 1080x1920 sources, scale=-2:240 produces
+        # 135x240 — below NVENC's 145px minimum frame width, causing
+        # InitializeEncoder failed with "Frame Dimension less than minimum".
+        # Skipping 240p costs us a slow-3G fallback tier (rare for video
+        # consumption today) and gains us a working ladder on both vertical
+        # and horizontal sources.
         if vcodec == "h264_nvenc":
             # NVENC per-output args. p4 + tune hq is balanced for ABR ladder.
             # No multipass on HLS — wall time matters more than 5% quality
@@ -137,42 +144,37 @@ async def package_clip(kill_id: str, mp4_url: str) -> str | None:
                     "-pix_fmt:v:" + idx, "yuv420p",
                 ]
             variant_args = (
-                ["-map", "[v1out]", *_nv("0", "400k", "600k", "800k")] +
-                ["-map", "[v2out]", *_nv("1", "1000k", "1500k", "2000k")] +
-                ["-map", "[v3out]", *_nv("2", "2500k", "3500k", "5000k")] +
-                ["-map", "[v4out]", *_nv("3", "5000k", "7000k", "10000k")]
+                ["-map", "[v1out]", *_nv("0", "1000k", "1500k", "2000k")] +
+                ["-map", "[v2out]", *_nv("1", "2500k", "3500k", "5000k")] +
+                ["-map", "[v3out]", *_nv("2", "5000k", "7000k", "10000k")]
             )
         else:
             variant_args = [
-                # Variant 0 — 240p (slow 3G fallback)
+                # Variant 0 — 480p (3G+ / shaky 4G)
                 "-map", "[v1out]", "-c:v:0", "libx264",
-                "-b:v:0", "400k", "-maxrate:v:0", "600k", "-bufsize:v:0", "800k",
-                # Variant 1 — 480p (3G+ / shaky 4G)
+                "-b:v:0", "1000k", "-maxrate:v:0", "1500k", "-bufsize:v:0", "2000k",
+                # Variant 1 — 720p (4G / mid-tier mobile)
                 "-map", "[v2out]", "-c:v:1", "libx264",
-                "-b:v:1", "1000k", "-maxrate:v:1", "1500k", "-bufsize:v:1", "2000k",
-                # Variant 2 — 720p (4G / mid-tier mobile)
+                "-b:v:1", "2500k", "-maxrate:v:1", "3500k", "-bufsize:v:1", "5000k",
+                # Variant 2 — 1080p (5G / wifi / desktop)
                 "-map", "[v3out]", "-c:v:2", "libx264",
-                "-b:v:2", "2500k", "-maxrate:v:2", "3500k", "-bufsize:v:2", "5000k",
-                # Variant 3 — 1080p (5G / wifi / desktop)
-                "-map", "[v4out]", "-c:v:3", "libx264",
-                "-b:v:3", "5000k", "-maxrate:v:3", "7000k", "-bufsize:v:3", "10000k",
+                "-b:v:2", "5000k", "-maxrate:v:2", "7000k", "-bufsize:v:2", "10000k",
             ]
 
         cmd = [
             "ffmpeg", "-y", "-i", src_path,
             "-filter_complex",
-            "[0:v]split=4[v1][v2][v3][v4];"
-            "[v1]scale=-2:240[v1out];"
-            "[v2]scale=-2:480[v2out];"
-            "[v3]scale=-2:720[v3out];"
-            "[v4]scale=-2:1080[v4out]",
+            "[0:v]split=3[v1][v2][v3];"
+            "[v1]scale=-2:480[v1out];"
+            "[v2]scale=-2:720[v2out];"
+            "[v3]scale=-2:1080[v3out]",
             *variant_args,
         ]
         if has_audio:
             cmd += [
                 # Audio mapped once per variant — var_stream_map needs
                 # one a:N per v:N reference.
-                "-map", "a:0", "-map", "a:0", "-map", "a:0", "-map", "a:0",
+                "-map", "a:0", "-map", "a:0", "-map", "a:0",
                 "-c:a", "aac", "-b:a", "96k", "-ac", "2",
             ]
         cmd += [
@@ -187,9 +189,9 @@ async def package_clip(kill_id: str, mp4_url: str) -> str | None:
             "-master_pl_name", "master.m3u8",
             "-var_stream_map",
             (
-                "v:0,a:0 v:1,a:1 v:2,a:2 v:3,a:3"
+                "v:0,a:0 v:1,a:1 v:2,a:2"
                 if has_audio
-                else "v:0 v:1 v:2 v:3"
+                else "v:0 v:1 v:2"
             ),
             os.path.join(work_dir, "v%v.m3u8"),
         ]
@@ -206,8 +208,12 @@ async def package_clip(kill_id: str, mp4_url: str) -> str | None:
             return None
 
         if proc.returncode != 0:
-            err = (stderr or b"")[:300].decode("utf-8", "ignore")
-            log.error("hls_encode_failed", kill_id=kill_id[:8], stderr=err)
+            # Tail of stderr — ffmpeg's actual error is at the END after
+            # ~200 chars of build banner. Old code was capturing only the
+            # banner, hiding the real failure.
+            err = (stderr or b"").decode("utf-8", "ignore")
+            err_tail = err[-800:] if len(err) > 800 else err
+            log.error("hls_encode_failed", kill_id=kill_id[:8], stderr_tail=err_tail)
             return None
 
         # Upload all .m3u8 + .ts files to R2

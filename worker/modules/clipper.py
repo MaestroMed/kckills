@@ -32,6 +32,7 @@ from scheduler import scheduler
 from services import r2_client
 from services.clip_hash import content_hash, perceptual_hash
 from services.ffmpeg_ops import video_codec_args
+from services.supabase_batch import batched_safe_update, get_writer
 from services.supabase_client import safe_select, safe_update
 
 log = structlog.get_logger()
@@ -785,7 +786,11 @@ async def run() -> int:
             if not yt_id:
                 return
 
-            safe_update("kills", {"status": "clipping"}, "id", kill["id"])
+            # PR10-A : batched_safe_update collapses the 200 status='clipping'
+            # writes per cycle into ONE PATCH (id=in.(uuid1,uuid2,...)) — same
+            # for the status='clipped' writes once they all flush together.
+            # Cuts ~600 HTTP RTT per cycle (~5 min of pure network) down to ~3.
+            await batched_safe_update("kills", {"status": "clipping"}, "id", kill["id"])
 
             urls = await clip_kill(
                 kill_id=kill["id"],
@@ -799,7 +804,10 @@ async def run() -> int:
                 # there for the analyzer that runs after clipping, never a DB
                 # column.
                 payload.pop("_local_h_path", None)
-                safe_update("kills", payload, "id", kill["id"])
+                # Per-row payload (URLs differ across kills) — batcher falls
+                # through to the parallel httpx pool (15 concurrent), still
+                # ~10x faster than serial safe_update.
+                await batched_safe_update("kills", payload, "id", kill["id"])
                 # PR6-C : tick the canonical event's "clip produced" QC gate.
                 # No-op if event_mapper hasn't created the row yet — next
                 # event_mapper cycle will pick it up with qc_clip_produced
@@ -811,7 +819,7 @@ async def run() -> int:
                     log.warn("event_qc_tick_failed", kill_id=kill["id"][:8], stage="clip_produced", error=str(_e)[:120])
                 counters["ok"] += 1
             else:
-                safe_update(
+                await batched_safe_update(
                     "kills",
                     {"status": "clip_error", "retry_count": int(kill.get("retry_count") or 0) + 1},
                     "id",
@@ -819,7 +827,13 @@ async def run() -> int:
                 )
                 counters["fail"] += 1
 
+    # Start the background flusher BEFORE the worker fan-out so writes
+    # batch as they happen, not all at the end.
+    await get_writer().start_background_flusher()
     await asyncio.gather(*(_process_one(k) for k in kills), return_exceptions=False)
+    # Drain the tail of the buffer so the next module sees a consistent
+    # DB state immediately.
+    await get_writer().flush_now()
 
     log.info("clipper_scan_done", processed=counters["ok"], failed=counters["fail"])
     return counters["ok"]
