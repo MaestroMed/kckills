@@ -606,12 +606,27 @@ async def _run_ytdlp(url: str, output_path: str, start: float, end: float) -> bo
             log.error("ytdlp_timeout", url=url[:60])
             return False
         if proc.returncode != 0:
-            log.warn("ytdlp_nonzero", rc=proc.returncode, stderr=(stderr or b"")[:400].decode("utf-8", "ignore"))
+            stderr_text = (stderr or b"")[:400].decode("utf-8", "ignore")
+            # YouTube anti-bot detection : when this fires, EVERY clip
+            # request fails until cookies are provided. Don't burn the
+            # batch's retry budget on a global outage — raise a sentinel
+            # exception so the caller can drop out of the batch entirely.
+            if "Sign in to confirm" in stderr_text or "not a bot" in stderr_text:
+                log.error("ytdlp_bot_blocked",
+                          hint="add worker/cookies.txt — see clipper._cookies_args docstring")
+                raise YouTubeBotBlockedError()
+            log.warn("ytdlp_nonzero", rc=proc.returncode, stderr=stderr_text)
             return False
         return True
     except FileNotFoundError:
         log.error("ytdlp_not_installed")
         return False
+
+
+class YouTubeBotBlockedError(Exception):
+    """Raised by _run_ytdlp when YouTube returns the 'Sign in to confirm
+    you're not a bot' error. The caller should abort the batch and
+    NOT bump retry_count — the failure is external."""
 
 
 async def _ffmpeg(args: list[str]) -> bool:
@@ -823,26 +838,31 @@ async def run() -> int:
             # Cuts ~600 HTTP RTT per cycle (~5 min of pure network) down to ~3.
             await batched_safe_update("kills", {"status": "clipping"}, "id", kill["id"])
 
-            urls = await clip_kill(
-                kill_id=kill["id"],
-                youtube_id=yt_id,
-                vod_offset_seconds=offset,
-                game_time_seconds=int(kill.get("game_time_seconds") or 0),
-            )
+            try:
+                urls = await clip_kill(
+                    kill_id=kill["id"],
+                    youtube_id=yt_id,
+                    vod_offset_seconds=offset,
+                    game_time_seconds=int(kill.get("game_time_seconds") or 0),
+                )
+            except YouTubeBotBlockedError:
+                # YouTube is anti-bot-blocking the entire process. Don't
+                # bump retry_count (it's not the kill's fault) and DON'T
+                # leave the kill in 'clipping' (would never recover).
+                # Reset to its prior status so the next clipper pass
+                # (after the user has supplied cookies.txt) picks it up.
+                prior = "clip_error" if kill.get("status") == "clip_error" else "vod_found"
+                await batched_safe_update("kills", {"status": prior}, "id", kill["id"])
+                counters["yt_blocked"] = counters.get("yt_blocked", 0) + 1
+                # Skip the rest of the batch — retrying every kill in
+                # the queue would just rack up identical bot blocks and
+                # waste 5+ minutes per cycle.
+                raise
+
             if urls and urls.get("clip_url_horizontal"):
                 payload = {**urls, "status": "clipped"}
-                # Strip the in-process file path before persisting — it's only
-                # there for the analyzer that runs after clipping, never a DB
-                # column.
                 payload.pop("_local_h_path", None)
-                # Per-row payload (URLs differ across kills) — batcher falls
-                # through to the parallel httpx pool (15 concurrent), still
-                # ~10x faster than serial safe_update.
                 await batched_safe_update("kills", payload, "id", kill["id"])
-                # PR6-C : tick the canonical event's "clip produced" QC gate.
-                # No-op if event_mapper hasn't created the row yet — next
-                # event_mapper cycle will pick it up with qc_clip_produced
-                # already TRUE thanks to the proxy logic in _kill_to_event_row.
                 try:
                     from services.event_qc import tick_qc_clip_produced
                     tick_qc_clip_produced(kill["id"])
@@ -861,10 +881,31 @@ async def run() -> int:
     # Start the background flusher BEFORE the worker fan-out so writes
     # batch as they happen, not all at the end.
     await get_writer().start_background_flusher()
-    await asyncio.gather(*(_process_one(k) for k in kills), return_exceptions=False)
+    # return_exceptions=True lets one bot-blocked kill abort that worker
+    # without bringing the gather to a halt. The other workers in flight
+    # also see YouTubeBotBlockedError on their next download attempt and
+    # exit cleanly, restoring their kill's prior status.
+    results = await asyncio.gather(
+        *(_process_one(k) for k in kills),
+        return_exceptions=True,
+    )
     # Drain the tail of the buffer so the next module sees a consistent
     # DB state immediately.
     await get_writer().flush_now()
 
-    log.info("clipper_scan_done", processed=counters["ok"], failed=counters["fail"])
+    yt_blocked = sum(
+        1 for r in results if isinstance(r, YouTubeBotBlockedError)
+    )
+    if yt_blocked > 0:
+        log.error(
+            "clipper_yt_blocked_batch_aborted",
+            yt_blocked=yt_blocked, batch_size=len(kills),
+            hint="put a cookies.txt in worker/ exported from a logged-in browser",
+        )
+
+    log.info(
+        "clipper_scan_done",
+        processed=counters["ok"], failed=counters["fail"],
+        yt_blocked=counters.get("yt_blocked", 0),
+    )
     return counters["ok"]
