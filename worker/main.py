@@ -53,6 +53,7 @@ DAEMON_MODULES: list[tuple[str, int, str]] = [
     ("channel_discoverer", 21600, "modules.channel_discoverer"),  # 6h — Kameto pivot K-Phase 0
     ("channel_reconciler", 3600, "modules.channel_reconciler"),   # 1h — K-Phase 1 (channel_videos -> matches)
     ("match_planner", 3600,  "modules.match_planner"), # 1h — pre-schedule next 21d KC matches + boost jobs
+    ("qc_sampler",    21600, "modules.qc_sampler"),    # 6h — random 2% sampling -> clip_qc.verify (Gemini drift)
     ("job_runner",    30,    "modules.job_runner"),    # 30s — admin-triggered jobs + boost dispatch
     ("heartbeat",     21600, "modules.heartbeat"),     # 6h
     ("watchdog",      1800,  "modules.watchdog"),      # 30 min
