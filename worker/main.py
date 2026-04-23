@@ -51,6 +51,7 @@ DAEMON_MODULES: list[tuple[str, int, str]] = [
     ("moderator",     180,   "modules.moderator"),     # 3 min — Haiku comment moderation
     ("hls_packager",  1800,  "modules.hls_packager"),  # 30 min — HLS adaptive bitrate (5 clips/run)
     ("channel_discoverer", 21600, "modules.channel_discoverer"),  # 6h — Kameto pivot K-Phase 0
+    ("channel_reconciler", 3600, "modules.channel_reconciler"),   # 1h — K-Phase 1 (channel_videos -> matches)
     ("match_planner", 3600,  "modules.match_planner"), # 1h — pre-schedule next 21d KC matches + boost jobs
     ("job_runner",    30,    "modules.job_runner"),    # 30s — admin-triggered jobs + boost dispatch
     ("heartbeat",     21600, "modules.heartbeat"),     # 6h

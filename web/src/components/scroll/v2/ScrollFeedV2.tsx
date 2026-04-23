@@ -153,14 +153,22 @@ export function ScrollFeedV2({
   });
   const isAtEndOfFeed = activeIndex === visibleItems.length;
 
-  // ─── Speculative thumbnail buffer (Phase 3) ───────────────────────
-  // Preloads thumbnails for items 3-10 ahead so fast flicks never
-  // reveal a blank poster. Skipped on "low" network quality.
+  // ─── Speculative buffer (PR5-A) ───────────────────────────────────
+  // Two layers : thumbnail preload (15 ahead on ultra) + video manifest
+  // HEAD-warmer for the next 2-3 items so HLS attach starts with a
+  // primed CDN edge cache. Both adaptive to network quality.
   useFeedBuffer({
-    items: visibleItems.map((it) => ({
-      id: it.id,
-      thumbnail: it.kind === "video" || it.kind === "moment" ? it.thumbnail : null,
-    })),
+    items: visibleItems.map((it) => {
+      if (it.kind === "video" || it.kind === "moment") {
+        return {
+          id: it.id,
+          thumbnail: it.thumbnail,
+          hlsMasterUrl: it.hlsMasterUrl ?? null,
+          videoUrl: it.clipVertical || null,
+        };
+      }
+      return { id: it.id, thumbnail: null, hlsMasterUrl: null, videoUrl: null };
+    }),
     activeIndex,
     quality,
   });
