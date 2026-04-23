@@ -389,6 +389,7 @@ export function ScrollFeedV2({
           itemHeight={itemHeight}
           muted={muted}
           useLowQuality={useLowQuality}
+          quality={quality}
           isDesktop={isDesktop}
           reducedMotion={reducedMotion}
           onError={handlePoolError}

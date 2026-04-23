@@ -32,8 +32,35 @@
  */
 
 import { useCallback, useRef } from "react";
+import type { NetworkQuality } from "./useNetworkQuality";
 
 type HlsModule = typeof import("hls.js");
+
+/**
+ * Map our NetworkQuality enum to an hls.js startLevel index.
+ * The variant ladder (after migration to 4 variants in hls_packager) is:
+ *   0 = 240p   1 = 480p   2 = 720p   3 = 1080p
+ *
+ * startLevel = -1  → hls.js auto-detects from bandwidth probe (slowest first)
+ * startLevel = 0+  → start at this index, then ABR can ramp up/down freely
+ *
+ * "ultra" forces 1080p start (saves the upramp delay on fast connections).
+ * "low"   caps to 240p only via maxLevel (no ABR ramp on bad networks).
+ */
+function startLevelFor(quality: NetworkQuality): number {
+  switch (quality) {
+    case "ultra": return 3;
+    case "high":  return 2;
+    case "med":   return 1;
+    case "low":   return 0;
+    default:      return -1; // auto
+  }
+}
+
+function capLevelFor(quality: NetworkQuality): number | undefined {
+  // Hard cap on "low" to spare data even if ABR thinks we can do more.
+  return quality === "low" ? 0 : undefined;
+}
 
 /** Module promise — lazy-loaded once. */
 let hlsModulePromise: Promise<HlsModule> | null = null;
@@ -64,7 +91,12 @@ export function useHlsAttach() {
   );
 
   const attachHlsTo = useCallback(
-    async (video: HTMLVideoElement, hlsUrl: string | null, fallbackMp4: string | null) => {
+    async (
+      video: HTMLVideoElement,
+      hlsUrl: string | null,
+      fallbackMp4: string | null,
+      quality: NetworkQuality = "auto",
+    ) => {
       if (!hlsUrl) {
         // No HLS available — set MP4 fallback if any.
         if (fallbackMp4 && video.src !== fallbackMp4) {
@@ -102,22 +134,35 @@ export function useHlsAttach() {
           return;
         }
 
+        const startLevel = startLevelFor(quality);
+        const cap = capLevelFor(quality);
         const instance = new Hls({
           // Lower latency + smaller buffer = better fit for short clips.
           maxBufferLength: 15,
           maxMaxBufferLength: 30,
           lowLatencyMode: false,
-          // Start at the lowest variant — bitrate negotiation kicks in
-          // after the first chunk loads. Avoids a big-bitrate stall on
-          // the first frame on slow connections.
-          startLevel: 0,
-          // Don't auto-recover MEDIA_ERR_DECODE — it can cause infinite
-          // loops on broken segments. The pool error handler will swap
-          // to MP4 if everything fails.
+          // Start level chosen from network quality — "ultra" jumps
+          // straight to 1080p, "low" stays at 240p.
+          startLevel,
+          ...(cap !== undefined ? { capLevelToPlayerSize: false, autoStartLoad: true } : {}),
           enableWorker: true,
         });
         instance.loadSource(hlsUrl);
         instance.attachMedia(video);
+        // Hard cap for "low" — once the manifest is parsed, force the
+        // level cap so even if ABR upgrades it, the player downgrades
+        // immediately. capLevel is hls.js' user-side ceiling.
+        if (cap !== undefined) {
+          const onManifest = () => {
+            try {
+              (instance as unknown as { capLevel?: number }).capLevel = cap;
+            } catch {
+              /* ignore */
+            }
+          };
+          (instance as unknown as { on: (e: string, cb: () => void) => void })
+            .on("hlsManifestParsed", onManifest);
+        }
         attachedRef.current.set(video, { instance, url: hlsUrl });
       } catch {
         // hls.js failed to load (offline?). Fall back to MP4.

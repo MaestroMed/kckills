@@ -24,7 +24,7 @@
 
 import { useEffect, useState } from "react";
 
-export type NetworkQuality = "auto" | "high" | "med" | "low";
+export type NetworkQuality = "auto" | "ultra" | "high" | "med" | "low";
 
 interface NetworkInformation {
   effectiveType?: string;
@@ -41,8 +41,14 @@ function detectQuality(conn: NetworkInformation | undefined): NetworkQuality {
   const dl = conn.downlink ?? 0;
   if (eff === "2g" || eff === "slow-2g") return "low";
   if (eff === "3g") return dl > 1.5 ? "med" : "low";
-  if (eff === "4g") return dl > 5 ? "high" : "med";
-  // 5g, wifi, etc — high.
+  if (eff === "4g") {
+    if (dl >= 25) return "ultra"; // strong 4G LTE+ / 5G NSA → 1080p
+    if (dl > 5) return "high";
+    return "med";
+  }
+  // No effectiveType (likely wifi / 5G via vendor browser) — gate on
+  // downlink. >=15Mbps = ultra (allows 1080p), else high.
+  if (dl >= 15) return "ultra";
   return "high";
 }
 

@@ -80,6 +80,10 @@ interface Props {
   itemHeight: number;
   muted: boolean;
   useLowQuality: boolean;
+  /** Network-quality enum from useNetworkQuality. Drives HLS startLevel
+   *  (240p/480p/720p/1080p) and capLevel for "low". When omitted, defaults
+   *  to "auto" → hls.js bandwidth probe picks the level. */
+  quality?: import("./hooks/useNetworkQuality").NetworkQuality;
   isDesktop: boolean;
   reducedMotion: boolean;
   onError: (itemId: string, src: string) => void;
@@ -100,6 +104,7 @@ export function FeedPlayerPool({
   itemHeight,
   muted,
   useLowQuality,
+  quality = "auto",
   isDesktop,
   reducedMotion,
   onError,
@@ -167,7 +172,7 @@ export function FeedPlayerPool({
         //   - No HLS URL:       falls through to fallbackMp4
         // It's async (lazy hls.js import) but fire-and-forget — the
         // poster covers the gap and play() retries via canplay listener.
-        void attachHlsTo(v, item.hlsMasterUrl ?? null, fallbackMp4);
+        void attachHlsTo(v, item.hlsMasterUrl ?? null, fallbackMp4, quality);
         v.poster = item.thumbnail ?? "";
         hasPlayedRef.current[s] = false;
       }
@@ -199,6 +204,7 @@ export function FeedPlayerPool({
     itemHeight,
     isDesktop,
     useLowQuality,
+    quality,
     resetOnFirstPlay,
   ]);
 

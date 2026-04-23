@@ -96,28 +96,36 @@ async def package_clip(kill_id: str, mp4_url: str) -> str | None:
         # Audio is mapped 3 times (one per variant) when present so the
         # var_stream_map a:0/a:1/a:2 references resolve correctly.
 
+        # 4 variants: 240p / 480p / 720p / 1080p. Source is 1080p (post
+        # 1080p quality bump), so the 1080p variant is just a re-encode
+        # at higher bitrate, not an upscale. Adaptive bitrate negotiation
+        # in hls.js / Safari native picks the right variant per device.
         cmd = [
             "ffmpeg", "-y", "-i", src_path,
             "-filter_complex",
-            "[0:v]split=3[v1][v2][v3];"
+            "[0:v]split=4[v1][v2][v3][v4];"
             "[v1]scale=-2:240[v1out];"
             "[v2]scale=-2:480[v2out];"
-            "[v3]scale=-2:720[v3out]",
-            # Variant 0 — 240p
+            "[v3]scale=-2:720[v3out];"
+            "[v4]scale=-2:1080[v4out]",
+            # Variant 0 — 240p (slow 3G fallback)
             "-map", "[v1out]", "-c:v:0", "libx264",
             "-b:v:0", "400k", "-maxrate:v:0", "600k", "-bufsize:v:0", "800k",
-            # Variant 1 — 480p
+            # Variant 1 — 480p (3G+ / shaky 4G)
             "-map", "[v2out]", "-c:v:1", "libx264",
             "-b:v:1", "1000k", "-maxrate:v:1", "1500k", "-bufsize:v:1", "2000k",
-            # Variant 2 — 720p
+            # Variant 2 — 720p (4G / mid-tier mobile)
             "-map", "[v3out]", "-c:v:2", "libx264",
             "-b:v:2", "2500k", "-maxrate:v:2", "3500k", "-bufsize:v:2", "5000k",
+            # Variant 3 — 1080p (5G / wifi / desktop)
+            "-map", "[v4out]", "-c:v:3", "libx264",
+            "-b:v:3", "5000k", "-maxrate:v:3", "7000k", "-bufsize:v:3", "10000k",
         ]
         if has_audio:
             cmd += [
                 # Audio mapped once per variant — var_stream_map needs
-                # one a:N per a:N reference.
-                "-map", "a:0", "-map", "a:0", "-map", "a:0",
+                # one a:N per v:N reference.
+                "-map", "a:0", "-map", "a:0", "-map", "a:0", "-map", "a:0",
                 "-c:a", "aac", "-b:a", "96k", "-ac", "2",
             ]
         cmd += [
@@ -131,7 +139,11 @@ async def package_clip(kill_id: str, mp4_url: str) -> str | None:
             "-hls_segment_filename", os.path.join(work_dir, "v%v_%03d.ts"),
             "-master_pl_name", "master.m3u8",
             "-var_stream_map",
-            ("v:0,a:0 v:1,a:1 v:2,a:2" if has_audio else "v:0 v:1 v:2"),
+            (
+                "v:0,a:0 v:1,a:1 v:2,a:2 v:3,a:3"
+                if has_audio
+                else "v:0 v:1 v:2 v:3"
+            ),
             os.path.join(work_dir, "v%v.m3u8"),
         ]
         proc = await asyncio.create_subprocess_exec(
