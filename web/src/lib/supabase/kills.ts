@@ -345,25 +345,32 @@ export const getPublishedKills = cache(async function getPublishedKills(
 });
 
 /**
- * Like getPublishedKills() but ALSO includes data-only entries from
- * gol.gg historical scrapes. Use for /clips, /players, /matches grids
- * — surfaces 6 years of KC kill metadata even where we don't have a
- * playable clip on R2.
+ * Like getPublishedKills() but expanded to ANY kill that has enough
+ * metadata to render a card — published with a clip OR data-only.
+ * Use for /clips, /players, /matches grids. Returns up to 6 years of
+ * KC kills depending on `limit`.
  *
  * NEVER use this for /scroll : the TikTok-style feed is clip-only.
  *
- * Selection logic :
- *   * status='published' AND clip_url_vertical NOT NULL  →  full kill
- *     (same as getPublishedKills)
- *   * data_source='gol_gg'                                →  data-only
- *     (always trusted ; gol.gg is post-game verified)
+ * Selection logic — merges THREE buckets, deduped by id :
  *
- * The two sets are merged client-side. Sort key is highlight_score
- * desc (data-only kills with NULL highlight_score sink to the bottom).
+ *   1. status='published' AND clip_url_vertical NOT NULL
+ *      → full clip card. Same as getPublishedKills.
  *
- * `kill_visible` is NOT enforced for the data-only branch — historical
- * gol.gg kills haven't been QC'd by Gemini, so requiring kill_visible=true
- * would zero them out. Trust the source instead.
+ *   2. data_source='gol_gg'    (ANY status)
+ *      → data-only card from the 6-year gol.gg historical scrape.
+ *        These never enter the clipping pipeline (we don't know
+ *        their YouTube VOD), but the kill data is post-game verified.
+ *
+ *   3. status='clip_error' OR status='analyzed'  (livestats source)
+ *      → data-only card. The harvester extracted the kill (we have
+ *        killer + victim + game_time) but the clipping/QC failed.
+ *        Better to surface them as stats than hide them entirely.
+ *
+ * `kill_visible` is enforced ONLY on bucket 1. Buckets 2 and 3 trust
+ * the underlying source — gol.gg has post-game verified rosters,
+ * livestats-extracted kills already passed the harvester's KC-side
+ * detection.
  */
 export const getKillsForGrid = cache(async function getKillsForGrid(
   limit = 200,
@@ -374,7 +381,7 @@ export const getKillsForGrid = cache(async function getKillsForGrid(
       ? createAnonSupabase()
       : await createServerSupabase();
 
-    // Branch 1 : full clips (status=published with clip)
+    // Bucket 1 : full clip cards
     let publishedQuery = supabase
       .from("kills")
       .select(KILL_SELECT)
@@ -386,49 +393,74 @@ export const getKillsForGrid = cache(async function getKillsForGrid(
       .order("created_at", { ascending: false })
       .limit(limit);
 
-    // Branch 2 : data-only from gol.gg (any status — they're post-game verified)
-    let dataOnlyQuery = supabase
+    // Bucket 2 : gol.gg historical data-only
+    let golggQuery = supabase
       .from("kills")
       .select(KILL_SELECT)
       .eq("data_source", "gol_gg")
       .order("game_time_seconds", { ascending: true })
       .limit(limit);
 
+    // Bucket 3 : livestats-derived data-only (clipping failed or pending)
+    let livestatsDataOnlyQuery = supabase
+      .from("kills")
+      .select(KILL_SELECT)
+      .in("status", ["clip_error", "analyzed"])
+      .eq("data_source", "livestats")
+      .not("killer_champion", "is", null)
+      .not("victim_champion", "is", null)
+      .order("created_at", { ascending: false })
+      .limit(limit);
+
     if (opts.killerChampion) {
       publishedQuery = publishedQuery.eq("killer_champion", opts.killerChampion);
-      dataOnlyQuery = dataOnlyQuery.eq("killer_champion", opts.killerChampion);
+      golggQuery = golggQuery.eq("killer_champion", opts.killerChampion);
+      livestatsDataOnlyQuery = livestatsDataOnlyQuery.eq("killer_champion", opts.killerChampion);
     }
     if (opts.matchExternalId) {
       publishedQuery = publishedQuery.eq("games.matches.external_id", opts.matchExternalId);
-      dataOnlyQuery = dataOnlyQuery.eq("games.matches.external_id", opts.matchExternalId);
+      golggQuery = golggQuery.eq("games.matches.external_id", opts.matchExternalId);
+      livestatsDataOnlyQuery = livestatsDataOnlyQuery.eq("games.matches.external_id", opts.matchExternalId);
     }
 
-    const [publishedRes, dataOnlyRes] = await Promise.all([publishedQuery, dataOnlyQuery]);
+    const [publishedRes, golggRes, livestatsRes] = await Promise.all([
+      publishedQuery,
+      golggQuery,
+      livestatsDataOnlyQuery,
+    ]);
 
     if (publishedRes.error) {
       console.warn("[supabase/kills] grid published query error:", publishedRes.error.message);
     }
-    if (dataOnlyRes.error) {
-      console.warn("[supabase/kills] grid data-only query error:", dataOnlyRes.error.message);
+    if (golggRes.error) {
+      console.warn("[supabase/kills] grid gol_gg query error:", golggRes.error.message);
+    }
+    if (livestatsRes.error) {
+      console.warn("[supabase/kills] grid livestats data-only query error:", livestatsRes.error.message);
     }
 
     const published = (publishedRes.data ?? []).map((row) =>
       normalize(row as unknown as RawKillSelect),
     );
-    const dataOnly = (dataOnlyRes.data ?? []).map((row) =>
+    const golgg = (golggRes.data ?? []).map((row) =>
+      normalize(row as unknown as RawKillSelect),
+    );
+    const livestats = (livestatsRes.data ?? []).map((row) =>
       normalize(row as unknown as RawKillSelect),
     );
 
-    // Dedupe — a kill may appear in both branches if it's both
-    // status=published AND data_source=gol_gg. Keep the published one
-    // (it has the clip URLs).
+    // Dedupe by id. Priority order : published (has clip) → gol_gg →
+    // livestats data-only. Keep whichever appears first in that order.
     const byId = new Map<string, PublishedKillRow>();
     for (const k of published) byId.set(k.id, k);
-    for (const k of dataOnly) {
+    for (const k of golgg) {
+      if (!byId.has(k.id)) byId.set(k.id, k);
+    }
+    for (const k of livestats) {
       if (!byId.has(k.id)) byId.set(k.id, k);
     }
 
-    // Sort merged set by highlight_score desc (NULL last), then created_at desc.
+    // Sort merged set : highlight_score desc (NULL last), then created_at desc.
     const merged = Array.from(byId.values()).sort((a, b) => {
       const sa = a.highlight_score ?? -1;
       const sb = b.highlight_score ?? -1;
@@ -489,7 +521,7 @@ export async function getKillsByMatchExternalId(
   try {
     const supabase = await createServerSupabase();
 
-    const [publishedRes, dataOnlyRes] = await Promise.all([
+    const [publishedRes, golggRes, livestatsRes] = await Promise.all([
       supabase
         .from("kills")
         .select(KILL_SELECT)
@@ -503,28 +535,43 @@ export async function getKillsByMatchExternalId(
         .eq("data_source", "gol_gg")
         .eq("games.matches.external_id", matchExternalId)
         .order("game_time_seconds", { ascending: true }),
+      // Bucket 3 : livestats kills that failed clipping or are pending
+      supabase
+        .from("kills")
+        .select(KILL_SELECT)
+        .in("status", ["clip_error", "analyzed"])
+        .eq("data_source", "livestats")
+        .eq("games.matches.external_id", matchExternalId)
+        .not("killer_champion", "is", null)
+        .order("game_time_seconds", { ascending: true }),
     ]);
 
     if (publishedRes.error) {
       console.warn("[supabase/kills] getKillsByMatchExternalId published error:", publishedRes.error.message);
     }
-    if (dataOnlyRes.error) {
-      console.warn("[supabase/kills] getKillsByMatchExternalId dataOnly error:", dataOnlyRes.error.message);
+    if (golggRes.error) {
+      console.warn("[supabase/kills] getKillsByMatchExternalId golgg error:", golggRes.error.message);
+    }
+    if (livestatsRes.error) {
+      console.warn("[supabase/kills] getKillsByMatchExternalId livestats error:", livestatsRes.error.message);
     }
 
     const published = (publishedRes.data ?? []).map((row) =>
       normalize(row as unknown as RawKillSelect),
     );
-    const dataOnly = (dataOnlyRes.data ?? []).map((row) =>
+    const golgg = (golggRes.data ?? []).map((row) =>
+      normalize(row as unknown as RawKillSelect),
+    );
+    const livestats = (livestatsRes.data ?? []).map((row) =>
       normalize(row as unknown as RawKillSelect),
     );
 
-    // Dedupe by id, prefer published (has the clip URLs).
+    // Dedupe by id, priority : published > gol_gg > livestats (the
+    // first one wins — published always has the clip URLs).
     const byId = new Map<string, PublishedKillRow>();
     for (const k of published) byId.set(k.id, k);
-    for (const k of dataOnly) {
-      if (!byId.has(k.id)) byId.set(k.id, k);
-    }
+    for (const k of golgg) if (!byId.has(k.id)) byId.set(k.id, k);
+    for (const k of livestats) if (!byId.has(k.id)) byId.set(k.id, k);
 
     return Array.from(byId.values()).sort(
       (a, b) => (a.game_time_seconds ?? 0) - (b.game_time_seconds ?? 0),
