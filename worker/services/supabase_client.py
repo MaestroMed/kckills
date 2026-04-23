@@ -165,7 +165,28 @@ def safe_select(table: str, columns: str = "*", **filters) -> list[dict]:
 
 
 async def flush_cache():
-    """Flush buffered writes from local cache to Supabase."""
+    """Flush buffered writes from local cache to Supabase.
+
+    PR8 hardening : the original implementation broke on the FIRST error,
+    so a single bad row (e.g. a stale cached UPDATE that references a
+    transient column like `_local_h_path` which the live code now strips)
+    would block ALL subsequent flushes — leading to the 984-pending
+    backlog observed in production.
+
+    The new flush :
+      * Sanitises each row before sending (strips known-transient keys
+        like `_local_h_path` that were leaked into older cached writes).
+      * Categorises HTTP errors :
+          - 4xx with code 23514 (CHECK constraint), 42703 (column does
+            not exist) or PGRST204 (column not in schema) = permanent ;
+            mark the row as flushed (drop it) so it stops blocking.
+          - Other errors (5xx, network, timeout) = transient ; leave the
+            row pending and continue with the next one.
+      * NEVER aborts the batch on a single failure.
+
+    Returns the count of rows successfully flushed (or dropped as
+    permanently bad).
+    """
     db = get_db()
     if not db:
         return 0
@@ -174,23 +195,87 @@ async def flush_cache():
     if not pending:
         return 0
 
-    flushed_ids = []
-    for write in pending:
-        try:
-            if write["operation"] == "insert":
-                db.insert(write["table"], write["data"])
-            elif write["operation"] == "upsert":
-                db.upsert(write["table"], write["data"])
-            elif write["operation"] == "update":
-                data = dict(write["data"])
-                match = data.pop("_match", {})
-                db.update(write["table"], data, match)
-            flushed_ids.append(write["id"])
-        except Exception:
-            break  # Stop on first failure
+    flushed_ids: list[str] = []
+    permanently_bad_ids: list[str] = []
+    transient_failures = 0
+    transient_failure_codes: list[int] = []
 
-    if flushed_ids:
-        cache.mark_flushed(flushed_ids)
-        log.info("cache_flushed", count=len(flushed_ids))
+    # Columns that are private to in-process pipelines and must never
+    # reach Supabase. Cached writes from older builds may still carry
+    # them ; we strip on flush as a belt-and-braces guard.
+    TRANSIENT_KEYS = {"_local_h_path", "_match"}
+
+    for write in pending:
+        wid = write["id"]
+        op = write["operation"]
+        table = write["table"]
+        raw = write["data"] or {}
+        try:
+            if op == "insert":
+                data = {k: v for k, v in raw.items() if k not in TRANSIENT_KEYS}
+                db.insert(table, data)
+            elif op == "upsert":
+                data = {k: v for k, v in raw.items() if k not in TRANSIENT_KEYS}
+                db.upsert(table, data)
+            elif op == "update":
+                data = dict(raw)
+                match = data.pop("_match", {})
+                # Strip transient keys from the data payload (NOT the
+                # match clause, which is always {col: val}).
+                data = {k: v for k, v in data.items() if k not in TRANSIENT_KEYS}
+                if not match:
+                    permanently_bad_ids.append(wid)
+                    continue
+                db.update(table, data, match)
+            else:
+                permanently_bad_ids.append(wid)
+                continue
+            flushed_ids.append(wid)
+        except httpx.HTTPStatusError as e:
+            status = e.response.status_code
+            body = e.response.text[:200]
+            # Permanent errors : invalid column, CHECK violation, FK
+            # violation, schema cache miss. These will NEVER succeed on
+            # retry — drop the row so the queue can drain.
+            permanent_signatures = (
+                '"42703"',          # column does not exist
+                '"23514"',          # CHECK constraint violation
+                '"23502"',          # NOT NULL violation (data shape bug)
+                '"23503"',          # FK violation (referenced row gone)
+                '"PGRST204"',       # column not in schema cache
+                '"PGRST205"',       # table not in schema cache
+            )
+            if status >= 400 and status < 500 and any(sig in body for sig in permanent_signatures):
+                permanently_bad_ids.append(wid)
+                log.warn(
+                    "cache_flush_drop_permanent",
+                    table=table, op=op, status=status, body=body[:120],
+                )
+            else:
+                transient_failures += 1
+                transient_failure_codes.append(status)
+                # Continue to next row — DON'T break the batch.
+        except Exception as e:
+            # Network / timeout / unknown — transient, leave for next cycle.
+            transient_failures += 1
+            log.warn(
+                "cache_flush_transient_error",
+                table=table, op=op, error=str(e)[:120],
+            )
+
+    # Mark both successfully-flushed AND permanently-bad rows as done so
+    # the cache drains. Permanently-bad get a separate log signal so we
+    # can audit later if a real bug emerges.
+    drained = list(set(flushed_ids + permanently_bad_ids))
+    if drained:
+        cache.mark_flushed(drained)
+        log.info(
+            "cache_flushed",
+            ok=len(flushed_ids),
+            dropped=len(permanently_bad_ids),
+            transient_failures=transient_failures,
+            transient_codes=sorted(set(transient_failure_codes))[:5],
+        )
+    return len(flushed_ids)
 
     return len(flushed_ids)

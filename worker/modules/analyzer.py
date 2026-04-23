@@ -390,11 +390,14 @@ async def run() -> int:
             break
 
         # Download clip from R2 for VIDEO analysis (not text-only)
+        # Uses the configured CLIPS_DIR (D:/kckills_worker/clips by default
+        # on the user's Gen5 NVMe). The qc_ prefix avoids collisions with
+        # active clipper raw downloads in the same dir.
         clip_path = None
         clip_url = kill.get("clip_url_vertical") or kill.get("clip_url_horizontal")
         if clip_url:
             import httpx as _httpx
-            _clip_dir = os.path.join(os.path.dirname(__file__), "..", "clips")
+            _clip_dir = config.CLIPS_DIR
             os.makedirs(_clip_dir, exist_ok=True)
             clip_path = os.path.join(_clip_dir, f"qc_{kill['id'][:8]}.mp4")
             try:

@@ -147,10 +147,23 @@ async def run() -> int:
 
     kills = safe_select(
         "kills",
-        "id, killer_champion, victim_champion, ai_description, avg_rating, rating_count, multi_kill, og_image_url, status",
+        "id, killer_champion, victim_champion, ai_description, avg_rating, rating_count, multi_kill, og_image_url, status, needs_reclip",
         status="analyzed",
     )
     if not kills:
+        return 0
+
+    # PR8 — skip kills marked as needs_reclip=true. These are quarantined
+    # clips (e.g. from the offset=0 bug) that should NOT be re-published
+    # until the clipper produces a corrected version. Without this filter,
+    # the og_generator would happily re-flip them to status='published'
+    # and the bad clips would land back on /scroll.
+    skipped_needs_reclip = sum(1 for k in kills if k.get("needs_reclip") is True)
+    kills = [k for k in kills if k.get("needs_reclip") is not True]
+    if skipped_needs_reclip > 0:
+        log.info("og_generator_skipped_needs_reclip", count=skipped_needs_reclip)
+    if not kills:
+        log.info("og_generator_scan_done", generated=0, skipped_needs_reclip=skipped_needs_reclip)
         return 0
 
     # Fast-path : kills that already have og_image_url just need a

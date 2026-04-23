@@ -41,7 +41,11 @@ MAX_PER_RUN = 25
 # ~6 cores via `-threads 0`, so 3 concurrent encodes on a 16-core box
 # leaves headroom for the rest of the daemon (clipper, analyzer downloads).
 CONCURRENCY = 3
-HLS_DIR = os.path.join(os.path.dirname(__file__), "..", "hls_temp")
+# HLS_DIR now comes from config (defaults to D:/kckills_worker/hls_temp
+# on the user's Gen5 NVMe, falls back to worker/hls_temp). This is an
+# I/O hot path — each clip writes ~40-80MB of .ts segments here during
+# encoding before upload to R2.
+HLS_DIR = config.HLS_DIR
 
 
 async def _source_has_audio(src_path: str) -> bool:
