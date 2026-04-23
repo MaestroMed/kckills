@@ -39,7 +39,11 @@ export async function logAdminAction(params: {
  *   1. Cookie `kc_admin` matches `KCKILLS_ADMIN_TOKEN` env var
  *   2. Discord OAuth user is in the `KCKILLS_ADMIN_DISCORD_IDS` allowlist
  *
- * If neither env var is set, the gate is OPEN (dev mode).
+ * Fail-closed in production : if NEITHER env var is configured in a
+ * production deployment, the gate REFUSES every request. This prevents
+ * a typo / unset env / preview-deployment slip from silently exposing
+ * the backoffice. In NODE_ENV=development the historical "no env =
+ * open" behaviour is preserved so local `pnpm dev` works.
  */
 export async function requireAdmin(): Promise<{ ok: true } | { ok: false; error: string }> {
   const expectedToken = process.env.KCKILLS_ADMIN_TOKEN;
@@ -48,7 +52,17 @@ export async function requireAdmin(): Promise<{ ok: true } | { ok: false; error:
     .map((s) => s.trim())
     .filter(Boolean);
 
-  // Dev mode — no env vars set, allow all (existing behaviour)
+  const isProduction = process.env.NODE_ENV === "production";
+
+  // PR-SECURITY-A : production fail-closed.
+  if (isProduction && !expectedToken && allowedDiscordIds.length === 0) {
+    return {
+      ok: false,
+      error: "Admin auth not configured (server misconfigured — refusing access)",
+    };
+  }
+
+  // Dev mode — no env vars set, allow all (preserves local dev UX).
   if (!expectedToken && allowedDiscordIds.length === 0) {
     return { ok: true };
   }

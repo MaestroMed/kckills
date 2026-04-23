@@ -1,11 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerSupabase } from "@/lib/supabase/server";
+import { requireAdmin } from "@/lib/admin/audit";
 
 /**
  * POST /api/admin/audit/[id]/replay
  *
  * Re-applies the `after` JSON of an admin_actions row to its entity.
  * Useful when you want to undo a recent change or repeat a fix.
+ *
+ * SECURITY (PR-SECURITY-A) : was missing requireAdmin check. Now gated.
  *
  * Currently supports replaying:
  *   - kill.edit / kill.bulk — re-apply patch to kills table
@@ -16,6 +19,10 @@ export async function POST(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  const admin = await requireAdmin();
+  if (!admin.ok) {
+    return NextResponse.json({ error: admin.error }, { status: 403 });
+  }
   const { id } = await params;
   const sb = await createServerSupabase();
 

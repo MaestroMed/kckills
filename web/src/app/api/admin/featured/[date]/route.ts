@@ -1,11 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerSupabase } from "@/lib/supabase/server";
+import { requireAdmin } from "@/lib/admin/audit";
 
-/** PUT /api/admin/featured/[date] — set featured kill for a date */
+/** PUT /api/admin/featured/[date] — set featured kill for a date.
+ *  SECURITY (PR-SECURITY-A) : was missing requireAdmin. Now gated.
+ */
 export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ date: string }> },
 ) {
+  const admin = await requireAdmin();
+  if (!admin.ok) {
+    return NextResponse.json({ error: admin.error }, { status: 403 });
+  }
   const { date } = await params;
   const body = await request.json();
   const killId = body.kill_id;
@@ -80,11 +87,17 @@ export async function PUT(
   return NextResponse.json({ ok: true });
 }
 
-/** DELETE /api/admin/featured/[date] — remove featured for a date */
+/** DELETE /api/admin/featured/[date] — remove featured for a date.
+ *  SECURITY (PR-SECURITY-A) : was missing requireAdmin. Now gated.
+ */
 export async function DELETE(
   _request: NextRequest,
   { params }: { params: Promise<{ date: string }> },
 ) {
+  const admin = await requireAdmin();
+  if (!admin.ok) {
+    return NextResponse.json({ error: admin.error }, { status: 403 });
+  }
   const { date } = await params;
   const sb = await createServerSupabase();
   const { error } = await sb.from("featured_clips").delete().eq("feature_date", date);

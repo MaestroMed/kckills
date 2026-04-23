@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerSupabase } from "@/lib/supabase/server";
+import { logAdminAction, requireAdmin } from "@/lib/admin/audit";
 
 const VALID_FIGHT_TYPES = [
   "solo_kill", "pick", "gank", "skirmish_2v2", "skirmish_3v3",
@@ -18,13 +19,20 @@ const VALID_TAGS = [
  *
  * Body: { ai_description?, fight_type?, ai_tags?, highlight_score?, hidden? }
  *
- * No auth check for now — this is an internal tool on a non-indexed route.
- * TODO: add admin auth when we have Discord login.
+ * SECURITY (PR-SECURITY-A) : was previously open to the internet. Now
+ * requires admin auth via requireAdmin (cookie kc_admin OR Discord
+ * allowlist). The middleware ALSO covers this route via an explicit
+ * matcher entry, but the handler-level check is the security boundary.
  */
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  const admin = await requireAdmin();
+  if (!admin.ok) {
+    return NextResponse.json({ error: admin.error }, { status: 403 });
+  }
+
   const { id } = await params;
   const body = await request.json();
 
@@ -64,6 +72,13 @@ export async function PATCH(
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
+
+  await logAdminAction({
+    action: "kill.edit",
+    entityType: "kill",
+    entityId: id,
+    after: patch,
+  });
 
   return NextResponse.json({ ok: true, patched: Object.keys(patch) });
 }

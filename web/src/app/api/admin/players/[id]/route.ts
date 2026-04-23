@@ -1,13 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerSupabase } from "@/lib/supabase/server";
+import { requireAdmin } from "@/lib/admin/audit";
 
 const VALID_ROLES = ["top", "jungle", "mid", "bottom", "support"];
 
-/** PATCH /api/admin/players/[id] — update a player */
+/** PATCH /api/admin/players/[id] — update a player.
+ *  SECURITY (PR-SECURITY-A) : was missing requireAdmin. Now gated.
+ */
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  const admin = await requireAdmin();
+  if (!admin.ok) {
+    return NextResponse.json({ error: admin.error }, { status: 403 });
+  }
   const { id } = await params;
   const body = await request.json();
 
