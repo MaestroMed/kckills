@@ -28,6 +28,7 @@ import type { VideoFeedItem, MomentFeedItem } from "@/components/scroll/ScrollFe
 import { isDescriptionClean } from "@/lib/scroll/sanitize-description";
 import { useImpressionTracker } from "./hooks/useImpressionTracker";
 import { FeedSidebarV2 } from "@/components/community/FeedSidebarV2";
+import { DoubleTapHeart } from "@/components/community/DoubleTapHeart";
 
 interface SharedFeedItemProps {
   index: number;
@@ -37,6 +38,12 @@ interface SharedFeedItemProps {
    *  fade-in via the .is-active class so it pops only when relevant. */
   isActive: boolean;
 }
+
+/** Tiny 1x2 dark gradient base64 used as `blurDataURL` placeholder
+ *  on every Image. Renders as a soft dark blur until the real
+ *  thumbnail decodes — no flash of empty white frame. */
+const BLUR_PLACEHOLDER =
+  "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQH/2wBDAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQH/wAARCAACAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAr/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/8QAFAEBAAAAAAAAAAAAAAAAAAAAAP/EABQRAQAAAAAAAAAAAAAAAAAAAAD/2gAMAwEAAhEDEQA/AKpgD//Z";
 
 // ─── Video item (single-kill clip from kills table) ────────────────────
 
@@ -71,6 +78,8 @@ export function FeedItemVideo({
           sizes="(max-width: 768px) 100vw, 50vw"
           // priority=true for the active item only — others lazy-load.
           priority={isActive}
+          placeholder="blur"
+          blurDataURL={BLUR_PLACEHOLDER}
           className="object-cover"
           // The pool video sits at z-index 0; this poster at z-index 0
           // too but in a lower DOM order — the video paints OVER once
@@ -97,6 +106,26 @@ export function FeedItemVideo({
       >
         #{index + 1} / {total}
       </Link>
+
+      {/* DoubleTapHeart — TikTok signature gesture. Double-tap on the
+          video → fire a like via the LikeButton's mechanism (custom
+          event consumed by LikeButton). Single-tap is forwarded to the
+          existing tap-to-pause if any. */}
+      {isActive && (
+        <DoubleTapHeart
+          onDoubleTap={() => {
+            try {
+              window.dispatchEvent(
+                new CustomEvent("kc:double-tap-like", {
+                  detail: { killId: item.id },
+                }),
+              );
+            } catch {
+              /* CustomEvent unsupported in some sandboxes */
+            }
+          }}
+        />
+      )}
 
       {/* TikTok-grade right action rail: like + comments + share + detail.
           Owns the InlineAuthPrompt — every action surfaces it on 401. */}
@@ -248,6 +277,8 @@ export function FeedItemMoment({
           fill
           sizes="(max-width: 768px) 100vw, 50vw"
           priority={isActive}
+          placeholder="blur"
+          blurDataURL={BLUR_PLACEHOLDER}
           className="object-cover"
         />
       )}
@@ -266,6 +297,22 @@ export function FeedItemMoment({
       >
         #{index + 1} / {total}
       </Link>
+
+      {isActive && (
+        <DoubleTapHeart
+          onDoubleTap={() => {
+            try {
+              window.dispatchEvent(
+                new CustomEvent("kc:double-tap-like", {
+                  detail: { killId: item.id },
+                }),
+              );
+            } catch {
+              /* ignore */
+            }
+          }}
+        />
+      )}
 
       {/* TikTok-grade right action rail (same component as video items) */}
       <FeedSidebarV2

@@ -21,7 +21,7 @@
  * RatingSheet (secondary action).
  */
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 
 interface Props {
@@ -65,7 +65,15 @@ export function LikeButton({
     return () => ac.abort();
   }, [killId]);
 
-  const toggle = async (e: React.MouseEvent | React.TouchEvent) => {
+  // (DoubleTapHeart listener is wired AFTER `toggle` is declared — see below)
+
+  /** Toggle the like. Wrapped in useCallback so the DoubleTapHeart
+   *  listener below can use it without TDZ + without re-binding the
+   *  listener on every render. */
+  const toggle = useCallback(async (
+    e: React.MouseEvent | React.TouchEvent | { stopPropagation: () => void },
+    options?: { forceLike?: boolean },
+  ) => {
     e.stopPropagation();
     // Throttle: ignore taps within 250ms of each other (debounce
     // double-tap that would otherwise like-then-immediately-unlike).
@@ -75,7 +83,13 @@ export function LikeButton({
     if (pending) return;
 
     const wasLiked = liked;
-    const newLiked = !wasLiked;
+    // forceLike (used by DoubleTapHeart) never unlikes — TikTok behavior:
+    // double-tap on already-liked re-fires the burst but stays liked.
+    if (options?.forceLike && wasLiked) {
+      setBurstKey((k) => k + 1);
+      return;
+    }
+    const newLiked = options?.forceLike ? true : !wasLiked;
 
     // Optimistic flip
     setLiked(newLiked);
@@ -111,7 +125,20 @@ export function LikeButton({
     } finally {
       setPending(false);
     }
-  };
+  }, [killId, liked, pending, onAuthRequired]);
+
+  // ─── Listen for DoubleTapHeart (kc:double-tap-like) ────────────
+  useEffect(() => {
+    if (!isUuid(killId)) return;
+    const onDoubleTap = (e: Event) => {
+      const detail = (e as CustomEvent<{ killId?: string }>).detail;
+      if (!detail || detail.killId !== killId) return;
+      void toggle({ stopPropagation: () => {} }, { forceLike: true });
+    };
+    window.addEventListener("kc:double-tap-like", onDoubleTap);
+    return () =>
+      window.removeEventListener("kc:double-tap-like", onDoubleTap);
+  }, [killId, toggle]);
 
   const sizes = variant === "wide"
     ? { btn: "h-14 w-14", icon: "h-7 w-7", label: "text-sm" }
