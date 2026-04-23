@@ -59,6 +59,8 @@ DAEMON_MODULES: list[tuple[str, int, str]] = [
     ("match_planner", 3600,  "modules.match_planner"), # 1h — pre-schedule next 21d KC matches + boost jobs
     ("qc_sampler",    21600, "modules.qc_sampler"),    # 6h — random 2% sampling -> clip_qc.verify (Gemini drift)
     ("job_runner",    30,    "modules.job_runner"),    # 30s — admin-triggered jobs + boost dispatch
+    ("kill_of_the_week", 3600, "modules.kill_of_the_week"),  # 1h — Sunday 22:00 UTC auto-pick (PR15)
+    ("push_notifier", 300,   "modules.push_notifier"),  # 5 min — pywebpush broadcast (PR16)
     ("heartbeat",     21600, "modules.heartbeat"),     # 6h
     ("watchdog",      1800,  "modules.watchdog"),      # 30 min
 ]

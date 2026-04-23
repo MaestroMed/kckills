@@ -30,8 +30,10 @@ const NAV: NavGroup[] = [
     label: "Content",
     items: [
       { href: "/admin/clips", label: "Clip Library", icon: "▶" },
+      { href: "/admin/editorial", label: "Editorial", icon: "✦" },
       { href: "/admin/featured", label: "Featured du jour", icon: "★" },
       { href: "/admin/bgm", label: "BGM Playlist", icon: "♪" },
+      { href: "/admin/push", label: "Push Broadcast", icon: "📣" },
     ],
   },
   {

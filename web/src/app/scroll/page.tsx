@@ -195,6 +195,10 @@ export default async function ScrollV2Page({ searchParams }: ScrollPageProps) {
       avgRating: k.avg_rating ?? null,
       ratingCount: k.rating_count,
       aiDescription: k.ai_description ?? null,
+      aiDescriptionFr: k.ai_description_fr ?? null,
+      aiDescriptionEn: k.ai_description_en ?? null,
+      aiDescriptionKo: k.ai_description_ko ?? null,
+      aiDescriptionEs: k.ai_description_es ?? null,
       aiTags: k.ai_tags ?? [],
       multiKill: k.multi_kill,
       isFirstBlood: k.is_first_blood,
@@ -243,6 +247,13 @@ export default async function ScrollV2Page({ searchParams }: ScrollPageProps) {
         avgRating: m.avg_rating,
         ratingCount: m.rating_count,
         aiDescription: m.ai_description,
+        // Moments don't yet carry per-language descriptions — use the
+        // legacy single field. <Description> falls back to it when
+        // every aiDescriptionXx is null.
+        aiDescriptionFr: null,
+        aiDescriptionEn: null,
+        aiDescriptionKo: null,
+        aiDescriptionEs: null,
         aiTags: m.ai_tags ?? [],
         startTimeSeconds: m.start_time_seconds,
         endTimeSeconds: m.end_time_seconds,

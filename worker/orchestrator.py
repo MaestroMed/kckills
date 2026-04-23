@@ -63,7 +63,8 @@ ROLE_MODULES: dict[str, list[str]] = {
     "discovery": ["sentinel", "harvester", "transitioner", "channel_discoverer",
                   "channel_reconciler", "match_planner", "event_mapper",
                   "vod_offset_finder"],
-    "control":   ["moderator", "job_runner", "heartbeat", "watchdog"],
+    "control":   ["moderator", "job_runner", "kill_of_the_week",
+                  "push_notifier", "heartbeat", "watchdog"],
 }
 
 ROLES = tuple(ROLE_MODULES.keys())

@@ -59,7 +59,16 @@ export interface VideoFeedItem {
   highlightScore: number | null;
   avgRating: number | null;
   ratingCount: number;
+  /** Legacy single-language field — keep populated for back-compat with
+   *  any code path that hasn't migrated to the multi-lang variants. */
   aiDescription: string | null;
+  /** PR14 multi-language descriptions, picked by <Description> via the
+   *  active LangProvider (cookie + Accept-Language fallback). When NULL
+   *  the picker falls back to aiDescription_fr → aiDescription. */
+  aiDescriptionFr: string | null;
+  aiDescriptionEn: string | null;
+  aiDescriptionKo: string | null;
+  aiDescriptionEs: string | null;
   aiTags: string[];
   multiKill: string | null;
   isFirstBlood: boolean;
@@ -94,6 +103,13 @@ export interface MomentFeedItem {
   avgRating: number | null;
   ratingCount: number;
   aiDescription: string | null;
+  // Multi-lang variants — moments are NOT translated by the worker yet
+  // (they aggregate kill descriptions). Kept for type symmetry with
+  // VideoFeedItem so <Description> works on either branch.
+  aiDescriptionFr: string | null;
+  aiDescriptionEn: string | null;
+  aiDescriptionKo: string | null;
+  aiDescriptionEs: string | null;
   aiTags: string[];
   startTimeSeconds: number;
   endTimeSeconds: number;

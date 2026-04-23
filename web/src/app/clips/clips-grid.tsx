@@ -7,6 +7,7 @@ import { championIconUrl } from "@/lib/constants";
 import { TEAM_LOGOS } from "@/lib/kc-assets";
 import { isDescriptionClean } from "@/lib/scroll/sanitize-description";
 import { Breadcrumb } from "@/components/Breadcrumb";
+import { Description } from "@/components/i18n/Description";
 
 export interface ClipCard {
   id: string;
@@ -21,6 +22,12 @@ export interface ClipCard {
   commentCount: number;
   impressionCount: number;
   aiDescription: string | null;
+  // PR14 multi-language descriptions — picked client-side by <Description>
+  // via the active LangProvider. Optional so existing callers compile.
+  aiDescriptionFr?: string | null;
+  aiDescriptionEn?: string | null;
+  aiDescriptionKo?: string | null;
+  aiDescriptionEs?: string | null;
   aiTags: string[];
   multiKill: string | null;
   isFirstBlood: boolean;
@@ -405,9 +412,17 @@ function ClipCardComponent({ card }: { card: ClipCard }) {
           <span>{dateStr}</span>
         </div>
         {showDesc && (
-          <p className="text-[10px] text-white/70 italic leading-tight mt-1 line-clamp-2">
-            {card.aiDescription}
-          </p>
+          <Description
+            kill={{
+              ai_description: card.aiDescription,
+              ai_description_fr: card.aiDescriptionFr ?? null,
+              ai_description_en: card.aiDescriptionEn ?? null,
+              ai_description_ko: card.aiDescriptionKo ?? null,
+              ai_description_es: card.aiDescriptionEs ?? null,
+            }}
+            as="p"
+            className="text-[10px] text-white/70 italic leading-tight mt-1 line-clamp-2"
+          />
         )}
       </div>
     </Link>

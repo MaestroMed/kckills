@@ -27,6 +27,7 @@ import Link from "next/link";
 import type { VideoFeedItem, MomentFeedItem } from "@/components/scroll/ScrollFeed";
 import { isDescriptionClean } from "@/lib/scroll/sanitize-description";
 import { useImpressionTracker } from "./hooks/useImpressionTracker";
+import { Description } from "@/components/i18n/Description";
 import { FeedSidebarV2 } from "@/components/community/FeedSidebarV2";
 import { DoubleTapHeart } from "@/components/community/DoubleTapHeart";
 
@@ -218,11 +219,26 @@ export function FeedItemVideo({
             </span>
           </p>
 
-          {/* AI description */}
+          {/* AI description — language-aware via <Description>.
+              The picker chooses ai_description_<lang> from the active
+              LangProvider, falling back to FR → legacy field. We still
+              gate visibility through isDescriptionClean(item.aiDescription)
+              because the moderation/cleanliness pass runs on the legacy
+              field — if that one was rejected, the localized variants
+              shouldn't show either. */}
           {isDescriptionClean(item.aiDescription) && (
-            <p className="text-[13px] md:text-[15px] lg:text-base text-white/90 italic leading-relaxed line-clamp-3 md:line-clamp-4 drop-shadow-md">
-              « {item.aiDescription} »
-            </p>
+            <Description
+              kill={{
+                ai_description: item.aiDescription,
+                ai_description_fr: item.aiDescriptionFr,
+                ai_description_en: item.aiDescriptionEn,
+                ai_description_ko: item.aiDescriptionKo,
+                ai_description_es: item.aiDescriptionEs,
+              }}
+              as="p"
+              quoted
+              className="text-[13px] md:text-[15px] lg:text-base text-white/90 italic leading-relaxed line-clamp-3 md:line-clamp-4 drop-shadow-md"
+            />
           )}
 
           {/* Match meta — small line at the bottom */}
@@ -359,9 +375,18 @@ export function FeedItemMoment({
             {item.redKills}
           </p>
           {isDescriptionClean(item.aiDescription) && (
-            <p className="text-[13px] md:text-[15px] lg:text-base text-white/90 italic leading-relaxed line-clamp-3 md:line-clamp-4 drop-shadow-md">
-              « {item.aiDescription} »
-            </p>
+            <Description
+              kill={{
+                ai_description: item.aiDescription,
+                ai_description_fr: item.aiDescriptionFr,
+                ai_description_en: item.aiDescriptionEn,
+                ai_description_ko: item.aiDescriptionKo,
+                ai_description_es: item.aiDescriptionEs,
+              }}
+              as="p"
+              quoted
+              className="text-[13px] md:text-[15px] lg:text-base text-white/90 italic leading-relaxed line-clamp-3 md:line-clamp-4 drop-shadow-md"
+            />
           )}
           <p className="font-data text-[10px] md:text-[11px] uppercase tracking-[0.2em] text-white/55">
             {item.kcInvolvement === "kc_aggressor"

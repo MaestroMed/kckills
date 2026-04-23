@@ -1,11 +1,12 @@
 // LoLTok Service Worker — PWA + Push Notifications
 //
-// Bumped to v3 (2026-04-20) when sw.js dropped the broken /icon-192.png
-// reference. A version bump is mandatory because old installations cling
-// to the previous CACHE_NAME until activate fires; without it, returning
-// users hit the stale 404 from cache for days.
+// Bumped to v4 (2026-04-23) when the push handler started consuming the
+// `image`, `tag`, `kind` and `actions` fields shipped by the worker
+// push_notifier module (PR16). A version bump is mandatory because old
+// installations cling to the previous CACHE_NAME until activate fires;
+// without it, returning users hit the stale handler from cache for days.
 
-const CACHE_NAME = "loltok-v3";
+const CACHE_NAME = "loltok-v4";
 const PRECACHE = ["/scroll", "/", "/manifest.json", "/offline.html"];
 
 // Install: precache shell
@@ -71,14 +72,43 @@ self.addEventListener("fetch", (event) => {
 });
 
 // Push notifications
+//
+// Payload shape (built by lib/push/send.ts and modules/push_notifier.py) :
+//   {
+//     title: "Caliste → Faker",
+//     body:  "Outplay 1v2 dans la jungle adverse",
+//     url:   "/scroll?kill=<uuid>",
+//     icon:  "/icons/icon-192x192.png",         (optional override)
+//     image: "https://clips.kckills.com/...",   (optional rich preview)
+//     tag:   "kill:<uuid>" | "kotw:2026-w17",   (collapses repeats)
+//     kind:  "kill" | "kill_of_the_week" | "editorial_pin" | ...
+//   }
+//
+// `tag` is the de-dupe key the OS uses to collapse stacked notifications
+// — passing the same tag replaces the previous toast instead of stacking
+// a second one. This matters for KOTW (one weekly slot) and live_match
+// (one per game).
 self.addEventListener("push", (event) => {
-  const data = event.data ? event.data.json() : {};
-  const title = data.title || "LoLTok";
+  let data = {};
+  try {
+    data = event.data ? event.data.json() : {};
+  } catch {
+    data = { body: event.data ? event.data.text() : "" };
+  }
+
+  const title = data.title || "KCKILLS";
   const options = {
     body: data.body || "Nouveau kill KC !",
-    icon: "/icons/icon-192x192.png",
+    icon: data.icon || "/icons/icon-192x192.png",
     badge: "/icons/icon-192x192.png",
-    data: { url: data.url || "/scroll" },
+    image: data.image || undefined,
+    tag: data.tag || data.kind || "kckills-default",
+    renotify: true,
+    requireInteraction: data.kind === "kill_of_the_week",
+    data: {
+      url: data.url || "/scroll",
+      kind: data.kind || "kill",
+    },
     actions: [
       { action: "view", title: "Voir le clip" },
       { action: "rate", title: "Noter" },

@@ -6,6 +6,7 @@ import { championIconUrl } from "@/lib/constants";
 import { isDescriptionClean } from "@/lib/scroll/sanitize-description";
 import { Breadcrumb } from "@/components/Breadcrumb";
 import { JsonLd, breadcrumbLD, recordsCollectionLD } from "@/lib/seo/jsonld";
+import { Description } from "@/components/i18n/Description";
 
 /**
  * /records — "Records Absolus" hall-of-fame.
@@ -392,9 +393,12 @@ function RecordCard({
         </div>
 
         {isDescriptionClean(kill.ai_description) && (
-          <p className="text-[11px] text-white/80 italic line-clamp-2 leading-tight">
-            &laquo; {kill.ai_description} &raquo;
-          </p>
+          <Description
+            kill={kill}
+            as="p"
+            quoted
+            className="text-[11px] text-white/80 italic line-clamp-2 leading-tight"
+          />
         )}
       </div>
 
