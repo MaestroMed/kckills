@@ -91,36 +91,50 @@ log = structlog.get_logger()
 # ──────────────────────────────────────────────────────────────────────
 
 KC_TOURNAMENTS: list[tuple[str, int, int, str]] = [
-    # LFL — early KC era
-    ("LFL Spring 2021",      1223, 2021, "spring"),
-    ("LFL Summer 2021",      1223, 2021, "summer"),
-    ("LFL Spring 2022",      1223, 2022, "spring"),
-    ("LFL Summer 2022",      1223, 2022, "summer"),
-    ("LFL Spring 2023",      1535, 2023, "spring"),
-    ("LFL Summer 2023",      1535, 2023, "summer"),
+    # ── 2021 (S11) — Team id 1223. ──────────────────────────────
+    ("LFL Spring 2021",                1223, 2021, "spring"),
+    ("LFL Spring Playoffs 2021",       1223, 2021, "spring_po"),
+    ("LFL Summer 2021",                1223, 2021, "summer"),
+    ("LFL Summer Playoffs 2021",       1223, 2021, "summer_po"),
+    ("LFL Finals 2021",                1223, 2021, "finals"),
+    ("EU Masters Spring 2021",         1223, 2021, "eum_spring"),
+    ("EU Masters Summer 2021",         1223, 2021, "eum_summer"),
 
-    # EU Masters appearances
-    ("EU Masters 2021 Summer Main Event",         1223, 2021, "summer"),
-    ("European Masters 2022 Spring Main Event",   1223, 2022, "spring"),
-    ("European Masters 2022 Summer Main Event",   1223, 2022, "summer"),
-    ("European Masters 2023 Spring Main Event",   1535, 2023, "spring"),
+    # ── 2022 (S12) — Rekkles era. Team id 1535. ──────────────────
+    ("LFL Spring 2022",                1535, 2022, "spring"),
+    ("LFL Spring Playoffs 2022",       1535, 2022, "spring_po"),
+    ("LFL Summer 2022",                1535, 2022, "summer"),
+    ("LFL Summer Playoffs 2022",       1535, 2022, "summer_po"),
+    ("EU Masters Spring 2022",         1535, 2022, "eum_spring"),
+    ("EU Masters Spring Play-In 2022", 1535, 2022, "eum_spring_pi"),
 
-    # LEC — main slot since 2024
+    # ── 2023 (S13) — final LFL year. Team id 1881. ───────────────
+    ("LFL Spring 2023",                1881, 2023, "spring"),
+    ("LFL Summer 2023",                1881, 2023, "summer"),
+    ("LFL Summer Playoffs 2023",       1881, 2023, "summer_po"),
+    ("EMEA Masters Summer 2023",       1881, 2023, "emea_summer"),
+
+    # ── 2024 (S14) — first LEC year. Team id 2166. ───────────────
     ("LEC Winter Season 2024",         2166, 2024, "winter"),
     ("LEC Spring Season 2024",         2166, 2024, "spring"),
     ("LEC Summer Season 2024",         2166, 2024, "summer"),
+    ("LEC Summer Playoffs 2024",       2166, 2024, "summer_po"),
     ("LEC Season Finals 2024",         2166, 2024, "finals"),
-    ("LEC Winter Season 2025",         2166, 2025, "winter"),
-    ("LEC Spring Season 2025",         2166, 2025, "spring"),
-    ("LEC Summer Season 2025",         2166, 2025, "summer"),
-    ("LEC Season Finals 2025",         2166, 2025, "finals"),
-    ("LEC Versus Season 2026",         2166, 2026, "versus"),
-    ("LEC Spring Season 2026",         2166, 2026, "spring"),
 
-    # International appearances (best-effort — naming varies)
-    ("First Stand 2025",               2166, 2025, "international"),
-    ("MSI 2025",                       2166, 2025, "international"),
-    ("Worlds 2025",                    2166, 2025, "international"),
+    # ── 2025 (S15) — Team id 2533 (NEW : gol.gg re-IDs every year).
+    # Naming convention CHANGED to "LEC YYYY <Split> <Phase>" format.
+    ("LEC Winter 2025",                2533, 2025, "winter"),
+    ("LEC 2025 Winter Playoffs",       2533, 2025, "winter_po"),
+    ("LEC 2025 Spring Season",         2533, 2025, "spring"),
+    ("LEC 2025 Spring Playoffs",       2533, 2025, "spring_po"),
+    ("LEC 2025 Summer Season",         2533, 2025, "summer"),
+    ("LEC 2025 Summer Playoffs",       2533, 2025, "summer_po"),
+    ("First Stand 2025",               2533, 2025, "international"),
+
+    # ── 2026 (S16) — Team id 2899. Current splits. ───────────────
+    ("LEC 2026 Versus Season",         2899, 2026, "versus"),
+    ("LEC 2026 Versus Playoffs",       2899, 2026, "versus_po"),
+    ("LEC 2026 Spring Season",         2899, 2026, "spring"),
 ]
 
 
