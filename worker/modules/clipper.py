@@ -624,12 +624,13 @@ def _safe_remove(path: str):
 
 MAX_RETRY_COUNT = 3
 
-# Cap how many kills we attempt per pass so the daemon yields control to
-# other modules (analyzer, og_generator, heartbeat) periodically. With a
-# 300s daemon interval + ~30s/clip, 20 clips = 10 min per pass. The
-# interval timer keeps ticking during the pass, so the next run fires
-# immediately after if there's still a backlog.
-BATCH_SIZE = 20
+# Cap how many kills we attempt per pass. With CONCURRENCY=4 workers
+# at ~30s/clip, 60 clips = ~7-8 min per pass. The 300s daemon interval
+# keeps ticking during the pass, so the next run fires immediately after
+# if there's still a backlog. On a beefy multi-core PC the bottleneck is
+# yt-dlp throttle (scheduler-managed), not ffmpeg.
+BATCH_SIZE = 60
+CONCURRENCY = 4
 
 
 async def run() -> int:
@@ -679,45 +680,54 @@ async def run() -> int:
         remaining=max(0, len(all_kills) - len(kills)),
     )
 
-    processed = 0
-    for kill in kills:
-        # Fetch parent game to find the VOD info
-        games = safe_select(
-            "games",
-            "vod_youtube_id, vod_offset_seconds",
-            id=kill.get("game_id", ""),
-        )
-        if not games:
-            continue
-        game = games[0]
-        yt_id = game.get("vod_youtube_id")
-        offset = int(game.get("vod_offset_seconds") or 0)
-        if not yt_id:
-            continue
+    # Parallel clip workers — bounded by CONCURRENCY semaphore.
+    # ffmpeg is multi-threaded, yt-dlp is rate-limited by scheduler,
+    # so 4 workers ≈ optimal CPU utilisation without throttle thrash.
+    sem = asyncio.Semaphore(CONCURRENCY)
+    counters = {"ok": 0, "fail": 0}
 
-        safe_update("kills", {"status": "clipping"}, "id", kill["id"])
-
-        urls = await clip_kill(
-            kill_id=kill["id"],
-            youtube_id=yt_id,
-            vod_offset_seconds=offset,
-            game_time_seconds=int(kill.get("game_time_seconds") or 0),
-        )
-        if urls and urls.get("clip_url_horizontal"):
-            payload = {**urls, "status": "clipped"}
-            # Strip the in-process file path before persisting — it's only
-            # there for the analyzer that runs after clipping, never a DB
-            # column.
-            payload.pop("_local_h_path", None)
-            safe_update("kills", payload, "id", kill["id"])
-            processed += 1
-        else:
-            safe_update(
-                "kills",
-                {"status": "clip_error", "retry_count": int(kill.get("retry_count") or 0) + 1},
-                "id",
-                kill["id"],
+    async def _process_one(kill: dict):
+        async with sem:
+            # Fetch parent game to find the VOD info
+            games = safe_select(
+                "games",
+                "vod_youtube_id, vod_offset_seconds",
+                id=kill.get("game_id", ""),
             )
+            if not games:
+                return
+            game = games[0]
+            yt_id = game.get("vod_youtube_id")
+            offset = int(game.get("vod_offset_seconds") or 0)
+            if not yt_id:
+                return
 
-    log.info("clipper_scan_done", processed=processed)
-    return processed
+            safe_update("kills", {"status": "clipping"}, "id", kill["id"])
+
+            urls = await clip_kill(
+                kill_id=kill["id"],
+                youtube_id=yt_id,
+                vod_offset_seconds=offset,
+                game_time_seconds=int(kill.get("game_time_seconds") or 0),
+            )
+            if urls and urls.get("clip_url_horizontal"):
+                payload = {**urls, "status": "clipped"}
+                # Strip the in-process file path before persisting — it's only
+                # there for the analyzer that runs after clipping, never a DB
+                # column.
+                payload.pop("_local_h_path", None)
+                safe_update("kills", payload, "id", kill["id"])
+                counters["ok"] += 1
+            else:
+                safe_update(
+                    "kills",
+                    {"status": "clip_error", "retry_count": int(kill.get("retry_count") or 0) + 1},
+                    "id",
+                    kill["id"],
+                )
+                counters["fail"] += 1
+
+    await asyncio.gather(*(_process_one(k) for k in kills), return_exceptions=False)
+
+    log.info("clipper_scan_done", processed=counters["ok"], failed=counters["fail"])
+    return counters["ok"]
