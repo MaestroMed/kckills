@@ -172,7 +172,16 @@ BANNED_PHRASE_PATTERNS = [
     re.compile(r"\bzero assist\b", re.IGNORECASE),
 ]
 
-MIN_DESCRIPTION_CHARS = 80
+# Descriptions shorter than this trigger a Gemini retry (up to 3 retries).
+# Originally 80 to enforce "rich" descriptions, but Gemini's natural French
+# style for short LoL kill clips lands in the 60-80 char range. Empirical
+# observation : 73 of 75 recent rejections were perfectly valid clips like
+# "KC Yike termine la Gwen avec une exécution éclair à la minute 31."
+# (73 chars). Rejecting + retrying these wastes Gemini quota AND blocks
+# publication. 50 chars is a safer floor that still catches truly empty /
+# stub responses. The encoding-artifact + hallucination filters below
+# remain unchanged — they're the real quality guard.
+MIN_DESCRIPTION_CHARS = 50
 
 
 def validate_description(text: str | None) -> tuple[bool, str]:
