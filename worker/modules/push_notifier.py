@@ -156,12 +156,16 @@ async def _broadcast_one(db, notif: dict[str, Any], vapid: dict[str, str]) -> No
     payload = _build_payload(notif)
 
     # Fetch all subs (could be tens of thousands at scale — paginate if so).
+    # Pull `preferences` so we can honour per-device opt-outs (PR21).
     import httpx
     try:
         r = httpx.get(
             f"{db.base}/push_subscriptions",
             headers=db.headers,
-            params={"select": "id,subscription_json", "limit": str(MAX_DELIVERIES_PER_CYCLE)},
+            params={
+                "select": "id,subscription_json,preferences",
+                "limit": str(MAX_DELIVERIES_PER_CYCLE),
+            },
             timeout=20,
         )
         r.raise_for_status()
@@ -169,6 +173,28 @@ async def _broadcast_one(db, notif: dict[str, Any], vapid: dict[str, str]) -> No
     except Exception as e:
         log.warn("push_notifier_subs_fetch_failed", error=str(e), notif=notif_id)
         return
+
+    # PR21 — filter by per-subscription preferences.
+    # Two ways a sub silences a kind :
+    #   * preferences.all === false                  → silence everything
+    #   * preferences[kind] === false                → silence only this kind
+    # Missing key = opt-IN by default (forward-compat with new kinds).
+    kind = notif.get("kind") or "broadcast"
+    def _allows(sub: dict[str, Any]) -> bool:
+        prefs = sub.get("preferences") or {}
+        if not isinstance(prefs, dict):
+            return True
+        if prefs.get("all") is False:
+            return False
+        if prefs.get(kind) is False:
+            return False
+        return True
+
+    silenced_count = sum(1 for s in subs if not _allows(s))
+    subs = [s for s in subs if _allows(s)]
+    if silenced_count:
+        log.info("push_notifier_silenced",
+                 notif=notif_id, kind=kind, silenced=silenced_count)
 
     if not subs:
         # Stamp sent_at so we don't keep retrying an empty broadcast.

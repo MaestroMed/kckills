@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { useState, useCallback, useEffect } from "react";
 import { BadgeRow } from "@/components/BadgeChip";
+import { NotificationSettings } from "@/components/settings/NotificationSettings";
+import { LanguageSettings } from "@/components/settings/LanguageSettings";
 
 export default function SettingsPage() {
   const [exportStatus, setExportStatus] = useState<"idle" | "loading" | "done" | "error" | "auth">("idle");
@@ -99,6 +101,12 @@ export default function SettingsPage() {
           Se connecter avec Discord
         </Link>
       </section>
+
+      {/* Language preference */}
+      <LanguageSettings />
+
+      {/* Push notifications */}
+      <NotificationSettings />
 
       {/* Riot Link (optional) */}
       <section className="rounded-xl border border-[var(--border-gold)] bg-[var(--bg-surface)] p-5 space-y-3">

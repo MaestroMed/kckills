@@ -156,10 +156,20 @@ export async function sendNow(params: EnqueuePushParams): Promise<SendNowResult>
   const sb = await createServerSupabase();
   const { data: subs } = await sb
     .from("push_subscriptions")
-    .select("id,subscription_json")
+    .select("id,subscription_json,preferences")
     .limit(500);
 
-  const subscriptions = (subs ?? []) as Subscription[];
+  // PR21 — honour per-subscription opt-out (preferences.all === false
+  // OR preferences[kind] === false silences this delivery). Same logic
+  // as the Python push_notifier daemon.
+  const allSubs = (subs ?? []) as Array<Subscription & { preferences?: Record<string, unknown> | null }>;
+  const subscriptions = allSubs.filter((s) => {
+    const p = s.preferences;
+    if (!p || typeof p !== "object") return true;
+    if ((p as Record<string, unknown>).all === false) return false;
+    if ((p as Record<string, unknown>)[params.kind] === false) return false;
+    return true;
+  });
   if (subscriptions.length === 0) {
     await sb
       .from("push_notifications")
