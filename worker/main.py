@@ -44,6 +44,7 @@ DAEMON_MODULES: list[tuple[str, int, str]] = [
     # (name, interval_seconds, dotted import path)
     ("sentinel",      300,   "modules.sentinel"),      # 5 min
     ("harvester",     600,   "modules.harvester"),     # 10 min
+    ("event_mapper",  600,   "modules.event_mapper"),  # 10 min — populate canonical game_events table (PR6-B)
     ("transitioner",  300,   "modules.transitioner"),  # 5 min — raw -> vod_found
     ("clipper",       300,   "modules.clipper"),       # 5 min
     ("analyzer",      600,   "modules.analyzer"),      # 10 min

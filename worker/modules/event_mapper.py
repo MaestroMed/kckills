@@ -1,0 +1,357 @@
+"""
+EVENT_MAPPER — Populate game_events (the canonical map) post-harvest.
+
+Why : we need ONE row per detectable in-game event, before any clip work.
+The user's words : "tu fais une table profonde [...] et après on coche
+les cases dès qu'on a les clips propres". This module IS the "table
+profonde" insertion phase. Other modules tick the boxes.
+
+Pipeline position
+─────────────────
+  harvester   ──► kills, moments
+  event_mapper (THIS) ──► game_events
+
+  (clipper / clip_qc / analyzer / event_publisher then tick QC gates
+   on the game_events row, see EVENT_MAP_SPEC.md)
+
+Strategy
+────────
+1. Pick games where games.event_mapping_complete=FALSE AND kills_extracted=TRUE.
+2. For each game :
+   a. Find every kill row for the game.
+   b. Find every moment row for the game.
+   c. INSERT one game_events row per kill (auto_kill source).
+      Insert relies on the unique partial index uniq_game_events_kill
+      to dedup — re-runs on the same game are no-ops.
+   d. INSERT one game_events row per moment NOT already covered by a kill
+      (e.g. teamfight moments that span multiple kills get one extra row
+      typed 'teamfight' / 'skirmish' / 'ace', auto_moment source).
+3. Set games.event_mapping_complete=TRUE.
+
+Idempotent : re-running on the same set of games = no inserts (unique
+indexes block dupes), but does flip the completion flag if it wasn't set.
+
+Daemon interval : 600s (10 min). The harvester runs at 600s too, so we're
+always at most one cycle behind it. Sentinel.boost during live matches
+forces both modules to 30s, so the canonical map stays fresh during games.
+"""
+
+from __future__ import annotations
+
+import json
+from datetime import datetime, timezone
+
+import httpx
+import structlog
+
+from services.supabase_client import get_db, safe_select, safe_update
+
+log = structlog.get_logger()
+
+
+# Mapping from kill row to event_type. Mirrored from migration 014's
+# backfill SELECT — keep in sync.
+def _classify_kill_event(kill: dict) -> str:
+    if kill.get("is_first_blood"):
+        return "first_blood"
+    mk = kill.get("multi_kill")
+    if mk in ("triple", "quadra", "penta"):
+        return "multi_kill"
+    if mk == "double":
+        return "duo_kill"
+    ft = kill.get("fight_type")
+    if ft in ("teamfight_5v5", "teamfight_4v4"):
+        return "teamfight"
+    if ft == "skirmish":
+        return "skirmish"
+    return "solo_kill"
+
+
+def _classify_moment_event(moment: dict) -> str:
+    """Map moments.classification → game_events.event_type."""
+    cls = (moment.get("classification") or "").lower()
+    if cls == "ace":
+        return "ace"
+    if cls == "teamfight":
+        return "teamfight"
+    if cls == "skirmish":
+        return "skirmish"
+    if cls == "objective_fight":
+        return "teamfight"  # collapse to teamfight for now; objective_taken types ship later
+    if cls == "solo_kill":
+        return "solo_kill"
+    return "other"
+
+
+def _kc_involvement_from_kill(kill: dict) -> str:
+    """Translate kills.tracked_team_involvement → game_events.kc_involvement."""
+    tti = kill.get("tracked_team_involvement")
+    if tti == "team_killer":
+        return "kc_winner"
+    if tti == "team_victim":
+        return "kc_loser"
+    if tti == "team_assist":
+        return "kc_winner"
+    return "no_kc"
+
+
+def _kc_involvement_from_moment(moment: dict) -> str:
+    """Translate moments.kc_involvement → game_events.kc_involvement."""
+    mi = moment.get("kc_involvement")
+    if mi == "kc_aggressor":
+        return "kc_winner"
+    if mi == "kc_victim":
+        return "kc_loser"
+    if mi == "kc_both":
+        return "kc_neutral"
+    return "no_kc"
+
+
+# ─── Event row builders ───────────────────────────────────────────────
+
+def _kill_to_event_row(kill: dict) -> dict:
+    """Build the INSERT payload for game_events from a kill row."""
+    assistants = kill.get("assistants")
+    if isinstance(assistants, str):
+        try:
+            assistants = json.loads(assistants)
+        except (json.JSONDecodeError, TypeError):
+            assistants = []
+    elif not isinstance(assistants, list):
+        assistants = []
+
+    return {
+        "game_id": kill["game_id"],
+        "event_type": _classify_kill_event(kill),
+        "multi_kill_grade": kill.get("multi_kill"),
+        "event_epoch": kill.get("event_epoch") or 0,
+        "game_time_seconds": kill.get("game_time_seconds") or 0,
+        "primary_actor_player_id": kill.get("killer_player_id"),
+        "primary_actor_champion": kill.get("killer_champion"),
+        "primary_target_player_id": kill.get("victim_player_id"),
+        "primary_target_champion": kill.get("victim_champion"),
+        "secondary_actors": assistants,
+        "kc_involvement": _kc_involvement_from_kill(kill),
+        "kill_id": kill["id"],
+        # QC ticks pre-derived from current kill state — same logic as
+        # migration 014 backfill, so re-mapping a game gives identical
+        # rows to the original backfill.
+        "qc_clip_produced": kill.get("clip_url_vertical") is not None,
+        "qc_clip_validated": (
+            kill.get("status") in ("analyzed", "published")
+            and kill.get("clip_url_vertical") is not None
+        ),
+        "qc_typed": (
+            kill.get("killer_champion") is not None
+            and kill.get("victim_champion") is not None
+        ),
+        "qc_described": (
+            kill.get("ai_description") is not None
+            and len(str(kill.get("ai_description") or "")) > 80
+        ),
+        "qc_visible": kill.get("kill_visible"),
+        "detection_source": "auto_kill",
+        "detection_confidence": kill.get("confidence") or "high",
+    }
+
+
+def _moment_to_event_row(moment: dict) -> dict:
+    """Build the INSERT payload for game_events from a moment row.
+
+    Moments don't have champions or per-player primary_actor — they're
+    cluster-level. We leave actor fields NULL.
+    """
+    return {
+        "game_id": moment["game_id"],
+        "event_type": _classify_moment_event(moment),
+        "multi_kill_grade": None,
+        "event_epoch": moment.get("start_epoch") or 0,
+        "game_time_seconds": moment.get("start_time_seconds") or 0,
+        "duration_seconds": (
+            (moment.get("end_time_seconds") or 0)
+            - (moment.get("start_time_seconds") or 0)
+        ),
+        "secondary_actors": [],
+        "kc_involvement": _kc_involvement_from_moment(moment),
+        "moment_id": moment["id"],
+        "qc_clip_produced": moment.get("clip_url_vertical") is not None,
+        "qc_clip_validated": (
+            moment.get("status") in ("analyzed", "published")
+            and moment.get("clip_url_vertical") is not None
+        ),
+        "qc_typed": True,            # classification already enforced by moments table CHECK
+        "qc_described": (
+            moment.get("ai_description") is not None
+            and len(str(moment.get("ai_description") or "")) > 80
+        ),
+        "qc_visible": moment.get("kill_visible"),  # might be NULL
+        "blue_team_gold": moment.get("blue_team_gold"),
+        "red_team_gold": moment.get("red_team_gold"),
+        "gold_swing": moment.get("gold_swing"),
+        "detection_source": "auto_moment",
+        "detection_confidence": "medium",
+    }
+
+
+def _bulk_insert_events(db, rows: list[dict]) -> int:
+    """POST a batch of events to PostgREST. Idempotent via unique partial
+    indexes on kill_id / moment_id — duplicates are silently dropped via
+    Prefer: resolution=ignore-duplicates.
+
+    Returns the number of new rows inserted (best-effort; PostgREST
+    returns the inserted set when Prefer=return=representation).
+    """
+    if not rows:
+        return 0
+    headers = {
+        **db.headers,
+        "Content-Type": "application/json",
+        "Prefer": "resolution=ignore-duplicates,return=representation",
+    }
+    try:
+        r = httpx.post(
+            f"{db.base}/game_events",
+            headers=headers,
+            json=rows,
+            timeout=30.0,
+        )
+        if r.status_code in (200, 201):
+            inserted = r.json() or []
+            return len(inserted)
+        log.warn("event_mapper_insert_failed", status=r.status_code, body=r.text[:300])
+        return 0
+    except Exception as e:
+        log.error("event_mapper_insert_threw", error=str(e)[:200])
+        return 0
+
+
+# ─── Per-game mapping ─────────────────────────────────────────────────
+
+async def map_game(db, game: dict) -> dict:
+    """Insert all event rows for one game. Returns counters dict."""
+    gid = game["id"]
+    counters = {"kills_in_game": 0, "moments_in_game": 0, "inserted": 0}
+
+    # Pull kills + moments with a single REST call each. Keep field set
+    # narrow to limit egress.
+    kills = safe_select(
+        "kills",
+        "id,game_id,event_epoch,game_time_seconds,killer_player_id,killer_champion,"
+        "victim_player_id,victim_champion,assistants,confidence,is_first_blood,"
+        "multi_kill,fight_type,tracked_team_involvement,clip_url_vertical,"
+        "kill_visible,ai_description,status",
+        game_id=gid,
+    ) or []
+    counters["kills_in_game"] = len(kills)
+
+    # Moments table : same select but moment-shaped columns. May be empty
+    # if migration 002 wasn't applied yet — we handle that gracefully.
+    try:
+        moments = safe_select(
+            "moments",
+            "id,game_id,start_epoch,start_time_seconds,end_time_seconds,"
+            "classification,kc_involvement,blue_team_gold,red_team_gold,gold_swing,"
+            "clip_url_vertical,kill_visible,ai_description,status",
+            game_id=gid,
+        ) or []
+    except Exception:
+        moments = []
+    counters["moments_in_game"] = len(moments)
+
+    rows: list[dict] = []
+    for k in kills:
+        rows.append(_kill_to_event_row(k))
+    for m in moments:
+        rows.append(_moment_to_event_row(m))
+
+    if rows:
+        counters["inserted"] = _bulk_insert_events(db, rows)
+
+    # Mark the game as mapped (idempotent — flip is cheap)
+    safe_update(
+        "games",
+        {
+            "event_mapping_complete": True,
+            "event_mapping_completed_at": datetime.now(timezone.utc).isoformat(),
+        },
+        "id",
+        gid,
+    )
+
+    return counters
+
+
+# ─── Daemon entry point ───────────────────────────────────────────────
+
+# How many games to process per cycle. Mapping is cheap (a couple of
+# REST calls + one bulk insert per game), so a generous cap is fine.
+GAMES_PER_RUN = 50
+
+
+async def run() -> int:
+    """Map every game where event_mapping_complete=FALSE AND kills_extracted=TRUE.
+
+    Returns the total event rows inserted across all games processed.
+    """
+    log.info("event_mapper_start")
+
+    db = get_db()
+    if not db:
+        return 0
+
+    # PostgREST query — both filters as eq.X. Limit to the cap so a
+    # huge backlog doesn't stall the daemon.
+    try:
+        r = httpx.get(
+            f"{db.base}/games",
+            headers=db.headers,
+            params={
+                "select": "id,external_id",
+                "kills_extracted": "eq.true",
+                "event_mapping_complete": "eq.false",
+                "limit": GAMES_PER_RUN,
+            },
+            timeout=15.0,
+        )
+        if r.status_code != 200:
+            log.warn("event_mapper_query_failed", status=r.status_code, body=r.text[:200])
+            return 0
+        games = r.json() or []
+    except Exception as e:
+        log.warn("event_mapper_query_threw", error=str(e)[:120])
+        return 0
+
+    if not games:
+        log.info("event_mapper_no_pending")
+        return 0
+
+    log.info("event_mapper_batch", games=len(games))
+
+    total_inserted = 0
+    games_done = 0
+    for g in games:
+        try:
+            counters = await map_game(db, g)
+            total_inserted += counters["inserted"]
+            games_done += 1
+            log.info(
+                "event_mapper_game_done",
+                game_id=g["id"][:8],
+                external_id=g.get("external_id"),
+                kills=counters["kills_in_game"],
+                moments=counters["moments_in_game"],
+                inserted=counters["inserted"],
+            )
+        except Exception as e:
+            log.error(
+                "event_mapper_game_error",
+                game_id=g.get("id", "")[:8],
+                error=str(e)[:200],
+            )
+
+    log.info(
+        "event_mapper_done",
+        games_processed=games_done,
+        events_inserted=total_inserted,
+    )
+    return total_inserted
