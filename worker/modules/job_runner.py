@@ -12,8 +12,18 @@ Supported job kinds (match admin UI + DB CHECK):
   - regen_audit_targets  payload: {} (no args)
   - backfill_assists_game payload: { game_id: str (external_id or UUID) }
   - reanalyze_backlog    payload: {} (reprocess all clips with needs_reclip=true)
+  - sentinel.boost       payload: { match_external_id, until_seconds }
+                         queued by match_planner — boucle sentinel + harvester
+                         toutes les 30s pendant `until_seconds` (default 7200)
+  - clip_qc.verify       payload: { kill_id }
+                         lance modules.clip_qc sur un clip déjà publié
+                         (admin-triggered via /admin/clips/[id] "QC ce clip")
 
 Daemon interval: 30 seconds. Pipeline latency target: < 5 minutes.
+
+Scheduled jobs : worker_jobs.scheduled_for est respecté. Si un row est
+pending mais scheduled_for > now, on le skip (il sera pickup au cycle
+qui suit son moment d'éligibilité).
 """
 from __future__ import annotations
 
@@ -21,12 +31,14 @@ import asyncio
 import json
 import os
 import sys
+import time
 import traceback
 from datetime import datetime, timezone
 
+import httpx
 import structlog
 
-from services.supabase_client import safe_select, safe_update
+from services.supabase_client import get_db, safe_select, safe_update
 
 log = structlog.get_logger()
 
@@ -60,8 +72,120 @@ async def _dispatch(job: dict) -> dict:
         return await _backfill_assists_game(payload.get("game_id"))
     elif kind == "reanalyze_backlog":
         return await _reanalyze_backlog()
+    elif kind == "sentinel.boost":
+        return await _sentinel_boost(payload)
+    elif kind == "clip_qc.verify":
+        return await _clip_qc_verify(payload.get("kill_id"))
     else:
         raise ValueError(f"Unknown job kind: {kind}")
+
+
+# ─── Boost loop — runs in background, marks job as completed instantly ──
+
+async def _sentinel_boost(payload: dict) -> dict:
+    """Spawn a background task that loops sentinel + harvester at 30s
+    cadence until `until_seconds` elapse. Returns immediately so the
+    job_runner can pick up other pending jobs in parallel.
+
+    The loop is fire-and-forget — if it crashes, it's just lost (next
+    match_planner run will queue a new boost).
+    """
+    until_seconds = int(payload.get("until_seconds") or 7200)
+    match_ext = payload.get("match_external_id")
+
+    # Don't spawn if a previous boost is already running for this match
+    # (cheap mutex via a module-level set; not crash-safe but enough).
+    if match_ext and match_ext in _active_boosts:
+        return {"boost_skipped": "already_running", "match": match_ext}
+
+    asyncio.create_task(_run_boost_loop(until_seconds, match_ext))
+    return {
+        "boost_started": True,
+        "duration_s": until_seconds,
+        "match": match_ext,
+    }
+
+
+_active_boosts: set[str] = set()
+
+
+async def _run_boost_loop(until_seconds: int, match_ext: str | None):
+    """Inner loop — sentinel + harvester every 30s for the duration."""
+    if match_ext:
+        _active_boosts.add(match_ext)
+    log.info("boost_loop_start", match=match_ext, duration_s=until_seconds)
+    end = time.monotonic() + until_seconds
+    cycles = 0
+    try:
+        # Lazy-import to avoid circular deps at module load
+        from modules import sentinel, harvester
+        while time.monotonic() < end:
+            try:
+                await sentinel.run()
+                await harvester.run()
+                cycles += 1
+            except Exception as e:
+                log.error(
+                    "boost_loop_iteration_error",
+                    match=match_ext,
+                    error=str(e)[:200],
+                )
+            await asyncio.sleep(30)
+    finally:
+        if match_ext:
+            _active_boosts.discard(match_ext)
+        log.info("boost_loop_done", match=match_ext, cycles=cycles)
+
+
+# ─── clip_qc admin-triggered handler ───────────────────────────────────
+
+async def _clip_qc_verify(kill_id: str | None) -> dict:
+    """Run clip_qc.verify_clip_timing on a single published kill.
+
+    Reads the kill's clip URL + game_time_seconds, downloads the clip
+    locally, runs Gemini timer reading, returns the drift. Doesn't
+    auto-reclip — surfaces the result in the job's `result` field for
+    the admin UI to display.
+    """
+    if not kill_id:
+        raise ValueError("kill_id required")
+
+    # Fetch the kill row
+    rows = safe_select(
+        "kills",
+        "id, clip_url_horizontal, game_time_seconds",
+        id=kill_id,
+    )
+    if not rows or not rows[0].get("clip_url_horizontal"):
+        return {"kill_id": kill_id, "error": "no horizontal clip URL"}
+    row = rows[0]
+
+    # Download the clip to a temp file
+    import tempfile
+    from modules.clip_qc import verify_clip_timing
+    src_url = row["clip_url_horizontal"]
+    expected = int(row.get("game_time_seconds") or 0)
+    with tempfile.NamedTemporaryFile(suffix=".mp4", delete=False) as tmp:
+        tmp_path = tmp.name
+    try:
+        with httpx.stream("GET", src_url, follow_redirects=True, timeout=60) as r:
+            r.raise_for_status()
+            with open(tmp_path, "wb") as f:
+                for chunk in r.iter_bytes():
+                    f.write(chunk)
+        is_ok, drift = await verify_clip_timing(tmp_path, expected)
+    finally:
+        try:
+            os.remove(tmp_path)
+        except OSError:
+            pass
+    return {
+        "kill_id": kill_id,
+        "expected_game_time": expected,
+        "is_ok": is_ok,
+        "drift_seconds": drift,
+        "needs_reclip": (not is_ok) and abs(drift) > 30,
+    }
 
 
 # ─── Job handlers ────────────────────────────────────────────────────────
@@ -164,8 +288,37 @@ async def _reanalyze_backlog() -> dict:
 # ─── Daemon loop ────────────────────────────────────────────────────────
 
 async def run() -> int:
-    """Poll worker_jobs for pending, execute each one serially."""
-    pending = safe_select("worker_jobs", "id,kind,payload,retry_count", status="pending") or []
+    """Poll worker_jobs for pending + scheduled-eligible, execute serially.
+
+    Eligibility = status='pending' AND (scheduled_for <= now OR scheduled_for IS NULL).
+    safe_select doesn't expose lte filters, so we go raw httpx for this query.
+    """
+    db = get_db()
+    if not db:
+        return 0
+    now_iso = datetime.now(timezone.utc).isoformat()
+    try:
+        # PostgREST: combine status=eq.pending AND scheduled_for=lte.now
+        # Rows with NULL scheduled_for are also matched via the OR-style
+        # `or` filter syntax: or=(scheduled_for.lte.X,scheduled_for.is.null)
+        r = httpx.get(
+            f"{db.base}/worker_jobs",
+            headers=db.headers,
+            params={
+                "select": "id,kind,payload,retry_count,scheduled_for",
+                "status": "eq.pending",
+                "or": f"(scheduled_for.lte.{now_iso},scheduled_for.is.null)",
+                "limit": 50,
+            },
+            timeout=15.0,
+        )
+        if r.status_code != 200:
+            log.warn("job_runner_query_failed", status=r.status_code, body=r.text[:200])
+            return 0
+        pending = r.json() or []
+    except Exception as e:
+        log.warn("job_runner_query_threw", error=str(e)[:120])
+        return 0
     if not pending:
         return 0
 
