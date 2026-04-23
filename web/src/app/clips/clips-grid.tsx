@@ -41,6 +41,11 @@ export interface ClipCard {
   kcWon: boolean | null;
   matchScore: string | null;
   createdAt: string;
+  /** PR23 — true if this kill has no clip on R2 (gol.gg historical
+   *  backfill). The grid renders a stats-only card variant : same
+   *  metadata layout, no <video> player, the thumbnail (if any) +
+   *  champion icons stand in as the visual. */
+  isDataOnly?: boolean;
 }
 
 type SortKey = "recent" | "score" | "rating" | "impressions";
@@ -324,12 +329,22 @@ function ClipCardComponent({ card }: { card: ClipCard }) {
   const showDesc = isDescriptionClean(card.aiDescription);
   const oppLogo = TEAM_LOGOS[card.opponentCode];
 
+  // PR23 — data-only kills (gol.gg historical, no clip on R2) deep-link
+  // to /kill/[id] instead of /scroll. /scroll requires a playable clip
+  // and would just bounce them. /kill/[id] handles the no-clip case
+  // gracefully (shows the stats card).
+  const href = card.isDataOnly ? `/kill/${card.id}` : `/scroll?kill=${card.id}`;
+
   return (
     <Link
-      href={`/scroll?kill=${card.id}`}
-      className="group relative flex flex-col overflow-hidden rounded-xl border border-[var(--border-gold)] bg-[var(--bg-surface)] hover:border-[var(--gold)]/60 hover:-translate-y-0.5 transition-all"
+      href={href}
+      className={`group relative flex flex-col overflow-hidden rounded-xl border bg-[var(--bg-surface)] hover:border-[var(--gold)]/60 hover:-translate-y-0.5 transition-all ${
+        card.isDataOnly
+          ? "border-[var(--border-subtle)]"
+          : "border-[var(--border-gold)]"
+      }`}
     >
-      {/* Thumbnail */}
+      {/* Thumbnail or champion-icon fallback for data-only kills */}
       <div className="relative aspect-[9/16] overflow-hidden bg-black">
         {card.thumbnail ? (
           <Image
@@ -337,9 +352,39 @@ function ClipCardComponent({ card }: { card: ClipCard }) {
             alt={`${card.killerChampion} → ${card.victimChampion}`}
             fill
             sizes="(max-width: 640px) 50vw, (max-width: 1024px) 25vw, 16vw"
-            className="object-cover group-hover:scale-105 transition-transform duration-500"
+            className={`object-cover group-hover:scale-105 transition-transform duration-500 ${
+              card.isDataOnly ? "opacity-60" : ""
+            }`}
           />
+        ) : card.isDataOnly ? (
+          // Data-only without thumbnail : show large champion icons as the
+          // visual identity. Better than an empty black card.
+          <div className="absolute inset-0 flex flex-col items-center justify-center bg-gradient-to-br from-[var(--bg-elevated)] to-[var(--bg-surface)] gap-3">
+            <Image
+              src={championIconUrl(card.killerChampion)}
+              alt=""
+              width={56}
+              height={56}
+              className="rounded-lg border-2 border-[var(--gold)]/40"
+            />
+            <span className="text-[var(--gold)]/60 text-2xl">↓</span>
+            <Image
+              src={championIconUrl(card.victimChampion)}
+              alt=""
+              width={48}
+              height={48}
+              className="rounded-lg border-2 border-white/20 opacity-60"
+            />
+          </div>
         ) : null}
+
+        {/* "Data" pill — top-right ; clear visual signal that this is
+            a stats-only entry without a clip. */}
+        {card.isDataOnly && (
+          <span className="absolute top-1.5 right-1.5 z-20 rounded bg-black/70 backdrop-blur-sm px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-[var(--text-muted)]">
+            data
+          </span>
+        )}
 
         {/* Top overlay: opponent + date */}
         <div className="absolute top-1.5 left-1.5 right-1.5 flex items-center justify-between text-[10px] z-10">

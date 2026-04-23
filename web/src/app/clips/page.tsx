@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { getPublishedKills } from "@/lib/supabase/kills";
+import { getKillsForGrid, isDataOnlyKill } from "@/lib/supabase/kills";
 import { loadRealData } from "@/lib/real-data";
 import { JsonLd, clipsCollectionLD } from "@/lib/seo/jsonld";
 import { ClipsGrid, type ClipCard, type InitialFilters } from "./clips-grid";
@@ -49,13 +49,20 @@ export default async function ClipsPage({ searchParams }: { searchParams?: Promi
   };
 
   const [kills, data] = await Promise.all([
-    getPublishedKills(500),
+    // PR23 — getKillsForGrid pulls BOTH the published-with-clip rows
+    // AND the data-only gol.gg historical rows (no clip but verified
+    // killer/victim/champions/timestamp). The /scroll feed continues
+    // to use getPublishedKills (clip-only) — only browse pages here
+    // get the full 6-year catalog.
+    getKillsForGrid(2000),
     Promise.resolve(loadRealData()),
   ]);
 
-  // Only KC team_killer + visible clips
+  // KC team_killer kills, visible (clip OR data-only). isDataOnlyKill
+  // == kill_url_vertical is null → ClipsGrid renders a stats card
+  // instead of a video card.
   const cards: ClipCard[] = kills
-    .filter((k) => k.tracked_team_involvement === "team_killer" && k.kill_visible !== false && k.clip_url_vertical)
+    .filter((k) => k.tracked_team_involvement === "team_killer" && k.kill_visible !== false)
     .map((k) => {
       const matchExt = k.games?.matches?.external_id;
       const matchJson = matchExt ? data.matches.find((m) => m.id === matchExt) : null;
@@ -89,6 +96,7 @@ export default async function ClipsPage({ searchParams }: { searchParams?: Promi
         kcWon: matchJson?.kc_won ?? null,
         matchScore: matchJson ? `${matchJson.kc_score}-${matchJson.opp_score}` : null,
         createdAt: k.created_at,
+        isDataOnly: isDataOnlyKill(k),
       };
     })
     // Default: chronological (most recent first by match date)
