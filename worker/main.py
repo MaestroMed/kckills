@@ -51,6 +51,7 @@ DAEMON_MODULES: list[tuple[str, int, str]] = [
     ("analyzer",      600,   "modules.analyzer"),      # 10 min
     ("og_generator",  900,   "modules.og_generator"),  # 15 min
     ("event_publisher", 300, "modules.event_publisher"), # 5 min — bridge game_events.is_publishable -> kills.status (PR6-D)
+    ("embedder",      1800,  "modules.embedder"),      # 30 min — Gemini text-embedding-004 -> kills.embedding for similarity (PR17)
     ("moderator",     180,   "modules.moderator"),     # 3 min — Haiku comment moderation
     ("hls_packager",  1800,  "modules.hls_packager"),  # 30 min — HLS adaptive bitrate (5 clips/run)
     ("channel_discoverer", 21600, "modules.channel_discoverer"),  # 6h — Kameto pivot K-Phase 0

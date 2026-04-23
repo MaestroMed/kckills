@@ -80,6 +80,11 @@ interface CinematicKillProps {
     multi_kill: string | null;
     is_first_blood: boolean | null;
   }>;
+  /** Optional server-rendered slot for the AI-similarity carousel.
+   *  PR17 — server component (SimilarClipsCarousel) is rendered by the
+   *  parent page and threaded through as a ReactNode so this client
+   *  island doesn't need to await Supabase itself. */
+  similarSlot?: React.ReactNode;
 }
 
 const CHAMPION_SPLASH = (champion: string | null | undefined): string =>
@@ -90,6 +95,7 @@ export function KillCinematicView({
   opponent,
   children,
   relatedKills = [],
+  similarSlot,
 }: CinematicKillProps) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -578,6 +584,11 @@ export function KillCinematicView({
           </div>
         </section>
       )}
+
+      {/* PR17 — AI-similarity carousel slot. Rendered by the parent page
+          (server component). Returns null when no similar clips found
+          (e.g. embedding not yet generated). */}
+      {similarSlot}
 
       {/* Riot disclaimer */}
       <p className="text-center text-[10px] text-[var(--text-disabled)] py-8 px-6">

@@ -68,10 +68,26 @@ Reponds UNIQUEMENT en JSON valide.</task>
     "tags": [<max 5 parmi: "outplay","teamfight","solo_kill","tower_dive",
               "baron_fight","dragon_fight","flash_predict","1v2","1v3",
               "clutch","clean","mechanical","shutdown","comeback",
-              "engage","peel","snipe","steal">],
-    "description_fr": "<max 120 chars, fr, FACTUEL et VARIE>",
+              "engage","peel","snipe","steal","level_1_cheese",
+              "rare_champ_pick","drake_steal","baron_steal","reverse_gank",
+              "deep_ward","gold_swing","penta_setup","ace_setup",
+              "side_swap","support_outplay","jungle_invade","mid_roam",
+              "scary_play","clean_finish">],
+    "description_fr": "<max 120 chars, FR, FACTUEL et VARIE>",
+    "description_en": "<max 130 chars, EN, same energy as FR>",
+    "description_ko": "<max 80 chars, KR Korean>",
+    "description_es": "<max 130 chars, ES Spanish>",
     "kill_visible_on_screen": true,
-    "caster_hype_level": <int 1-5>
+    "caster_hype_level": <int 1-5>,
+    "best_thumbnail_timestamp_in_clip_sec": <int 0-40, second IN the clip
+                                              that best captures the kill
+                                              moment — kill landing impact,
+                                              champion ult animation, killfeed
+                                              flash. Avoid loading screens,
+                                              minimap zooms, caster cams>,
+    "in_game_timer_at_clip_midpoint": "<MM:SS or NONE if not visible —
+                                        read the in-game clock at top center
+                                        of the screen at clip midpoint>"
 }}
 </output_format>
 
@@ -521,19 +537,69 @@ async def _process_one(kill: dict, clip_path: str | None,
         return
 
     kill_visible_flag = bool(result.get("kill_visible_on_screen", True))
+    # PR14 — multi-language descriptions + AI thumbnail timestamp + per-clip QC
+    desc_en = (result.get("description_en") or "").strip() or None
+    desc_ko = (result.get("description_ko") or "").strip() or None
+    desc_es = (result.get("description_es") or "").strip() or None
+    thumb_ts = _safe_int(result.get("best_thumbnail_timestamp_in_clip_sec"))
+
+    # Parse in-game timer from "MM:SS" format → compute drift vs expected
+    qc_timer_sec: int | None = None
+    qc_drift_sec: int | None = None
+    timer_raw = (result.get("in_game_timer_at_clip_midpoint") or "").strip()
+    if timer_raw and timer_raw.upper() != "NONE":
+        m = re.match(r"(\d+):(\d+)", timer_raw)
+        if m:
+            qc_timer_sec = int(m.group(1)) * 60 + int(m.group(2))
+            expected = int(kill.get("game_time_seconds") or 0)
+            if expected > 0:
+                qc_drift_sec = abs(qc_timer_sec - expected)
+
+    needs_reclip_due_to_drift = (qc_drift_sec is not None and qc_drift_sec > 30)
+
     patch = {
         "highlight_score": _safe_float(result.get("highlight_score")),
         "ai_tags": result.get("tags") or [],
         "ai_description": desc,
+        "ai_description_fr": desc,                       # canonical FR copy
+        "ai_description_en": desc_en,
+        "ai_description_ko": desc_ko,
+        "ai_description_es": desc_es,
+        "ai_thumbnail_timestamp_sec": thumb_ts,
+        "ai_qc_timer_sec": qc_timer_sec,
+        "ai_qc_drift_sec": qc_drift_sec,
+        "ai_pipeline_version": "v2",
         "kill_visible": kill_visible_flag,
         "caster_hype_level": _safe_int(result.get("caster_hype_level")),
         "status": "analyzed",
     }
+    if needs_reclip_due_to_drift:
+        # PR14 per-clip QC : drift > 30s = clip almost certainly shows
+        # the wrong moment. Flag for re-clip and DON'T promote to
+        # 'analyzed' (keep needs_reclip=true gate). Same retract path
+        # as the qc_sampler / quarantine_offset_zero flows.
+        patch["needs_reclip"] = True
+        log.warn(
+            "analyzer_qc_drift_detected",
+            kill_id=kill["id"][:8],
+            expected=int(kill.get("game_time_seconds") or 0),
+            actual=qc_timer_sec,
+            drift=qc_drift_sec,
+        )
     safe_update("kills", patch, "id", kill["id"])
     try:
-        from services.event_qc import tick_qc_described, tick_qc_visible
+        from services.event_qc import (
+            tick_qc_described, tick_qc_visible,
+            tick_qc_clip_validated, fail_qc_clip_validated,
+        )
         tick_qc_described(kill["id"])
         tick_qc_visible(kill["id"], kill_visible_flag)
+        # PR14 : per-clip QC tick from the same Gemini call (no extra cost)
+        if qc_drift_sec is not None:
+            if needs_reclip_due_to_drift:
+                fail_qc_clip_validated(kill["id"], reason=f"drift={qc_drift_sec}s")
+            else:
+                tick_qc_clip_validated(kill["id"])
     except Exception as _e:
         log.warn("event_qc_tick_failed",
                  kill_id=kill["id"][:8], stage="analyzed", error=str(_e)[:120])

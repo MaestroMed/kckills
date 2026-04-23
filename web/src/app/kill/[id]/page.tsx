@@ -7,6 +7,7 @@ import { computeKillScore } from "@/lib/feed-algorithm";
 import { getKillById, getKillsByMatchExternalId, getPublishedKills, type PublishedKillRow } from "@/lib/supabase/kills";
 import { KillInteractions } from "./interactions";
 import { KillCinematicView } from "@/components/kill/KillCinematicView";
+import { SimilarClipsCarousel } from "@/components/kill/SimilarClipsCarousel";
 import type { Metadata } from "next";
 
 // ISR: pre-render the top N clips at build time, regenerate every 10 min
@@ -307,6 +308,7 @@ export default async function KillDetailPage({ params }: Props) {
             kill={kill}
             opponent={opponent}
             relatedKills={relatedKills}
+            similarSlot={<SimilarClipsCarousel killId={id} />}
           >
             {/* Interactions block (rate / comment / share / inline auth)
                 lives inside the cinematic shell so it's pinned in the

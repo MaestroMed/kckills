@@ -52,10 +52,17 @@ export async function requireAdmin(): Promise<{ ok: true } | { ok: false; error:
     .map((s) => s.trim())
     .filter(Boolean);
 
+  const allowedEmailsEarly = (process.env.KCKILLS_ADMIN_EMAILS ?? "").trim();
   const isProduction = process.env.NODE_ENV === "production";
 
   // PR-SECURITY-A : production fail-closed.
-  if (isProduction && !expectedToken && allowedDiscordIds.length === 0) {
+  // PR-SECURITY-B : also accept email allowlist as a valid auth path.
+  if (
+    isProduction
+    && !expectedToken
+    && allowedDiscordIds.length === 0
+    && !allowedEmailsEarly
+  ) {
     return {
       ok: false,
       error: "Admin auth not configured (server misconfigured — refusing access)",
@@ -63,7 +70,7 @@ export async function requireAdmin(): Promise<{ ok: true } | { ok: false; error:
   }
 
   // Dev mode — no env vars set, allow all (preserves local dev UX).
-  if (!expectedToken && allowedDiscordIds.length === 0) {
+  if (!expectedToken && allowedDiscordIds.length === 0 && !allowedEmailsEarly) {
     return { ok: true };
   }
 
@@ -85,6 +92,29 @@ export async function requireAdmin(): Promise<{ ok: true } | { ok: false; error:
       const { data: { user } } = await sb.auth.getUser();
       const discordId = (user?.user_metadata as { provider_id?: string } | undefined)?.provider_id;
       if (discordId && allowedDiscordIds.includes(discordId)) return { ok: true };
+    } catch {
+      /* fall through */
+    }
+  }
+
+  // Path 3: Supabase Auth email allowlist (PR-SECURITY-B)
+  // Lets you give access to multiple admins by adding their emails to
+  // KCKILLS_ADMIN_EMAILS (comma-separated). They sign up via Supabase
+  // Auth (email + password) at /admin/login — once their email is on
+  // the allowlist, requireAdmin() lets them through. Safe because :
+  //   - Supabase manages bcrypt hashing + sessions
+  //   - Email allowlist is server-side env var, can't be tampered
+  //   - Each admin has their own credentials → audit trail per person
+  const allowedEmails = (process.env.KCKILLS_ADMIN_EMAILS ?? "")
+    .split(",")
+    .map((s) => s.trim().toLowerCase())
+    .filter(Boolean);
+  if (allowedEmails.length > 0) {
+    try {
+      const sb = await createServerSupabase();
+      const { data: { user } } = await sb.auth.getUser();
+      const email = user?.email?.toLowerCase();
+      if (email && allowedEmails.includes(email)) return { ok: true };
     } catch {
       /* fall through */
     }
