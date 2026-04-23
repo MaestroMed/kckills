@@ -598,7 +598,7 @@ export async function getKillsByKillerChampion(
   try {
     const supabase = await createServerSupabase();
 
-    const [publishedRes, dataOnlyRes] = await Promise.all([
+    const [publishedRes, golggRes, livestatsRes] = await Promise.all([
       supabase
         .from("kills")
         .select(KILL_SELECT)
@@ -614,27 +614,43 @@ export async function getKillsByKillerChampion(
         .eq("killer_champion", championName)
         .order("game_time_seconds", { ascending: true })
         .limit(limit),
+      // Bucket 3 — same as getKillsForGrid : livestats kills stuck at
+      // clip_error / analyzed get the data-only treatment so the player
+      // profile shows them too.
+      supabase
+        .from("kills")
+        .select(KILL_SELECT)
+        .in("status", ["clip_error", "analyzed"])
+        .eq("data_source", "livestats")
+        .eq("killer_champion", championName)
+        .order("created_at", { ascending: false })
+        .limit(limit),
     ]);
 
     if (publishedRes.error) {
       console.warn("[supabase/kills] getKillsByKillerChampion published error:", publishedRes.error.message);
     }
-    if (dataOnlyRes.error) {
-      console.warn("[supabase/kills] getKillsByKillerChampion dataOnly error:", dataOnlyRes.error.message);
+    if (golggRes.error) {
+      console.warn("[supabase/kills] getKillsByKillerChampion golgg error:", golggRes.error.message);
+    }
+    if (livestatsRes.error) {
+      console.warn("[supabase/kills] getKillsByKillerChampion livestats error:", livestatsRes.error.message);
     }
 
     const published = (publishedRes.data ?? []).map((row) =>
       normalize(row as unknown as RawKillSelect),
     );
-    const dataOnly = (dataOnlyRes.data ?? []).map((row) =>
+    const golgg = (golggRes.data ?? []).map((row) =>
+      normalize(row as unknown as RawKillSelect),
+    );
+    const livestats = (livestatsRes.data ?? []).map((row) =>
       normalize(row as unknown as RawKillSelect),
     );
 
     const byId = new Map<string, PublishedKillRow>();
     for (const k of published) byId.set(k.id, k);
-    for (const k of dataOnly) {
-      if (!byId.has(k.id)) byId.set(k.id, k);
-    }
+    for (const k of golgg) if (!byId.has(k.id)) byId.set(k.id, k);
+    for (const k of livestats) if (!byId.has(k.id)) byId.set(k.id, k);
 
     return Array.from(byId.values())
       .sort((a, b) => {
