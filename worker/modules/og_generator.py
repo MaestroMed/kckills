@@ -156,15 +156,47 @@ async def run() -> int:
 
     # PR8 — skip kills marked as needs_reclip=true. These are quarantined
     # clips (e.g. from the offset=0 bug) that should NOT be re-published
-    # until the clipper produces a corrected version. Without this filter,
-    # the og_generator would happily re-flip them to status='published'
-    # and the bad clips would land back on /scroll.
+    # until the clipper produces a corrected version.
     skipped_needs_reclip = sum(1 for k in kills if k.get("needs_reclip") is True)
     kills = [k for k in kills if k.get("needs_reclip") is not True]
-    if skipped_needs_reclip > 0:
-        log.info("og_generator_skipped_needs_reclip", count=skipped_needs_reclip)
+
+    # PR11 — HARD QUALITY GATES. Only publish clips that pass all of :
+    #   1. kill_visible == True   (Gemini saw the kill happen on screen,
+    #                              not a caster cam / map view / replay menu)
+    #   2. highlight_score >= 3.0 (filters out the ai-rated flatliners)
+    #   3. ai_description present (already enforced by analyzer, but the
+    #                              field can be NULL from older legacy rows)
+    # Anything failing these gates stays in status='analyzed' until
+    # admin manually marks it qc_human_approved=TRUE via the upcoming
+    # PR6-E /admin/events dashboard.
+    pre_count = len(kills)
+    skipped_invisible = sum(1 for k in kills if k.get("kill_visible") is False)
+    skipped_low_score = sum(
+        1 for k in kills
+        if k.get("highlight_score") is not None and k["highlight_score"] < 3.0
+    )
+    skipped_no_desc = sum(1 for k in kills if not k.get("ai_description"))
+    kills = [
+        k for k in kills
+        if k.get("kill_visible") is not False           # TRUE or NULL passes
+        and (k.get("highlight_score") is None or k["highlight_score"] >= 3.0)
+        and k.get("ai_description")
+    ]
+    skipped_quality = pre_count - len(kills)
+
+    if skipped_needs_reclip or skipped_quality:
+        log.info(
+            "og_generator_quality_gate",
+            skipped_needs_reclip=skipped_needs_reclip,
+            skipped_invisible=skipped_invisible,
+            skipped_low_score=skipped_low_score,
+            skipped_no_desc=skipped_no_desc,
+            kept=len(kills),
+        )
     if not kills:
-        log.info("og_generator_scan_done", generated=0, skipped_needs_reclip=skipped_needs_reclip)
+        log.info("og_generator_scan_done", generated=0,
+                 skipped_needs_reclip=skipped_needs_reclip,
+                 skipped_quality=skipped_quality)
         return 0
 
     # Fast-path : kills that already have og_image_url just need a

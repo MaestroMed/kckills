@@ -31,12 +31,13 @@ from services.supabase_client import safe_select, safe_update
 
 log = structlog.get_logger()
 
-# Bumped 5 -> 25 after the clipper boost (200 clips/pass) — without this
-# the HLS packager would run 1h behind the clipper, leaving published
-# clips MP4-only for too long. With CONCURRENCY=3 each cycle finishes in
-# ~3 min wall time (25 clips × ~20s / 3 workers ≈ 170s), comfortably
-# under the 30min daemon interval.
-MAX_PER_RUN = 25
+# PR11 — bumped 25 -> 100 after NVENC went live. NVENC encodes ~8x faster
+# than libx264 (verified: 4.71s for a 40s 1080p source on RTX 4070 Ti).
+# At CONCURRENCY=4 + ~5s/clip wall time, 100 clips drains in ~125s,
+# still well under the 30min daemon interval. Critical because /scroll
+# UX needs HLS for adaptive bitrate on mobile — pre-PR11 only 33% of
+# published clips had HLS, leaving mobile users on raw MP4.
+MAX_PER_RUN = 100
 # Parallel ffmpeg workers per HLS pass. Each ffmpeg already saturates
 # ~6 cores via `-threads 0`, so 3 concurrent encodes on a 16-core box
 # leaves headroom for the rest of the daemon (clipper, analyzer downloads).

@@ -40,8 +40,13 @@ log = structlog.get_logger()
 
 
 # Tunables (kept conservative — Gemini quota is shared with analyzer)
-SAMPLE_POOL_SIZE = 200          # how many recent clips we look at
-SAMPLE_PICK_SIZE = 5            # how many we actually QC per cycle
+SAMPLE_POOL_SIZE = 500          # how many recent clips we look at
+# PR11 — bumped 5 -> 20 per cycle. With 1h interval that's 480 QC checks
+# per day, ~2x the daily publish rate, giving every clip a coin-flip
+# chance of being QC'd within 24h. Gemini quota math : 20/cycle × 24
+# cycles = 480 RPD ; analyzer uses ~250 RPD ; total ≈ 730 RPD with
+# 220 RPD headroom under the 950 daily cap.
+SAMPLE_PICK_SIZE = 20
 RECENT_WINDOW_DAYS = 30         # only QC clips published in last 30d
                                 # (worker has a backlog — newest clips
                                 # may be days old. 30d keeps the pool
