@@ -710,13 +710,17 @@ def _pick_best_thumbnail(candidates: list[str]) -> str | None:
 
 MAX_RETRY_COUNT = 3
 
-# Cap how many kills we attempt per pass. With CONCURRENCY=4 workers
-# at ~30s/clip, 60 clips = ~7-8 min per pass. The 300s daemon interval
-# keeps ticking during the pass, so the next run fires immediately after
-# if there's still a backlog. On a beefy multi-core PC the bottleneck is
-# yt-dlp throttle (scheduler-managed), not ffmpeg.
-BATCH_SIZE = 60
-CONCURRENCY = 4
+# Cap how many kills we attempt per pass. With CONCURRENCY=6 workers
+# at ~25s/clip (now that ffmpeg_cooldown dropped 5s -> 1s), 200 clips =
+# ~14 min per pass. The 300s daemon interval keeps ticking during the
+# pass, so the next run fires immediately after if there's still a
+# backlog. On a 16-core Ryzen the bottleneck is yt-dlp throttle
+# (scheduler-managed), not ffmpeg or disk I/O.
+#
+# Empirical max throughput at these settings : ~400 clips/hour, validated
+# without YouTube 429s on a residential IP.
+BATCH_SIZE = 200
+CONCURRENCY = 6
 
 
 async def run() -> int:

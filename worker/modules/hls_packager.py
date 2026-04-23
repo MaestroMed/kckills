@@ -31,7 +31,16 @@ from services.supabase_client import safe_select, safe_update
 
 log = structlog.get_logger()
 
-MAX_PER_RUN = 5
+# Bumped 5 -> 25 after the clipper boost (200 clips/pass) — without this
+# the HLS packager would run 1h behind the clipper, leaving published
+# clips MP4-only for too long. With CONCURRENCY=3 each cycle finishes in
+# ~3 min wall time (25 clips × ~20s / 3 workers ≈ 170s), comfortably
+# under the 30min daemon interval.
+MAX_PER_RUN = 25
+# Parallel ffmpeg workers per HLS pass. Each ffmpeg already saturates
+# ~6 cores via `-threads 0`, so 3 concurrent encodes on a 16-core box
+# leaves headroom for the rest of the daemon (clipper, analyzer downloads).
+CONCURRENCY = 3
 HLS_DIR = os.path.join(os.path.dirname(__file__), "..", "hls_temp")
 
 
@@ -216,15 +225,34 @@ async def run() -> int:
         log.info("hls_packager_no_pending")
         return 0
 
-    packaged = 0
-    for kill in pending:
-        kid = kill["id"]
-        mp4_url = kill["clip_url_vertical"]
-        log.info("hls_package_kill", kill_id=kid[:8])
-        master_url = await package_clip(kid, mp4_url)
-        if master_url:
-            safe_update("kills", {"hls_master_url": master_url}, "id", kid)
-            packaged += 1
+    log.info("hls_packager_queue", pending=len(pending), workers=CONCURRENCY)
 
-    log.info("hls_packager_done", packaged=packaged)
-    return packaged
+    sem = asyncio.Semaphore(CONCURRENCY)
+    counters = {"packaged": 0, "failed": 0}
+
+    async def _process(kill: dict):
+        async with sem:
+            kid = kill["id"]
+            mp4_url = kill["clip_url_vertical"]
+            log.info("hls_package_kill", kill_id=kid[:8])
+            try:
+                master_url = await package_clip(kid, mp4_url)
+            except Exception as e:
+                log.error("hls_package_crash", kill_id=kid[:8], error=str(e)[:200])
+                counters["failed"] += 1
+                return
+            if master_url:
+                safe_update("kills", {"hls_master_url": master_url}, "id", kid)
+                counters["packaged"] += 1
+            else:
+                counters["failed"] += 1
+
+    await asyncio.gather(*[_process(k) for k in pending], return_exceptions=False)
+
+    log.info(
+        "hls_packager_done",
+        packaged=counters["packaged"],
+        failed=counters["failed"],
+        attempted=len(pending),
+    )
+    return counters["packaged"]

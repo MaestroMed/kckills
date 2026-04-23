@@ -12,10 +12,15 @@ from datetime import datetime, timezone
 
 class LoLTokScheduler:
     DELAYS: dict[str, float] = {
-        "gemini": 4.0,             # 15 RPM
-        "haiku": 1.5,              # 50 RPM
+        "gemini": 4.0,             # 15 RPM — hard API limit, can't lower
+        "haiku": 1.5,              # 50 RPM — hard API limit, can't lower
         "youtube_search": 2.0,
-        "ytdlp": 10.0,
+        # ytdlp throttle dropped from 10s to 4s after observing zero 429s
+        # over 1.5K successful downloads on residential IP. Scheduler still
+        # serialises across the 6 clip workers, so effective rate is one
+        # download every 4s = 900/h theoretical, ~250-400/h with ffmpeg
+        # post-processing. If YouTube starts throttling, bump back to 8s.
+        "ytdlp": 4.0,
         "discord": 2.5,            # 30/60s
         # lolesports has no published rate limit; 2s is courteous for scan
         # loops that paginate the full schedule (7 pages). Main throttle is
@@ -24,7 +29,11 @@ class LoLTokScheduler:
         "lolesports_live": 10.0,
         "livestats": 2.0,          # game frames are lightweight and we
                                     # scan ~15 windows per BO5 game
-        "ffmpeg_cooldown": 5.0,
+        # ffmpeg_cooldown : the original 5s assumed a small CPU. With a
+        # 16-core Ryzen the bottleneck is I/O, not heat. 1s gives ffmpeg
+        # enough breathing room to flush + close handles between calls
+        # without artificially serialising the per-clip 4-pass encode.
+        "ffmpeg_cooldown": 1.0,
         "supabase": 0.1,
         "r2": 0.5,
     }

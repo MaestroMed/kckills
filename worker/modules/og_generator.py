@@ -12,6 +12,7 @@ Exposes:
 
 from __future__ import annotations
 
+import asyncio
 import os
 import structlog
 
@@ -22,6 +23,12 @@ from services import r2_client
 from services.supabase_client import safe_select, safe_update
 
 log = structlog.get_logger()
+
+# Concurrent Pillow renders + R2 uploads. Pillow itself releases the GIL
+# during compression, and R2 uploads are I/O-bound, so 4 workers parallelise
+# cleanly on a 16-core box. Bumped from serial loop after observing ~10min
+# for a backlog of 200 OG images at 1 worker.
+CONCURRENCY = 4
 
 WIDTH = 1200
 HEIGHT = 630
@@ -146,37 +153,57 @@ async def run() -> int:
     if not kills:
         return 0
 
-    generated = 0
-    for kill in kills:
-        if kill.get("og_image_url"):
-            # Already has OG; mark as published and move on
-            safe_update("kills", {"status": "published"}, "id", kill["id"])
-            continue
+    # Fast-path : kills that already have og_image_url just need a
+    # status flip. Batch them serially to avoid 200 parallel REST writes.
+    already = [k for k in kills if k.get("og_image_url")]
+    todo = [k for k in kills if not k.get("og_image_url")]
+    for k in already:
+        safe_update("kills", {"status": "published"}, "id", k["id"])
 
-        local_path = generate_og_image(
-            kill_id=kill["id"],
-            killer_name=kill.get("killer_name") or "KC",
-            killer_champion=kill.get("killer_champion") or "?",
-            victim_name=kill.get("victim_name") or "Opponent",
-            victim_champion=kill.get("victim_champion") or "?",
-            description=kill.get("ai_description") or "",
-            rating=float(kill.get("avg_rating") or 0),
-            rating_count=int(kill.get("rating_count") or 0),
-            multi_kill=kill.get("multi_kill"),
-        )
-        if not local_path:
-            continue
+    if not todo:
+        log.info("og_generator_scan_done", generated=0, status_only=len(already))
+        return 0
 
-        og_url = await r2_client.upload_og(kill["id"], local_path)
-        patch = {"status": "published"}
-        if og_url:
-            patch["og_image_url"] = og_url
-        safe_update("kills", patch, "id", kill["id"])
-        try:
-            os.remove(local_path)
-        except Exception:
-            pass
-        generated += 1
+    sem = asyncio.Semaphore(CONCURRENCY)
+    counters = {"generated": 0, "skipped": 0}
 
-    log.info("og_generator_scan_done", generated=generated)
-    return generated
+    async def _process(kill: dict):
+        async with sem:
+            kid = kill["id"]
+            # Pillow render runs CPU-bound; offload to a thread so the
+            # event loop can keep firing the other workers' R2 uploads.
+            local_path = await asyncio.to_thread(
+                generate_og_image,
+                kill_id=kid,
+                killer_name=kill.get("killer_name") or "KC",
+                killer_champion=kill.get("killer_champion") or "?",
+                victim_name=kill.get("victim_name") or "Opponent",
+                victim_champion=kill.get("victim_champion") or "?",
+                description=kill.get("ai_description") or "",
+                rating=float(kill.get("avg_rating") or 0),
+                rating_count=int(kill.get("rating_count") or 0),
+                multi_kill=kill.get("multi_kill"),
+            )
+            if not local_path:
+                counters["skipped"] += 1
+                return
+            og_url = await r2_client.upload_og(kid, local_path)
+            patch = {"status": "published"}
+            if og_url:
+                patch["og_image_url"] = og_url
+            safe_update("kills", patch, "id", kid)
+            try:
+                os.remove(local_path)
+            except Exception:
+                pass
+            counters["generated"] += 1
+
+    await asyncio.gather(*[_process(k) for k in todo], return_exceptions=False)
+
+    log.info(
+        "og_generator_scan_done",
+        generated=counters["generated"],
+        skipped=counters["skipped"],
+        status_only=len(already),
+    )
+    return counters["generated"]
