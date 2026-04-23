@@ -252,7 +252,11 @@ async def analyze_kill(
     text = ""
     try:
         genai.configure(api_key=config.GEMINI_API_KEY)
-        model = genai.GenerativeModel(config.GEMINI_MODEL_ANALYZER)
+        # PR13 — allow per-call model override (used by lab generator
+        # to A/B-test different models on the same clip). Defaults to
+        # the configured analyzer model.
+        model_name = kill.get("_model_override") or config.GEMINI_MODEL_ANALYZER
+        model = genai.GenerativeModel(model_name)
 
         if clip_path and os.path.exists(clip_path):
             video_file = genai.upload_file(clip_path)
@@ -269,6 +273,18 @@ async def analyze_kill(
         text = _strip_code_fence(text)
         result = json.loads(text)
         log.info("gemini_analysis_done", score=result.get("highlight_score"))
+        # Surface usage_metadata for lab cost accounting
+        try:
+            um = getattr(response, "usage_metadata", None)
+            if um is not None:
+                result["_usage"] = {
+                    "prompt_tokens": getattr(um, "prompt_token_count", None),
+                    "candidates_tokens": getattr(um, "candidates_token_count", None),
+                    "total_tokens": getattr(um, "total_token_count", None),
+                }
+        except Exception:
+            pass
+        result["_model"] = model_name
         return result
     except json.JSONDecodeError:
         log.warn("gemini_invalid_json", text=text[:200] if text else "")
