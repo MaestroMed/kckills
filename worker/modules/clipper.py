@@ -807,6 +807,15 @@ async def run() -> int:
                 # column.
                 payload.pop("_local_h_path", None)
                 safe_update("kills", payload, "id", kill["id"])
+                # PR6-C : tick the canonical event's "clip produced" QC gate.
+                # No-op if event_mapper hasn't created the row yet — next
+                # event_mapper cycle will pick it up with qc_clip_produced
+                # already TRUE thanks to the proxy logic in _kill_to_event_row.
+                try:
+                    from services.event_qc import tick_qc_clip_produced
+                    tick_qc_clip_produced(kill["id"])
+                except Exception as _e:
+                    log.warn("event_qc_tick_failed", kill_id=kill["id"][:8], stage="clip_produced", error=str(_e)[:120])
                 counters["ok"] += 1
             else:
                 safe_update(

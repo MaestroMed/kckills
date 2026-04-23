@@ -456,15 +456,25 @@ async def run() -> int:
                 )
             continue
 
+        kill_visible_flag = bool(result.get("kill_visible_on_screen", True))
         patch = {
             "highlight_score": _safe_float(result.get("highlight_score")),
             "ai_tags": result.get("tags") or [],
             "ai_description": desc,
-            "kill_visible": bool(result.get("kill_visible_on_screen", True)),
+            "kill_visible": kill_visible_flag,
             "caster_hype_level": _safe_int(result.get("caster_hype_level")),
             "status": "analyzed",
         }
         safe_update("kills", patch, "id", kill["id"])
+        # PR6-C : tick the canonical event's "described" + "visible" gates.
+        # No-op if event_mapper hasn't caught up yet — next mapping cycle
+        # picks up the same state via the proxy logic.
+        try:
+            from services.event_qc import tick_qc_described, tick_qc_visible
+            tick_qc_described(kill["id"])
+            tick_qc_visible(kill["id"], kill_visible_flag)
+        except Exception as _e:
+            log.warn("event_qc_tick_failed", kill_id=kill["id"][:8], stage="analyzed", error=str(_e)[:120])
         analysed += 1
 
     log.info("analyzer_scan_done", analysed=analysed, rejected=rejected)

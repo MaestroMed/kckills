@@ -179,6 +179,18 @@ async def _clip_qc_verify(kill_id: str | None) -> dict:
             os.remove(tmp_path)
         except OSError:
             pass
+    # PR6-C : tick the canonical event's qc_clip_validated gate. is_ok
+    # = drift within tolerance. If is_ok=False, gate flips to FALSE,
+    # which (via the GENERATED is_publishable column) instantly removes
+    # the event from the publishable pool.
+    try:
+        from services.event_qc import tick_qc_clip_validated, fail_qc_clip_validated
+        if is_ok:
+            tick_qc_clip_validated(kill_id)
+        else:
+            fail_qc_clip_validated(kill_id, reason=f"drift={drift}s")
+    except Exception as _e:
+        log.warn("event_qc_tick_failed", kill_id=kill_id[:8], stage="clip_validated", error=str(_e)[:120])
     return {
         "kill_id": kill_id,
         "expected_game_time": expected,
