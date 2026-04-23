@@ -26,6 +26,8 @@ import Image from "next/image";
 import Link from "next/link";
 import type { VideoFeedItem, MomentFeedItem } from "@/components/scroll/ScrollFeed";
 import { isDescriptionClean } from "@/lib/scroll/sanitize-description";
+import { useImpressionTracker } from "./hooks/useImpressionTracker";
+import { FeedSidebarV2 } from "@/components/community/FeedSidebarV2";
 
 interface SharedFeedItemProps {
   index: number;
@@ -46,6 +48,9 @@ export function FeedItemVideo({
   isActive,
 }: SharedFeedItemProps & { item: VideoFeedItem }) {
   const isKcKill = item.kcInvolvement === "team_killer";
+  // Fire impression beacon after 1.5s of dwell (real engagement signal,
+  // filters out flick-pasts).
+  useImpressionTracker({ killId: item.id, isActive });
   return (
     <div
       data-feed-item
@@ -93,10 +98,16 @@ export function FeedItemVideo({
         #{index + 1} / {total}
       </Link>
 
-      {/* Share button — top-right. Tries Web Share API first (mobile
-          native share sheet), falls back to clipboard copy with a toast. */}
-      <ShareFab killId={item.id} />
-
+      {/* TikTok-grade right action rail: like + comments + share + detail.
+          Owns the InlineAuthPrompt — every action surfaces it on 401. */}
+      <FeedSidebarV2
+        killId={item.id}
+        shareTitle={`${item.killerChampion} kills ${item.victimChampion}`}
+        shareText={item.aiDescription ?? undefined}
+        initialLikeCount={item.ratingCount ?? 0}
+        initialCommentCount={0}
+        visible={isActive}
+      />
 
       {/* Bottom overlay */}
       <div
@@ -183,6 +194,7 @@ export function FeedItemMoment({
 }: SharedFeedItemProps & { item: MomentFeedItem }) {
   const isKc = item.kcInvolvement === "kc_aggressor" || item.kcInvolvement === "kc_both";
   const label = MOMENT_LABEL[item.classification] ?? item.classification;
+  useImpressionTracker({ killId: item.id, isActive });
   return (
     <div
       data-feed-item
@@ -216,6 +228,17 @@ export function FeedItemMoment({
       >
         #{index + 1} / {total}
       </Link>
+
+      {/* TikTok-grade right action rail (same component as video items) */}
+      <FeedSidebarV2
+        killId={item.id}
+        shareTitle={`${label} · ${item.killCount} kills`}
+        shareText={item.aiDescription ?? undefined}
+        initialLikeCount={item.ratingCount ?? 0}
+        initialCommentCount={0}
+        visible={isActive}
+      />
+
       <div
         className={`absolute inset-x-0 bottom-0 z-10 px-4 md:px-6 transition-opacity duration-500 ${
           isActive ? "opacity-100" : "opacity-90"
