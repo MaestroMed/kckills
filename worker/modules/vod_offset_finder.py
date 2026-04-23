@@ -38,7 +38,7 @@ import structlog
 from config import config
 from scheduler import scheduler
 from services.supabase_client import get_db, safe_update
-from services import livestats_api
+from services import livestats_api, youtube_cookies
 
 log = structlog.get_logger()
 
@@ -150,6 +150,7 @@ async def _vod_metadata(youtube_id: str) -> dict | None:
         result = subprocess.run(
             [
                 __import__("sys").executable, "-m", "yt_dlp",
+                *youtube_cookies.cli_args(),
                 "--js-runtimes", "node",
                 "--dump-json", "--no-playlist", "--skip-download",
                 f"https://youtu.be/{youtube_id}",
@@ -220,6 +221,7 @@ async def _read_timer_at(youtube_id: str, vod_seconds: int) -> int | None:
         url_proc = subprocess.run(
             [
                 __import__("sys").executable, "-m", "yt_dlp",
+                *youtube_cookies.cli_args(),
                 "--js-runtimes", "node",
                 "-g", "-f", "best[height<=720]",
                 "--no-playlist", f"https://youtu.be/{youtube_id}",

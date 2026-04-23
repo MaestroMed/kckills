@@ -565,16 +565,34 @@ def cleanup_local_clip(local_path: str | None):
 
 
 def _cookies_args() -> list[str]:
-    """Return yt-dlp cookie args if a cookies.txt exists, empty list otherwise.
+    """Return yt-dlp cookie args.
 
-    We intentionally do NOT use --cookies-from-browser because Chrome's DPAPI
-    encryption fails when running from non-interactive shells (Claude Code,
-    systemd, Task Scheduler). Instead, the user can manually export a
-    cookies.txt via a browser extension if YouTube starts throttling.
+    PR24 — delegates to services.youtube_cookies which supports two modes :
+      * KCKILLS_YT_COOKIES_FILE       — Netscape cookies.txt path
+      * KCKILLS_YT_COOKIES_CHROME_PROFILE — name/path of a Chrome profile
+        that's NOT currently active (read SQLite directly + DPAPI-decrypt)
+
+    With YouTube Premium auth :
+      * 429s drop sharply (Premium accounts get priority)
+      * Higher-quality formats unlocked
+      * Age-gates bypassed
+
+    Falls back to no cookies if neither env var is set — preserves the
+    legacy anonymous-yt-dlp behaviour. Also keeps the old
+    worker/cookies.txt convention for back-compat.
     """
-    cookies_file = os.path.join(os.path.dirname(__file__), "..", "cookies.txt")
-    if os.path.exists(cookies_file):
-        return ["--cookies", cookies_file]
+    try:
+        from services import youtube_cookies
+        args = youtube_cookies.cli_args()
+        if args:
+            return args
+    except Exception:
+        pass
+
+    # Legacy fallback : worker/cookies.txt sitting next to main.py
+    legacy = os.path.join(os.path.dirname(__file__), "..", "cookies.txt")
+    if os.path.exists(legacy):
+        return ["--cookies", legacy]
     return []
 
 

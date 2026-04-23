@@ -167,6 +167,17 @@ async def _fetch_recent_uploads(channel_uc_id: str, limit: int = PLAYLIST_END) -
         "playlistend": limit,
         "no_warnings": True,
     }
+    # PR24 — inject the cookies file path when configured. yt-dlp's
+    # Python API uses `cookiefile` (not the CLI's --cookies). Skip
+    # silently if no cookies are wired up.
+    try:
+        from services import youtube_cookies
+        cli = youtube_cookies.cli_args()
+        # cli is either [] or ["--cookies", "/abs/path"]
+        if len(cli) == 2 and cli[0] == "--cookies":
+            opts["cookiefile"] = cli[1]
+    except Exception:
+        pass
 
     def _sync_fetch():
         with yt_dlp.YoutubeDL(opts) as ydl:

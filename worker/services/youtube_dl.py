@@ -1,9 +1,19 @@
-"""yt-dlp wrapper with retry and backoff."""
+"""yt-dlp wrapper with retry and backoff.
+
+PR24 — All yt-dlp invocations now thread through `youtube_cookies.cli_args()`
+which injects `--cookies <path>` when a YouTube Premium session is
+configured (KCKILLS_YT_COOKIES_FILE or KCKILLS_YT_COOKIES_CHROME_PROFILE).
+With Premium auth :
+  * 429s drop sharply (Premium accounts get priority)
+  * 1080p+ formats unlocked
+  * Age-gates bypassed
+"""
 
 import subprocess
 import asyncio
 import structlog
 from scheduler import scheduler
+from services import youtube_cookies
 
 log = structlog.get_logger()
 
@@ -27,6 +37,7 @@ async def download_segment(
         try:
             result = subprocess.run([
                 "yt-dlp",
+                *youtube_cookies.cli_args(),
                 "--download-sections", f"*{start_seconds}-{end_seconds}",
                 "--force-keyframes-at-cuts",
                 "-f", f"bestvideo[height<={max_height}]+bestaudio/best[height<={max_height}]",
@@ -64,7 +75,13 @@ async def search(query: str, max_results: int = 5) -> list[dict]:
 
     try:
         result = subprocess.run(
-            ["yt-dlp", "--flat-playlist", "--print", "%(id)s\t%(title)s", f"ytsearch{max_results}:{query}"],
+            [
+                "yt-dlp",
+                *youtube_cookies.cli_args(),
+                "--flat-playlist",
+                "--print", "%(id)s\t%(title)s",
+                f"ytsearch{max_results}:{query}",
+            ],
             capture_output=True, text=True, timeout=30,
         )
         videos = []

@@ -37,3 +37,8 @@ worker/state.json
 worker/logs/
 worker/.backfill_state.json
 worker/vods/
+
+# YouTube auth cookies — contains active session tokens, NEVER commit
+worker/.youtube_cookies.txt
+worker/youtube_cookies.txt
+worker/cookies.txt
