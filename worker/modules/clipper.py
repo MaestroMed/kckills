@@ -736,15 +736,46 @@ async def run() -> int:
         status="vod_found",
     ) or []
 
-    # Retry queue: kills that failed but haven't exhausted their attempts
-    retry_kills = [
-        k for k in (safe_select(
-            "kills",
-            "id, game_id, game_time_seconds, status, retry_count",
-            status="clip_error",
-        ) or [])
-        if int(k.get("retry_count") or 0) < MAX_RETRY_COUNT
-    ]
+    # Retry queue: kills that failed but haven't exhausted their attempts.
+    #
+    # CRITICAL : we hit PostgREST's default 1000-row cap when the table
+    # has thousands of clip_errors. If the first 1000 happen to all be
+    # retry_count=3 (which they were on 2026-04-23 — 1004 of 1607
+    # clip_errors at retry=3), the Python-side filter strips everything
+    # and the clipper reports "no_pending" forever, leaving ~600 valid
+    # retries unprocessed. Workaround : push the retry_count<MAX filter
+    # into the SQL via a raw httpx call so PostgREST returns the right
+    # 1000 rows, not just any 1000.
+    retry_kills: list[dict] = []
+    try:
+        from services.supabase_client import get_db
+        import httpx
+        db = get_db()
+        if db is not None:
+            r = httpx.get(
+                f"{db.base}/kills",
+                headers=db.headers,
+                params={
+                    "select": "id,game_id,game_time_seconds,status,retry_count",
+                    "status": "eq.clip_error",
+                    "retry_count": f"lt.{MAX_RETRY_COUNT}",
+                    "order": "retry_count.asc,updated_at.asc",
+                    "limit": "1000",
+                },
+                timeout=20.0,
+            )
+            if r.status_code == 200:
+                retry_kills = r.json() or []
+    except Exception as _e:
+        # Fall back to the legacy path on any failure (network, etc.)
+        retry_kills = [
+            k for k in (safe_select(
+                "kills",
+                "id, game_id, game_time_seconds, status, retry_count",
+                status="clip_error",
+            ) or [])
+            if int(k.get("retry_count") or 0) < MAX_RETRY_COUNT
+        ]
 
     # Fresh first so new arrivals don't starve behind a long retry queue.
     all_kills = fresh_kills + retry_kills
