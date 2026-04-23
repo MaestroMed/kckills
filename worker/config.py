@@ -32,6 +32,14 @@ class Config:
     GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "")
     ANTHROPIC_API_KEY: str = os.getenv("ANTHROPIC_API_KEY", "")
 
+    # ─── Encoding ────────────────────────────────────────────
+    # NVENC (NVIDIA GPU encoding) selection.
+    #   "auto" : use NVENC if ffmpeg has h264_nvenc (default — best perf
+    #            on a box with an RTX card; falls back to libx264 otherwise)
+    #   "1"    : force NVENC (fail if unavailable)
+    #   "0"    : force libx264 (debug or non-GPU machines)
+    USE_NVENC = os.getenv("KCKILLS_USE_NVENC", "auto")
+
     # ─── Discord ─────────────────────────────────────────────
     DISCORD_WEBHOOK_URL: str = os.getenv("DISCORD_WEBHOOK_URL", "")
 

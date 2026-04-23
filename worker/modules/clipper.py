@@ -31,6 +31,7 @@ from config import config
 from scheduler import scheduler
 from services import r2_client
 from services.clip_hash import content_hash, perceptual_hash
+from services.ffmpeg_ops import video_codec_args
 from services.supabase_client import safe_select, safe_update
 
 log = structlog.get_logger()
@@ -223,9 +224,7 @@ async def clip_kill(
         if not await _ffmpeg([
             "-i", raw_path,
             "-vf", "scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2",
-            "-c:v", "libx264", "-preset", "fast", "-crf", "22",
-            "-profile:v", "main", "-level", "4.0",
-            "-maxrate", "4M", "-bufsize", "8M",
+            *video_codec_args("hq"),
             "-c:a", "aac", "-b:a", "128k",
             "-movflags", "+faststart",
             "-y", h_path,
@@ -253,9 +252,7 @@ async def clip_kill(
         if not await _ffmpeg([
             "-i", raw_path,
             "-vf", v_filter,
-            "-c:v", "libx264", "-preset", "fast", "-crf", "22",
-            "-profile:v", "main", "-level", "4.0",
-            "-maxrate", "4M", "-bufsize", "8M",
+            *video_codec_args("hq"),
             "-c:a", "aac", "-b:a", "128k",
             "-movflags", "+faststart",
             "-y", v_path,
@@ -268,9 +265,7 @@ async def clip_kill(
         if not await _ffmpeg([
             "-i", raw_path,
             "-vf", "crop=ih*9/16:ih:iw/2-ih*9/32:0,scale=540:960",
-            "-c:v", "libx264", "-preset", "fast", "-crf", "27",
-            "-profile:v", "baseline", "-level", "3.1",
-            "-maxrate", "1200k", "-bufsize", "2400k",
+            *video_codec_args("low"),
             "-c:a", "aac", "-b:a", "80k",
             "-movflags", "+faststart",
             "-y", vl_path,
@@ -442,9 +437,7 @@ async def clip_moment(
         if not await _ffmpeg([
             "-i", raw_path,
             "-vf", "scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2",
-            "-c:v", "libx264", "-preset", "fast", "-crf", "22",
-            "-profile:v", "main", "-level", "4.0",
-            "-maxrate", "4M", "-bufsize", "8M",
+            *video_codec_args("hq"),
             "-c:a", "aac", "-b:a", "128k",
             "-movflags", "+faststart",
             "-y", h_path,
@@ -460,9 +453,7 @@ async def clip_moment(
         if not await _ffmpeg([
             "-i", raw_path,
             "-vf", v_filter,
-            "-c:v", "libx264", "-preset", "fast", "-crf", "22",
-            "-profile:v", "main", "-level", "4.0",
-            "-maxrate", "4M", "-bufsize", "8M",
+            *video_codec_args("hq"),
             "-c:a", "aac", "-b:a", "128k",
             "-movflags", "+faststart",
             "-y", v_path,
@@ -475,9 +466,7 @@ async def clip_moment(
         if not await _ffmpeg([
             "-i", raw_path,
             "-vf", "crop=ih*9/16:ih:iw/2-ih*9/32:0,scale=540:960",
-            "-c:v", "libx264", "-preset", "fast", "-crf", "27",
-            "-profile:v", "baseline", "-level", "3.1",
-            "-maxrate", "1200k", "-bufsize", "2400k",
+            *video_codec_args("low"),
             "-c:a", "aac", "-b:a", "80k",
             "-movflags", "+faststart",
             "-y", vl_path,
@@ -720,7 +709,11 @@ MAX_RETRY_COUNT = 3
 # Empirical max throughput at these settings : ~400 clips/hour, validated
 # without YouTube 429s on a residential IP.
 BATCH_SIZE = 200
-CONCURRENCY = 6
+# CONCURRENCY raised 6 -> 8 for NVENC: GPU is the bottleneck on RTX 4070 Ti
+# Ada Lovelace can run 8 concurrent NVENC sessions per consumer card (limit
+# enforced by NVIDIA driver). Each clipper worker also spawns yt-dlp +
+# ffmpeg, but ffmpeg now offloads encode to the GPU so CPU contention drops.
+CONCURRENCY = 8
 
 
 async def run() -> int:

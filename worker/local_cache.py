@@ -93,5 +93,30 @@ class LocalCache:
         row = conn.execute("SELECT COUNT(*) as c FROM pending_writes WHERE flushed = 0").fetchone()
         return row["c"]
 
+    # Alias to match LocalCacheRedis public API.
+    count_pending = pending_count
 
-cache = LocalCache()
+
+def get_cache():
+    """Return Redis-backed cache if KCKILLS_USE_REDIS=1 and reachable, else SQLite.
+
+    The Redis backend is required for the orchestrator's process-split
+    architecture (4 child processes hammering the cache concurrently
+    cause SQLite write-lock contention). For the legacy single-process
+    main.py, SQLite is fine.
+    """
+    import structlog
+    log = structlog.get_logger()
+    if os.getenv("KCKILLS_USE_REDIS") == "1":
+        try:
+            from local_cache_redis import LocalCacheRedis
+            c = LocalCacheRedis()
+            c.ping()
+            log.info("cache_backend_selected", backend="redis")
+            return c
+        except Exception as e:
+            log.warn("redis_cache_unavailable_falling_back", error=str(e))
+    return LocalCache()
+
+
+cache = get_cache()

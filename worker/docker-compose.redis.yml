@@ -1,0 +1,11 @@
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: kckills-redis
+    ports: ["127.0.0.1:6379:6379"]
+    command: redis-server --maxmemory 1gb --maxmemory-policy allkeys-lru --save 60 1000
+    volumes:
+      - kckills-redis-data:/data
+    restart: unless-stopped
+volumes:
+  kckills-redis-data:

@@ -40,7 +40,7 @@ MAX_PER_RUN = 25
 # Parallel ffmpeg workers per HLS pass. Each ffmpeg already saturates
 # ~6 cores via `-threads 0`, so 3 concurrent encodes on a 16-core box
 # leaves headroom for the rest of the daemon (clipper, analyzer downloads).
-CONCURRENCY = 3
+CONCURRENCY = 4
 # HLS_DIR now comes from config (defaults to D:/kckills_worker/hls_temp
 # on the user's Gen5 NVMe, falls back to worker/hls_temp). This is an
 # I/O hot path — each clip writes ~40-80MB of .ts segments here during
@@ -113,6 +113,51 @@ async def package_clip(kill_id: str, mp4_url: str) -> str | None:
         # 1080p quality bump), so the 1080p variant is just a re-encode
         # at higher bitrate, not an upscale. Adaptive bitrate negotiation
         # in hls.js / Safari native picks the right variant per device.
+        # Pick codec — h264_nvenc on Ada (RTX 4070 Ti), libx264 fallback.
+        # NVENC consumer cards = 8 sessions/process; this filter_complex
+        # opens 4 sessions in one ffmpeg = well within budget.
+        from services.ffmpeg_ops import _resolve_encoder
+        vcodec = _resolve_encoder("auto")
+
+        if vcodec == "h264_nvenc":
+            # NVENC per-output args. p4 + tune hq is balanced for ABR ladder.
+            # No multipass on HLS — wall time matters more than 5% quality
+            # because hls.js negotiates the variant down anyway.
+            def _nv(idx: str, b: str, mx: str, bs: str) -> list[str]:
+                return [
+                    "-c:v:" + idx, "h264_nvenc",
+                    "-preset:v:" + idx, "p4",
+                    "-tune:v:" + idx, "hq",
+                    "-rc:v:" + idx, "vbr",
+                    "-b:v:" + idx, b,
+                    "-maxrate:v:" + idx, mx,
+                    "-bufsize:v:" + idx, bs,
+                    "-bf:v:" + idx, "3",
+                    "-b_ref_mode:v:" + idx, "middle",
+                    "-pix_fmt:v:" + idx, "yuv420p",
+                ]
+            variant_args = (
+                ["-map", "[v1out]", *_nv("0", "400k", "600k", "800k")] +
+                ["-map", "[v2out]", *_nv("1", "1000k", "1500k", "2000k")] +
+                ["-map", "[v3out]", *_nv("2", "2500k", "3500k", "5000k")] +
+                ["-map", "[v4out]", *_nv("3", "5000k", "7000k", "10000k")]
+            )
+        else:
+            variant_args = [
+                # Variant 0 — 240p (slow 3G fallback)
+                "-map", "[v1out]", "-c:v:0", "libx264",
+                "-b:v:0", "400k", "-maxrate:v:0", "600k", "-bufsize:v:0", "800k",
+                # Variant 1 — 480p (3G+ / shaky 4G)
+                "-map", "[v2out]", "-c:v:1", "libx264",
+                "-b:v:1", "1000k", "-maxrate:v:1", "1500k", "-bufsize:v:1", "2000k",
+                # Variant 2 — 720p (4G / mid-tier mobile)
+                "-map", "[v3out]", "-c:v:2", "libx264",
+                "-b:v:2", "2500k", "-maxrate:v:2", "3500k", "-bufsize:v:2", "5000k",
+                # Variant 3 — 1080p (5G / wifi / desktop)
+                "-map", "[v4out]", "-c:v:3", "libx264",
+                "-b:v:3", "5000k", "-maxrate:v:3", "7000k", "-bufsize:v:3", "10000k",
+            ]
+
         cmd = [
             "ffmpeg", "-y", "-i", src_path,
             "-filter_complex",
@@ -121,18 +166,7 @@ async def package_clip(kill_id: str, mp4_url: str) -> str | None:
             "[v2]scale=-2:480[v2out];"
             "[v3]scale=-2:720[v3out];"
             "[v4]scale=-2:1080[v4out]",
-            # Variant 0 — 240p (slow 3G fallback)
-            "-map", "[v1out]", "-c:v:0", "libx264",
-            "-b:v:0", "400k", "-maxrate:v:0", "600k", "-bufsize:v:0", "800k",
-            # Variant 1 — 480p (3G+ / shaky 4G)
-            "-map", "[v2out]", "-c:v:1", "libx264",
-            "-b:v:1", "1000k", "-maxrate:v:1", "1500k", "-bufsize:v:1", "2000k",
-            # Variant 2 — 720p (4G / mid-tier mobile)
-            "-map", "[v3out]", "-c:v:2", "libx264",
-            "-b:v:2", "2500k", "-maxrate:v:2", "3500k", "-bufsize:v:2", "5000k",
-            # Variant 3 — 1080p (5G / wifi / desktop)
-            "-map", "[v4out]", "-c:v:3", "libx264",
-            "-b:v:3", "5000k", "-maxrate:v:3", "7000k", "-bufsize:v:3", "10000k",
+            *variant_args,
         ]
         if has_audio:
             cmd += [

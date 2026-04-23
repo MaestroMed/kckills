@@ -10,9 +10,52 @@ For each completed KC match not yet in the DB:
 import structlog
 
 from services import lolesports_api, discord_webhook
-from services.supabase_client import safe_select, safe_upsert
+from services.supabase_client import safe_insert, safe_select, safe_upsert
 
 log = structlog.get_logger()
+
+
+def _resolve_team_id(team: dict) -> str | None:
+    """Return the teams.id (UUID) for a lolesports team payload.
+
+    Lookup priority:
+      1. By teams.external_id (the lolesports team UUID — stable).
+      2. By teams.code (e.g. "KC", "SK") — fallback for legacy rows
+         whose external_id is a placeholder like "team_kc".
+
+    If neither match, INSERT a new teams row from the API payload so
+    every future sentinel pass resolves cleanly.
+    Returns None only if the API payload is too thin to insert (no code).
+    """
+    ext_id = (team.get("id") or "").strip()
+    code = (team.get("code") or "").strip().upper()
+    name = (team.get("name") or code or "").strip()
+
+    if ext_id:
+        rows = safe_select("teams", "id", external_id=ext_id)
+        if rows:
+            return rows[0]["id"]
+    if code:
+        rows = safe_select("teams", "id", code=code)
+        if rows:
+            return rows[0]["id"]
+
+    if not code:
+        return None
+
+    payload = {
+        "external_id": ext_id or f"team_{code.lower()}",
+        "code": code,
+        "name": name or code,
+        "slug": code.lower(),
+        "logo_url": team.get("image"),
+        "is_tracked": code in {"KC"},
+    }
+    inserted = safe_insert("teams", payload)
+    if inserted and inserted.get("id"):
+        return inserted["id"]
+    rows = safe_select("teams", "id", code=code)
+    return rows[0]["id"] if rows else None
 
 
 async def run() -> int:
@@ -52,6 +95,23 @@ async def run() -> int:
         kc_team = team_a if lolesports_api.is_kc(team_a) else team_b
         opp_team = team_b if lolesports_api.is_kc(team_a) else team_a
 
+        # Resolve team UUIDs BEFORE the match upsert so team_blue_id /
+        # team_red_id are never NULL. If the team isn't yet in the DB
+        # we insert it from the lolesports payload (id, code, name,
+        # image). Without this guarantee the matches table accumulates
+        # rows the frontend can't render (see SK match 115548668059589320).
+        blue_id = _resolve_team_id(team_a)
+        red_id = _resolve_team_id(team_b)
+        if not blue_id or not red_id:
+            log.warn(
+                "match_team_unresolved",
+                match_id=match_ext_id,
+                blue_code=team_a.get("code"),
+                red_code=team_b.get("code"),
+                resolved_blue=bool(blue_id),
+                resolved_red=bool(red_id),
+            )
+
         strategy = match.get("strategy", {}) or {}
         bo_count = strategy.get("count", 1)
 
@@ -59,6 +119,8 @@ async def run() -> int:
             "matches",
             {
                 "external_id": match_ext_id,
+                "team_blue_id": blue_id,
+                "team_red_id": red_id,
                 "format": f"bo{bo_count}",
                 "stage": event.get("blockName", "") or "",
                 "scheduled_at": event.get("startTime"),

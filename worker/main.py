@@ -46,6 +46,7 @@ DAEMON_MODULES: list[tuple[str, int, str]] = [
     ("harvester",     600,   "modules.harvester"),     # 10 min
     ("event_mapper",  600,   "modules.event_mapper"),  # 10 min — populate canonical game_events table (PR6-B)
     ("transitioner",  300,   "modules.transitioner"),  # 5 min — raw -> vod_found
+    ("vod_offset_finder", 3600, "modules.vod_offset_finder"),  # 1h — recover NULL vod_offset_seconds via Live Stats epoch alignment
     ("clipper",       300,   "modules.clipper"),       # 5 min
     ("analyzer",      600,   "modules.analyzer"),      # 10 min
     ("og_generator",  900,   "modules.og_generator"),  # 15 min
