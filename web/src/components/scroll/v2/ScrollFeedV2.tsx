@@ -201,9 +201,35 @@ export function ScrollFeedV2({
     setMuted((m) => {
       const next = !m;
       localStorage.setItem("kc-scroll-muted", String(next));
+      // Notify the BGM player so it can duck the music while the
+      // user is listening to the cast — see AudioPlayer.tsx.
+      try {
+        window.dispatchEvent(
+          new CustomEvent("kc:clip-unmuted", { detail: { unmuted: !next } }),
+        );
+      } catch {
+        // CustomEvent unsupported in some sandboxes — silent
+      }
       return next;
     });
   };
+
+  // Initial sync — if mute state was persisted as "unmuted" from a
+  // previous session, fire the duck event so BGM starts in ducked
+  // mode rather than blasting at 100% on first paint.
+  useEffect(() => {
+    if (!muted) {
+      try {
+        window.dispatchEvent(
+          new CustomEvent("kc:clip-unmuted", { detail: { unmuted: true } }),
+        );
+      } catch {
+        // ignore
+      }
+    }
+    // Run only when mute state changes (handled separately above on user toggle).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // ─── Full keyboard shortcuts (Phase 6) ────────────────────────────
   // Pro mode bindings: J/K next/prev, Space, M mute, L like, C comments,

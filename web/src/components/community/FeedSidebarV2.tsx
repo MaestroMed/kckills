@@ -81,17 +81,28 @@ export function FeedSidebarV2({
   return (
     <>
       <div
-        className={`absolute right-3 md:right-5 bottom-32 md:bottom-40 z-20 flex flex-col items-center gap-4 md:gap-5 transition-all duration-500 delay-150 ${
+        className={`absolute right-3 md:right-5 lg:right-7 2xl:right-12 bottom-32 md:bottom-40 lg:bottom-48 2xl:bottom-56 z-20 flex flex-col items-center gap-4 md:gap-5 lg:gap-6 2xl:gap-7 transition-all duration-500 delay-150 ${
           visible ? "opacity-100 translate-x-0" : "opacity-0 translate-x-3 pointer-events-none"
         }`}
       >
-        {/* Like — primary action, biggest visual presence */}
-        <LikeButton
-          killId={killId}
-          initialCount={initialLikeCount}
-          variant="compact"
-          onAuthRequired={() => setAuthPromptIntent("like")}
-        />
+        {/* Like — primary action, biggest visual presence.
+            Variant scales: compact (mobile/tablet) → wide (≥1280px). */}
+        <div className="block lg:hidden">
+          <LikeButton
+            killId={killId}
+            initialCount={initialLikeCount}
+            variant="compact"
+            onAuthRequired={() => setAuthPromptIntent("like")}
+          />
+        </div>
+        <div className="hidden lg:block">
+          <LikeButton
+            killId={killId}
+            initialCount={initialLikeCount}
+            variant="wide"
+            onAuthRequired={() => setAuthPromptIntent("like")}
+          />
+        </div>
 
         {/* Comments */}
         <button
@@ -101,11 +112,11 @@ export function FeedSidebarV2({
             setShowComments(true);
           }}
           aria-label={`Commentaires (${initialCommentCount})`}
-          className="flex flex-col items-center gap-1.5 select-none"
+          className="flex flex-col items-center gap-1.5 lg:gap-2 select-none"
         >
-          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-black/50 backdrop-blur-sm border border-white/10 transition-all hover:bg-black/65 active:scale-90">
+          <div className="flex h-12 w-12 lg:h-14 lg:w-14 2xl:h-16 2xl:w-16 items-center justify-center rounded-full bg-black/55 backdrop-blur-sm border border-white/15 transition-all hover:bg-black/75 hover:border-white/25 active:scale-90 shadow-[0_4px_18px_rgba(0,0,0,0.5)]">
             <svg
-              className="h-6 w-6 text-white"
+              className="h-6 w-6 lg:h-7 lg:w-7 2xl:h-8 2xl:w-8 text-white"
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
@@ -118,7 +129,7 @@ export function FeedSidebarV2({
               />
             </svg>
           </div>
-          <span className="font-data text-[10px] font-bold tabular-nums text-white/75">
+          <span className="font-data text-[10px] lg:text-xs 2xl:text-sm font-bold tabular-nums text-white/80">
             {formatCount(initialCommentCount)}
           </span>
         </button>
@@ -128,11 +139,11 @@ export function FeedSidebarV2({
           type="button"
           onClick={handleShare}
           aria-label="Partager"
-          className="flex flex-col items-center gap-1.5 select-none"
+          className="flex flex-col items-center gap-1.5 lg:gap-2 select-none"
         >
-          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-black/50 backdrop-blur-sm border border-white/10 transition-all hover:bg-black/65 active:scale-90">
+          <div className="flex h-12 w-12 lg:h-14 lg:w-14 2xl:h-16 2xl:w-16 items-center justify-center rounded-full bg-black/55 backdrop-blur-sm border border-white/15 transition-all hover:bg-black/75 hover:border-white/25 active:scale-90 shadow-[0_4px_18px_rgba(0,0,0,0.5)]">
             <svg
-              className="h-5 w-5 text-white"
+              className="h-5 w-5 lg:h-6 lg:w-6 2xl:h-7 2xl:w-7 text-white"
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
@@ -145,7 +156,7 @@ export function FeedSidebarV2({
               />
             </svg>
           </div>
-          <span className="font-data text-[10px] font-bold text-white/75">
+          <span className="font-data text-[10px] lg:text-xs 2xl:text-sm font-bold text-white/80">
             Partager
           </span>
         </button>
@@ -157,9 +168,9 @@ export function FeedSidebarV2({
           className="flex flex-col items-center gap-1.5 mt-1 select-none"
           aria-label="Voir le détail"
         >
-          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-black/40 backdrop-blur-sm border border-white/8 transition-all hover:bg-black/55 active:scale-90">
+          <div className="flex h-10 w-10 lg:h-12 lg:w-12 2xl:h-14 2xl:w-14 items-center justify-center rounded-full bg-black/45 backdrop-blur-sm border border-white/10 transition-all hover:bg-black/65 active:scale-90">
             <svg
-              className="h-5 w-5 text-white/70"
+              className="h-5 w-5 lg:h-6 lg:w-6 2xl:h-7 2xl:w-7 text-white/75"
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"

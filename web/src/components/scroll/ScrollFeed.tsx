@@ -41,6 +41,12 @@ export interface VideoFeedItem {
   killerPlayerId: string | null;
   killerChampion: string;
   victimChampion: string;
+  /** Player IGNs resolved server-side from kc_matches.json + roster
+   *  for the active match. Null when not resolvable (data legacy /
+   *  opponent player not in our roster mapping). When KC is the killer,
+   *  killerName is one of {Canna, Yike, Kyeahoo, Caliste, Busio}. */
+  killerName: string | null;
+  victimName: string | null;
   /** Grid pivot dimensions — enables the /scroll?axis=...&value=... filter. */
   minuteBucket: string | null;
   fightType: string | null;

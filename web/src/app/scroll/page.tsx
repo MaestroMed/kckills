@@ -135,6 +135,32 @@ export default async function ScrollV2Page({ searchParams }: ScrollPageProps) {
     const opponentCode = matchJson?.opponent.code ?? "LEC";
     const kcWon = matchJson?.kc_won ?? null;
     const matchScore = matchJson ? `${matchJson.kc_score}-${matchJson.opp_score}` : null;
+
+    // Resolve killer / victim player IGNs by matching their champion
+    // against the match's roster snapshot. KC players come from
+    // matchJson.games[N].kc_players (Caliste/Yike/etc.), opponents
+    // from opp_players. We strip the "KC " prefix client-side.
+    const gameN = k.games?.game_number ?? 1;
+    const game = matchJson?.games?.find((g) => g.number === gameN) ?? matchJson?.games?.[0];
+    const stripPrefix = (n: string | undefined) =>
+      n ? n.replace(/^[A-Z]{1,4}\s+/, "") : null;
+    let killerName: string | null = null;
+    let victimName: string | null = null;
+    if (k.tracked_team_involvement === "team_killer") {
+      killerName = stripPrefix(
+        game?.kc_players.find((p) => p.champion === k.killer_champion)?.name,
+      );
+      victimName = stripPrefix(
+        game?.opp_players.find((p) => p.champion === k.victim_champion)?.name,
+      );
+    } else if (k.tracked_team_involvement === "team_victim") {
+      killerName = stripPrefix(
+        game?.opp_players.find((p) => p.champion === k.killer_champion)?.name,
+      );
+      victimName = stripPrefix(
+        game?.kc_players.find((p) => p.champion === k.victim_champion)?.name,
+      );
+    }
     const hl = (k.highlight_score ?? 5) / 10;
     const rt = k.rating_count > 0 ? (k.avg_rating ?? 0) / 5 : 0;
     const engagement =
@@ -156,6 +182,8 @@ export default async function ScrollV2Page({ searchParams }: ScrollPageProps) {
       killerPlayerId: k.killer_player_id,
       killerChampion: k.killer_champion ?? "?",
       victimChampion: k.victim_champion ?? "?",
+      killerName,
+      victimName,
       minuteBucket: k.game_minute_bucket,
       fightType: k.fight_type,
       clipVertical: k.clip_url_vertical ?? "",

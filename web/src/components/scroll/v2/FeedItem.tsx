@@ -109,65 +109,103 @@ export function FeedItemVideo({
         visible={isActive}
       />
 
-      {/* Bottom overlay */}
+      {/* Bottom overlay — STATE OF THE ART revamp.
+          - Reserves right-side gutter for the FeedSidebarV2 (mobile 64px, desktop 96px)
+          - Player names visible in addition to champions
+          - Matchup poster style: "[KC PLAYER] sur [CHAMPION] → [OPP] sur [CHAMP]"
+          - Badges chips with stronger contrast
+          - AI description italic with subtle gradient fade if too long
+          - Match meta line at the very bottom, monospaced, muted
+          - Active item: full opacity, slight slide-up animation */}
       <div
-        className={`absolute inset-x-0 bottom-0 z-10 px-4 md:px-6 transition-opacity duration-500 ${
-          isActive ? "opacity-100" : "opacity-90"
+        className={`absolute inset-x-0 bottom-0 z-10 pl-4 md:pl-7 lg:pl-10 pointer-events-none transition-all duration-500 ${
+          isActive ? "opacity-100 translate-y-0" : "opacity-85 translate-y-1"
         }`}
-        style={{ paddingBottom: "max(2rem, env(safe-area-inset-bottom, 2rem))" }}
+        style={{
+          paddingBottom: "max(2rem, env(safe-area-inset-bottom, 2rem))",
+          // Reserve right-side gutter for the action sidebar so text doesn't
+          // get covered by the like/comment/share buttons.
+          paddingRight: "calc(72px + env(safe-area-inset-right, 0px))",
+        }}
       >
-        <div className="space-y-3">
+        <div className="space-y-2.5 md:space-y-3 max-w-2xl">
           {/* Badges row */}
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-center gap-1.5 md:gap-2">
             <span
-              className={`rounded-md px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.15em] ${
+              className={`rounded-md px-2.5 py-1 text-[10px] md:text-[11px] font-black uppercase tracking-[0.15em] backdrop-blur-sm shadow-[0_4px_12px_rgba(0,0,0,0.5)] ${
                 isKcKill
-                  ? "bg-[var(--gold)]/20 border border-[var(--gold)]/45 text-[var(--gold)]"
-                  : "bg-[var(--red)]/20 border border-[var(--red)]/45 text-[var(--red)]"
+                  ? "bg-[var(--gold)]/25 border border-[var(--gold)]/55 text-[var(--gold)]"
+                  : "bg-[var(--red)]/25 border border-[var(--red)]/55 text-[var(--red)]"
               }`}
             >
-              {isKcKill ? "KC Kill" : "KC Death"}
+              {isKcKill ? "● KC kill" : "○ KC death"}
             </span>
             {item.isFirstBlood && (
-              <span className="rounded-md bg-[var(--red)]/20 border border-[var(--red)]/40 px-2.5 py-1 text-[10px] font-black text-[var(--red)] uppercase tracking-[0.15em]">
-                First Blood
+              <span className="rounded-md bg-[var(--red)]/25 border border-[var(--red)]/55 backdrop-blur-sm px-2.5 py-1 text-[10px] md:text-[11px] font-black text-[var(--red)] uppercase tracking-[0.15em] shadow-[0_4px_12px_rgba(0,0,0,0.5)]">
+                ⚡ First blood
               </span>
             )}
             {item.multiKill && (
-              <span className="rounded-md bg-[var(--orange)]/20 border border-[var(--orange)]/40 px-2.5 py-1 text-[10px] font-black text-[var(--orange)] uppercase tracking-wider">
-                {item.multiKill} kill
+              <span className="rounded-md bg-[var(--orange)]/25 border border-[var(--orange)]/55 backdrop-blur-sm px-2.5 py-1 text-[10px] md:text-[11px] font-black text-[var(--orange)] uppercase tracking-wider shadow-[0_4px_12px_rgba(0,0,0,0.5)]">
+                ✦ {item.multiKill}
               </span>
             )}
             {item.highlightScore != null && (
-              <span className="rounded-md bg-[var(--gold)]/10 border border-[var(--gold)]/20 px-2 py-1 text-[10px] font-data font-bold text-[var(--gold)]">
-                {item.highlightScore.toFixed(1)}/10
+              <span className="rounded-md bg-black/55 border border-[var(--gold)]/35 backdrop-blur-sm px-2 py-1 text-[10px] md:text-[11px] font-data font-bold text-[var(--gold)]">
+                ★ {item.highlightScore.toFixed(1)}/10
               </span>
             )}
           </div>
 
-          {/* Matchup */}
-          <p className="font-display text-2xl md:text-3xl font-black leading-tight text-white drop-shadow-lg">
+          {/* Player line — small, ALL-CAPS data font, HIGH contrast */}
+          {(item.killerName || item.victimName) && (
+            <p className="font-data text-[11px] md:text-[12px] uppercase tracking-[0.2em] text-white/70 drop-shadow-md">
+              {item.killerName ? (
+                <span className={isKcKill ? "text-[var(--gold)] font-bold" : "text-white/85"}>
+                  {item.killerName}
+                </span>
+              ) : (
+                <span className="text-white/55">?</span>
+              )}
+              <span className="text-white/35 mx-2">vs</span>
+              {item.victimName ? (
+                <span className={!isKcKill ? "text-[var(--gold)] font-bold" : "text-white/65"}>
+                  {item.victimName}
+                </span>
+              ) : (
+                <span className="text-white/45">?</span>
+              )}
+            </p>
+          )}
+
+          {/* Matchup — the headliner, big display font */}
+          <p className="font-display text-2xl md:text-4xl lg:text-5xl font-black leading-[1.05] text-white drop-shadow-[0_4px_24px_rgba(0,0,0,0.85)]">
             <span className={isKcKill ? "text-[var(--gold)]" : "text-white"}>
               {item.killerChampion}
             </span>
-            <span className="text-[var(--gold)] mx-2">→</span>
-            <span className={!isKcKill ? "text-[var(--gold)]" : "text-white/85"}>
+            <span className="text-[var(--gold)]/80 mx-2 md:mx-3 text-[0.85em] align-middle">→</span>
+            <span className={!isKcKill ? "text-[var(--gold)]" : "text-white/80"}>
               {item.victimChampion}
             </span>
           </p>
 
           {/* AI description */}
           {isDescriptionClean(item.aiDescription) && (
-            <p className="text-sm md:text-base text-white/85 italic line-clamp-3 max-w-md">
+            <p className="text-[13px] md:text-[15px] lg:text-base text-white/90 italic leading-relaxed line-clamp-3 md:line-clamp-4 drop-shadow-md">
               « {item.aiDescription} »
             </p>
           )}
 
-          {/* Match meta */}
-          <p className="text-[11px] font-data uppercase tracking-wider text-white/60">
+          {/* Match meta — small line at the bottom */}
+          <p className="font-data text-[10px] md:text-[11px] uppercase tracking-[0.2em] text-white/55">
             {item.opponentCode ? `vs ${item.opponentCode}` : item.matchStage}
             {item.gameNumber ? ` · G${item.gameNumber}` : ""}
             {item.matchScore ? ` · ${item.matchScore}` : ""}
+            {item.kcWon != null ? (
+              <span className={`ml-2 font-bold ${item.kcWon ? "text-[var(--green)]" : "text-[var(--red)]"}`}>
+                {item.kcWon ? "W" : "L"}
+              </span>
+            ) : null}
           </p>
         </div>
       </div>
@@ -240,38 +278,45 @@ export function FeedItemMoment({
       />
 
       <div
-        className={`absolute inset-x-0 bottom-0 z-10 px-4 md:px-6 transition-opacity duration-500 ${
-          isActive ? "opacity-100" : "opacity-90"
+        className={`absolute inset-x-0 bottom-0 z-10 pl-4 md:pl-7 lg:pl-10 pointer-events-none transition-all duration-500 ${
+          isActive ? "opacity-100 translate-y-0" : "opacity-85 translate-y-1"
         }`}
-        style={{ paddingBottom: "max(2rem, env(safe-area-inset-bottom, 2rem))" }}
+        style={{
+          paddingBottom: "max(2rem, env(safe-area-inset-bottom, 2rem))",
+          paddingRight: "calc(72px + env(safe-area-inset-right, 0px))",
+        }}
       >
-        <div className="space-y-3">
-          <div className="flex flex-wrap items-center gap-2">
+        <div className="space-y-2.5 md:space-y-3 max-w-2xl">
+          <div className="flex flex-wrap items-center gap-1.5 md:gap-2">
             <span
-              className={`rounded-md px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.18em] ${
+              className={`rounded-md px-2.5 py-1 text-[10px] md:text-[11px] font-black uppercase tracking-[0.18em] backdrop-blur-sm shadow-[0_4px_12px_rgba(0,0,0,0.5)] ${
                 isKc
-                  ? "bg-[var(--gold)]/20 border border-[var(--gold)]/45 text-[var(--gold)]"
-                  : "bg-[var(--red)]/20 border border-[var(--red)]/45 text-[var(--red)]"
+                  ? "bg-[var(--gold)]/25 border border-[var(--gold)]/55 text-[var(--gold)]"
+                  : "bg-[var(--red)]/25 border border-[var(--red)]/55 text-[var(--red)]"
               }`}
             >
               {label}
             </span>
-            <span className="rounded-md bg-black/50 border border-white/15 px-2 py-1 text-[10px] font-data font-bold text-white/80">
+            <span className="rounded-md bg-black/55 border border-white/20 backdrop-blur-sm px-2 py-1 text-[10px] md:text-[11px] font-data font-bold text-white/85">
               {item.killCount} kills
             </span>
             {item.momentScore != null && (
-              <span className="rounded-md bg-[var(--gold)]/10 border border-[var(--gold)]/20 px-2 py-1 text-[10px] font-data font-bold text-[var(--gold)]">
-                {item.momentScore.toFixed(1)}/10
+              <span className="rounded-md bg-black/55 border border-[var(--gold)]/35 backdrop-blur-sm px-2 py-1 text-[10px] md:text-[11px] font-data font-bold text-[var(--gold)]">
+                ★ {item.momentScore.toFixed(1)}/10
               </span>
             )}
           </div>
+          <p className="font-display text-2xl md:text-3xl lg:text-4xl font-black text-white leading-tight drop-shadow-[0_4px_24px_rgba(0,0,0,0.85)]">
+            {item.blueKills}
+            <span className="text-[var(--gold)]/80 mx-2">·</span>
+            {item.redKills}
+          </p>
           {isDescriptionClean(item.aiDescription) && (
-            <p className="text-sm md:text-base text-white/85 italic line-clamp-3 max-w-md">
+            <p className="text-[13px] md:text-[15px] lg:text-base text-white/90 italic leading-relaxed line-clamp-3 md:line-clamp-4 drop-shadow-md">
               « {item.aiDescription} »
             </p>
           )}
-          <p className="text-[11px] font-data uppercase tracking-wider text-white/60">
-            {item.blueKills}-{item.redKills} ·{" "}
+          <p className="font-data text-[10px] md:text-[11px] uppercase tracking-[0.2em] text-white/55">
             {item.kcInvolvement === "kc_aggressor"
               ? "KC dominant"
               : item.kcInvolvement === "kc_victim"

@@ -1,32 +1,41 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 
 /**
  * BCC Vibes Audio Player — plays "Ahou Ahou" OTT Nseven on first visit.
  *
- * Auto-play flow:
- * 1. On mount, we check localStorage for "kckills_bcc_seen". If not seen,
- *    this is a first visit — we "arm" the player so any user interaction
- *    (click anywhere on the page) immediately starts playback.
- * 2. On subsequent visits, the player stays idle by default. The user can
- *    manually click the floating "BCC Vibes" button to replay.
- * 3. Browsers block autoplay with sound without a prior user gesture, so
- *    we piggyback on the first click anywhere. This is legal and UX-friendly.
+ * Fixes (2026-04-23):
+ *   • Was: silent autoplay because Chrome blocks audio on iframe autoplay
+ *     even after user gesture if the URL doesn't EXPLICITLY say `mute=0`.
+ *     Now: mute=0 + enablejsapi=1 + JS API postMessage to force unMute
+ *     after the iframe loads (paranoid path).
+ *   • Was: BGM kept playing at full volume when a /scroll clip got
+ *     unmuted, audio overlap.
+ *     Now: window-level "kc:clip-unmuted" custom event; AudioPlayer
+ *     ducks to 25% volume while a clip is unmuted, restores to 100%
+ *     when the clip is re-muted.
  *
- * Source: YouTube iframe with autoplay=1 + loop. Hidden from view, audio only.
+ * Auto-play flow unchanged:
+ * 1. First visit detected via localStorage → "armed".
+ * 2. Any user click/key → start playback (legal: piggybacks the gesture).
+ * 3. Subsequent visits stay idle by default; manual button to replay.
  */
 
 const STORAGE_KEY = "kckills_bcc_seen";
 const YOUTUBE_ID = "YNzvHb92xqY"; // Ahou Ahou — OTT Nseven
+const BGM_DUCKED_VOLUME = 25; // % volume while a clip is unmuted
+const BGM_FULL_VOLUME = 100;
 
 export function AudioPlayer() {
   const [playing, setPlaying] = useState(false);
   const [dismissed, setDismissed] = useState(false);
   const [armedForAutoStart, setArmedForAutoStart] = useState(false);
   const [showFirstVisitHint, setShowFirstVisitHint] = useState(false);
+  const [ducked, setDucked] = useState(false);
+  const iframeRef = useRef<HTMLIFrameElement | null>(null);
 
-  // On mount: detect first visit
+  // ─── First-visit detection ───────────────────────────────────────
   useEffect(() => {
     if (typeof window === "undefined") return;
     try {
@@ -34,16 +43,15 @@ export function AudioPlayer() {
       if (!seen) {
         setArmedForAutoStart(true);
         setShowFirstVisitHint(true);
-        // Hide the hint after 6 seconds even if user hasn't clicked yet
         const t = window.setTimeout(() => setShowFirstVisitHint(false), 6000);
         return () => window.clearTimeout(t);
       }
     } catch {
-      // localStorage may be blocked (strict privacy mode) — fail silently
+      // localStorage may be blocked — fail silently
     }
   }, []);
 
-  // First user gesture triggers auto-play on first visit
+  // ─── First user gesture → start playback ─────────────────────────
   useEffect(() => {
     if (!armedForAutoStart) return;
 
@@ -60,7 +68,6 @@ export function AudioPlayer() {
 
     const onClick = () => fire();
     const onKey = (e: KeyboardEvent) => {
-      // Any key except modifiers
       if (!e.ctrlKey && !e.metaKey && !e.altKey) fire();
     };
 
@@ -74,6 +81,59 @@ export function AudioPlayer() {
       window.removeEventListener("keydown", onKey);
     };
   }, [armedForAutoStart]);
+
+  // ─── Send a JS API command to the iframe (postMessage) ───────────
+  // YouTube IFrame Player API: send commands as JSON {event, func, args}
+  // to the iframe's contentWindow. Works only if enablejsapi=1 + an
+  // origin allowed by Google (same-origin for our /).
+  const sendCommand = useCallback((func: string, args: unknown[] = []) => {
+    const win = iframeRef.current?.contentWindow;
+    if (!win) return;
+    try {
+      win.postMessage(
+        JSON.stringify({ event: "command", func, args }),
+        "*",
+      );
+    } catch {
+      // ignore — postMessage rarely fails but cross-origin can throw
+    }
+  }, []);
+
+  // ─── Ducking : listen for clip mute toggles ──────────────────────
+  // ScrollFeedV2 dispatches `kc:clip-unmuted` (detail: { unmuted: bool })
+  // whenever the user toggles mute on the active clip. We respond by
+  // ducking the BGM to 25% (still audible but doesn't fight the cast).
+  useEffect(() => {
+    const onUnmute = (e: Event) => {
+      const detail = (e as CustomEvent<{ unmuted: boolean }>).detail;
+      if (!detail) return;
+      setDucked(detail.unmuted);
+    };
+    window.addEventListener("kc:clip-unmuted", onUnmute as EventListener);
+    return () =>
+      window.removeEventListener("kc:clip-unmuted", onUnmute as EventListener);
+  }, []);
+
+  // Apply volume to the iframe whenever ducking state OR playing flips.
+  useEffect(() => {
+    if (!playing) return;
+    const target = ducked ? BGM_DUCKED_VOLUME : BGM_FULL_VOLUME;
+    sendCommand("setVolume", [target]);
+    // Also force unMute — some browsers re-mute the iframe on volume change.
+    sendCommand("unMute", []);
+  }, [playing, ducked, sendCommand]);
+
+  // After mounting the iframe (post-play-click), force unMute via postMessage
+  // as a paranoid safety net in case Chrome's mute=0 URL hint isn't honoured.
+  useEffect(() => {
+    if (!playing) return;
+    const t = window.setTimeout(() => {
+      sendCommand("unMute", []);
+      sendCommand("setVolume", [BGM_FULL_VOLUME]);
+      sendCommand("playVideo", []);
+    }, 800);
+    return () => window.clearTimeout(t);
+  }, [playing, sendCommand]);
 
   const handleManualPlay = useCallback(() => {
     setPlaying(true);
@@ -92,12 +152,17 @@ export function AudioPlayer() {
 
   if (dismissed) return null;
 
+  // mute=0 + enablejsapi=1 are CRITICAL for audio to actually play.
+  // Without mute=0 Chrome silently mutes the autoplay even post-gesture.
+  const iframeSrc = `https://www.youtube-nocookie.com/embed/${YOUTUBE_ID}?autoplay=1&loop=1&playlist=${YOUTUBE_ID}&controls=0&showinfo=0&rel=0&modestbranding=1&mute=0&enablejsapi=1&playsinline=1`;
+
   return (
     <>
       {/* Hidden YouTube iframe — only mounted when actually playing */}
       {playing && (
         <iframe
-          src={`https://www.youtube-nocookie.com/embed/${YOUTUBE_ID}?autoplay=1&loop=1&playlist=${YOUTUBE_ID}&controls=0&showinfo=0&rel=0&modestbranding=1`}
+          ref={iframeRef}
+          src={iframeSrc}
           className="fixed -top-96 -left-96 w-1 h-1 opacity-0 pointer-events-none"
           allow="autoplay; encrypted-media"
           title="BCC Audio"
@@ -125,8 +190,8 @@ export function AudioPlayer() {
 
         {playing && (
           <div className="flex items-center gap-1.5 rounded-full border border-[var(--gold)]/30 bg-black/70 backdrop-blur-md px-3 py-2.5">
-            {/* Audio visualizer bars */}
-            <div className="flex items-end gap-0.5 h-4">
+            {/* Audio visualizer bars — fade when ducked */}
+            <div className={`flex items-end gap-0.5 h-4 transition-opacity ${ducked ? "opacity-50" : "opacity-100"}`}>
               {[1, 2, 3, 4].map((i) => (
                 <div
                   key={i}
@@ -139,7 +204,7 @@ export function AudioPlayer() {
               ))}
             </div>
             <span className="text-[9px] font-bold text-[var(--gold)] uppercase tracking-widest ml-1">
-              Ahou Ahou
+              {ducked ? "Ducked" : "Ahou Ahou"}
             </span>
             <button
               onClick={handleDismiss}
@@ -154,12 +219,11 @@ export function AudioPlayer() {
         )}
       </div>
 
-      {/* First visit hint — only shown until user clicks anywhere */}
       {showFirstVisitHint && armedForAutoStart && (
         <div className="fixed bottom-24 right-6 z-[90] pointer-events-none animate-pulse max-w-[260px]">
           <div className="rounded-xl border border-[var(--gold)]/40 bg-black/85 backdrop-blur-md px-4 py-3 shadow-2xl shadow-[var(--gold)]/10">
             <p className="font-data text-[10px] uppercase tracking-[0.2em] text-[var(--gold)]/80 mb-1">
-              🎵 BCC Vibes &middot; first visit
+              {"\uD83C\uDFB5"} BCC Vibes &middot; first visit
             </p>
             <p className="text-xs text-white/85 leading-snug">
               Clique n&apos;importe ou sur le site pour lancer
