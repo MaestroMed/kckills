@@ -1,24 +1,27 @@
 """HLS backfill — re-encode every published clip without hls_master_url.
 
-The daemon's hls_packager module caps at 5 clips per 30-min run (so it
-doesn't starve other modules and doesn't spike R2 storage). For 340
-backlog clips that's ~34h of waiting. This one-shot script bypasses
-the cap and processes everything sequentially.
+Parallelised version (6 workers). On a modern multi-core PC each ffmpeg
+instance saturates ~1.5 cores, so 6 workers = ~9 cores busy. R2 download
++ upload is I/O-bound and parallelises trivially via asyncio.
+
+The daemon's hls_packager module caps at MAX_PER_RUN=5 clips per 30-min
+run (so it doesn't starve the other modules). For a 340-clip backlog
+the daemon would take ~34h. This one-shot script bypasses the cap and
+runs N workers in parallel.
 
 Usage (from worker/ dir):
     .venv\\Scripts\\python.exe -m scripts.hls_backfill
+    .venv\\Scripts\\python.exe -m scripts.hls_backfill --workers 8
     .venv\\Scripts\\python.exe -m scripts.hls_backfill --limit 50
     .venv\\Scripts\\python.exe -m scripts.hls_backfill --dry-run
 
-Cost estimate (340 clips):
+Cost estimate (340 clips at --workers 6):
   R2 storage: ~340 × 6 MB ≈ 2 GB additional (free tier 10 GB OK)
   Bandwidth: ~340 × 3 MB ingress + 6 MB egress ≈ 3 GB total
-  ffmpeg time: ~30s per clip on a typical PC ≈ 3h total
+  ffmpeg time: ~30s per clip × 340 / 6 = ~30min total (vs ~3h serial)
   No Gemini cost — pure local re-encoding.
 
-Each clip is processed end-to-end (download → ffmpeg → upload → DB
-update) before moving to the next. Crash-safe: re-runs are idempotent
-because we filter on hls_master_url IS NULL.
+Idempotent (filters on hls_master_url IS NULL). Safe to interrupt.
 """
 
 from __future__ import annotations
@@ -26,6 +29,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import sys
+import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -72,17 +76,52 @@ def fetch_pending(limit: int | None) -> list[dict]:
     return out[: limit] if limit else out
 
 
-async def main_async(limit: int | None, dry_run: bool):
+async def process_one(
+    kill: dict,
+    sem: asyncio.Semaphore,
+    counters: dict,
+    total: int,
+):
+    """Process a single clip under the semaphore. Updates counters in-place.
+
+    Side-effect: prints a one-line status per clip on completion (success
+    or failure). The semaphore is released automatically when the async
+    context manager exits.
+    """
+    async with sem:
+        kid = kill["id"]
+        mp4_url = kill["clip_url_vertical"]
+        idx = counters["started"] + 1
+        counters["started"] = idx
+        prefix = f"[{idx:>3}/{total}] {kid[:8]}"
+        t0 = time.monotonic()
+        try:
+            master_url = await package_clip(kid, mp4_url)
+        except Exception as e:
+            counters["fail"] += 1
+            print(f"{prefix} CRASH: {str(e)[:120]}")
+            return
+        elapsed = time.monotonic() - t0
+        if master_url:
+            safe_update("kills", {"hls_master_url": master_url}, "id", kid)
+            counters["ok"] += 1
+            print(f"{prefix} OK  {elapsed:5.1f}s  -> {master_url[:80]}")
+        else:
+            counters["fail"] += 1
+            print(f"{prefix} FAIL {elapsed:5.1f}s  (returned None)")
+
+
+async def main_async(limit: int | None, dry_run: bool, workers: int):
     pending = fetch_pending(limit)
-    print(f"Found {len(pending)} clips without HLS (limit={limit or 'none'})")
+    print(f"Found {len(pending)} clips without HLS (limit={limit or 'none'}, workers={workers})")
     if pending:
-        print(f"\nFirst 10 candidates:")
-        for k in pending[:10]:
+        print(f"\nFirst 5 candidates:")
+        for k in pending[:5]:
             score = k.get("highlight_score")
             score_str = f"{score:.1f}" if score is not None else "?"
             print(f"  {k['id'][:8]} score={score_str:>5} {k.get('killer_champion')} -> {k.get('victim_champion')}")
-        if len(pending) > 10:
-            print(f"  ... +{len(pending) - 10} more")
+        if len(pending) > 5:
+            print(f"  ... +{len(pending) - 5} more")
 
     if dry_run:
         print("\nDry-run mode — no encoding done.")
@@ -92,33 +131,27 @@ async def main_async(limit: int | None, dry_run: bool):
         print("Nothing to do.")
         return
 
-    print(f"\nStart processing {len(pending)} clips. Press Ctrl+C to stop cleanly.")
-    print("(Already-processed clips on re-run are skipped — safe to interrupt.)\n")
+    print(f"\nStart processing {len(pending)} clips with {workers} workers in parallel.")
+    print("Press Ctrl+C to stop cleanly. Already-processed clips on re-run are skipped.\n")
 
-    ok = 0
-    fail = 0
-    skipped = 0
-    for i, kill in enumerate(pending, 1):
-        kid = kill["id"]
-        mp4_url = kill["clip_url_vertical"]
-        prefix = f"[{i}/{len(pending)}] {kid[:8]}"
-        print(f"{prefix} encoding...", flush=True)
-        try:
-            master_url = await package_clip(kid, mp4_url)
-        except Exception as e:
-            print(f"{prefix} CRASH: {str(e)[:120]}")
-            fail += 1
-            continue
-        if master_url:
-            safe_update("kills", {"hls_master_url": master_url}, "id", kid)
-            ok += 1
-            print(f"{prefix} OK -> {master_url[:80]}")
-        else:
-            fail += 1
-            print(f"{prefix} FAILED (returned None)")
+    sem = asyncio.Semaphore(workers)
+    counters = {"started": 0, "ok": 0, "fail": 0}
+    t0 = time.monotonic()
+    tasks = [
+        asyncio.create_task(process_one(kill, sem, counters, len(pending)))
+        for kill in pending
+    ]
+    try:
+        await asyncio.gather(*tasks, return_exceptions=False)
+    except KeyboardInterrupt:
+        print("\nInterrupted — cancelling remaining tasks...")
+        for t in tasks:
+            t.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)
 
-    print(f"\nDone. ok={ok} fail={fail} skipped={skipped}")
-    print("Daemon will pick up any remaining at 30-min intervals.")
+    elapsed = time.monotonic() - t0
+    rate = counters["ok"] / max(elapsed / 60, 0.01)
+    print(f"\nDone in {elapsed/60:.1f}min. ok={counters['ok']} fail={counters['fail']} rate={rate:.1f}/min")
 
 
 def main():
@@ -127,9 +160,13 @@ def main():
                     help="Cap the number of clips to process (default: all).")
     ap.add_argument("--dry-run", action="store_true",
                     help="List candidates without encoding.")
+    ap.add_argument("--workers", type=int, default=6,
+                    help="Number of parallel ffmpeg workers (default: 6). "
+                         "Each instance uses ~1.5 cores. "
+                         "Bump to 8-10 on a 12+ core machine.")
     args = ap.parse_args()
 
-    asyncio.run(main_async(args.limit, args.dry_run))
+    asyncio.run(main_async(args.limit, args.dry_run, args.workers))
 
 
 if __name__ == "__main__":
