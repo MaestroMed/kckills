@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { getPublishedKills } from "@/lib/supabase/kills";
 import { loadRealData } from "@/lib/real-data";
+import { JsonLd, clipsCollectionLD } from "@/lib/seo/jsonld";
 import { ClipsGrid, type ClipCard, type InitialFilters } from "./clips-grid";
 
 // 300s cache — /clips pulls 500 kills and filters client-side. The
@@ -89,5 +90,25 @@ export default async function ClipsPage({ searchParams }: { searchParams?: Promi
     // Default: chronological (most recent first by match date)
     .sort((a, b) => (b.matchDate ?? "").localeCompare(a.matchDate ?? ""));
 
-  return <ClipsGrid initialCards={cards} initialFilters={initialFilters} />;
+  // Schema.org payload for the catalog. Sample = first 20 cards (pre-filter)
+  // so Google sees the same default ordering a fresh visitor would see,
+  // and the numberOfItems reflects the full unfiltered count for honesty.
+  const ld = clipsCollectionLD({
+    totalCount: cards.length,
+    sample: cards.slice(0, 20).map((c) => ({
+      id: c.id,
+      killer_champion: c.killerChampion,
+      victim_champion: c.victimChampion,
+      highlight_score: c.highlightScore,
+      created_at: c.createdAt,
+      thumbnail_url: c.thumbnail,
+    })),
+  });
+
+  return (
+    <>
+      <JsonLd data={ld} />
+      <ClipsGrid initialCards={cards} initialFilters={initialFilters} />
+    </>
+  );
 }

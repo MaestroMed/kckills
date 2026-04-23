@@ -5,6 +5,7 @@ import { getPublishedKills, type PublishedKillRow } from "@/lib/supabase/kills";
 import { championIconUrl } from "@/lib/constants";
 import { isDescriptionClean } from "@/lib/scroll/sanitize-description";
 import { Breadcrumb } from "@/components/Breadcrumb";
+import { JsonLd, breadcrumbLD, recordsCollectionLD } from "@/lib/seo/jsonld";
 
 /**
  * /records — "Records Absolus" hall-of-fame.
@@ -33,12 +34,20 @@ export const metadata: Metadata = {
   title: "Records Absolus — KCKILLS",
   description:
     "Hall of fame des plus gros moments Karmine Corp en LEC : pentakills, outplays, teamfights, clutch, first bloods. Le best-of absolu.",
+  alternates: { canonical: "/records" },
   openGraph: {
     title: "Records Absolus — KCKILLS",
     description:
       "Le best-of absolu Karmine Corp : pentakills, outplays, teamfights, clutch.",
     type: "website",
     siteName: "KCKILLS",
+    locale: "fr_FR",
+    url: "/records",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Records Absolus — KCKILLS",
+    description: "Le best-of absolu Karmine Corp.",
   },
 };
 
@@ -135,27 +144,20 @@ export default async function RecordsPage() {
 
   // JSON-LD — CollectionPage aggregating the 6 sub-lists helps Google
   // understand this is a curated hall-of-fame rather than a random grid.
-  const itemsForSchema = categories
-    .flatMap((c) => c.rows.slice(0, 3))
-    .slice(0, 12);
-  const jsonLd = {
-    "@context": "https://schema.org",
-    "@type": "CollectionPage",
-    name: "Records Absolus — KCKILLS",
-    description:
-      "Hall of fame des plus gros moments Karmine Corp en LEC, classés par catégorie.",
-    inLanguage: "fr-FR",
-    isPartOf: { "@type": "WebSite", name: "KCKILLS", url: "https://kckills.com" },
-    mainEntity: {
-      "@type": "ItemList",
-      numberOfItems: itemsForSchema.length,
-      itemListElement: itemsForSchema.map((k, i) => ({
-        "@type": "ListItem",
-        position: i + 1,
-        url: `https://kckills.com/scroll?kill=${k.id}`,
-      })),
-    },
-  };
+  // Two payloads :
+  //   1. recordsCollectionLD : describes the 6 categories as nested lists
+  //   2. breadcrumbLD : Accueil > Records Absolus
+  const collectionLD = recordsCollectionLD({
+    categories: categories.map(({ cat, rows }) => ({
+      name: cat.title,
+      href: cat.allHref,
+      count: rows.length,
+    })),
+  });
+  const crumbLD = breadcrumbLD([
+    { name: "Accueil", url: "/" },
+    { name: "Records Absolus", url: "/records" },
+  ]);
 
   return (
     <div
@@ -169,10 +171,8 @@ export default async function RecordsPage() {
         marginRight: "-50vw",
       }}
     >
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
-      />
+      <JsonLd data={collectionLD} />
+      <JsonLd data={crumbLD} />
 
       {/* Breadcrumb — discreet top-left overlay */}
       <div className="relative z-20 max-w-7xl mx-auto px-6 pt-6">

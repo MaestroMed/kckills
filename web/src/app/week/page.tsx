@@ -7,6 +7,7 @@ import { isDescriptionClean } from "@/lib/scroll/sanitize-description";
 import { TEAM_LOGOS } from "@/lib/kc-assets";
 import { loadRealData } from "@/lib/real-data";
 import { Breadcrumb } from "@/components/Breadcrumb";
+import { JsonLd, breadcrumbLD, weekCollectionLD } from "@/lib/seo/jsonld";
 
 /**
  * /week — "Cette semaine" recap page.
@@ -27,12 +28,20 @@ export const metadata: Metadata = {
   title: "Cette semaine — KCKILLS",
   description:
     "Top des clips Karmine Corp des 7 derniers jours. Pentakills, outplays, teamfights — le best-of de la semaine LEC.",
+  alternates: { canonical: "/week" },
   openGraph: {
     title: "Cette semaine — KCKILLS",
     description:
       "Top des clips KC des 7 derniers jours. Le best-of de la semaine.",
     type: "website",
     siteName: "KCKILLS",
+    locale: "fr_FR",
+    url: "/week",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Cette semaine — KCKILLS",
+    description: "Top des clips KC des 7 derniers jours.",
   },
 };
 
@@ -100,6 +109,27 @@ export default async function WeekPage() {
     month: "short",
   });
 
+  // Schema.org payload — CollectionPage scoped to this 7-day window so
+  // Google can mark the page as "fresh weekly recap" rather than just a
+  // generic listing. Sample = top 10 ranked clips for the ItemList.
+  const collectionLD = weekCollectionLD({
+    count: totalClips,
+    weekStartISO: new Date(since).toISOString(),
+    weekEndISO: new Date(now).toISOString(),
+    sample: ranked.slice(0, 10).map(({ kill: k }) => ({
+      id: k.id,
+      killer_champion: k.killer_champion,
+      victim_champion: k.victim_champion,
+      highlight_score: k.highlight_score,
+      created_at: k.created_at,
+      thumbnail_url: k.thumbnail_url,
+    })),
+  });
+  const crumbLD = breadcrumbLD([
+    { name: "Accueil", url: "/" },
+    { name: "Cette semaine", url: "/week" },
+  ]);
+
   return (
     <div
       className="-mt-6"
@@ -112,6 +142,9 @@ export default async function WeekPage() {
         marginRight: "-50vw",
       }}
     >
+      <JsonLd data={collectionLD} />
+      <JsonLd data={crumbLD} />
+
       {/* Breadcrumb */}
       <div className="relative z-20 max-w-7xl mx-auto px-6 pt-6">
         <Breadcrumb
