@@ -46,7 +46,7 @@ DAEMON_MODULES: list[tuple[str, int, str]] = [
     ("harvester",     600,   "modules.harvester"),     # 10 min
     ("event_mapper",  600,   "modules.event_mapper"),  # 10 min — populate canonical game_events table (PR6-B)
     ("transitioner",  300,   "modules.transitioner"),  # 5 min — raw -> vod_found
-    ("vod_offset_finder", 3600, "modules.vod_offset_finder"),  # 1h — recover NULL vod_offset_seconds via Live Stats epoch alignment
+    ("vod_offset_finder", 3600, "modules.vod_offset_finder_v2"),  # 1h — multi-candidate scan (PR23.3 - replaces v1 which bailed instantly when Gemini reads NONE; v2 walks forward in 90s steps to find gameplay)
     ("clipper",       300,   "modules.clipper"),       # 5 min
     ("analyzer",      600,   "modules.analyzer"),      # 10 min
     ("og_generator",  900,   "modules.og_generator"),  # 15 min
@@ -59,8 +59,6 @@ DAEMON_MODULES: list[tuple[str, int, str]] = [
     ("match_planner", 3600,  "modules.match_planner"), # 1h — pre-schedule next 21d KC matches + boost jobs
     ("qc_sampler",    21600, "modules.qc_sampler"),    # 6h — random 2% sampling -> clip_qc.verify (Gemini drift)
     ("job_runner",    30,    "modules.job_runner"),    # 30s — admin-triggered jobs + boost dispatch
-    ("kill_of_the_week", 3600, "modules.kill_of_the_week"),  # 1h — Sunday 22:00 UTC auto-pick (PR15)
-    ("push_notifier", 300,   "modules.push_notifier"),  # 5 min — pywebpush broadcast (PR16)
     ("heartbeat",     21600, "modules.heartbeat"),     # 6h
     ("watchdog",      1800,  "modules.watchdog"),      # 30 min
 ]

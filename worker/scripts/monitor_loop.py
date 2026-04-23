@@ -43,7 +43,7 @@ POLL_INTERVAL_SECONDS = 180   # 3 minutes
 MAX_CYCLES = 80               # 80 × 3 min = 240 min = 4 hours
 
 # Alerts thresholds
-HB_STALE_MINUTES = 15         # worker heartbeat stale beyond this = ALERT
+HB_STALE_MINUTES = 420        # 7h — heartbeat module fires every 6h, so <7h is healthy
 CLIP_ERROR_GROWTH_ALERT = 50  # clip_errors growing by >50 between cycles
 
 
