@@ -30,10 +30,48 @@
  */
 
 import { useEffect, useState } from "react";
+import { track } from "@/lib/analytics/track";
 
 const VAPID = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ?? "";
 
-type Permission = "default" | "granted" | "denied" | "unsupported";
+type Permission = "default" | "granted" | "denied" | "unsupported" | "ios_needs_install";
+
+/**
+ * iOS PWA gate
+ * ════════════
+ * Web Push on iOS Safari requires :
+ *   1. iOS / iPadOS 16.4+ (released March 2023)
+ *   2. The site MUST be installed to the home screen first — Safari
+ *      will not surface the permission prompt from a regular browser
+ *      tab. Calling Notification.requestPermission() throws.
+ *
+ * Detect : iPhone/iPad UA + display-mode is NOT standalone → block the
+ * subscribe button and surface the install instructions instead.
+ *
+ * Returns true ONLY when running on iOS in a regular browser tab. iOS
+ * inside an installed PWA returns false (push works normally there).
+ * Non-iOS platforms always return false.
+ */
+function needsIosInstall(): boolean {
+  if (typeof window === "undefined" || typeof navigator === "undefined") return false;
+  // Modern detection — iPadOS 13+ reports "MacIntel" platform but has touch.
+  const ua = navigator.userAgent || "";
+  const isIos =
+    /iPhone|iPad|iPod/.test(ua) ||
+    (navigator.platform === "MacIntel" && (navigator as Navigator & { maxTouchPoints?: number }).maxTouchPoints !== undefined && ((navigator as Navigator & { maxTouchPoints?: number }).maxTouchPoints ?? 0) > 1);
+  if (!isIos) return false;
+  try {
+    const standalone =
+      typeof window.matchMedia === "function" &&
+      window.matchMedia("(display-mode: standalone)").matches;
+    // Legacy iOS exposes navigator.standalone (non-standard) before
+    // they added matchMedia support for display-mode.
+    const legacyStandalone = (navigator as Navigator & { standalone?: boolean }).standalone === true;
+    return !standalone && !legacyStandalone;
+  } catch {
+    return true; // err on the side of showing the explainer
+  }
+}
 
 interface Preferences {
   all: boolean;
@@ -85,6 +123,14 @@ export function NotificationSettings() {
     let cancelled = false;
     (async () => {
       if (typeof window === "undefined") return;
+      // iOS-in-Safari-tab gate runs BEFORE the API check — Safari does
+      // expose the Notification API in a regular tab on 16.4+, but the
+      // permission prompt throws there. Show the install explainer
+      // instead so the user knows what to do.
+      if (needsIosInstall()) {
+        if (!cancelled) setPermission("ios_needs_install");
+        return;
+      }
       if (!("Notification" in window) || !("serviceWorker" in navigator) || !("PushManager" in window)) {
         if (!cancelled) setPermission("unsupported");
         return;
@@ -132,6 +178,25 @@ export function NotificationSettings() {
     setBusy("subscribe");
     setError(null);
     try {
+      // Explicit requestPermission() handles the case where permission
+      // is "default" — calling pushManager.subscribe() with
+      // userVisibleOnly: true does prompt automatically, but doing it
+      // separately lets us track the denial as a distinct analytics
+      // event and surface a friendlier UX.
+      if (Notification.permission === "default") {
+        const result = await Notification.requestPermission();
+        if (result !== "granted") {
+          setPermission(result === "denied" ? "denied" : "default");
+          track("push.permission_denied", { metadata: { result } });
+          return;
+        }
+      } else if (Notification.permission === "denied") {
+        // Shouldn't reach here from the UI, but defensive.
+        setPermission("denied");
+        track("push.permission_denied", { metadata: { result: "denied" } });
+        return;
+      }
+
       const reg = await navigator.serviceWorker.ready;
       const sub = await reg.pushManager.subscribe({
         userVisibleOnly: true,
@@ -146,8 +211,19 @@ export function NotificationSettings() {
       setEndpoint(sub.endpoint);
       setPermission("granted");
       setPrefs(DEFAULT_PREFS);
+      track("push.subscribed", {
+        metadata: { endpoint_host: safeHost(sub.endpoint) },
+      });
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Erreur d'abonnement");
+      const msg = e instanceof Error ? e.message : "Erreur d'abonnement";
+      setError(msg);
+      // Treat NotAllowedError as a permission denial — the browser may
+      // throw this when the user rejected an OS-level prompt that we
+      // don't see as a "denied" state on the Notification.permission API.
+      if (e instanceof Error && e.name === "NotAllowedError") {
+        setPermission("denied");
+        track("push.permission_denied", { metadata: { reason: "NotAllowedError" } });
+      }
     } finally {
       setBusy(null);
     }
@@ -166,6 +242,13 @@ export function NotificationSettings() {
         body: JSON.stringify({ endpoint, preferences: next }),
       });
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      // Diff the prefs and report which kinds flipped — useful to spot
+      // which categories users actually mute in aggregate.
+      const flipped: string[] = [];
+      for (const k of Object.keys(next) as Array<keyof Preferences>) {
+        if (previous[k] !== next[k]) flipped.push(k);
+      }
+      track("push.preferences_updated", { metadata: { flipped } });
     } catch (e) {
       setPrefs(previous); // rollback
       setError(e instanceof Error ? e.message : "Erreur");
@@ -198,6 +281,9 @@ export function NotificationSettings() {
       setEndpoint(null);
       setPermission("default");
       setPrefs(DEFAULT_PREFS);
+      track("push.unsubscribed", {
+        metadata: { endpoint_host: safeHost(endpoint) },
+      });
     } catch (e) {
       setError(e instanceof Error ? e.message : "Erreur");
     } finally {
@@ -211,9 +297,30 @@ export function NotificationSettings() {
     return (
       <Card>
         <h2 className="font-display font-semibold">Notifications</h2>
-        <p className="text-sm text-[var(--text-muted)]">
+        <p className="text-sm text-[var(--text-muted)]" role="status" aria-live="polite">
           Ton navigateur ne supporte pas les notifications push.
         </p>
+      </Card>
+    );
+  }
+
+  if (permission === "ios_needs_install") {
+    return (
+      <Card>
+        <h2 className="font-display font-semibold">Notifications</h2>
+        <div className="space-y-2" role="status" aria-live="polite">
+          <p className="text-sm text-[var(--text-muted)]">
+            Sur iOS, installe d&apos;abord l&apos;app sur ton écran d&apos;accueil pour activer les notifications.
+          </p>
+          <ol className="text-xs text-[var(--text-muted)] space-y-1 list-decimal list-inside pl-1">
+            <li>Touche le bouton <strong>Partager</strong> en bas de Safari.</li>
+            <li>Choisis <strong>« Sur l&apos;écran d&apos;accueil »</strong>.</li>
+            <li>Ouvre KCKILLS depuis l&apos;icône, puis reviens ici.</li>
+          </ol>
+          <p className="text-[10px] text-[var(--text-muted)] opacity-70">
+            iOS 16.4 ou plus récent requis.
+          </p>
+        </div>
       </Card>
     );
   }
@@ -225,14 +332,20 @@ export function NotificationSettings() {
         <p className="text-sm text-[var(--text-muted)]">
           Reçois une notif quand un pentakill, un quadra, ou le Kill of the Week tombe.
         </p>
+        <div role="status" aria-live="polite" className="space-y-2">
         {permission === "denied" ? (
           <div className="space-y-2">
             <p className="text-xs text-[var(--red)]">
-              Les notifications sont bloquées dans ton navigateur. Réactive-les dans les paramètres du site (icône cadenas dans la barre d&apos;adresse).
+              Les notifications sont bloquées dans ton navigateur. Réactive-les depuis :
             </p>
+            <ul className="text-xs text-[var(--text-muted)] space-y-1 list-disc list-inside pl-1">
+              <li><strong>Chrome / Edge</strong> : icône cadenas (barre d&apos;adresse) → Notifications → Autoriser</li>
+              <li><strong>Firefox</strong> : icône cadenas → Permissions → Notifications</li>
+              <li><strong>Safari</strong> : Réglages &gt; Sites web &gt; Notifications</li>
+            </ul>
             <button
               disabled
-              className="rounded-lg border border-[var(--border-gold)] px-4 py-2 text-sm text-[var(--text-muted)] opacity-50 cursor-not-allowed"
+              className="w-full md:w-auto rounded-lg border border-[var(--border-gold)] px-4 py-3 text-sm text-[var(--text-muted)] opacity-50 cursor-not-allowed min-h-[44px]"
             >
               Bloquées par le navigateur
             </button>
@@ -241,7 +354,7 @@ export function NotificationSettings() {
           <button
             onClick={subscribe}
             disabled={busy === "subscribe" || !VAPID}
-            className="rounded-lg bg-[var(--gold)] px-4 py-2 text-sm font-bold text-black disabled:opacity-50"
+            className="w-full md:w-auto rounded-lg bg-[var(--gold)] px-4 py-3 text-sm font-bold text-black disabled:opacity-50 min-h-[44px]"
           >
             {busy === "subscribe" ? "Activation…" : !VAPID ? "Indisponible" : "Activer les notifications"}
           </button>
@@ -249,6 +362,7 @@ export function NotificationSettings() {
         {error && (
           <p className="text-xs text-[var(--red)]">{error}</p>
         )}
+        </div>
       </Card>
     );
   }
@@ -258,7 +372,11 @@ export function NotificationSettings() {
     <Card>
       <div className="flex items-center justify-between">
         <h2 className="font-display font-semibold">Notifications</h2>
-        <span className="text-[10px] uppercase tracking-widest text-[var(--green)]">
+        <span
+          className="text-[10px] uppercase tracking-widest text-[var(--green)]"
+          role="status"
+          aria-live="polite"
+        >
           ● Actif
         </span>
       </div>
@@ -315,14 +433,14 @@ export function NotificationSettings() {
         <button
           onClick={unsubscribe}
           disabled={busy === "unsubscribe"}
-          className="text-xs text-[var(--text-muted)] hover:text-[var(--red)] underline"
+          className="inline-flex items-center min-h-[44px] py-2 text-xs text-[var(--text-muted)] hover:text-[var(--red)] underline"
         >
           {busy === "unsubscribe" ? "Désactivation…" : "Désactiver complètement les notifications"}
         </button>
       </div>
 
       {error && (
-        <p className="text-xs text-[var(--red)]">{error}</p>
+        <p className="text-xs text-[var(--red)]" role="status" aria-live="polite">{error}</p>
       )}
     </Card>
   );
@@ -334,4 +452,18 @@ function Card({ children }: { children: React.ReactNode }) {
       {children}
     </section>
   );
+}
+
+/**
+ * Strip the secret token from a push endpoint URL so we can include just
+ * the host (fcm.googleapis.com / updates.push.services.mozilla.com /
+ * web.push.apple.com / …) in analytics. The token portion of the URL
+ * is the device's push credential — never log it.
+ */
+function safeHost(endpoint: string): string {
+  try {
+    return new URL(endpoint).host;
+  } catch {
+    return "unknown";
+  }
 }
