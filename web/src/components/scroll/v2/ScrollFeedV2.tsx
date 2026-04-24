@@ -43,6 +43,7 @@ import { PullToRefreshIndicator } from "./PullToRefreshIndicator";
 import { KeyboardHelpOverlay } from "./KeyboardHelpOverlay";
 import { ScrollChipBar, type ChipFilters } from "@/components/scroll/ScrollChipBar";
 import type { FeedItem } from "@/components/scroll/ScrollFeed";
+import { track } from "@/lib/analytics/track";
 
 interface Props {
   items: FeedItem[];
@@ -73,6 +74,24 @@ export function ScrollFeedV2({
   const [isRefreshing, setIsRefreshing] = useState(false);
   // Sync prop changes (e.g. URL filter changes triggering server re-render).
   useEffect(() => setItems(itemsProp), [itemsProp]);
+
+  // ─── feed.view analytics — fired once on mount ────────────────────
+  useEffect(() => {
+    // Snapshot the chip filters into a flat metadata blob (no nested
+    // objects > 1KB, no PII). The /api/track sanitiser drops anything
+    // suspicious server-side, but keeping it lean is cheaper.
+    const meta: Record<string, unknown> = { count: itemsProp.length };
+    if (chipFilters) {
+      if (chipFilters.player) meta.player = chipFilters.player;
+      if (chipFilters.fight) meta.fight = chipFilters.fight;
+      if (chipFilters.side) meta.side = chipFilters.side;
+      if (chipFilters.multiKillsOnly) meta.multi = true;
+      if (chipFilters.firstBloodsOnly) meta.fb = true;
+    }
+    track("feed.view", { metadata: meta });
+    // Run once per mount — re-runs on URL filter changes via remount.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // ─── Network-driven quality (Phase 3) ─────────────────────────────
   const { quality, useLowQuality, effectiveType } = useNetworkQuality();
@@ -318,6 +337,7 @@ export function ScrollFeedV2({
             clipVerticalLow: it.clipVerticalLow,
             clipHorizontal: it.clipHorizontal,
             hlsMasterUrl: it.hlsMasterUrl ?? null,
+            assetsManifest: it.assetsManifest ?? null,
             thumbnail: it.thumbnail,
           };
         }
@@ -327,6 +347,7 @@ export function ScrollFeedV2({
           clipVerticalLow: null,
           clipHorizontal: null,
           hlsMasterUrl: null,
+          assetsManifest: null,
           thumbnail: null,
         };
       }),

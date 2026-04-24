@@ -27,6 +27,7 @@ import Link from "next/link";
 import { LikeButton } from "./LikeButton";
 import { CommentSheetV2 } from "./CommentSheetV2";
 import { InlineAuthPrompt } from "./InlineAuthPrompt";
+import { track } from "@/lib/analytics/track";
 
 interface Props {
   killId: string;
@@ -61,6 +62,7 @@ export function FeedSidebarV2({
 
   const handleShare = async (e: React.MouseEvent) => {
     e.stopPropagation();
+    track("clip.shared", { entityType: "kill", entityId: killId });
     if (typeof navigator !== "undefined" && typeof navigator.share === "function") {
       try {
         await navigator.share({
@@ -109,6 +111,11 @@ export function FeedSidebarV2({
           type="button"
           onClick={(e) => {
             e.stopPropagation();
+            track("clip.opened", {
+              entityType: "kill",
+              entityId: killId,
+              metadata: { surface: "comments" },
+            });
             setShowComments(true);
           }}
           aria-label={`Commentaires (${initialCommentCount})`}

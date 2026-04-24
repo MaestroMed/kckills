@@ -7,6 +7,7 @@ import { KonamiBlueWall } from "./KonamiBlueWall";
 import { PwaInstallPrompt } from "./PwaInstallPrompt";
 import { LangProvider } from "@/lib/i18n/use-lang";
 import type { Lang } from "@/lib/i18n/lang";
+import { AuthEventTracker } from "./analytics/AuthEventTracker";
 
 /**
  * App-wide providers.
@@ -40,6 +41,7 @@ export function Providers({
           <CommandPalette />
           <KonamiBlueWall />
           <PwaInstallPrompt />
+          <AuthEventTracker />
         </ToastProvider>
       </LazyMotion>
     </LangProvider>

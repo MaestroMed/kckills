@@ -18,6 +18,7 @@ import { AnimatedNumber } from "@/components/AnimatedNumber";
 import { MacronEasterEgg } from "@/components/MacronEasterEgg";
 import { HeroClipBackground } from "@/components/HeroClipBackground";
 import { NextMatchOverlay } from "@/components/NextMatchOverlay";
+import { PageViewTracker } from "@/components/analytics/PageViewTracker";
 // ScrollVivantSection deleted (2026-04-20) — was a dead grid prototype that
 // never made it to production. The /scroll v2 player handles the live feed
 // and /clips handles the cards-grid use case it was meant to fill.
@@ -154,6 +155,9 @@ export default async function HomePage() {
           FAB bottom-right with quick-dismiss ×. Hint bubble shows for
           6s on first visit to tell user what's about to happen. */}
       <AudioPlayer />
+
+      {/* Analytics — fire-and-forget page.viewed event on mount. */}
+      <PageViewTracker pageId="home" />
 
       {/* ═══ HERO — 2-col layout with clip rotator (full-bleed via parent) ═══ */}
       <section className="relative min-h-[100vh] md:min-h-[92vh] overflow-hidden">

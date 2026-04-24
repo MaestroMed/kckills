@@ -15,6 +15,7 @@
 import { useState, useEffect } from "react";
 import { LANGS, LANG_META, type Lang } from "@/lib/i18n/lang";
 import { useLang } from "@/lib/i18n/use-lang";
+import { track } from "@/lib/analytics/track";
 
 export function LangSwitcher({
   variant = "compact",
@@ -64,7 +65,15 @@ export function LangSwitcher({
                   <button
                     key={code}
                     type="button"
-                    onClick={() => { setLang(code); setOpen(false); }}
+                    onClick={() => {
+                      if (code !== lang) {
+                        track("language.changed", {
+                          metadata: { from: lang, to: code },
+                        });
+                      }
+                      setLang(code);
+                      setOpen(false);
+                    }}
                     className={`flex w-full items-center gap-2.5 px-3 py-1.5 text-left text-xs transition-colors ${
                       active
                         ? "bg-[var(--gold)]/10 text-[var(--gold)]"
@@ -99,7 +108,14 @@ export function LangSwitcher({
           <button
             key={code}
             type="button"
-            onClick={() => setLang(code)}
+            onClick={() => {
+              if (code !== lang) {
+                track("language.changed", {
+                  metadata: { from: lang, to: code },
+                });
+              }
+              setLang(code);
+            }}
             className={`inline-flex items-center gap-1.5 rounded px-2.5 py-1.5 text-xs font-data uppercase tracking-widest transition-colors ${
               active
                 ? "bg-[var(--gold)]/15 text-[var(--gold)]"

@@ -55,6 +55,10 @@ export interface VideoFeedItem {
   clipHorizontal: string | null;
   /** HLS master playlist URL — null = not yet HLS-packaged. */
   hlsMasterUrl?: string | null;
+  /** Versioned kill_assets manifest (migration 026). When present, the
+   *  player pool prefers it over the legacy clip* fields. NULL on rows
+   *  clipped before the migration ran. */
+  assetsManifest?: import("./v2/FeedPlayerPool").PoolAssetsManifest | null;
   thumbnail: string | null;
   highlightScore: number | null;
   avgRating: number | null;
@@ -98,6 +102,10 @@ export interface MomentFeedItem {
   clipHorizontal: string | null;
   /** HLS master playlist URL (Phase 4). */
   hlsMasterUrl?: string | null;
+  /** Versioned moments_assets manifest (future migration). NULL today
+   *  on every moment — kept for type symmetry with VideoFeedItem so
+   *  ScrollFeedV2 can build PoolItem from either branch. */
+  assetsManifest?: import("./v2/FeedPlayerPool").PoolAssetsManifest | null;
   thumbnail: string | null;
   momentScore: number | null;
   avgRating: number | null;

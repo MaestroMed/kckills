@@ -52,6 +52,7 @@ const NAV: NavGroup[] = [
       { href: "/admin/pipeline", label: "Daemon Status", icon: "◉" },
       { href: "/admin/pipeline/jobs", label: "Job Queue", icon: "⚙" },
       { href: "/admin/pipeline/trigger", label: "Trigger Run", icon: "⚡" },
+      { href: "/admin/pipeline/dlq", label: "Dead Letter", icon: "⚠" },
     ],
   },
   {

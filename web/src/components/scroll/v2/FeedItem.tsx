@@ -21,7 +21,7 @@
  * translate3d offsets.
  */
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import type { VideoFeedItem, MomentFeedItem } from "@/components/scroll/ScrollFeed";
@@ -30,6 +30,7 @@ import { useImpressionTracker } from "./hooks/useImpressionTracker";
 import { Description } from "@/components/i18n/Description";
 import { FeedSidebarV2 } from "@/components/community/FeedSidebarV2";
 import { DoubleTapHeart } from "@/components/community/DoubleTapHeart";
+import { track } from "@/lib/analytics/track";
 
 interface SharedFeedItemProps {
   index: number;
@@ -46,6 +47,67 @@ interface SharedFeedItemProps {
 const BLUR_PLACEHOLDER =
   "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQH/2wBDAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQH/wAARCAACAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAr/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/8QAFAEBAAAAAAAAAAAAAAAAAAAAAP/EABQRAQAAAAAAAAAAAAAAAAAAAAD/2gAMAwEAAhEDEQA/AKpgD//Z";
 
+/**
+ * Per-item analytics hook.
+ *
+ * Fires :
+ *   - `clip.viewed`    when the item becomes active (one event per
+ *                      isActive transition, deduped per item id).
+ *   - `clip.started`   when the pool's video for this item dispatches
+ *                      `kc:clip-played`.
+ *   - `clip.completed` when the pool dispatches `kc:clip-ended` AND the
+ *                      reported duration is above THRESHOLD seconds.
+ *                      We only count "real" completes — a 0.5s loop on
+ *                      a broken source shouldn't count as engagement.
+ *
+ * Per-mount dedup so swipe-back-and-forth doesn't multi-count.
+ */
+const COMPLETE_DURATION_THRESHOLD_S = 3;
+
+function useFeedItemAnalytics({
+  itemId,
+  isActive,
+}: {
+  itemId: string;
+  isActive: boolean;
+}) {
+  const viewedRef = useRef(false);
+
+  useEffect(() => {
+    if (!isActive) return;
+    if (!viewedRef.current) {
+      viewedRef.current = true;
+      track("clip.viewed", { entityType: "kill", entityId: itemId });
+    }
+  }, [itemId, isActive]);
+
+  useEffect(() => {
+    if (!isActive) return;
+    const onPlay = (ev: Event) => {
+      const detail = (ev as CustomEvent<{ itemId?: string }>).detail;
+      if (detail?.itemId !== itemId) return;
+      track("clip.started", { entityType: "kill", entityId: itemId });
+    };
+    const onEnded = (ev: Event) => {
+      const detail = (ev as CustomEvent<{ itemId?: string; duration?: number }>).detail;
+      if (detail?.itemId !== itemId) return;
+      const duration = detail?.duration ?? 0;
+      if (duration < COMPLETE_DURATION_THRESHOLD_S) return;
+      track("clip.completed", {
+        entityType: "kill",
+        entityId: itemId,
+        metadata: { duration_s: duration },
+      });
+    };
+    window.addEventListener("kc:clip-played", onPlay as EventListener);
+    window.addEventListener("kc:clip-ended", onEnded as EventListener);
+    return () => {
+      window.removeEventListener("kc:clip-played", onPlay as EventListener);
+      window.removeEventListener("kc:clip-ended", onEnded as EventListener);
+    };
+  }, [itemId, isActive]);
+}
+
 // ─── Video item (single-kill clip from kills table) ────────────────────
 
 export function FeedItemVideo({
@@ -59,6 +121,7 @@ export function FeedItemVideo({
   // Fire impression beacon after 1.5s of dwell (real engagement signal,
   // filters out flick-pasts).
   useImpressionTracker({ killId: item.id, isActive });
+  useFeedItemAnalytics({ itemId: item.id, isActive });
   return (
     <div
       data-feed-item
@@ -278,6 +341,7 @@ export function FeedItemMoment({
   const isKc = item.kcInvolvement === "kc_aggressor" || item.kcInvolvement === "kc_both";
   const label = MOMENT_LABEL[item.classification] ?? item.classification;
   useImpressionTracker({ killId: item.id, isActive });
+  useFeedItemAnalytics({ itemId: item.id, isActive });
   return (
     <div
       data-feed-item

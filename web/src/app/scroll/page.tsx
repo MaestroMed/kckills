@@ -190,6 +190,7 @@ export default async function ScrollV2Page({ searchParams }: ScrollPageProps) {
       clipVerticalLow: k.clip_url_vertical_low ?? null,
       clipHorizontal: k.clip_url_horizontal ?? null,
       hlsMasterUrl: k.hls_master_url ?? null,
+      assetsManifest: k.assets_manifest ?? null,
       thumbnail: k.thumbnail_url ?? null,
       highlightScore: k.highlight_score ?? null,
       avgRating: k.avg_rating ?? null,
@@ -242,6 +243,9 @@ export default async function ScrollV2Page({ searchParams }: ScrollPageProps) {
         clipVerticalLow: m.clip_url_vertical_low,
         clipHorizontal: m.clip_url_horizontal,
         hlsMasterUrl: m.hls_master_url ?? null,
+        // Moments don't yet have a versioned manifest column — null
+        // keeps PoolItem.pickSrc on the legacy clip* fall-through.
+        assetsManifest: null,
         thumbnail: m.thumbnail_url,
         momentScore: m.moment_score,
         avgRating: m.avg_rating,

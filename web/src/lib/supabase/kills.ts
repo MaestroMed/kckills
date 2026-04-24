@@ -51,6 +51,46 @@ export type MinuteBucket =
   | "30-35"
   | "35+";
 
+/**
+ * Per-type entry inside `kills.assets_manifest` (migration 026).
+ *
+ * Built by `fn_refresh_kill_assets_manifest` on every kill_assets
+ * insert/update/delete. The trigger projects `jsonb_object_agg(type, ...)`
+ * so the JSON keys are the kill_assets.type enum values
+ * (`horizontal`, `vertical`, `vertical_low`, `thumbnail`, `hls_master`,
+ *  `og_image`, `preview_gif`).
+ *
+ * All numeric fields can be NULL when the worker probe_video() failed —
+ * the consumer must tolerate it (UI degrades to default sizing).
+ */
+export interface KillAssetManifestEntry {
+  url: string;
+  width: number | null;
+  height: number | null;
+  duration_ms: number | null;
+  size_bytes: number | null;
+  version: number;
+}
+
+/**
+ * Shape of the `kills.assets_manifest` JSONB column. Keys are asset
+ * types; values describe the current (`is_current = TRUE`) URL for
+ * that type. The frontend prefers this map for source-URL selection
+ * (FeedPlayerPool.pickSrc), falling back to the legacy
+ * clip_url_horizontal / clip_url_vertical columns when manifest is
+ * absent on older rows.
+ */
+export type KillAssetsManifest = Partial<Record<
+  | "horizontal"
+  | "vertical"
+  | "vertical_low"
+  | "thumbnail"
+  | "hls_master"
+  | "og_image"
+  | "preview_gif",
+  KillAssetManifestEntry
+>>;
+
 export interface PublishedKillRow {
   id: string;
   killer_player_id: string | null;
@@ -69,6 +109,13 @@ export interface PublishedKillRow {
   hls_master_url: string | null;
   thumbnail_url: string | null;
   og_image_url: string | null;
+  /**
+   * Versioned kill_assets manifest (migration 026). Replaces the
+   * hardcoded clip_url_* columns above as the source of truth for asset
+   * URLs. NULL on rows clipped before the migration ran — consumers
+   * must fall back to clip_url_horizontal / clip_url_vertical / etc.
+   */
+  assets_manifest: KillAssetsManifest | null;
   ai_description: string | null;
   ai_description_fr: string | null;
   ai_description_en: string | null;
@@ -134,6 +181,7 @@ const KILL_SELECT = `
   hls_master_url,
   thumbnail_url,
   og_image_url,
+  assets_manifest,
   ai_description,
   ai_description_fr,
   ai_description_en,
@@ -194,6 +242,7 @@ interface RawKillSelect {
   hls_master_url?: string | null;
   thumbnail_url?: string | null;
   og_image_url?: string | null;
+  assets_manifest?: KillAssetsManifest | null;
   ai_description?: string | null;
   ai_description_fr?: string | null;
   ai_description_en?: string | null;
@@ -269,6 +318,7 @@ function normalize(row: RawKillSelect): PublishedKillRow {
     hls_master_url: row.hls_master_url ?? null,
     thumbnail_url: row.thumbnail_url ?? null,
     og_image_url: row.og_image_url ?? null,
+    assets_manifest: row.assets_manifest ?? null,
     ai_description: row.ai_description ?? null,
     ai_description_fr: row.ai_description_fr ?? null,
     ai_description_en: row.ai_description_en ?? null,

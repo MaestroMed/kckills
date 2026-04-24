@@ -24,6 +24,11 @@ export async function GET(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
+  // Detect signup vs login : if the profile row doesn't exist yet, this
+  // is a first-time signup. Otherwise it's a returning login. We compute
+  // BEFORE the upsert below so the check is accurate.
+  let isSignup = false;
+
   if (user) {
     const meta = (user.user_metadata ?? {}) as Record<string, unknown>;
     const discordId = String(meta.provider_id ?? meta.sub ?? user.id);
@@ -35,6 +40,13 @@ export async function GET(request: NextRequest) {
       (meta.full_name as string | undefined) ??
       null;
     const discordAvatarUrl = (meta.avatar_url as string | undefined) ?? null;
+
+    const { data: existingProfile } = await supabase
+      .from("profiles")
+      .select("id")
+      .eq("id", user.id)
+      .maybeSingle();
+    isSignup = !existingProfile;
 
     await supabase
       .from("profiles")
@@ -50,5 +62,18 @@ export async function GET(request: NextRequest) {
       );
   }
 
-  return NextResponse.redirect(`${origin}${redirectTo}`);
+  // Drop a one-shot cookie that the next page load picks up to fire the
+  // analytics event client-side. Server-side tracking would bypass the
+  // anonymous_user_id / session_id chain, so we defer to the client.
+  // The cookie is consumed + cleared by AuthEventTracker on first read.
+  const response = NextResponse.redirect(`${origin}${redirectTo}`);
+  if (user) {
+    response.cookies.set("kc_auth_event", isSignup ? "auth.signup" : "auth.login", {
+      path: "/",
+      maxAge: 60, // self-clears within 60s if the next page never loads
+      sameSite: "lax",
+      httpOnly: false, // needs to be readable by client JS
+    });
+  }
+  return response;
 }

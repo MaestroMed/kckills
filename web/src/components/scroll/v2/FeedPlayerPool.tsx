@@ -56,6 +56,25 @@ import {
 } from "./hooks/useFeedPlayer";
 import { useHlsAttach } from "./hooks/useHlsAttach";
 
+/**
+ * Versioned-asset manifest (kills.assets_manifest, migration 026).
+ * Mirror of `KillAssetsManifest` in lib/supabase/kills.ts but kept
+ * loose here so the pool stays portable to moments / aggregate items
+ * which don't import from the kills module. NULL on rows clipped
+ * before the migration ran — pickSrc falls back to clipHorizontal /
+ * clipVertical in that case.
+ */
+export type PoolAssetsManifest = Partial<Record<
+  | "horizontal"
+  | "vertical"
+  | "vertical_low"
+  | "thumbnail"
+  | "hls_master"
+  | "og_image"
+  | "preview_gif",
+  { url: string; width?: number | null; height?: number | null }
+>>;
+
 export interface PoolItem {
   /** Stable id used for telemetry + autoplay decisions. */
   id: string;
@@ -71,6 +90,10 @@ export interface PoolItem {
    *  attaches via hls.js (Chrome/Firefox) or native (Safari) for
    *  adaptive bitrate. NULL falls back to the MP4 chain above. */
   hlsMasterUrl?: string | null;
+  /** Versioned kill_assets manifest (migration 026). When present,
+   *  pickSrc prefers it over the legacy clip* fields. NULL on older
+   *  rows — back-compat path keeps using the clip* fields. */
+  assetsManifest?: PoolAssetsManifest | null;
 }
 
 interface Props {
@@ -297,6 +320,37 @@ export function FeedPlayerPool({
             const item = items[itemIdx];
             if (item) onError(item.id, v.currentSrc || v.src);
           }}
+          onPlay={() => {
+            // Notify analytics — only fire for the LIVE slot to avoid
+            // "started" events for warm/cold slot pre-rolls.
+            const itemIdx = slotItemIndex[slotIdx];
+            const item = items[itemIdx];
+            if (!item || itemIdx !== activeIndex) return;
+            try {
+              window.dispatchEvent(
+                new CustomEvent("kc:clip-played", { detail: { itemId: item.id } }),
+              );
+            } catch {
+              /* CustomEvent unsupported in some sandboxes */
+            }
+          }}
+          onEnded={() => {
+            const itemIdx = slotItemIndex[slotIdx];
+            const item = items[itemIdx];
+            if (!item) return;
+            try {
+              window.dispatchEvent(
+                new CustomEvent("kc:clip-ended", {
+                  detail: {
+                    itemId: item.id,
+                    duration: (videoRefs.current[slotIdx]?.duration ?? 0) | 0,
+                  },
+                }),
+              );
+            } catch {
+              /* ignore */
+            }
+          }}
           // Disable contextmenu — TikTok native style.
           onContextMenu={(e) => e.preventDefault()}
           // Ignore reducedMotion since this is just video playback.
@@ -310,6 +364,20 @@ export function FeedPlayerPool({
 // ─── Helpers ───────────────────────────────────────────────────────────
 
 function pickSrc(item: PoolItem, isDesktop: boolean, useLowQuality: boolean): string {
+  // Manifest-aware path (migration 026 — kill_assets table).
+  // The manifest is the source of truth for asset URLs once the
+  // worker has clipped through the new pipeline. Same selection
+  // priority as the legacy fall-through below.
+  const m = item.assetsManifest;
+  if (m) {
+    if (useLowQuality && m.vertical_low?.url) return m.vertical_low.url;
+    if (isDesktop && m.horizontal?.url) return m.horizontal.url;
+    if (m.vertical?.url) return m.vertical.url;
+    // Manifest present but missing the type we wanted — fall through to
+    // legacy fields below rather than returning nothing.
+  }
+  // Legacy back-compat path : rows clipped before migration 026 still
+  // carry only the flat clip_url_* columns.
   // Desktop wants the native 16:9 landscape clip — letterboxing a 9:16
   // vertical inside a 16:9 viewport leaves black bars on 2/3 of the
   // screen and feels like a broken layout. Mobile stays on vertical
