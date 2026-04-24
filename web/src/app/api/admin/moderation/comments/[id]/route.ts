@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerSupabase } from "@/lib/supabase/server";
-import { logAdminAction, requireAdmin } from "@/lib/admin/audit";
+import { deriveActorRole, logAdminAction, requireAdmin } from "@/lib/admin/audit";
 
 /** POST /api/admin/moderation/comments/[id]
  *  Body: { action: 'approve'|'reject'|'delete'|'flag', reason?: string } */
@@ -42,6 +42,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     before,
     after: patch,
     notes: body.reason,
+    actorRole: deriveActorRole(admin),
+    request: req,
   });
 
   return NextResponse.json({ ok: true });

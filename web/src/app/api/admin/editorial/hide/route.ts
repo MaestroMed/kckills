@@ -18,7 +18,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { createServerSupabase } from "@/lib/supabase/server";
-import { requireAdmin } from "@/lib/admin/audit";
+import { deriveActorRole, logAdminAction, requireAdmin } from "@/lib/admin/audit";
 
 interface HideBody {
   kill_id?: string;
@@ -69,6 +69,17 @@ export async function POST(request: NextRequest) {
     kill_id,
     performed_by: "admin",
     payload: { previous_kill_visible: before.kill_visible, new_kill_visible: nextVisible },
+  });
+
+  // Mirror to the unified admin_actions audit log.
+  await logAdminAction({
+    action: hide ? "kill.hide" : "kill.unhide",
+    entityType: "kill",
+    entityId: kill_id,
+    before: { kill_visible: before.kill_visible },
+    after: { kill_visible: nextVisible },
+    actorRole: deriveActorRole(admin),
+    request,
   });
 
   return NextResponse.json({ ok: true, kill_visible: nextVisible });

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { logAdminAction, requireAdmin } from "@/lib/admin/audit";
+import { deriveActorRole, logAdminAction, requireAdmin } from "@/lib/admin/audit";
 import { createServerSupabase } from "@/lib/supabase/server";
 
 const VALID_VERDICTS = ["great", "good", "ok", "meh", "bad"];
@@ -56,6 +56,8 @@ export async function POST(req: NextRequest) {
     entityType: "lab_evaluation",
     entityId: body.eval_id,
     after: { verdict: body.verdict, note },
+    actorRole: deriveActorRole(admin),
+    request: req,
   });
 
   return NextResponse.json({ ok: true });

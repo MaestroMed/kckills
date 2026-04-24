@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerSupabase } from "@/lib/supabase/server";
-import { requireAdmin } from "@/lib/admin/audit";
+import { deriveActorRole, logAdminAction, requireAdmin } from "@/lib/admin/audit";
 
 /**
  * POST /api/admin/audit/[id]/replay
@@ -16,7 +16,7 @@ import { requireAdmin } from "@/lib/admin/audit";
  *   - featured.set — re-apply featured pick
  */
 export async function POST(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
   const admin = await requireAdmin();
@@ -61,14 +61,17 @@ export async function POST(
       return NextResponse.json({ error: `Cannot replay action kind: ${action.action}` }, { status: 400 });
     }
 
-    // Log the replay itself as an audit action
-    await sb.from("admin_actions").insert({
-      actor_label: "admin (replay)",
+    // Log the replay itself as an audit action — uses the strengthened
+    // helper so we capture actor role + IP + UA on the replay too.
+    await logAdminAction({
       action: `${action.action}.replayed`,
-      entity_type: action.entity_type,
-      entity_id: action.entity_id,
+      entityType: action.entity_type,
+      entityId: action.entity_id,
       after,
       notes: `Replayed audit action ${id}`,
+      actorLabel: "admin (replay)",
+      actorRole: deriveActorRole(admin),
+      request,
     });
 
     return NextResponse.json({ ok: true, ...result });

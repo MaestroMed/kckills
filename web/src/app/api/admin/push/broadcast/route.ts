@@ -31,7 +31,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { createServerSupabase } from "@/lib/supabase/server";
-import { requireAdmin } from "@/lib/admin/audit";
+import { deriveActorRole, logAdminAction, requireAdmin } from "@/lib/admin/audit";
 import { enqueuePush, sendNow, type PushKind } from "@/lib/push/send";
 
 interface BroadcastBody {
@@ -125,6 +125,14 @@ export async function POST(request: NextRequest) {
     if (!result.ok) {
       return NextResponse.json({ error: result.error ?? "Send failed" }, { status: 500 });
     }
+    await logAdminAction({
+      action: "push.broadcast.send_now",
+      entityType: "push_notification",
+      entityId: body.kill_id,
+      after: { kind, title, url, kill_id: body.kill_id, dedupe_key: body.dedupe_key },
+      actorRole: deriveActorRole(admin),
+      request,
+    });
     return NextResponse.json(result);
   }
 
@@ -132,5 +140,13 @@ export async function POST(request: NextRequest) {
   if (!result.ok) {
     return NextResponse.json({ error: result.error ?? "Enqueue failed" }, { status: 500 });
   }
+  await logAdminAction({
+    action: "push.broadcast.enqueue",
+    entityType: "push_notification",
+    entityId: body.kill_id,
+    after: { kind, title, url, kill_id: body.kill_id, dedupe_key: body.dedupe_key },
+    actorRole: deriveActorRole(admin),
+    request,
+  });
   return NextResponse.json(result);
 }

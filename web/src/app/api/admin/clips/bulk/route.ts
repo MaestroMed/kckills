@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerSupabase } from "@/lib/supabase/server";
-import { logAdminAction, requireAdmin } from "@/lib/admin/audit";
+import { deriveActorRole, logAdminAction, requireAdmin } from "@/lib/admin/audit";
 
 const VALID_ACTIONS = [
   "hide", "unhide",
@@ -113,6 +113,8 @@ export async function POST(req: NextRequest) {
     entityType: "kill",
     entityId: `bulk_${ids.length}`,
     after: { ids, action, payload },
+    actorRole: deriveActorRole(admin),
+    request: req,
   });
 
   return NextResponse.json({ ok: true, affected: ids.length });

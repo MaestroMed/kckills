@@ -17,7 +17,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { createServerSupabase } from "@/lib/supabase/server";
-import { requireAdmin } from "@/lib/admin/audit";
+import { deriveActorRole, logAdminAction, requireAdmin } from "@/lib/admin/audit";
 
 interface PushBody {
   kill_id?: string;
@@ -121,6 +121,16 @@ export async function POST(request: NextRequest) {
     kill_id,
     performed_by: "admin",
     payload: { message, score },
+  });
+
+  // Mirror to the unified admin_actions audit log.
+  await logAdminAction({
+    action: "discord.push",
+    entityType: "kill",
+    entityId: kill_id,
+    after: { message, score, channel: "editorial" },
+    actorRole: deriveActorRole(admin),
+    request,
   });
 
   return NextResponse.json({ ok: true });

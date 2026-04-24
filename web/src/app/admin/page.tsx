@@ -14,7 +14,13 @@ export default async function AdminDashboard() {
   const sb = await createServerSupabase();
   const [kills, recentActions, pendingComments] = await Promise.all([
     getPublishedKills(500),
-    sb.from("admin_actions").select("id,action,entity_type,created_at").order("created_at", { ascending: false }).limit(5),
+    // PR-AUDIT : pull the strengthened columns (actor_label / actor_role)
+    // so the widget shows WHO did WHAT, not just the action name.
+    sb
+      .from("admin_actions")
+      .select("id,actor_label,actor_role,action,entity_type,entity_id,created_at")
+      .order("created_at", { ascending: false })
+      .limit(10),
     sb.from("comments").select("id", { count: "exact" }).eq("moderation_status", "pending"),
   ]);
 
@@ -124,15 +130,38 @@ export default async function AdminDashboard() {
         </section>
       )}
 
-      {/* Recent actions */}
+      {/* Recent activity — strengthened with actor + role + entity_id */}
       {recentActions.data && recentActions.data.length > 0 && (
         <section>
-          <h2 className="font-display text-[10px] uppercase tracking-widest text-[var(--text-muted)] mb-3">Actions récentes</h2>
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="font-display text-[10px] uppercase tracking-widest text-[var(--text-muted)]">
+              Recent admin activity
+            </h2>
+            <Link href="/admin/audit" className="text-[10px] text-[var(--cyan)] hover:underline">
+              voir tout →
+            </Link>
+          </div>
           <div className="rounded-xl border border-[var(--border-gold)] bg-[var(--bg-surface)] divide-y divide-[var(--border-gold)]/30">
             {recentActions.data.map((a) => (
-              <div key={a.id} className="px-3 py-2 flex justify-between text-xs">
-                <span><span className="text-[var(--gold)] font-mono">{a.action}</span> on {a.entity_type}</span>
-                <span className="text-[var(--text-muted)]">{new Date(a.created_at).toLocaleString("fr-FR")}</span>
+              <div key={a.id} className="px-3 py-2 flex items-center gap-2 text-xs">
+                <span className="font-mono text-[var(--gold)] w-32 flex-shrink-0 truncate" title={a.action}>
+                  {a.action}
+                </span>
+                <span className="rounded bg-[var(--bg-elevated)] px-1.5 py-0.5 text-[9px] uppercase tracking-widest text-[var(--text-muted)]">
+                  {a.entity_type}
+                </span>
+                <span className="font-mono text-[10px] text-[var(--text-disabled)] truncate flex-1">
+                  {a.entity_id ? a.entity_id.slice(0, 16) : "—"}
+                </span>
+                <span className="text-[var(--text-muted)] text-[10px] whitespace-nowrap">
+                  {a.actor_label ?? "?"}
+                  {a.actor_role && a.actor_role !== "unknown" ? (
+                    <span className="text-[var(--text-disabled)]"> · {a.actor_role}</span>
+                  ) : null}
+                </span>
+                <span className="text-[var(--text-disabled)] text-[10px] whitespace-nowrap">
+                  {new Date(a.created_at).toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" })}
+                </span>
               </div>
             ))}
           </div>

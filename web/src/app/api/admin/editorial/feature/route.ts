@@ -20,7 +20,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { createServerSupabase } from "@/lib/supabase/server";
-import { requireAdmin } from "@/lib/admin/audit";
+import { deriveActorRole, logAdminAction, requireAdmin } from "@/lib/admin/audit";
 
 interface PinBody {
   kill_id?: string;
@@ -118,6 +118,17 @@ export async function POST(request: NextRequest) {
     kill_id,
     performed_by: "admin",
     payload: { valid_from, valid_to, custom_note, feature_date: featureDate },
+  });
+
+  // Mirror to admin_actions so /admin/audit shows it in the unified
+  // timeline alongside other backoffice actions.
+  await logAdminAction({
+    action: "feature.pin",
+    entityType: "kill",
+    entityId: kill_id,
+    after: { valid_from, valid_to, custom_note, feature_date: featureDate },
+    actorRole: deriveActorRole(admin),
+    request,
   });
 
   return NextResponse.json({ ok: true, feature_date: featureDate });

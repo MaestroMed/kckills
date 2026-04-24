@@ -37,17 +37,20 @@ COMMENT ON COLUMN admin_actions.action IS
     '  pipeline.replay / pipeline.cancel / dlq.requeue / dlq.cancel ';
 
 -- ─── Indexes for /admin/audit page ──────────────────────────────────
+-- NOTE : the column is `created_at` (migration 009), not `performed_at`.
+-- The migration originally referenced `performed_at` — corrected here so
+-- the indexes / view actually create against the real column.
 CREATE INDEX IF NOT EXISTS idx_admin_actions_recent
-    ON admin_actions(performed_at DESC);
+    ON admin_actions(created_at DESC);
 
 CREATE INDEX IF NOT EXISTS idx_admin_actions_actor
-    ON admin_actions(actor_label, performed_at DESC);
+    ON admin_actions(actor_label, created_at DESC);
 
 CREATE INDEX IF NOT EXISTS idx_admin_actions_action
-    ON admin_actions(action, performed_at DESC);
+    ON admin_actions(action, created_at DESC);
 
-CREATE INDEX IF NOT EXISTS idx_admin_actions_entity
-    ON admin_actions(entity_type, entity_id, performed_at DESC);
+CREATE INDEX IF NOT EXISTS idx_admin_actions_entity_full
+    ON admin_actions(entity_type, entity_id, created_at DESC);
 
 -- ─── Convenience view : last 7-day summary per actor ────────────────
 CREATE OR REPLACE VIEW v_admin_actions_7d AS
@@ -56,9 +59,9 @@ SELECT
     actor_role,
     action,
     COUNT(*)            AS count_7d,
-    MAX(performed_at)   AS last_action_at
+    MAX(created_at)     AS last_action_at
   FROM admin_actions
- WHERE performed_at > now() - interval '7 days'
+ WHERE created_at > now() - interval '7 days'
  GROUP BY actor_label, actor_role, action
  ORDER BY count_7d DESC;
 
