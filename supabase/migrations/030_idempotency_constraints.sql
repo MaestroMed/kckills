@@ -25,11 +25,21 @@
 -- harvester picks a different draft-phase frame as t=0). epoch is
 -- the fixed reference point and is what makes ingestion pause-proof
 -- in the first place.
+--
+-- WHY event_epoch > 0 — historical gol.gg backfills sometimes write
+-- event_epoch=0 as a sentinel when the kill timestamp couldn't be
+-- determined (the source CSV only carries minute-level granularity
+-- per row, not absolute UTC). Treating 0 as "unknown" stops the
+-- index from collapsing all unknown-time kills onto one tuple. The
+-- harvester's livestats path always writes a real epoch (>1.6e9 for
+-- post-2020 matches), so the index still catches the real-world
+-- duplicate-ingest case it's there to prevent.
 CREATE UNIQUE INDEX IF NOT EXISTS idx_kills_unique_event
     ON kills(game_id, killer_player_id, victim_player_id, event_epoch)
     WHERE killer_player_id IS NOT NULL
       AND victim_player_id IS NOT NULL
-      AND event_epoch IS NOT NULL;
+      AND event_epoch IS NOT NULL
+      AND event_epoch > 0;
 
 -- ─── channel_videos : (id is already UUID YouTube video id, just enforce) ───
 -- Already implicit via PK, just here for clarity.
