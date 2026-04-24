@@ -312,6 +312,29 @@ SPECS: list[MigrationSpec] = [
         },
         rls_tables=["reports"],
     ),
+
+    MigrationSpec(
+        number=33,
+        label="pipeline_jobs.type extended for worker.backfill",
+        # No new tables / indexes / views — just a CHECK constraint
+        # rewrite. The constraint name stays the same so existence is
+        # the only thing we verify here. To assert the actual whitelist
+        # contents, an operator can run --strict mode against pg_catalog
+        # but for the standard verifier this is a presence check.
+        check_constraints={
+            "pipeline_jobs": ["pipeline_jobs_type_check"],
+        },
+    ),
+
+    MigrationSpec(
+        number=34,
+        label="user_events.event_type extended for Wave 4 analytics",
+        # Same pattern as 033 — DROP + ADD rewrites the whitelist body
+        # but keeps the constraint name. Presence check only.
+        check_constraints={
+            "user_events": ["user_events_event_type_check"],
+        },
+    ),
 ]
 
 
