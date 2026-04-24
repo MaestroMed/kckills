@@ -65,11 +65,26 @@ async def run() -> int:
     events, _next = await lolesports_api.get_schedule()
     new_matches = 0
 
+    # PR23.12 — pre-insert upcoming/inProgress matches AND completed.
+    # Previously the sentinel ignored any match not in state='completed'
+    # which meant every live match started its lifecycle ~1h late : the
+    # match row only landed AFTER the broadcast ended, so the harvester
+    # couldn't extract kills in real time and the clipper played catch-up.
+    #
+    # New flow per event state :
+    #   'completed'  → full processing (insert games, kick downstream)
+    #   'inProgress' → insert match + games (state='live') so harvester
+    #                  can start polling live stats feed immediately
+    #   'unstarted'  → insert match shell (state='upcoming') so the
+    #                  /matches page shows it ahead of time. Games
+    #                  (and the harvester run) wait until kickoff.
     for event in events:
         if event.get("type") != "match":
             continue
-        if event.get("state") != "completed":
+        ev_state = event.get("state", "")
+        if ev_state not in ("completed", "inProgress", "unstarted"):
             continue
+        is_completed = (ev_state == "completed")
 
         match = event.get("match", {})
         teams = match.get("teams", [])
@@ -86,10 +101,15 @@ async def run() -> int:
         existing = safe_select("matches", "id", external_id=match_ext_id)
         already_seen = bool(existing)
 
+        # For unstarted matches, getEventDetails often has no game info yet,
+        # but we DO want to insert the match shell so the /matches page
+        # shows the upcoming fixture. Fall back to a minimal details dict.
         details = await lolesports_api.get_event_details(match_ext_id)
-        if not details:
+        if not details and is_completed:
             log.warn("sentinel_no_details", match_id=match_ext_id)
             continue
+        if not details:
+            details = {}
 
         team_a, team_b = teams[0], teams[1]
         kc_team = team_a if lolesports_api.is_kc(team_a) else team_b
@@ -115,6 +135,16 @@ async def run() -> int:
         strategy = match.get("strategy", {}) or {}
         bo_count = strategy.get("count", 1)
 
+        # Map lolesports state → DB state
+        # completed   → 'completed' (final scores in)
+        # inProgress  → 'live'      (broadcast running, harvester should poll)
+        # unstarted   → 'upcoming'  (scheduled, awaiting kickoff)
+        db_state = (
+            "completed" if ev_state == "completed"
+            else "live" if ev_state == "inProgress"
+            else "upcoming"
+        )
+
         match_row = safe_upsert(
             "matches",
             {
@@ -124,7 +154,7 @@ async def run() -> int:
                 "format": f"bo{bo_count}",
                 "stage": event.get("blockName", "") or "",
                 "scheduled_at": event.get("startTime"),
-                "state": "completed",
+                "state": db_state,
             },
             on_conflict="external_id",
         )
@@ -133,9 +163,12 @@ async def run() -> int:
             match_db_id = existing[0]["id"]
 
         # Insert / upsert each game with proper match_id FK
+        # PR23.12 — also accept inProgress games so the harvester can
+        # start polling live stats DURING the broadcast, not just after.
         detail_match = details.get("match", {}) or {}
         for game in detail_match.get("games", []):
-            if game.get("state") != "completed":
+            game_state = game.get("state", "")
+            if game_state not in ("completed", "inProgress", "unstarted"):
                 continue
 
             game_ext_id = game.get("id", "")
@@ -177,13 +210,25 @@ async def run() -> int:
                         vod_offset = _parse_offset(vod.get("offset"))
                         break
 
+            # State mapping :
+            # completed + has VOD → 'vod_found' (clipper-ready)
+            # completed + no VOD  → 'pending'
+            # inProgress          → 'live' (harvester picks up via live stats)
+            # unstarted           → 'pending'
+            if game_state == "completed":
+                game_db_state = "vod_found" if vod_youtube_id else "pending"
+            elif game_state == "inProgress":
+                game_db_state = "live"
+            else:
+                game_db_state = "pending"
+
             game_payload = {
                 "external_id": game_ext_id,
                 "match_id": match_db_id,
                 "game_number": game.get("number", 1),
                 "vod_youtube_id": vod_youtube_id,
                 "vod_offset_seconds": vod_offset,
-                "state": "vod_found" if vod_youtube_id else "pending",
+                "state": game_db_state,
             }
             # Strip keys with None so we don't overwrite existing good data
             game_payload = {k: v for k, v in game_payload.items() if v is not None}
