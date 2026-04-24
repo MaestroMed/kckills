@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerSupabase } from "@/lib/supabase/server";
-import { logAdminAction, requireAdmin } from "@/lib/admin/audit";
+import { deriveActorRole, logAdminAction, requireAdmin } from "@/lib/admin/audit";
 
 const VALID_JOB_KINDS = [
   "reanalyze_kill", "reclip_kill", "regen_og",
@@ -65,6 +65,8 @@ export async function POST(req: NextRequest) {
     entityType: "worker_job",
     entityId: data.id,
     after: { kind, payload },
+    actorRole: deriveActorRole(admin),
+    request: req,
   });
 
   return NextResponse.json({ ok: true, job: data });

@@ -10,10 +10,10 @@
  */
 import { NextResponse } from "next/server";
 import { createServerSupabase } from "@/lib/supabase/server";
-import { logAdminAction, requireAdmin } from "@/lib/admin/audit";
+import { deriveActorRole, logAdminAction, requireAdmin } from "@/lib/admin/audit";
 
 export async function POST(
-  _req: Request,
+  req: Request,
   ctx: { params: Promise<{ id: string }> }
 ) {
   const admin = await requireAdmin();
@@ -66,7 +66,10 @@ export async function POST(
     action: "dlq.cancel",
     entityType: "dead_letter_job",
     entityId: id,
-    after: { type: dlq.type, entity_id: dlq.entity_id },
+    before: { resolution_status: dlq.resolution_status, type: dlq.type, entity_id: dlq.entity_id },
+    after: { resolution_status: "cancelled", type: dlq.type, entity_id: dlq.entity_id },
+    actorRole: deriveActorRole(admin),
+    request: req,
   });
 
   return NextResponse.json({ ok: true });
