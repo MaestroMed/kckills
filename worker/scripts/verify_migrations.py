@@ -257,11 +257,11 @@ SPECS: list[MigrationSpec] = [
             "push_subscriptions": ["endpoint"],
         },
         indexes=[
-            # NOTE : the migration creates this on
-            # (game_id, killer_player_id, victim_player_id, game_time_seconds)
-            # — NOT (..., event_epoch). The arch-doc says event_epoch but
-            # the file ships game_time_seconds. Verifier matches the file,
-            # not the doc.
+            # Reconciled with CLAUDE.md §5.4 — the unique key is on
+            # (game_id, killer_player_id, victim_player_id, event_epoch)
+            # because event_epoch is the canonical pause-proof timing.
+            # game_time_seconds is a derived value that can drift on
+            # re-ingest if game_start_epoch is recomputed.
             "idx_kills_unique_event",
             "idx_push_subscriptions_endpoint",
             # The DO-block guards may or may not have created these

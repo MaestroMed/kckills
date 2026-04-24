@@ -10,17 +10,26 @@
 --
 -- This migration locks all those gates with DB-level constraints.
 
--- ─── kills : (game_id, killer_player_id, victim_player_id, game_time_seconds) ────
+-- ─── kills : (game_id, killer_player_id, victim_player_id, event_epoch) ────
 -- A kill is uniquely identified by game + killer + victim + timing.
 -- Multi-source ingestion (livestats + gol_gg) on the same game would
 -- otherwise produce 2 rows for the same kill. Use a partial index
 -- because killer_player_id can be NULL (data-only entries) — those
 -- get deduped by content_hash on the asset side.
+--
+-- WHY event_epoch (not game_time_seconds) — see CLAUDE.md §5.4. The
+-- canonical timing is the absolute frame timestamp from the live
+-- stats feed (rfc460Timestamp parsed → epoch). game_time_seconds is
+-- a derived value (event_epoch − game_start_epoch) and CAN drift on
+-- re-ingest if game_start_epoch is recomputed (e.g. when the
+-- harvester picks a different draft-phase frame as t=0). epoch is
+-- the fixed reference point and is what makes ingestion pause-proof
+-- in the first place.
 CREATE UNIQUE INDEX IF NOT EXISTS idx_kills_unique_event
-    ON kills(game_id, killer_player_id, victim_player_id, game_time_seconds)
+    ON kills(game_id, killer_player_id, victim_player_id, event_epoch)
     WHERE killer_player_id IS NOT NULL
       AND victim_player_id IS NOT NULL
-      AND game_time_seconds IS NOT NULL;
+      AND event_epoch IS NOT NULL;
 
 -- ─── channel_videos : (id is already UUID YouTube video id, just enforce) ───
 -- Already implicit via PK, just here for clarity.
