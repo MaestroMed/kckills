@@ -42,6 +42,14 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 // ─── Allowed event types — keep in sync with migration 029 ─────────────
+//
+// NOTE on `timeline.era_selected` : the value is allowed at the API gate
+// so the request shape validates client-side, BUT the DB CHECK constraint
+// in migration 029 doesn't list it yet. Inserts with this event_type will
+// be silently dropped by Postgres (logged on the server, never surfaced
+// to the client — tracker is best-effort by design). A follow-up
+// migration should extend the constraint when we want to actually count
+// these events.
 
 const ALLOWED_EVENT_TYPES = new Set<string>([
   "feed.view",
@@ -59,6 +67,7 @@ const ALLOWED_EVENT_TYPES = new Set<string>([
   "match.opened",
   "tournament.opened",
   "search.executed",
+  "timeline.era_selected",
   "comment.created",
   "language.changed",
   "quality.changed",

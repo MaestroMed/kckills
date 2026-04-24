@@ -10,6 +10,7 @@ import { HomeRareCards } from "@/components/HomeRareCards";
 import { HomeYouTubeShowcase } from "@/components/HomeYouTubeShowcase";
 import { KillOfTheWeek } from "@/components/KillOfTheWeek";
 import { HomeRecentClips } from "@/components/HomeRecentClips";
+import { HomeTimelineFeed } from "@/components/timeline/HomeTimelineFeed";
 import { QuoteCard } from "@/components/QuoteCard";
 import { QUOTES } from "@/lib/quotes";
 import { HomeQuoteRotator } from "@/components/HomeQuoteRotator";
@@ -438,8 +439,16 @@ export default async function HomePage() {
       {/* ═══ KILL OF THE WEEK — surface the featured clip first ═════════ */}
       <KillOfTheWeek />
 
-      {/* ═══ DERNIERS CLIPS — strip horizontal des 8 plus récents ═══════ */}
-      <HomeRecentClips />
+      {/* ═══ KC TIMELINE + DEFAULT FEED ════════════════════════════════
+          Per CLAUDE.md §6.2 : the timeline is a horizontal era strip
+          that filters the kills feed below it. When NO era is selected
+          (default), HomeRecentClips is shown. When the user picks an
+          era card, the strip renders that era's clips instead. The
+          state lives client-side so the heavy homepage RSC never
+          re-renders on selection. */}
+      <HomeTimelineFeed>
+        <HomeRecentClips />
+      </HomeTimelineFeed>
 
       {/* ═══ DISCOVERY STRIP — 3 curated entry points to go deeper ═════ */}
       <section className="max-w-7xl mx-auto px-4 md:px-6 py-6">

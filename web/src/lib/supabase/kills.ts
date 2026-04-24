@@ -792,3 +792,84 @@ export async function getKillsByKillerChampion(
     return [];
   }
 }
+
+/**
+ * Filter spec for getKillsByEra. We accept the era's date window directly
+ * (instead of just the era id) so callers don't have to import the eras
+ * module here — keeps the supabase layer free of UI-side concerns.
+ */
+export interface KillsByEraOpts {
+  /** ISO yyyy-mm-dd, inclusive — usually `era.dateStart`. */
+  startDate: string;
+  /** ISO yyyy-mm-dd, inclusive — usually `era.dateEnd`. */
+  endDate: string;
+  /** Hard cap on rows returned. Defaults to 60. */
+  limit?: number;
+  /** Build-time mode (sitemap, ISR pre-render) — uses anon client to
+   *  avoid the cookies() crash outside a request scope. */
+  buildTime?: boolean;
+}
+
+/**
+ * Get published kill clips that happened during the given KC era.
+ *
+ * Filters by the MATCH date (`games.matches.scheduled_at`) — that's the
+ * actual day the kill happened on the Riot stage, not when our worker
+ * imported the row. Without this, freshly-backfilled gol.gg historical
+ * kills (scraped in 2026) would always slot into the 2026 eras.
+ *
+ * Same selection criteria as getPublishedKills :
+ *   * publication_status='published' (with PR23 legacy fallback on `status`)
+ *   * kill_visible=true (Gemini QC has confirmed the kill is in-frame)
+ *   * clip_url_vertical NOT NULL + thumbnail_url NOT NULL (real R2 asset)
+ *
+ * Sorted by highlight_score DESC NULLS LAST, then created_at DESC — same
+ * ordering as the homepage feed so eras with high-quality clips bubble
+ * the best plays to the top of the strip.
+ *
+ * Returns an empty array if no kills fall in the window (e.g. early LFL
+ * eras where no clips have been backfilled yet) — never throws.
+ */
+export const getKillsByEra = cache(async function getKillsByEra(
+  opts: KillsByEraOpts,
+): Promise<PublishedKillRow[]> {
+  const limit = opts.limit ?? 60;
+  // Build a half-open ISO range from the era's calendar-day window.
+  // dateEnd is inclusive at the date level, so we filter < (end + 1 day).
+  const startISO = `${opts.startDate}T00:00:00Z`;
+  // gte/lte on a date string compares lexicographically — appending the
+  // end-of-day timestamp avoids dropping kills that happened on dateEnd.
+  const endISO = `${opts.endDate}T23:59:59Z`;
+  try {
+    const supabase = opts.buildTime
+      ? createAnonSupabase()
+      : await createServerSupabase();
+    const { data, error } = await supabase
+      .from("kills")
+      .select(KILL_SELECT)
+      // PR23 split-status fallback (see getPublishedKills).
+      .or(
+        "publication_status.eq.published," +
+          "and(publication_status.is.null,status.eq.published)",
+      )
+      .eq("kill_visible", true)
+      .not("clip_url_vertical", "is", null)
+      .not("thumbnail_url", "is", null)
+      // Filter on the match date (when the kill actually happened on
+      // stage), NOT on `kills.created_at` which is the worker import time.
+      .gte("games.matches.scheduled_at", startISO)
+      .lte("games.matches.scheduled_at", endISO)
+      .order("highlight_score", { ascending: false, nullsFirst: false })
+      .order("created_at", { ascending: false })
+      .limit(limit);
+    if (error) {
+      console.warn("[supabase/kills] getKillsByEra error:", error.message);
+      return [];
+    }
+    return (data ?? []).map((row) => normalize(row as unknown as RawKillSelect));
+  } catch (err) {
+    rethrowIfDynamic(err);
+    console.warn("[supabase/kills] getKillsByEra threw:", err);
+    return [];
+  }
+});

@@ -55,6 +55,7 @@ export type EventType =
   | "match.opened"
   | "tournament.opened"
   | "search.executed"
+  | "timeline.era_selected"
   // Interaction
   | "comment.created"
   | "language.changed"
