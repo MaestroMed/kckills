@@ -23,10 +23,16 @@ from services.supabase_client import safe_select, safe_update
 log = structlog.get_logger()
 
 
-EMBEDDING_MODEL = "models/text-embedding-004"
+EMBEDDING_MODEL = "models/gemini-embedding-001"
 EMBEDDING_DIM = 768
 BATCH_SIZE = 50
 TASK_TYPE = "RETRIEVAL_DOCUMENT"
+# Note : text-embedding-004 was deprecated 2026-04 and the API now returns
+# 404 for it. gemini-embedding-001 is the current Google-recommended
+# replacement, same 768-dim output by default (output_dimensionality=768),
+# same RETRIEVAL_DOCUMENT task_type semantics. If we ever switch to the
+# new google.genai SDK (the FutureWarning at module-import time), the
+# call shape changes — see embedder_v2.py when it lands.
 
 
 def _build_embed_text(kill: dict) -> str:
@@ -62,6 +68,10 @@ async def embed_one(kill: dict) -> list[float] | None:
             model=EMBEDDING_MODEL,
             content=text,
             task_type=TASK_TYPE,
+            # gemini-embedding-001 defaults to 3072 dims — force 768
+            # to match the kills.embedding column dimension. The Google
+            # API accepts any value in {768, 1536, 3072} for this model.
+            output_dimensionality=EMBEDDING_DIM,
         )
         emb = result.get("embedding") if isinstance(result, dict) else None
         if emb and isinstance(emb[0], list):
