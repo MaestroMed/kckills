@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { StarRating } from "@/components/star-rating";
 import Link from "next/link";
+import { ReportButton } from "@/components/community/ReportButton";
 
 // ─── Server-shape types ─────────────────────────────────────────────────
 // Minimal interfaces matching what /api/kills/[id]/comment returns. Keeping
@@ -347,6 +348,22 @@ export function KillInteractions({ killId }: { killId: string }) {
           <CommentThread key={c.id} comment={c} depth={0} />
         ))}
       </div>
+
+      {/* Footer report — same loop as the scroll feed sidebar but
+          surfaced as text so it's discoverable on the static detail
+          page. Only meaningful for real Supabase-backed kills (UUID).
+          Legacy aggregate IDs (slug-style) skip this entirely. */}
+      {isUuid && (
+        <div className="flex items-center justify-end gap-2 px-1 text-[11px] text-[var(--text-muted)]">
+          <span>Un problème avec ce clip&nbsp;?</span>
+          <ReportButton
+            targetType="kill"
+            targetId={killId}
+            size="sm"
+            ariaLabel="Signaler ce kill"
+          />
+        </div>
+      )}
     </div>
   );
 }
@@ -354,6 +371,10 @@ export function KillInteractions({ killId }: { killId: string }) {
 function CommentThread({ comment: c, depth }: { comment: Comment; depth: number }) {
   const maxDepth = 3;
   const indent = Math.min(depth, maxDepth);
+  // Optimistic / local-only comments don't have server ids — hide the
+  // report button until the canonical row lands.
+  const reportable =
+    !c.pending && !c.id.startsWith("opt-") && !c.id.startsWith("local-");
 
   return (
     <div style={{ marginLeft: indent > 0 ? `${indent * 16}px` : 0 }}>
@@ -373,6 +394,15 @@ function CommentThread({ comment: c, depth }: { comment: Comment; depth: number 
           <span className="text-[10px] text-[var(--text-disabled)]">{c.time}</span>
           {depth > 0 && (
             <span className="text-[9px] text-[var(--text-disabled)]">&middot; r&eacute;ponse</span>
+          )}
+          {reportable && (
+            <span className="ml-auto">
+              <ReportButton
+                targetType="comment"
+                targetId={c.id}
+                size="sm"
+              />
+            </span>
           )}
         </div>
         <p className="text-sm text-[var(--text-secondary)] pl-8">{c.text}</p>

@@ -19,7 +19,8 @@ Risk bumps :
   +0.3  highlight_score is extreme (>= 9 or <= 3)
   +0.5  ai_annotation.confidence_score < 0.5
   +0.6  recent ffmpeg warning logged for this kill
-  +1.0  user reported the clip (when reports table exists)
+  +1.0  user reported the clip (>= 1 pending report in `reports` table)
+  +0.5  ADDITIONAL bump when >= 3 pending reports (very confident bad)
   +0.4  duration outside [15s, 30s]
 
 Pipeline :
@@ -71,7 +72,9 @@ RISK_FIRST_FROM_VOD  = 0.4      # no prior verified clip from same vod
 RISK_EXTREME_SCORE   = 0.3      # highlight_score >= 9 or <= 3
 RISK_LOW_CONFIDENCE  = 0.5      # ai_annotation.confidence_score < 0.5
 RISK_FFMPEG_WARNING  = 0.6      # recent ffmpeg warning for this kill
-RISK_USER_REPORTED   = 1.0      # user-reported (reports table)
+RISK_USER_REPORTED       = 1.0  # ≥1 pending user report
+RISK_USER_REPORTED_HEAVY = 0.5  # extra +0.5 when ≥3 pending reports — very confident bad
+RISK_HEAVY_REPORT_THRESHOLD = 3
 RISK_WEIRD_DURATION  = 0.4      # duration outside [15s, 30s]
 
 
@@ -240,6 +243,51 @@ def _fetch_annotations_bulk(db, kill_ids: list[str]) -> dict[str, dict]:
     return out
 
 
+def _fetch_pending_report_counts(db, kill_ids: list[str]) -> dict[str, int]:
+    """Return {kill_id: pending_report_count} for the given kill ids.
+
+    Reads `reports` table (migration 032) with status='pending'. Returns
+    an empty dict if the table doesn't exist yet (pre-032 deployments)
+    or any HTTP error happens — the caller treats missing entries as 0.
+
+    PostgREST doesn't expose GROUP BY directly via the REST surface, so
+    we fetch the raw rows and count client-side. With our partial index
+    (idx_reports_pending) and the upper bound of SAMPLE_POOL_SIZE * a
+    handful of pending reports each, the row count stays bounded.
+    """
+    if not kill_ids:
+        return {}
+    out: dict[str, int] = {}
+    in_filter = "in.(" + ",".join(kill_ids) + ")"
+    try:
+        r = httpx.get(
+            f"{db.base}/reports",
+            headers=db.headers,
+            params={
+                "select": "target_id",
+                "target_type": "eq.kill",
+                "target_id": in_filter,
+                "status": "eq.pending",
+                "limit": 5000,
+            },
+            timeout=15.0,
+        )
+        if r.status_code != 200:
+            log.debug(
+                "qc_sampler_reports_fetch_skipped",
+                status=r.status_code,
+                body=r.text[:120],
+            )
+            return {}
+        for row in r.json() or []:
+            kid = row.get("target_id")
+            if kid:
+                out[kid] = out.get(kid, 0) + 1
+    except Exception as e:
+        log.debug("qc_sampler_reports_fetch_error", error=str(e)[:120])
+    return out
+
+
 def _fetch_verified_vod_set(db, vod_ids: list[str]) -> set[str]:
     """Return the set of vod_youtube_ids that have at least one
     successfully verified qc.verify job. A kill from a brand-new VOD with
@@ -340,11 +388,17 @@ def compute_qc_risk(
     verified_vods: set[str] | None = None,
     has_ffmpeg_warning: bool = False,
     user_reported: bool = False,
+    pending_report_count: int = 0,
 ) -> float:
     """Return a non-negative risk score for this published kill.
 
     The score is the sum of all triggered bumps. A 2% random baseline is
     added so the looks-fine population still gets unbiased coverage.
+
+    `user_reported` is kept for back-compat with callers that haven't
+    been updated yet — when both it and `pending_report_count` are
+    supplied, the count wins. `pending_report_count` is the source of
+    truth coming from the `reports` table (migration 032).
     """
     score = 0.0
 
@@ -407,9 +461,19 @@ def compute_qc_risk(
     if has_ffmpeg_warning:
         score += RISK_FFMPEG_WARNING
 
-    # User report
-    if user_reported:
+    # User reports — read from migration 032 `reports` table.
+    # ≥1 pending report → +1.0 ("user-flagged is high signal").
+    # ≥3 pending reports → +0.5 extra ("very confident bad").
+    # `user_reported` boolean is the legacy back-compat path : if a
+    # caller still passes the old flag without the count, treat as
+    # exactly one pending report.
+    effective_count = pending_report_count
+    if effective_count <= 0 and user_reported:
+        effective_count = 1
+    if effective_count > 0:
         score += RISK_USER_REPORTED
+        if effective_count >= RISK_HEAVY_REPORT_THRESHOLD:
+            score += RISK_USER_REPORTED_HEAVY
 
     return score
 
@@ -474,6 +538,7 @@ async def run() -> int:
     eligible_ids = [r["id"] for r in eligible_rows]
     assets_by_kill = _fetch_assets_bulk(db, eligible_ids)
     annos_by_kill = _fetch_annotations_bulk(db, eligible_ids)
+    reports_by_kill = _fetch_pending_report_counts(db, eligible_ids)
     vod_ids = [r.get("vod_youtube_id") for r in eligible_rows if r.get("vod_youtube_id")]
     verified_vods = _fetch_verified_vod_set(db, vod_ids)
 
@@ -488,7 +553,7 @@ async def run() -> int:
             annotation=annos_by_kill.get(kid),
             verified_vods=verified_vods,
             has_ffmpeg_warning=False,    # no ffmpeg-warning table yet
-            user_reported=False,         # no reports table yet
+            pending_report_count=reports_by_kill.get(kid, 0),
         )
         if risk >= RISK_THRESHOLD:
             scored.append((risk, kill))
@@ -522,6 +587,8 @@ async def run() -> int:
         already_qcd=len(already),
         risky=len(scored),
         enqueued=enqueued,
+        reported_kills=sum(1 for v in reports_by_kill.values() if v > 0),
+        heavy_reported=sum(1 for v in reports_by_kill.values() if v >= RISK_HEAVY_REPORT_THRESHOLD),
         avg_risk=round(sum(r for r, _ in pick) / max(1, len(pick)), 2),
         max_risk=round(pick[0][0], 2) if pick else 0.0,
     )

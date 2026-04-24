@@ -27,6 +27,7 @@ import Link from "next/link";
 import { LikeButton } from "./LikeButton";
 import { CommentSheetV2 } from "./CommentSheetV2";
 import { InlineAuthPrompt } from "./InlineAuthPrompt";
+import { ReportButton } from "./ReportButton";
 import { track } from "@/lib/analytics/track";
 
 interface Props {
@@ -191,6 +192,16 @@ export function FeedSidebarV2({
             </svg>
           </div>
         </Link>
+
+        {/* Report — tertiary action, smallest visual weight. The user-
+            triggered QC loop : flagging here enqueues a qc.verify job
+            so the worker re-checks the clip / re-runs Gemini analysis. */}
+        <ReportButton
+          targetType="kill"
+          targetId={killId}
+          size="md"
+          ariaLabel="Signaler ce kill"
+        />
       </div>
 
       {/* Comment sheet — lazy mount via the isOpen prop driving its

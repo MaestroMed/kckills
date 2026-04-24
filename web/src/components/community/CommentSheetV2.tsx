@@ -29,6 +29,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence, useMotionValue } from "framer-motion";
+import { ReportButton } from "./ReportButton";
 
 interface ApiProfile {
   id?: string;
@@ -330,6 +331,12 @@ const MAX_DEPTH = 3;
 
 function CommentRow({ comment, depth }: { comment: UiComment; depth: number }) {
   const indent = Math.min(depth, MAX_DEPTH);
+  // Optimistic + pending comments don't have a real server id yet —
+  // skip the report button so we don't POST against `opt-…` ids.
+  const reportable =
+    !comment.pending &&
+    !comment.id.startsWith("opt-") &&
+    !comment.id.startsWith("local-");
   return (
     <div style={{ marginLeft: indent > 0 ? `${indent * 14}px` : 0 }}>
       <div
@@ -359,6 +366,14 @@ function CommentRow({ comment, depth }: { comment: UiComment; depth: number }) {
             {comment.text}
           </p>
         </div>
+        {reportable && (
+          <ReportButton
+            targetType="comment"
+            targetId={comment.id}
+            size="sm"
+            className="self-start mt-0.5"
+          />
+        )}
       </div>
       {comment.replies && comment.replies.length > 0 && (
         <div className="mt-3 space-y-3 border-l border-white/8 pl-3">
