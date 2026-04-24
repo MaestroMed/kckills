@@ -1,0 +1,7 @@
+# RFC 9116 security contact for kckills.com
+# https://www.rfc-editor.org/rfc/rfc9116.html
+
+Contact: mailto:kckillsloltok@gmail.com
+Expires: 2027-04-24T00:00:00.000Z
+Preferred-Languages: fr, en
+Canonical: https://kckills.com/.well-known/security.txt

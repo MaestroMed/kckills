@@ -6,6 +6,7 @@ import { getKillsByMatchExternalId, type PublishedKillRow } from "@/lib/supabase
 import { pickAssetUrl } from "@/lib/kill-assets";
 import { ClipReel } from "@/components/ClipReel";
 import { MatchHero } from "@/components/match/MatchHero";
+import { JsonLd, breadcrumbLD } from "@/lib/seo/jsonld";
 import Image from "next/image";
 import Link from "next/link";
 import type { Metadata } from "next";
@@ -21,8 +22,36 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const data = loadRealData();
   const match = getMatchById(data, slug);
   if (!match) return { title: "Match introuvable \u2014 KCKILLS" };
+  const title = `KC vs ${match.opponent.code} \u2014 ${match.stage}`;
+  const description = `Karmine Corp ${match.kc_score}-${match.opp_score} ${match.opponent.name} (${match.stage}, Bo${match.best_of}) — clips, stats par game, timeline des kills.`;
+  const canonicalPath = `/match/${match.id}`;
   return {
-    title: `KC vs ${match.opponent.code} \u2014 ${match.stage} \u2014 KCKILLS`,
+    title,
+    description,
+    alternates: { canonical: canonicalPath },
+    openGraph: {
+      title: `${title} \u2014 KCKILLS`,
+      description,
+      type: "website",
+      url: canonicalPath,
+      siteName: "KCKILLS",
+      locale: "fr_FR",
+      images: [
+        {
+          url: "/images/hero-bg.jpg",
+          width: 1920,
+          height: 1280,
+          alt: `KC vs ${match.opponent.name} \u2014 ${match.stage}`,
+        },
+      ],
+    },
+    twitter: {
+      card: "summary_large_image",
+      title: `${title} \u2014 KCKILLS`,
+      description,
+      images: ["/images/hero-bg.jpg"],
+      creator: "@KarmineCorp",
+    },
   };
 }
 
@@ -119,12 +148,21 @@ export default async function MatchPage({ params }: Props) {
     url: `https://kckills.com/match/${match.id}`,
   };
 
+  // BreadcrumbList — Home > Matches > KC vs OPP. Helps Google build
+  // the site-nav rich result alongside the SportsEvent card.
+  const breadcrumbJsonLd = breadcrumbLD([
+    { name: "Accueil", url: "/" },
+    { name: "Matchs", url: "/matches" },
+    { name: `KC vs ${match.opponent.code}`, url: `/match/${match.id}` },
+  ]);
+
   return (
     <div className="space-y-8">
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(matchJsonLd) }}
       />
+      <JsonLd data={breadcrumbJsonLd} />
       {/* Breadcrumb */}
       <nav className="flex items-center gap-2 text-sm text-[var(--text-muted)]">
         <Link href="/" className="hover:text-[var(--gold)]">Accueil</Link>

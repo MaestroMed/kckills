@@ -9,6 +9,7 @@ import { KillInteractions } from "./interactions";
 import { KillCinematicView } from "@/components/kill/KillCinematicView";
 import { SimilarClipsCarousel } from "@/components/kill/SimilarClipsCarousel";
 import { getAssetMetadata, pickAssetUrl } from "@/lib/kill-assets";
+import { JsonLd, breadcrumbLD } from "@/lib/seo/jsonld";
 import type { Metadata } from "next";
 
 // ISR: pre-render the top N clips at build time, regenerate every 10 min
@@ -311,6 +312,22 @@ export default async function KillDetailPage({ params }: Props) {
           }));
       }
 
+      // Breadcrumb JSON-LD — Home > Match > Kill. Helps Google build
+      // the "site nav" rich result that surfaces alongside the video
+      // carousel. The match link is included only when we have a
+      // resolved external_id so the URL is canonical.
+      const matchExtId = kill.games?.matches?.external_id;
+      const breadcrumbJsonLd = breadcrumbLD([
+        { name: "Accueil", url: "/" },
+        ...(matchExtId
+          ? [{ name: `KC vs ${opponent.code}`, url: `/match/${matchExtId}` }]
+          : []),
+        {
+          name: `${kill.killer_champion ?? "?"} \u2192 ${kill.victim_champion ?? "?"}`,
+          url: `/kill/${id}`,
+        },
+      ]);
+
       return (
         <>
           {videoJsonLd && (
@@ -319,6 +336,7 @@ export default async function KillDetailPage({ params }: Props) {
               dangerouslySetInnerHTML={{ __html: JSON.stringify(videoJsonLd) }}
             />
           )}
+          <JsonLd data={breadcrumbJsonLd} />
           <KillCinematicView
             kill={kill}
             opponent={opponent}

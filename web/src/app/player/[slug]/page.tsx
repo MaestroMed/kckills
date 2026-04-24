@@ -10,6 +10,7 @@ import {
   type PublishedKillRow,
 } from "@/lib/supabase/kills";
 import { getAssetMetadata, pickAssetUrl } from "@/lib/kill-assets";
+import { JsonLd, breadcrumbLD } from "@/lib/seo/jsonld";
 import Image from "next/image";
 import Link from "next/link";
 import type { Metadata } from "next";
@@ -181,9 +182,14 @@ export default async function PlayerPage({ params }: Props) {
   //     PerformanceRole because the latter requires Wikidata-grade
   //     IDs we don't have. Photo + ItemList of clips so video
   //     carousels can attribute hits to the right athlete.
-  const playerJsonLd = {
-    "@context": "https://schema.org",
+  //
+  //     Wrapped inside a ProfilePage envelope (Phase 4 SEO) so Google
+  //     understands this URL is the canonical profile for the
+  //     embedded Person — recommended by schema.org for athlete /
+  //     creator pages.
+  const personNode = {
     "@type": "Person",
+    "@id": `https://kckills.com/player/${encodeURIComponent(name)}#person`,
     name,
     alternateName: `KC ${name}`,
     url: `https://kckills.com/player/${encodeURIComponent(name)}`,
@@ -194,6 +200,7 @@ export default async function PlayerPage({ params }: Props) {
     memberOf: {
       "@type": "SportsTeam",
       name: "Karmine Corp",
+      alternateName: ["KC", "KCorp"],
       url: "https://kckills.com",
       sport: "League of Legends",
     },
@@ -214,6 +221,21 @@ export default async function PlayerPage({ params }: Props) {
       : {}),
   };
 
+  const playerJsonLd = {
+    "@context": "https://schema.org",
+    "@type": "ProfilePage",
+    url: `https://kckills.com/player/${encodeURIComponent(name)}`,
+    name: `${name} — KCKILLS`,
+    inLanguage: "fr-FR",
+    mainEntity: personNode,
+  };
+
+  const breadcrumbJsonLd = breadcrumbLD([
+    { name: "Accueil", url: "/" },
+    { name: "Joueurs", url: "/players" },
+    { name, url: `/player/${encodeURIComponent(name)}` },
+  ]);
+
   return (
     <div
       className="-mt-6"
@@ -231,6 +253,7 @@ export default async function PlayerPage({ params }: Props) {
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(playerJsonLd) }}
       />
+      <JsonLd data={breadcrumbJsonLd} />
       {/* ═══ HERO — full-screen cinematic with cube-portrait morph ═══ */}
       <section className="relative h-[90vh] min-h-[720px] w-full overflow-hidden bg-[var(--bg-primary)]">
         {/* Soft champion-art backdrop — heavily darkened so the dot-matrix

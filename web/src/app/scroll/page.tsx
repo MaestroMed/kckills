@@ -24,6 +24,12 @@ import {
 } from "@/components/scroll/ScrollFeed";
 import { ScrollFeedV2 } from "@/components/scroll/v2/ScrollFeedV2";
 import type { GridAxisId } from "@/lib/grid/axis-config";
+import { JsonLd, breadcrumbLD } from "@/lib/seo/jsonld";
+import { pickAssetUrl } from "@/lib/kill-assets";
+
+const SITE_URL =
+  process.env.NEXT_PUBLIC_SITE_URL ??
+  (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "https://kckills.com");
 
 const FILTERABLE_AXES: ReadonlySet<string> = new Set<GridAxisId>([
   "game_minute_bucket",
@@ -39,16 +45,32 @@ const FILTERABLE_AXES: ReadonlySet<string> = new Set<GridAxisId>([
 export const revalidate = 300;
 export const metadata = {
   title: "Scroll — KCKILLS",
-  description: "Scroll les kills KC comme sur TikTok. Vrais clips video des matchs LEC, generes automatiquement.",
+  description:
+    "Scroll les kills KC comme sur TikTok. Vrais clips vidéo des matchs LEC, générés automatiquement, classés par score IA.",
+  alternates: { canonical: "/scroll" },
   openGraph: {
     title: "KC Kills — Le TikTok des kills LoL",
-    description: "Scroll, rate et partage chaque kill Karmine Corp de la LEC. Clips video autoplay + descriptions AI.",
-    type: "website",
+    description:
+      "Scroll, rate et partage chaque kill Karmine Corp de la LEC. Clips vidéo autoplay + descriptions AI.",
+    type: "website" as const,
+    url: "/scroll",
+    siteName: "KCKILLS",
+    locale: "fr_FR",
+    images: [
+      {
+        url: "/images/hero-bg.jpg",
+        width: 1920,
+        height: 1280,
+        alt: "KCKILLS — feed vertical des kills Karmine Corp",
+      },
+    ],
   },
   twitter: {
-    card: "summary_large_image",
+    card: "summary_large_image" as const,
     title: "KC Kills — Le TikTok des kills LoL",
     description: "Scroll les kills KC comme sur TikTok.",
+    images: ["/images/hero-bg.jpg"],
+    creator: "@KarmineCorp",
   },
 };
 
@@ -281,14 +303,68 @@ export default async function ScrollV2Page({ searchParams }: ScrollPageProps) {
     : weightedShuffle(allClips);
   const clipCount = items.length;
 
+  // ─── JSON-LD : ItemList of the first 20 highest-scored published
+  //     kills, each as a VideoObject. Helps Google build a video
+  //     carousel rich result for the /scroll surface. We pull from
+  //     `allKills` (raw Supabase rows) instead of `items` (FeedItem)
+  //     because the manifest-aware thumbnail URL lives on the raw
+  //     row, not the lightweight feed view-model.
+  const ldSample = allKills
+    .filter((k) => k.tracked_team_involvement === "team_killer" && k.kill_visible !== false)
+    .slice(0, 20);
+  const scrollItemListJsonLd = {
+    "@context": "https://schema.org",
+    "@type": "ItemList",
+    name: "Feed des clips KC — KCKILLS",
+    description:
+      "Les meilleurs kills Karmine Corp en LEC, classés par score IA et engagement communauté.",
+    url: `${SITE_URL}/scroll`,
+    numberOfItems: ldSample.length,
+    itemListOrder: "https://schema.org/ItemListOrderDescending",
+    itemListElement: ldSample.map((k, i) => {
+      const thumb = pickAssetUrl(k, "thumbnail") ?? pickAssetUrl(k, "og_image") ?? undefined;
+      const horizontal = pickAssetUrl(k, "horizontal") ?? undefined;
+      return {
+        "@type": "ListItem",
+        position: i + 1,
+        url: `${SITE_URL}/kill/${k.id}`,
+        item: {
+          "@type": "VideoObject",
+          name:
+            k.killer_champion && k.victim_champion
+              ? `${k.killer_champion} \u2192 ${k.victim_champion} — Karmine Corp`
+              : `Clip Karmine Corp #${i + 1}`,
+          description:
+            k.ai_description ??
+            (k.killer_champion && k.victim_champion
+              ? `${k.killer_champion} élimine ${k.victim_champion} — clip Karmine Corp en LEC.`
+              : "Clip Karmine Corp en LEC."),
+          thumbnailUrl: thumb,
+          contentUrl: horizontal,
+          uploadDate: k.created_at || undefined,
+          inLanguage: "fr-FR",
+        },
+      };
+    }),
+  };
+
+  const breadcrumbJsonLd = breadcrumbLD([
+    { name: "Accueil", url: "/" },
+    { name: "Scroll", url: "/scroll" },
+  ]);
+
   return (
-    <ScrollFeedV2
-      items={items}
-      videoCount={clipCount}
-      initialKillId={initialKillId}
-      chipFilters={chipFilters}
-      rosterChips={rosterChips}
-    />
+    <>
+      <JsonLd data={scrollItemListJsonLd} />
+      <JsonLd data={breadcrumbJsonLd} />
+      <ScrollFeedV2
+        items={items}
+        videoCount={clipCount}
+        initialKillId={initialKillId}
+        chipFilters={chipFilters}
+        rosterChips={rosterChips}
+      />
+    </>
   );
 }
 

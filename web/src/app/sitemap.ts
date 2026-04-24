@@ -11,7 +11,23 @@ const SITE_URL =
 // Cap how many clip URLs we expose in the sitemap so it stays under
 // Google's 50K-entry / 50MB hard limit even at scale, and so the
 // sitemap fetch at build time doesn't pull the entire kills table.
-const SITEMAP_MAX_CLIPS = 500;
+// Phase 4 — bumped from 500 → 5000 once the catalog crossed 350+
+// published clips with growth velocity. Google's per-file cap is 50k
+// so we still have headroom; Vercel ISR builds the file in <2s at
+// 5k since the SELECT is index-backed (idx_kills_published).
+const SITEMAP_MAX_CLIPS = 5000;
+// Limits for the auxiliary entity pages — sized so the per-file URL
+// count comfortably stays under Google's 50K cap once ALL buckets
+// (clips + players + matches + champions + matchups + static)
+// are merged.
+const SITEMAP_MAX_PLAYERS = 200;
+const SITEMAP_MAX_MATCHES = 200;
+
+// ISR cadence for the sitemap itself. 1h is the sweet spot per the
+// Phase 4 SEO spec : fresh enough for newly-published clips to hit
+// the index quickly, slow enough that we don't hammer Supabase on
+// every Googlebot fetch (Vercel caches the response between builds).
+export const revalidate = 3600;
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const now = new Date();
@@ -113,18 +129,36 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     priority: 0.55,
   }));
 
-  const playerPages: MetadataRoute.Sitemap = roster.map((player) => ({
-    url: `${SITE_URL}/player/${encodeURIComponent(player.name)}`,
-    lastModified: now,
-    changeFrequency: "weekly",
-    priority: 0.6,
-  }));
+  // Player pages — top N by total kills so the most relevant profiles
+  // get priority crawl signal. Sort first then slice — the Phase 4
+  // spec asks for top 200 by total kills, but the live KC/alumni
+  // roster only has ~30 names; the cap is here for when historical
+  // backfills bring us above that bar.
+  const playerPages: MetadataRoute.Sitemap = [...roster]
+    .sort((a, b) => b.totalKills - a.totalKills)
+    .slice(0, SITEMAP_MAX_PLAYERS)
+    .map((player) => ({
+      url: `${SITE_URL}/player/${encodeURIComponent(player.name)}`,
+      lastModified: now,
+      changeFrequency: "weekly" as const,
+      priority: 0.7,
+    }));
 
-  const matchPages: MetadataRoute.Sitemap = data.matches.slice(0, 100).map((match) => ({
+  // Match pages — keep the last 12 months at full priority so Google
+  // sees the freshest competitive context first. Older matches still
+  // resolve via the on-demand /match/[id] route, they just don't get
+  // sitemap signal beyond the 200-row cap.
+  const twelveMonthsAgo = new Date();
+  twelveMonthsAgo.setFullYear(twelveMonthsAgo.getFullYear() - 1);
+  const recentMatches = data.matches
+    .filter((m) => new Date(m.date) >= twelveMonthsAgo)
+    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+    .slice(0, SITEMAP_MAX_MATCHES);
+  const matchPages: MetadataRoute.Sitemap = recentMatches.map((match) => ({
     url: `${SITE_URL}/match/${match.id}`,
     lastModified: new Date(match.date),
-    changeFrequency: "monthly",
-    priority: 0.5,
+    changeFrequency: "monthly" as const,
+    priority: 0.6,
   }));
 
   // Per-champion URLs derived from the kills sample we already have in
@@ -163,18 +197,29 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   });
 
   // Per-clip URLs — the actual content Google should index. Priority is
-  // attenuated by highlight score so the index gets a quality signal.
+  // attenuated by highlight score so the index gets a quality signal,
+  // and freshness is amplified for the last-90-days window so the
+  // crawler revisits hot content. Phase 4 spec :
+  //   - priority 0.5-0.9 mapped from highlight_score (1-10)
+  //   - changeFreq monthly (kills don't change once published, only
+  //     ratings do — and ratings refresh via React Query, not crawl)
+  const ninetyDaysAgo = Date.now() - 90 * 24 * 60 * 60 * 1000;
   const clipPages: MetadataRoute.Sitemap = publishedKills.map((k) => {
     const score = typeof k.highlight_score === "number" ? k.highlight_score : 5;
-    // Map highlight 1-10 → priority 0.3-0.85 (top clips outrank generic
+    // Map highlight 1-10 → priority 0.5-0.9 (top clips outrank generic
     // landing pages but never beat the homepage).
-    const priority = Math.max(0.3, Math.min(0.85, 0.3 + (score / 10) * 0.55));
-    const lastModified = k.created_at ? new Date(k.created_at) : now;
+    let priority = Math.max(0.5, Math.min(0.9, 0.5 + (score / 10) * 0.4));
+    const created = k.created_at ? new Date(k.created_at) : now;
+    // Recent clip → bump priority slightly so Google prioritises
+    // crawling the freshest content within the same score band.
+    if (created.getTime() >= ninetyDaysAgo) {
+      priority = Math.min(0.9, priority + 0.05);
+    }
     return {
       url: `${SITE_URL}/kill/${k.id}`,
-      lastModified,
-      changeFrequency: "weekly" as const,
-      priority,
+      lastModified: created,
+      changeFrequency: "monthly" as const,
+      priority: Math.round(priority * 100) / 100,
     };
   });
 
