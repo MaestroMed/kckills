@@ -1,20 +1,36 @@
 """
-CHANNEL_RECONCILER v2 — Match channel_videos rows to (match, game, content_type).
+CHANNEL_RECONCILER v3 — Match channel_videos rows to (match, game, content_type).
 
 V1 covered LEC 2024+ via @LEC's standardised "TEAMA vs TEAMB | HIGHLIGHTS"
-title format. V2 extends coverage to :
-  - LFL  (KC's roots 2021-2023, FR titles, "OTPLOL", "LFL")
-  - EU Masters (KC's 3 EUM titles, "EUM", "EU Masters", "EM")
-  - Worlds qualifiers / play-in
-  - First Stand 2025
-  - Kameto Clips short-clip titles ("KILL DE X", "PENTAKILL DE Y")
-  - KC official channel content (voicecomms, debriefs, post-match,
-    interviews, funny moments) — these have no in-game footage but
-    SHOULD be attached to a match as "context" so the /match/[slug]
-    page can surface them.
+title format. V2 extended coverage to LFL / EUM / Worlds / First Stand /
+Kameto Clips / KC official channel content_types.
 
-Backward-compat : v1 LEC_HIGHLIGHTS_RE / LIVE_GAME_RE preserved
-unchanged — existing rows still parse identically.
+V3 (PR25) FIXES THE 154-VIDEO BACKLOG. Three concrete bugs were stopping
+matches from ever being linked :
+
+  A) The status filter was too tight. The discoverer scores most match
+     titles like "TH vs KC | HIGHLIGHTS" at relevance 0.5 (single \\bKC\\b
+     hit), which lands the row in `manual_review` — NOT `classified`.
+     V3 widens the input set to {discovered, classified, manual_review}
+     and re-attempts parsing.
+
+  B) The discoverer never persists `published_at`, so the v2 reconciler's
+     30-day default window was missing every historical video. V3 widens
+     to ±7 days when published_at exists, and falls back to the FULL
+     team-vs-team history when it doesn't (closest match by date wins).
+
+  C) The match-lookup was strictly ordered (team_a vs team_b expected to
+     appear in a specific blue/red slot). V3 matches on the SET of team
+     codes — KC/TH and TH/KC both hit the same matches row.
+
+Once a match is found we set :
+  status = 'matched'
+  matched_match_external_id = <external_id>
+  matched_game_number       = <int from "Game N" if any>
+  matched_at                = now()
+  kc_relevance_score        = max(existing, 0.7)   <- promote to "matched"
+
+Backward-compat : v1 LEC_HIGHLIGHTS_RE / LIVE_GAME_RE preserved unchanged.
 """
 
 from __future__ import annotations
@@ -81,6 +97,14 @@ FIRSTSTAND_RE = re.compile(
     re.IGNORECASE,
 )
 
+# Generic "TEAMA vs TEAMB" anywhere in the title — fallback when no
+# tournament tag is present (covers KC official replays / Kameto VOD
+# rebroadcasts whose titles are just "KC vs G2 - BO5 Finale").
+GENERIC_VS_RE = re.compile(
+    r"(?:^|\b)([A-Z0-9.]{2,8})\s*vs\.?\s*([A-Z0-9.]{2,8})\b",
+    re.IGNORECASE,
+)
+
 # Kameto Clips — heavily varied, FR-only
 KAMETO_CLIP_RE = re.compile(
     r"^\s*"
@@ -107,50 +131,75 @@ SPLIT_RE = re.compile(
     re.IGNORECASE,
 )
 GAME_N_RE = re.compile(r"\bGame\s*(\d)\b", re.IGNORECASE)
+YEAR_RE = re.compile(r"\b(20[2-3]\d)\b")
 
 
 # ─── Team-code aliases ────────────────────────────────────────────────
+# Keys are normalised (no dot/space/dash, uppercase). Values are the
+# canonical 2-4 letter codes stored in the `teams.code` column.
 TEAM_ALIAS: dict[str, str] = {
     "KARMINE": "KC", "KCORP": "KC", "KARMINECORP": "KC",
-    "KCB": "KCB", "KARMINE.B": "KCB", "KARMINEB": "KCB",
-    "VIT.B": "VITB", "VITALITY.BEE": "VITB", "VITALITYBEE": "VITB", "BEE": "VITB",
-    "FNC.R": "FNCR", "FNATIC.RISING": "FNCR", "FNATICRISING": "FNCR",
-    "BDS.A": "BDSA", "BDS.ACADEMY": "BDSA", "BDSACADEMY": "BDSA",
-    "MISFITS.P": "MSFP", "MISFITSPREMIER": "MSFP",
+    "KCB": "KCB", "KARMINEB": "KCB",
+    "VITB": "VITB", "VITALITYBEE": "VITB", "BEE": "VITB",
+    "FNCR": "FNCR", "FNATICRISING": "FNCR",
+    "BDSA": "BDSA", "BDSACADEMY": "BDSA",
+    "MISFITSP": "MSFP", "MISFITSPREMIER": "MSFP",
     "OTPLOL": "OPL",
     "GW": "GMW", "GAMEWARD": "GMW",
-    "LDLC.OL": "LDL", "LDLCOL": "LDL",
+    "LDLCOL": "LDL",
     "MCES": "MCE",
-    "BKR": "BKROG", "BK": "BKROG", "BK.ROG": "BKROG",
+    "BKR": "BKROG", "BK": "BKROG", "BKROG": "BKROG",
     "SOLARY": "SLY",
     "G2ESPORTS": "G2",
     "FNATIC": "FNC",
     "MADLIONS": "MAD",
-    "TEAM.HERETICS": "TH", "HERETICS": "TH",
+    "TEAMHERETICS": "TH", "HERETICS": "TH",
     "TEAMBDS": "BDS",
     "VITALITY": "VIT", "TEAMVITALITY": "VIT",
-    "MOVISTAR.KOI": "MKOI", "MOVISTARKOI": "MKOI",
-    "GIANTX": "GX",
+    "MOVISTARKOI": "MKOI",
+    # Note : many sources use "GX" but the DB stores "GIANTX". We invert
+    # the mapping — anything looking GiantX-ish normalises to GIANTX.
+    "GX": "GIANTX", "GIANTX": "GIANTX",
     "ROGUE": "RGE",
     "SKGAMING": "SK",
     "ASTRALIS": "AST",
     "EXCEL": "XL",
     "HANWHALIFE": "HLE",
     "TOPESPORTS": "TES",
-    "CTBC": "CFO", "FLYING.OYSTER": "CFO",
+    "CTBC": "CFO", "FLYINGOYSTER": "CFO",
 }
 
 
 def normalise_team(code: str) -> str:
-    """Strip dots/spaces/case, map to canonical via TEAM_ALIAS."""
+    """Strip dots/spaces/dashes/case, map to canonical via TEAM_ALIAS."""
+    if not code:
+        return ""
     cleaned = re.sub(r"[\s.\-]", "", code).upper()
     return TEAM_ALIAS.get(cleaned, cleaned)
+
+
+# Codes that can NEVER be a team — these look like teams in the regex
+# but are tournament tags or noise. Must drop them before looking up
+# matches, otherwise we'd issue ridiculous queries.
+NON_TEAM_TOKENS = {
+    "VS", "EN", "ET", "OU", "DE", "DU", "LA", "LE", "LES",
+    "BO1", "BO3", "BO5",
+    "GAME", "DAY", "WEEK", "SEMAINE", "JOUR",
+    "LEC", "LFL", "EUM", "EM", "WORLDS", "MSI",
+    "FIRSTSTAND", "PLAYOFFS", "FINAL", "FINALE", "REGULAR",
+    "SPRING", "SUMMER", "WINTER", "VERSUS",
+    "HIGHLIGHTS", "HIGHLIGHT", "VOD", "FULL",
+}
 
 
 # ─── Title parser ─────────────────────────────────────────────────────
 
 def parse_title_for_match(title: str, role: str | None = None) -> dict | None:
-    """Extract structured match info from a channel video title."""
+    """Extract structured match info from a channel video title.
+
+    Returns None when nothing parses ; otherwise a dict with at least
+    `content_type` set, plus optionally `team_a`/`team_b`/`game_n`/etc.
+    """
     if not title:
         return None
 
@@ -185,59 +234,85 @@ def parse_title_for_match(title: str, role: str | None = None) -> dict | None:
     # LEC (v1 backward-compat first)
     m = LEC_HIGHLIGHTS_RE.search(title)
     if m:
-        out["team_a"] = normalise_team(m.group(1))
-        out["team_b"] = normalise_team(m.group(2))
-        out["league"] = "lec"
-        out["video_type"] = "game_highlights"
-        out["content_type"] = "highlights"
+        a, b = normalise_team(m.group(1)), normalise_team(m.group(2))
+        if a not in NON_TEAM_TOKENS and b not in NON_TEAM_TOKENS:
+            out["team_a"] = a
+            out["team_b"] = b
+            out["league"] = "lec"
+            out["video_type"] = "game_highlights"
+            out["content_type"] = "highlights"
 
     if not out:
         m = LIVE_GAME_RE.search(title)
         if m:
-            out["team_a"] = normalise_team(m.group(1))
-            out["team_b"] = normalise_team(m.group(2))
-            out["game_n"] = int(m.group(3))
-            out["league"] = "lec"
-            out["video_type"] = "single_game"
-            out["content_type"] = "single_game"
+            a, b = normalise_team(m.group(1)), normalise_team(m.group(2))
+            if a not in NON_TEAM_TOKENS and b not in NON_TEAM_TOKENS:
+                out["team_a"] = a
+                out["team_b"] = b
+                out["game_n"] = int(m.group(3))
+                out["league"] = "lec"
+                out["video_type"] = "single_game"
+                out["content_type"] = "single_game"
 
     if not out:
         m = LFL_BRACKET_RE.search(title) or LFL_HIGHLIGHTS_RE.search(title)
         if m:
-            out["team_a"] = normalise_team(m.group(1))
-            out["team_b"] = normalise_team(m.group(2))
-            out["league"] = "lfl"
-            out["video_type"] = "game_highlights"
-            out["content_type"] = "highlights"
+            a, b = normalise_team(m.group(1)), normalise_team(m.group(2))
+            if a not in NON_TEAM_TOKENS and b not in NON_TEAM_TOKENS:
+                out["team_a"] = a
+                out["team_b"] = b
+                out["league"] = "lfl"
+                out["video_type"] = "game_highlights"
+                out["content_type"] = "highlights"
 
     if not out:
         m = EUM_HIGHLIGHTS_RE.search(title)
         if m:
-            out["team_a"] = normalise_team(m.group(1))
-            out["team_b"] = normalise_team(m.group(2))
-            out["league"] = "eum"
-            out["video_type"] = "game_highlights"
-            out["content_type"] = "highlights"
+            a, b = normalise_team(m.group(1)), normalise_team(m.group(2))
+            if a not in NON_TEAM_TOKENS and b not in NON_TEAM_TOKENS:
+                out["team_a"] = a
+                out["team_b"] = b
+                out["league"] = "eum"
+                out["video_type"] = "game_highlights"
+                out["content_type"] = "highlights"
 
     if not out:
         m = WORLDS_RE.search(title)
         if m:
-            out["team_a"] = normalise_team(m.group(1))
-            out["team_b"] = normalise_team(m.group(2))
-            out["league"] = "worlds"
-            out["video_type"] = "game_highlights"
-            out["content_type"] = "highlights"
-            if m.group(4):
-                out["year"] = int(m.group(4))
+            a, b = normalise_team(m.group(1)), normalise_team(m.group(2))
+            if a not in NON_TEAM_TOKENS and b not in NON_TEAM_TOKENS:
+                out["team_a"] = a
+                out["team_b"] = b
+                out["league"] = "worlds"
+                out["video_type"] = "game_highlights"
+                out["content_type"] = "highlights"
+                if m.group(4):
+                    out["year"] = int(m.group(4))
 
     if not out:
         m = FIRSTSTAND_RE.search(title)
         if m:
-            out["team_a"] = normalise_team(m.group(1))
-            out["team_b"] = normalise_team(m.group(2))
-            out["league"] = "first_stand"
-            out["video_type"] = "game_highlights"
-            out["content_type"] = "highlights"
+            a, b = normalise_team(m.group(1)), normalise_team(m.group(2))
+            if a not in NON_TEAM_TOKENS and b not in NON_TEAM_TOKENS:
+                out["team_a"] = a
+                out["team_b"] = b
+                out["league"] = "first_stand"
+                out["video_type"] = "game_highlights"
+                out["content_type"] = "highlights"
+
+    # Last-resort generic "TEAMA vs TEAMB" — only fires if KC is on at
+    # least one side, otherwise we'd pull garbage matches.
+    if not out:
+        m = GENERIC_VS_RE.search(title)
+        if m:
+            a, b = normalise_team(m.group(1)), normalise_team(m.group(2))
+            if (a not in NON_TEAM_TOKENS and b not in NON_TEAM_TOKENS
+                    and (a in ("KC", "KCB") or b in ("KC", "KCB"))):
+                out["team_a"] = a
+                out["team_b"] = b
+                out["league"] = "unknown"
+                out["video_type"] = "game_highlights"
+                out["content_type"] = "highlights"
 
     if not out:
         return None
@@ -264,20 +339,79 @@ def parse_title_for_match(title: str, role: str | None = None) -> dict | None:
         }
         out["split"] = SPLIT_MAP.get(split_raw, split_raw)
         out["year"] = int(m.group(2))
+    elif "year" not in out:
+        m = YEAR_RE.search(title)
+        if m:
+            out["year"] = int(m.group(1))
 
     return out
 
 
 # ─── Match candidate lookup ───────────────────────────────────────────
 
+def _matches_in_window(
+    db,
+    *,
+    window_start: str | None,
+    window_end: str | None,
+) -> list[dict]:
+    """Fetch matches in an optional time window, embedded with team codes."""
+    # PostgREST httpx tuple-list trick : a list of (key, value) tuples
+    # serialises to multiple `key=value` query string entries — exactly
+    # what's needed to AND `scheduled_at=gte.X` AND `scheduled_at=lte.Y`.
+    # Passing {"scheduled_at": [...]} only keeps the LAST value (httpx
+    # collapses duplicate keys when the value is a list of strings).
+    params: list[tuple[str, str]] = [
+        (
+            "select",
+            "id,external_id,scheduled_at,stage,"
+            "team_blue:teams!matches_team_blue_id_fkey(code),"
+            "team_red:teams!matches_team_red_id_fkey(code)",
+        ),
+        ("order", "scheduled_at.desc"),
+        ("limit", "500"),
+    ]
+    if window_start:
+        params.append(("scheduled_at", f"gte.{window_start}"))
+    if window_end:
+        params.append(("scheduled_at", f"lte.{window_end}"))
+
+    r = httpx.get(
+        f"{db.base}/matches",
+        headers=db.headers,
+        params=params,
+        timeout=20.0,
+    )
+    if r.status_code != 200:
+        log.warn(
+            "reconciler_match_query_failed",
+            status=r.status_code,
+            body=r.text[:200],
+        )
+        return []
+    return r.json() or []
+
+
 async def find_match_candidates(
     db,
     parsed: dict,
     published_at: datetime | None,
 ) -> list[dict]:
-    """Look up matches table for KC matches matching parsed teams + date window."""
+    """Look up matches involving the parsed teams within a sensible window.
+
+    Match logic :
+      - SET-equal team codes (KC/TH == TH/KC, no blue/red ordering).
+      - Window :
+          * published_at known   -> ±7 days around it (LEC / LFL / EUM
+                                    typical upload delay 0-48h, but a
+                                    Kameto re-upload can drift days).
+          * year hint, no date   -> entire year.
+          * neither              -> entire history (closest-by-date wins).
+      - One side must always be KC / KCB.
+    """
     teams = {parsed.get("team_a"), parsed.get("team_b")}
     teams.discard(None)
+    teams.discard("")
     kc_in = teams & {"KC", "KCB"}
     if not kc_in:
         return []
@@ -286,51 +420,25 @@ async def find_match_candidates(
         return []
     opp = next(iter(opp_set))
 
-    if published_at is None:
-        if parsed.get("league") in ("lfl", "eum") and parsed.get("year"):
-            year = parsed["year"]
-            window_start = datetime(year, 1, 1, tzinfo=timezone.utc).isoformat()
-            window_end = datetime(year, 12, 31, 23, 59, tzinfo=timezone.utc).isoformat()
-        else:
-            window_start = (datetime.now(timezone.utc) - timedelta(days=30)).isoformat()
-            window_end = datetime.now(timezone.utc).isoformat()
-    else:
-        is_live = parsed.get("video_type") == "single_game"
-        is_historical = parsed.get("league") in ("lfl", "eum") and parsed.get("year", 9999) < 2024
-        if is_live:
-            window_start = (published_at - timedelta(days=2)).isoformat()
-            window_end = (published_at + timedelta(hours=12)).isoformat()
-        elif is_historical:
-            year = parsed.get("year") or published_at.year
-            window_start = datetime(year, 1, 1, tzinfo=timezone.utc).isoformat()
-            window_end = datetime(year, 12, 31, 23, 59, tzinfo=timezone.utc).isoformat()
-        else:
-            window_start = (published_at - timedelta(days=7)).isoformat()
-            window_end = (published_at + timedelta(days=1)).isoformat()
+    window_start: str | None = None
+    window_end: str | None = None
 
-    r = httpx.get(
-        f"{db.base}/matches",
-        headers=db.headers,
-        params={
-            "select": (
-                "id,external_id,scheduled_at,stage,"
-                "team_blue:teams!matches_team_blue_id_fkey(code),"
-                "team_red:teams!matches_team_red_id_fkey(code)"
-            ),
-            "scheduled_at": [
-                f"gte.{window_start}",
-                f"lte.{window_end}",
-            ],
-            "limit": 100,
-        },
-        timeout=15.0,
+    if published_at is not None:
+        window_start = (published_at - timedelta(days=7)).isoformat()
+        window_end = (published_at + timedelta(days=7)).isoformat()
+    elif parsed.get("year"):
+        year = int(parsed["year"])
+        window_start = datetime(year, 1, 1, tzinfo=timezone.utc).isoformat()
+        window_end = datetime(year, 12, 31, 23, 59, 59, tzinfo=timezone.utc).isoformat()
+    # else: full history, no window
+
+    candidates = _matches_in_window(
+        db,
+        window_start=window_start,
+        window_end=window_end,
     )
-    if r.status_code != 200:
-        log.warn("reconciler_match_query_failed", status=r.status_code)
-        return []
-    candidates = r.json() or []
 
-    matched = []
+    matched: list[dict] = []
     for m in candidates:
         codes = {
             (m.get("team_blue") or {}).get("code"),
@@ -342,22 +450,54 @@ async def find_match_candidates(
         if opp not in codes:
             continue
         matched.append(m)
+
     return matched
+
+
+def _pick_closest(
+    candidates: list[dict],
+    pivot: datetime | None,
+) -> dict | None:
+    """Closest scheduled_at to the pivot. Fallback : most recent."""
+    if not candidates:
+        return None
+    if pivot is None:
+        # Newest match wins — already DESC-sorted by the query
+        return candidates[0]
+
+    def _dist(c: dict) -> float:
+        sched = c.get("scheduled_at")
+        if not sched:
+            return 10**12
+        try:
+            dt = datetime.fromisoformat(sched.replace("Z", "+00:00"))
+        except (ValueError, AttributeError):
+            return 10**12
+        return abs((dt - pivot).total_seconds())
+
+    return min(candidates, key=_dist)
 
 
 # ─── Reconciliation per row ───────────────────────────────────────────
 
 async def reconcile_one(db, video: dict) -> str:
     """Reconcile a single channel_video row. Returns the new status."""
+    video_id = video["id"]
     title = video.get("title") or ""
     role = video.get("channel_role")
     parsed = parse_title_for_match(title, role=role)
 
     if not parsed:
+        log.info(
+            "reconciler_match_not_found",
+            video_id=video_id,
+            reason="unparseable",
+            title=title[:60],
+        )
         safe_update(
             "channel_videos",
             {"status": "manual_review", "notes": f"Unparseable: {title[:80]}"},
-            "id", video["id"],
+            "id", video_id,
         )
         return "manual_review"
 
@@ -365,6 +505,12 @@ async def reconcile_one(db, video: dict) -> str:
 
     # Standalone content (no match link) — Kameto generic clips, KC funny moments
     if content_type in ("kameto_clip", "funny_moment") and "team_a" not in parsed:
+        log.info(
+            "reconciler_match_found",
+            video_id=video_id,
+            kind="standalone",
+            content_type=content_type,
+        )
         safe_update(
             "channel_videos",
             {
@@ -372,15 +518,22 @@ async def reconcile_one(db, video: dict) -> str:
                 "video_type": parsed.get("video_type"),
                 "content_type": content_type,
                 "matched_at": datetime.now(timezone.utc).isoformat(),
+                "kc_relevance_score": max(video.get("kc_relevance_score") or 0.0, 0.7),
                 "notes": f"Standalone {content_type}",
             },
-            "id", video["id"],
+            "id", video_id,
         )
         return "matched"
 
     # KC official content WITHOUT a parsed match
     if content_type in ("voicecomms", "debrief", "post_match", "interview") \
             and "team_a" not in parsed:
+        log.info(
+            "reconciler_match_found",
+            video_id=video_id,
+            kind="kc_standalone",
+            content_type=content_type,
+        )
         safe_update(
             "channel_videos",
             {
@@ -388,13 +541,14 @@ async def reconcile_one(db, video: dict) -> str:
                 "video_type": parsed.get("video_type"),
                 "content_type": content_type,
                 "matched_at": datetime.now(timezone.utc).isoformat(),
+                "kc_relevance_score": max(video.get("kc_relevance_score") or 0.0, 0.7),
                 "notes": f"Standalone {content_type}",
             },
-            "id", video["id"],
+            "id", video_id,
         )
         return "matched"
 
-    published_at = None
+    published_at: datetime | None = None
     if video.get("published_at"):
         try:
             published_at = datetime.fromisoformat(
@@ -407,8 +561,8 @@ async def reconcile_one(db, video: dict) -> str:
 
     if len(candidates) == 0:
         log.info(
-            "reconcile_no_match",
-            video_id=video["id"],
+            "reconciler_match_not_found",
+            video_id=video_id,
             league=parsed.get("league"),
             teams=f"{parsed.get('team_a')}/{parsed.get('team_b')}",
             title=title[:60],
@@ -421,31 +575,38 @@ async def reconcile_one(db, video: dict) -> str:
                 "content_type": content_type,
                 "notes": f"No match {parsed.get('team_a')}/{parsed.get('team_b')} ({parsed.get('league')})",
             },
-            "id", video["id"],
+            "id", video_id,
         )
         return "manual_review"
 
     if len(candidates) > 1:
+        # Closest-by-date wins. published_at preferred, else "now" pivot.
+        pivot = published_at
+        if pivot is None and parsed.get("year"):
+            pivot = datetime(int(parsed["year"]), 6, 30, tzinfo=timezone.utc)
+        cand = _pick_closest(candidates, pivot)
         log.info(
-            "reconcile_ambiguous",
-            video_id=video["id"],
+            "reconciler_match_ambiguous",
+            video_id=video_id,
             count=len(candidates),
+            picked=(cand or {}).get("external_id"),
             title=title[:60],
         )
-        safe_update(
-            "channel_videos",
-            {
-                "status": "manual_review",
-                "video_type": parsed.get("video_type"),
-                "content_type": content_type,
-                "notes": f"Ambiguous: {len(candidates)} candidates",
-            },
-            "id", video["id"],
-        )
-        return "manual_review"
+        if cand is None:
+            safe_update(
+                "channel_videos",
+                {
+                    "status": "manual_review",
+                    "video_type": parsed.get("video_type"),
+                    "content_type": content_type,
+                    "notes": f"Ambiguous: {len(candidates)} candidates, none datable",
+                },
+                "id", video_id,
+            )
+            return "manual_review"
+    else:
+        cand = candidates[0]
 
-    # Exactly 1 candidate → matched
-    cand = candidates[0]
     safe_update(
         "channel_videos",
         {
@@ -455,8 +616,9 @@ async def reconcile_one(db, video: dict) -> str:
             "matched_match_external_id": cand["external_id"],
             "matched_game_number": parsed.get("game_n"),
             "matched_at": datetime.now(timezone.utc).isoformat(),
+            "kc_relevance_score": max(video.get("kc_relevance_score") or 0.0, 0.7),
         },
-        "id", video["id"],
+        "id", video_id,
     )
 
     # If "context" video, ALSO insert into match_context_videos for the
@@ -472,11 +634,11 @@ async def reconcile_one(db, video: dict) -> str:
                 "match_context_videos",
                 {
                     "match_external_id": cand["external_id"],
-                    "video_id": video["id"],
+                    "video_id": video_id,
                     "channel_id": video.get("channel_id"),
                     "content_type": content_type,
                     "title": title[:500],
-                    "url": f"https://www.youtube.com/watch?v={video['id']}",
+                    "url": f"https://www.youtube.com/watch?v={video_id}",
                     "published_at": video.get("published_at"),
                 },
                 on_conflict="match_external_id,video_id",
@@ -485,8 +647,8 @@ async def reconcile_one(db, video: dict) -> str:
             log.warn("context_video_insert_failed", error=str(e)[:100])
 
     log.info(
-        "reconcile_matched",
-        video_id=video["id"],
+        "reconciler_match_found",
+        video_id=video_id,
         match_ext_id=cand["external_id"],
         game_n=parsed.get("game_n"),
         content_type=content_type,
@@ -496,27 +658,44 @@ async def reconcile_one(db, video: dict) -> str:
 
 # ─── Daemon loop ──────────────────────────────────────────────────────
 
+# Statuses we consider as candidates for re-reconciliation. The original
+# v2 only looked at 'classified' rows, but most discoverer rows actually
+# end up in 'discovered' (when classification missed) or 'manual_review'
+# (when kc_relevance < 0.7) — see PR25.
+RECONCILE_STATUSES = ("discovered", "classified", "manual_review")
+
+
 @run_logged()
 async def run() -> int:
-    """Reconcile all channel_videos rows in status='classified'."""
-    log.info("channel_reconciler_v2_start")
+    """Reconcile pending channel_videos rows. Returns matched count."""
+    log.info("channel_reconciler_v3_start")
 
     db = get_db()
     if not db:
+        log.warn("channel_reconciler_no_db")
         return 0
 
+    # `in.(...)` lets us pull all 3 statuses in one round-trip. Skip rows
+    # that already have a match link (idempotent re-run safe).
+    params: list[tuple[str, str]] = [
+        ("select", "id,channel_id,title,published_at,kc_relevance_score,channels!inner(role)"),
+        ("status", f"in.({','.join(RECONCILE_STATUSES)})"),
+        ("matched_match_external_id", "is.null"),
+        ("order", "created_at.desc"),
+        ("limit", "200"),
+    ]
     r = httpx.get(
         f"{db.base}/channel_videos",
         headers=db.headers,
-        params={
-            "select": "id,channel_id,title,published_at,channels!inner(role)",
-            "status": "eq.classified",
-            "limit": 50,
-        },
-        timeout=15.0,
+        params=params,
+        timeout=20.0,
     )
     if r.status_code != 200:
-        log.warn("reconciler_fetch_failed", status=r.status_code)
+        log.warn(
+            "reconciler_fetch_failed",
+            status=r.status_code,
+            body=r.text[:200],
+        )
         return 0
 
     rows = r.json() or []
@@ -529,11 +708,14 @@ async def run() -> int:
         row["channel_role"] = ch.get("role")
 
     matched_count = 0
+    not_found_count = 0
     for row in rows:
         try:
             new_status = await reconcile_one(db, row)
             if new_status == "matched":
                 matched_count += 1
+            else:
+                not_found_count += 1
         except Exception as e:
             log.error(
                 "reconcile_error",
@@ -542,8 +724,9 @@ async def run() -> int:
             )
 
     log.info(
-        "channel_reconciler_v2_done",
+        "channel_reconciler_v3_done",
         processed=len(rows),
         matched=matched_count,
+        not_matched=not_found_count,
     )
     return matched_count
