@@ -350,13 +350,21 @@ async def clip_kill(
             phash=p_hash,
         )
 
+        # PR23.9 — content_hash + perceptual_hash columns require
+        # migration 010, which isn't applied on this environment yet.
+        # The PATCH was failing with PGRST204 ("column not in schema
+        # cache") which silently rolled back the ENTIRE row update —
+        # so the clip URLs themselves never made it to the DB and the
+        # kill stayed at status=clipping forever (or fell back to
+        # clip_error after the next retry). Strip those two fields
+        # until 010 lands. The hashes are still computed + logged,
+        # just not persisted.
+        # TODO : remove the strip once supabase/migrations/010 is run.
         return {
             "clip_url_horizontal": h_url,
             "clip_url_vertical": v_url,
             "clip_url_vertical_low": vl_url,
             "thumbnail_url": thumb_url,
-            "content_hash": c_hash,
-            "perceptual_hash": p_hash,
             # Local path kept alive for Gemini video analysis —
             # caller is responsible for cleanup via cleanup_local_files()
             "_local_h_path": h_path if os.path.exists(h_path) else None,
