@@ -21,9 +21,45 @@ Usage:
 from __future__ import annotations
 
 import asyncio
+import io
+import os
 import sys
 import time
 import traceback
+
+# ─── Force UTF-8 console output on Windows ───────────────────────────
+# Without this, structlog's ConsoleRenderer crashes on emoji-bearing
+# log lines (Kameto YouTube titles like "💀 Kameto bouge un Sett 😳")
+# because the default Windows console codepage is cp1252 which can't
+# encode anything outside Latin-1. The result is a UnicodeEncodeError
+# inside the log handler that bubbles up as `error="'charmap' codec
+# can't encode character '\\U0001f602'"`. The errors don't break the
+# pipeline (the log line is dropped) but they pollute the output and
+# we lose the actual title we were trying to log.
+#
+# stdout.reconfigure(encoding='utf-8', errors='replace') was added in
+# Python 3.7 and is a no-op on already-UTF-8 streams (Linux/macOS).
+if sys.platform == "win32":
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")  # type: ignore[attr-defined]
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")  # type: ignore[attr-defined]
+    except (AttributeError, io.UnsupportedOperation):
+        # Older Python or a stream that can't be reconfigured (e.g.
+        # piped through `tee`). Fall back to wrapping with TextIOWrapper.
+        try:
+            sys.stdout = io.TextIOWrapper(  # type: ignore[assignment]
+                sys.stdout.buffer, encoding="utf-8", errors="replace",
+                line_buffering=True,
+            )
+            sys.stderr = io.TextIOWrapper(  # type: ignore[assignment]
+                sys.stderr.buffer, encoding="utf-8", errors="replace",
+                line_buffering=True,
+            )
+        except Exception:
+            pass  # last-resort — keep going with whatever we have
+    # Belt-and-braces: also tell child Python processes (subprocess,
+    # admin_job_runner) to use UTF-8 by default.
+    os.environ.setdefault("PYTHONIOENCODING", "utf-8")
 
 import structlog
 
@@ -53,6 +89,7 @@ DAEMON_MODULES: list[tuple[str, int, str]] = [
     ("event_publisher", 300, "modules.event_publisher"), # 5 min — bridge game_events.is_publishable -> kills.status (PR6-D)
     ("embedder",      1800,  "modules.embedder"),      # 30 min — Gemini text-embedding-004 -> kills.embedding for similarity (PR17)
     ("moderator",     180,   "modules.moderator"),     # 3 min — Haiku comment moderation
+    ("discord_autopost", 60, "modules.discord_autopost"), # 60s — auto-share high-score kills to Discord webhook (PR-arch P2 Phase 3)
     ("hls_packager",  1800,  "modules.hls_packager"),  # 30 min — HLS adaptive bitrate (5 clips/run)
     ("channel_discoverer", 21600, "modules.channel_discoverer"),  # 6h — Kameto pivot K-Phase 0
     ("channel_reconciler", 3600, "modules.channel_reconciler"),   # 1h — K-Phase 1 (channel_videos -> matches)
