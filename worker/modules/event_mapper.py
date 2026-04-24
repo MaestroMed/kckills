@@ -34,16 +34,34 @@ indexes block dupes), but does flip the completion flag if it wasn't set.
 Daemon interval : 600s (10 min). The harvester runs at 600s too, so we're
 always at most one cycle behind it. Sentinel.boost during live matches
 forces both modules to 30s, so the canonical map stays fresh during games.
+
+PR-arch P1 : queue-first via pipeline_jobs.
+  * Claim `event.map` jobs.
+  * NOTE on entity model : the dispatcher (and analyzer downstream
+    enqueue) keys event.map jobs by KILL — entity_type='kill',
+    entity_id=kill_id. But map_game() naturally operates per-game.
+    We translate : look up the kill's game_id, then run map_game
+    once per unique game across the claimed batch. All jobs targeting
+    the same game share the resulting count and are acked together.
+    The unique-on-(game_id, kill_id) and unique-on-(game_id, moment_id)
+    partial indexes on game_events keep the inserts idempotent, so
+    multiple kill-keyed jobs hitting the same game don't double-insert.
+  * If the queue is empty, fall back to the legacy game-scan path
+    (event_mapping_complete=FALSE AND kills_extracted=TRUE).
+  * Lease : 60s (one game = a couple of REST calls + bulk insert).
 """
 
 from __future__ import annotations
 
+import asyncio
 import json
+import os
 from datetime import datetime, timezone
 
 import httpx
 import structlog
 
+from services import job_queue
 from services.observability import run_logged
 from services.supabase_client import get_db, safe_select, safe_update
 
@@ -287,11 +305,41 @@ async def map_game(db, game: dict) -> dict:
 # How many games to process per cycle. Mapping is cheap (a couple of
 # REST calls + one bulk insert per game), so a generous cap is fine.
 GAMES_PER_RUN = 50
+BATCH_SIZE = 100
+LEASE_SECONDS = 60
+
+
+def _resolve_game_id(entity_type: str | None, entity_id: str | None) -> str | None:
+    """Translate a job's (entity_type, entity_id) into a game_id.
+
+    Most event.map jobs are kill-keyed (the dispatcher + analyzer enqueue
+    them per kill_id). Some legacy callers may key directly by game.
+    Both shapes are supported.
+    """
+    if not entity_id:
+        return None
+    if entity_type == "game":
+        return entity_id
+    # Default : assume kill_id and look up its game.
+    rows = safe_select("kills", "id,game_id", id=entity_id)
+    if not rows:
+        return None
+    return rows[0].get("game_id")
 
 
 @run_logged()
 async def run() -> int:
     """Map every game where event_mapping_complete=FALSE AND kills_extracted=TRUE.
+
+    Order :
+      1. Claim `event.map` jobs from pipeline_jobs. Resolve each job's
+         entity_id (usually a kill_id) to a game_id, then coalesce so
+         each unique game is mapped exactly once. Ack all jobs sharing
+         the game with the same result.
+      2. If the queue is empty, fall back to the legacy game-scan path
+         AND enqueue jobs for what we find.
+      3. map_game() is idempotent — re-runs on the same game = no inserts
+         (unique partial indexes on kill_id / moment_id) but a flag flip.
 
     Returns the total event rows inserted across all games processed.
     """
@@ -301,59 +349,159 @@ async def run() -> int:
     if not db:
         return 0
 
-    # PostgREST query — both filters as eq.X. Limit to the cap so a
-    # huge backlog doesn't stall the daemon.
-    try:
-        r = httpx.get(
-            f"{db.base}/games",
-            headers=db.headers,
-            params={
-                "select": "id,external_id",
-                "kills_extracted": "eq.true",
-                "event_mapping_complete": "eq.false",
-                "limit": GAMES_PER_RUN,
-            },
-            timeout=15.0,
-        )
-        if r.status_code != 200:
-            log.warn("event_mapper_query_failed", status=r.status_code, body=r.text[:200])
-            return 0
-        games = r.json() or []
-    except Exception as e:
-        log.warn("event_mapper_query_threw", error=str(e)[:120])
-        return 0
+    worker_id = f"event_mapper-{os.getpid()}"
 
-    if not games:
-        log.info("event_mapper_no_pending")
-        return 0
+    # ─── 1. Queue-first claim ──────────────────────────────────────
+    claimed = await asyncio.to_thread(
+        job_queue.claim,
+        worker_id,
+        ["event.map"],
+        BATCH_SIZE,
+        LEASE_SECONDS,
+    )
 
-    log.info("event_mapper_batch", games=len(games))
-
+    legacy_fallback_used = False
     total_inserted = 0
     games_done = 0
-    for g in games:
+
+    if claimed:
+        # Group jobs by game_id so we map each game exactly once.
+        # game_id -> list[job_dict]
+        game_jobs: dict[str, list[dict]] = {}
+        bad_jobs: list[dict] = []
+        for job in claimed:
+            gid = _resolve_game_id(job.get("entity_type"), job.get("entity_id"))
+            if not gid:
+                bad_jobs.append(job)
+                continue
+            game_jobs.setdefault(gid, []).append(job)
+
+        # Ack the unresolvable ones so they don't pile up.
+        for job in bad_jobs:
+            await asyncio.to_thread(
+                job_queue.fail, job["id"],
+                "could not resolve entity to game_id",
+                3600, "map_failed",
+            )
+
+        log.info(
+            "event_mapper_queue",
+            claimed=len(claimed),
+            unique_games=len(game_jobs),
+            unresolvable=len(bad_jobs),
+        )
+
+        for gid, jobs in game_jobs.items():
+            try:
+                counters = await map_game(db, {"id": gid})
+                total_inserted += counters["inserted"]
+                games_done += 1
+                log.info(
+                    "event_mapper_game_done",
+                    game_id=gid[:8],
+                    kills=counters["kills_in_game"],
+                    moments=counters["moments_in_game"],
+                    inserted=counters["inserted"],
+                    coalesced_jobs=len(jobs),
+                )
+                # Ack every job that targeted this game.
+                for job in jobs:
+                    await asyncio.to_thread(
+                        job_queue.succeed, job["id"],
+                        {
+                            "game_id": gid,
+                            "inserted": counters["inserted"],
+                            "kills": counters["kills_in_game"],
+                            "moments": counters["moments_in_game"],
+                        },
+                    )
+            except Exception as e:
+                log.error(
+                    "event_mapper_game_error",
+                    game_id=gid[:8], error=str(e)[:200],
+                )
+                # Fail every job that targeted this game so the retry
+                # comes back as a unit.
+                for job in jobs:
+                    await asyncio.to_thread(
+                        job_queue.fail, job["id"],
+                        f"map_game_exception: {type(e).__name__}",
+                        180, "map_failed",
+                    )
+
+    # ─── 2. Legacy fallback if queue was empty ────────────────────
+    if not claimed:
+        legacy_fallback_used = True
+
+        # PostgREST query — both filters as eq.X. Limit to the cap so a
+        # huge backlog doesn't stall the daemon.
         try:
-            counters = await map_game(db, g)
-            total_inserted += counters["inserted"]
-            games_done += 1
-            log.info(
-                "event_mapper_game_done",
-                game_id=g["id"][:8],
-                external_id=g.get("external_id"),
-                kills=counters["kills_in_game"],
-                moments=counters["moments_in_game"],
-                inserted=counters["inserted"],
+            r = httpx.get(
+                f"{db.base}/games",
+                headers=db.headers,
+                params={
+                    "select": "id,external_id",
+                    "kills_extracted": "eq.true",
+                    "event_mapping_complete": "eq.false",
+                    "limit": GAMES_PER_RUN,
+                },
+                timeout=15.0,
             )
+            if r.status_code != 200:
+                log.warn("event_mapper_query_failed", status=r.status_code, body=r.text[:200])
+                return 0
+            games = r.json() or []
         except Exception as e:
-            log.error(
-                "event_mapper_game_error",
-                game_id=g.get("id", "")[:8],
-                error=str(e)[:200],
+            log.warn("event_mapper_query_threw", error=str(e)[:120])
+            return 0
+
+        if not games:
+            log.info("event_mapper_no_pending")
+            return 0
+
+        log.info("event_mapper_legacy_fallback_batch", games=len(games))
+
+        # Enqueue one event.map job per game so subsequent passes go
+        # through the queue. Idempotent via the unique index.
+        enqueued = 0
+        for g in games:
+            jid = await asyncio.to_thread(
+                job_queue.enqueue,
+                "event.map", "game", g["id"],
+                None, 50, None, 3,
             )
+            if jid:
+                enqueued += 1
+
+        for g in games:
+            try:
+                counters = await map_game(db, g)
+                total_inserted += counters["inserted"]
+                games_done += 1
+                log.info(
+                    "event_mapper_game_done",
+                    game_id=g["id"][:8],
+                    external_id=g.get("external_id"),
+                    kills=counters["kills_in_game"],
+                    moments=counters["moments_in_game"],
+                    inserted=counters["inserted"],
+                )
+            except Exception as e:
+                log.error(
+                    "event_mapper_game_error",
+                    game_id=g.get("id", "")[:8],
+                    error=str(e)[:200],
+                )
+
+        log.info(
+            "event_mapper_legacy_enqueued",
+            enqueued_for_next_pass=enqueued,
+        )
 
     log.info(
         "event_mapper_done",
         games_processed=games_done,
         events_inserted=total_inserted,
+        legacy_fallback=legacy_fallback_used,
     )
     return total_inserted
