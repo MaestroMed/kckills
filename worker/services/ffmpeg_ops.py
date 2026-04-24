@@ -172,12 +172,15 @@ def video_codec_args(
         mr = maxrate or "4M"
         bs = bufsize or "8M"
         prof = profile or "high"
-        lvl = level or "4.1"
+        # PR23.7 — `level or "4.1"` was forcing the explicit "4.1" string
+        # back through the NVENC pipeline, bypassing _nvenc_args_hq's
+        # default of "auto". For NVENC we now pass "auto" through, which
+        # tells _nvenc_args_hq to omit the -level flag entirely (driver
+        # picks). libx264 still keeps "4.0" for bit-identical output.
         if chosen == "h264_nvenc":
+            lvl = level or "auto"
             return _nvenc_args_hq(mr, bs, profile=prof, level=lvl, multipass=True)
-        # libx264 sticks to the original main/4.0 spec to keep output bit-
-        # identical to pre-NVENC pipeline on machines without GPU.
-        return _libx264_args_hq(mr, bs, profile="main", level="4.0")
+        return _libx264_args_hq(mr, bs, profile="main", level=(level or "4.0"))
 
     if variant == "low":
         mr = maxrate or "1200k"
