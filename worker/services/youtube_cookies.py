@@ -51,6 +51,15 @@ log = structlog.get_logger()
 WORKER_ROOT = Path(__file__).resolve().parent.parent
 COOKIES_PATH = WORKER_ROOT / ".youtube_cookies.txt"
 
+# Make sure the env vars are loaded even if this module gets imported
+# from a context that didn't already call load_dotenv (e.g. CLI tests).
+# Idempotent — won't override existing vars.
+try:
+    from dotenv import load_dotenv
+    load_dotenv(WORKER_ROOT / ".env")
+except Exception:
+    pass
+
 # Re-extract Chrome cookies if the cached file is older than this.
 # Chrome cookies for YouTube auth typically last weeks but the
 # refresh-cycle keeps short-lived ones (PSIDCC, __Secure-3PAPISID

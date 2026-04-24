@@ -1,5 +1,34 @@
 # YouTube Premium auth for yt-dlp — setup
 
+## ⚠️ DON'T ENABLE THIS YET (April 2026)
+
+YouTube enforces **PO Token** (Proof of Origin) for all authenticated
+requests as of late 2025. yt-dlp can NOT generate PO tokens natively
+— without one, authenticated requests get **storyboard-only** responses
+(no real video formats). Anonymous yt-dlp gets full 1080p60 access.
+
+So : **enabling cookies right now makes things WORSE**, not better.
+Verified empirically on 2026-04-24 with yt-dlp 2026.04.10 + a fresh
+Premium session :
+  * `yt-dlp --list-formats <lec_vod>` (anonymous) → 1080p60, AV1, etc.
+  * `yt-dlp --cookies <prem.txt> --list-formats <lec_vod>` → only sb0-sb3 storyboards.
+
+The `worker/.env` ships with `KCKILLS_YT_COOKIES_FILE` **commented out**
+for this reason. The `services/youtube_cookies.py` module is in place
+ready to be re-enabled the moment a PO Token plugin lands :
+
+  * `bgutil-ytdlp-pot-provider` — Node.js based, requires sidecar service
+  * Pending native yt-dlp support (tracked in yt-dlp/yt-dlp issues)
+  * Or a future Chrome version that exposes PO tokens via DPAPI
+
+When that day comes, just uncomment the env var line, restart the
+worker, and the auth path activates. Until then, anonymous mode is
+the right call.
+
+---
+
+## Original setup guide (kept for when PO Token is solved)
+
 The worker can authenticate yt-dlp with your YouTube Premium session
 to drop 429 throttling, unlock 1080p+ formats, and bypass age-gates.
 Setup takes ~30 seconds.
