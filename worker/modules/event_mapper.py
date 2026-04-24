@@ -44,6 +44,7 @@ from datetime import datetime, timezone
 import httpx
 import structlog
 
+from services.observability import run_logged
 from services.supabase_client import get_db, safe_select, safe_update
 
 log = structlog.get_logger()
@@ -288,6 +289,7 @@ async def map_game(db, game: dict) -> dict:
 GAMES_PER_RUN = 50
 
 
+@run_logged()
 async def run() -> int:
     """Map every game where event_mapping_complete=FALSE AND kills_extracted=TRUE.
 

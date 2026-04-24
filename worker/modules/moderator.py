@@ -9,6 +9,7 @@ import json
 import structlog
 from scheduler import scheduler
 from config import config
+from services.observability import run_logged
 
 log = structlog.get_logger()
 
@@ -58,6 +59,7 @@ async def moderate_comment(username: str, content: str) -> dict:
 
 # ─── Daemon loop ─────────────────────────────────────────────────────────
 
+@run_logged()
 async def run() -> int:
     """Process all comments in moderation_status='pending'.
 

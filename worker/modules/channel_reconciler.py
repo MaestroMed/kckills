@@ -25,6 +25,7 @@ from datetime import datetime, timezone, timedelta
 import httpx
 import structlog
 
+from services.observability import run_logged
 from services.supabase_client import get_db, safe_select, safe_update, safe_upsert
 
 log = structlog.get_logger()
@@ -495,6 +496,7 @@ async def reconcile_one(db, video: dict) -> str:
 
 # ─── Daemon loop ──────────────────────────────────────────────────────
 
+@run_logged()
 async def run() -> int:
     """Reconcile all channel_videos rows in status='classified'."""
     log.info("channel_reconciler_v2_start")

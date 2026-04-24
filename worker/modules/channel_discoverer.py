@@ -27,6 +27,7 @@ import structlog
 
 from config import config
 from scheduler import scheduler
+from services.observability import run_logged
 from services.supabase_client import get_db, safe_insert, safe_update
 
 log = structlog.get_logger()
@@ -281,6 +282,7 @@ def _now_iso() -> str:
 
 # ─── Daemon loop ──────────────────────────────────────────────────────
 
+@run_logged()
 async def run() -> int:
     """Poll every active channel, return total new videos inserted."""
     log.info("channel_discoverer_scan_start")

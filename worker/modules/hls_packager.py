@@ -27,6 +27,7 @@ import structlog
 
 from config import config
 from services import r2_client
+from services.observability import run_logged
 from services.supabase_client import safe_select, safe_update
 
 log = structlog.get_logger()
@@ -247,6 +248,7 @@ async def package_clip(kill_id: str, mp4_url: str) -> str | None:
 
 # ─── Daemon loop ─────────────────────────────────────────────────────────
 
+@run_logged()
 async def run() -> int:
     """Find published clips without HLS master, package next 5."""
     log.info("hls_packager_start")

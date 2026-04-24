@@ -39,6 +39,7 @@ import structlog
 
 from config import config
 from scheduler import scheduler
+from services.observability import run_logged
 from services.supabase_client import get_db, safe_update
 from services import livestats_api, youtube_cookies
 
@@ -315,6 +316,7 @@ async def _process_game(game: dict) -> bool:
     return True
 
 
+@run_logged()
 async def run() -> int:
     games = _fetch_pending_games(GAMES_PER_RUN)
     if not games:

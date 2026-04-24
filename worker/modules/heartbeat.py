@@ -11,12 +11,14 @@ from datetime import datetime, timezone
 import structlog
 
 from scheduler import scheduler
+from services.observability import run_logged
 from services.supabase_client import get_db, safe_upsert
 from local_cache import cache
 
 log = structlog.get_logger()
 
 
+@run_logged()
 async def run():
     """Ping Supabase to keep it alive and record health metrics."""
     db = get_db()

@@ -22,8 +22,13 @@ clip without re-running the entire pipeline. published_at on the event
 stays as a permanent record of "this WAS published, then pulled back".
 
 Daemon interval : 300s (5 min). The cycle is :
-  * publishable & not yet flipped to status='published'  -> publish
-  * not publishable any more & status='published'        -> retract
+  * Discovery : enqueue `publish.check` jobs for events that became
+    publishable since last run.
+  * Process : claim those jobs from the queue. publish.check is a
+    fast operation (1 row update) so we run discovery + process in
+    the same daemon tick — no need to split.
+  * Retract : flip back kills that lost their publishable status. This
+    stays direct (not queue-driven) since it's a tiny set per cycle.
 
 Idempotency : every operation is keyed off is_publishable + status, so
 re-runs are no-ops once consistent.
@@ -31,11 +36,15 @@ re-runs are no-ops once consistent.
 
 from __future__ import annotations
 
+import asyncio
+import os
 from datetime import datetime, timezone
 
 import httpx
 import structlog
 
+from services import job_queue
+from services.observability import run_logged
 from services.supabase_client import get_db, safe_update
 
 log = structlog.get_logger()
@@ -155,11 +164,101 @@ def _stamp_event_published(event_id: str) -> bool:
     )
 
 
+# ─── Discovery + queue-driven processing ──────────────────────────────
+
+async def _discover_and_enqueue(db) -> int:
+    """Scan game_events for newly-publishable rows and enqueue
+    `publish.check` jobs for each one.
+
+    The unique index on (type, entity_type, entity_id) WHERE active makes
+    this idempotent — re-discovery on the next tick won't double-enqueue.
+    """
+    publishable = await _fetch_publishable(db)
+    enqueued = 0
+    for ev in publishable:
+        ev_id = ev.get("id")
+        if not ev_id:
+            continue
+        # entity_type='event' so the unique index distinguishes
+        # publish.check on a kill vs on a game_event row.
+        jid = await asyncio.to_thread(
+            job_queue.enqueue,
+            "publish.check", "event", ev_id,
+            None, 60, None, 3,  # priority 60 — above default 50 so publish lands quick
+        )
+        if jid:
+            enqueued += 1
+    return enqueued
+
+
+def _process_publish_check(job: dict) -> bool:
+    """Execute one publish.check job. Returns True on successful publish."""
+    event_id = job.get("entity_id")
+    if not event_id:
+        return False
+
+    db = get_db()
+    if db is None:
+        return False
+
+    # Re-fetch the event row — its is_publishable may have flipped
+    # back to FALSE between enqueue and process (e.g. clip_qc just
+    # caught drift). We don't want to publish a now-failing kill.
+    try:
+        r = httpx.get(
+            f"{db.base}/game_events",
+            headers=db.headers,
+            params={
+                "select": "id,kill_id,event_type,kc_involvement,is_publishable,published_at",
+                "id": f"eq.{event_id}",
+                "limit": 1,
+            },
+            timeout=15.0,
+        )
+        r.raise_for_status()
+        rows = r.json() or []
+        if not rows:
+            return False
+        ev = rows[0]
+    except Exception as e:
+        log.warn("publish_check_fetch_failed",
+                 event_id=event_id[:8], error=str(e)[:120])
+        return False
+
+    # No-op cases — return True so the job marks succeeded.
+    if not ev.get("is_publishable"):
+        log.info("publish_check_no_longer_publishable",
+                 event_id=event_id[:8])
+        return True
+    if ev.get("published_at"):
+        return True
+
+    kill_id = ev.get("kill_id")
+    if not kill_id:
+        return True
+
+    ok_kill = _flip_kill_published(kill_id)
+    ok_event = _stamp_event_published(event_id)
+    if ok_kill and ok_event:
+        log.info(
+            "event_published",
+            event_id=event_id[:8],
+            kill_id=kill_id[:8],
+            type=ev.get("event_type"),
+            kc=ev.get("kc_involvement"),
+        )
+        return True
+    return False
+
+
 # ─── Daemon entry point ──────────────────────────────────────────────
 
+@run_logged()
 async def run() -> int:
     """Publish newly-publishable events + retract those that became
-    unpublishable. Returns the number of state transitions made.
+    unpublishable. Queue-driven for the publish path, direct for the
+    retract path (small per-cycle batch). Returns the number of state
+    transitions made.
     """
     log.info("event_publisher_start")
 
@@ -167,33 +266,46 @@ async def run() -> int:
     if not db:
         return 0
 
-    # PUBLISH PHASE
-    publishable = await _fetch_publishable(db)
+    # ─── Discovery + claim + process for publish.check ─────────────
+    discovered = await _discover_and_enqueue(db)
+
+    worker_id = f"event_publisher-{os.getpid()}"
+    claimed = await asyncio.to_thread(
+        job_queue.claim,
+        worker_id,
+        ["publish.check"],
+        PUBLISH_BATCH,
+        120,  # 2 min lease — publish.check is fast
+    )
     published_count = 0
-    for ev in publishable:
-        kill_id = ev.get("kill_id")
-        if not kill_id:
-            continue
+    for job in claimed:
         try:
-            ok_kill = _flip_kill_published(kill_id)
-            ok_event = _stamp_event_published(ev["id"])
-            if ok_kill and ok_event:
-                published_count += 1
-                log.info(
-                    "event_published",
-                    event_id=ev["id"][:8],
-                    kill_id=kill_id[:8],
-                    type=ev.get("event_type"),
-                    kc=ev.get("kc_involvement"),
-                )
+            ok = await asyncio.to_thread(_process_publish_check, job)
         except Exception as e:
             log.error(
                 "event_publish_error",
-                event_id=ev.get("id", "")[:8],
+                job_id=job.get("id", "")[:8],
+                event_id=(job.get("entity_id") or "")[:8],
                 error=str(e)[:200],
             )
+            await asyncio.to_thread(
+                job_queue.fail, job["id"],
+                f"publish_check_exception: {type(e).__name__}",
+                300, "publish_exception",
+            )
+            continue
+        if ok:
+            published_count += 1
+            await asyncio.to_thread(
+                job_queue.succeed, job["id"], {"event_id": job.get("entity_id")},
+            )
+        else:
+            await asyncio.to_thread(
+                job_queue.fail, job["id"],
+                "publish_check returned false", 300, "publish_failed",
+            )
 
-    # RETRACT PHASE
+    # ─── Retract phase (direct, not queue-driven) ───────────────────
     retractable = await _fetch_retractable(db)
     retracted_count = 0
     for ev in retractable:
@@ -218,9 +330,10 @@ async def run() -> int:
 
     log.info(
         "event_publisher_done",
+        discovered=discovered,
+        claimed=len(claimed),
         published=published_count,
         retracted=retracted_count,
-        publishable_pool=len(publishable),
         retract_pool=len(retractable),
     )
     return published_count + retracted_count

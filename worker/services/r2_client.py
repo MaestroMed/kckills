@@ -119,12 +119,75 @@ async def upload_clip(kill_id: str, local_path: str, format_suffix: str) -> str 
     """Upload a clip file to R2 under clips/ prefix.
 
     format_suffix is one of: 'h', 'v', 'v_low', 'thumb'.
+
+    LEGACY flat-key layout — kept for back-compat with the kills.clip_url_*
+    columns. New code should call `upload_versioned` which produces
+    `clips/{game_id}/{kill_id}/v{N}/{file}` keys and feeds the kill_assets
+    table introduced in migration 026.
     """
     ext = "jpg" if format_suffix == "thumb" else "mp4"
     folder = "thumbnails" if format_suffix == "thumb" else "clips"
     key = f"{folder}/{kill_id}_{format_suffix}.{ext}"
     ct = "image/jpeg" if ext == "jpg" else "video/mp4"
     return await upload(local_path, key, ct)
+
+
+# ─── Asset-type metadata for the versioned layout ───────────────────────
+# Single source of truth for the (file, content_type, manifest_type) tuple
+# attached to each artefact. Imported by the clipper so we don't drift the
+# naming on R2 vs the kill_assets.type enum.
+ASSET_TYPE_META: dict[str, dict[str, str]] = {
+    # asset_type        file              content_type   db_type
+    "horizontal":   {"file": "h.mp4",          "content_type": "video/mp4",   "db_type": "horizontal"},
+    "vertical":     {"file": "v.mp4",          "content_type": "video/mp4",   "db_type": "vertical"},
+    "vertical_low": {"file": "v_low.mp4",      "content_type": "video/mp4",   "db_type": "vertical_low"},
+    "thumbnail":    {"file": "thumb.jpg",      "content_type": "image/jpeg",  "db_type": "thumbnail"},
+    "hls_master":   {"file": "hls/master.m3u8","content_type": "application/vnd.apple.mpegurl", "db_type": "hls_master"},
+    "og_image":     {"file": "og.png",         "content_type": "image/png",   "db_type": "og_image"},
+    "preview_gif":  {"file": "preview.gif",    "content_type": "image/gif",   "db_type": "preview_gif"},
+}
+
+
+def versioned_key(game_id: str, kill_id: str, version: int, asset_type: str) -> str:
+    """Compute the canonical R2 key for a versioned kill asset.
+
+    Layout : clips/{game_id}/{kill_id}/v{N}/{file}
+
+    `asset_type` is one of the keys in ASSET_TYPE_META (horizontal, vertical,
+    vertical_low, thumbnail, hls_master, og_image, preview_gif).
+    """
+    meta = ASSET_TYPE_META.get(asset_type)
+    if meta is None:
+        raise ValueError(f"unknown asset_type: {asset_type}")
+    file_name = meta["file"]
+    return f"clips/{game_id}/{kill_id}/v{version}/{file_name}"
+
+
+async def upload_versioned(
+    game_id: str,
+    kill_id: str,
+    version: int,
+    file_path: str,
+    asset_type: str,
+    content_type: str | None = None,
+) -> str | None:
+    """Upload a kill artefact to a versioned R2 key.
+
+    Layout: ``clips/{game_id}/{kill_id}/v{N}/{file}`` where {file} is one of
+    h.mp4, v.mp4, v_low.mp4, thumb.jpg, hls/master.m3u8, og.png, preview.gif
+    depending on `asset_type`.
+
+    Returns the public URL on success, None on any failure (missing file,
+    R2 not configured, upload error). Always paired with a kill_assets row
+    insert by the caller — this function only handles the bytes.
+    """
+    meta = ASSET_TYPE_META.get(asset_type)
+    if meta is None:
+        log.error("upload_versioned_unknown_type", asset_type=asset_type)
+        return None
+    key = versioned_key(game_id, kill_id, version, asset_type)
+    ct = content_type or meta["content_type"]
+    return await upload(file_path, key, ct)
 
 
 async def upload_moment(moment_id: str, local_path: str, format_suffix: str) -> str | None:

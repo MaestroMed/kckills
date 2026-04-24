@@ -10,6 +10,7 @@ For each completed KC match not yet in the DB:
 import structlog
 
 from services import lolesports_api, discord_webhook
+from services.observability import run_logged
 from services.supabase_client import safe_insert, safe_select, safe_upsert
 
 log = structlog.get_logger()
@@ -58,6 +59,7 @@ def _resolve_team_id(team: dict) -> str | None:
     return rows[0]["id"] if rows else None
 
 
+@run_logged()
 async def run() -> int:
     """Scan the LEC schedule for new completed KC matches. Returns the count of newly-processed matches."""
     log.info("sentinel_scan_start")

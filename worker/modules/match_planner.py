@@ -34,6 +34,7 @@ import httpx
 import structlog
 
 from services import lolesports_api
+from services.observability import run_logged
 from services.supabase_client import get_db, safe_upsert
 
 log = structlog.get_logger()
@@ -49,6 +50,7 @@ LOOKAHEAD_DAYS = 21
 BOOST_LEAD_MINUTES = 5
 
 
+@run_logged()
 async def run() -> int:
     """Refresh the next 21 days of KC matches + queue boost jobs.
 

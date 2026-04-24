@@ -4,6 +4,7 @@ WATCHDOG — Monitors pipeline health, resets stuck tasks, sends daily report.
 
 import structlog
 from datetime import datetime, timezone
+from services.observability import run_logged
 from services.supabase_client import safe_select, safe_update
 from services import discord_webhook
 from scheduler import scheduler
@@ -12,6 +13,7 @@ from local_cache import cache
 log = structlog.get_logger()
 
 
+@run_logged()
 async def run():
     """Check pipeline health, reset stuck kills, flush cache."""
 

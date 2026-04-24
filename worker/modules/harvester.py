@@ -27,6 +27,7 @@ from datetime import datetime, timedelta
 
 from models.kill_event import KillEvent
 from services import livestats_api
+from services.observability import run_logged
 from services.supabase_client import safe_insert, safe_select, safe_update
 
 log = structlog.get_logger()
@@ -532,6 +533,7 @@ def _detect_multi_kill(delta_kills: int) -> str | None:
 
 # ─── Daemon loop ────────────────────────────────────────────────────────────
 
+@run_logged()
 async def run() -> int:
     """Scan games whose kills haven't been extracted yet and fill them in."""
     log.info("harvester_scan_start")

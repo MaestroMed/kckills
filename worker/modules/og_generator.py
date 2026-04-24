@@ -20,6 +20,7 @@ from PIL import Image, ImageDraw, ImageFont
 
 from config import config
 from services import r2_client
+from services.observability import run_logged
 from services.supabase_batch import batched_safe_update, get_writer
 from services.supabase_client import safe_select, safe_update
 
@@ -142,6 +143,7 @@ def _load_fonts():
 
 # ─── Daemon loop ────────────────────────────────────────────────────────────
 
+@run_logged()
 async def run() -> int:
     """Generate OG images for analysed kills that don't have one yet."""
     log.info("og_generator_scan_start")

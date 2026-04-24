@@ -38,6 +38,7 @@ from typing import Any, Optional
 
 import structlog
 
+from services.observability import run_logged
 from services.supabase_client import get_db
 
 log = structlog.get_logger()
@@ -277,6 +278,7 @@ def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+@run_logged()
 async def run() -> None:
     vapid = _vapid_config()
     if vapid is None:

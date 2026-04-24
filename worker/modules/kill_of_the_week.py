@@ -26,6 +26,7 @@ import httpx
 import structlog
 
 from config import config
+from services.observability import run_logged
 from services.supabase_client import get_db, safe_insert, safe_upsert
 
 log = structlog.get_logger()
@@ -137,6 +138,7 @@ async def _post_discord(kill: dict, valid_from: datetime, valid_to: datetime) ->
         log.warn("kotw_discord_post_failed", error=str(e))
 
 
+@run_logged()
 async def run() -> None:
     now = datetime.now(timezone.utc)
     if not _is_in_window(now):

@@ -28,16 +28,45 @@ Post-validation pass added (audit Quick Wins 1+2):
 
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 import re
+import time
 import structlog
 
 from config import config
 from scheduler import scheduler
-from services.supabase_client import safe_select, safe_update
+from services import job_queue
+from services.ai_pricing import compute_gemini_cost
+from services.observability import run_logged
+from services.supabase_client import (
+    get_db,
+    safe_insert,
+    safe_select,
+    safe_update,
+)
 
 log = structlog.get_logger()
+
+
+# ─── Versioning constants (PR23-arch) ────────────────────────────────
+# Bump ANALYZER_PROMPT_VERSION whenever the wording of ANALYSIS_PROMPT
+# changes (rules, tags list, output format, roster pool — anything that
+# can shift the model's output distribution). The version is stored on
+# every ai_annotations row so we can later filter "what scores did
+# v3 produce vs v4" without re-running.
+#
+# History :
+#   v1 = original 3-rule prompt (pre-PR16)
+#   v2 = added multi-language descriptions (PR14)
+#   v3 = audit Quick Wins 1+2, anchored detail, banned phrases (current)
+ANALYZER_PROMPT_VERSION: str = "v3"
+
+# Pipeline-level version, logged into ai_annotations.analysis_version.
+# Bumped when the pipeline architecture changes (kill_assets, ai_annotations,
+# multi-step calls, etc.) regardless of the prompt wording.
+ANALYZER_PIPELINE_VERSION: str = "v2"
 
 
 # ─── Roster reference (used in the prompt to enforce credit accuracy) ──
@@ -87,7 +116,11 @@ Reponds UNIQUEMENT en JSON valide.</task>
                                               minimap zooms, caster cams>,
     "in_game_timer_at_clip_midpoint": "<MM:SS or NONE if not visible —
                                         read the in-game clock at top center
-                                        of the screen at clip midpoint>"
+                                        of the screen at clip midpoint>",
+    "confidence_score": <float 0.0-1.0, ton degre de confiance dans CETTE
+                          analyse. 1.0 = clip net, kill clairement visible,
+                          champions identifies sans doute. 0.5 = clip flou
+                          ou angle incertain. 0.0 = devine totalement.>
 }}
 </output_format>
 
@@ -234,12 +267,17 @@ async def analyze_kill(
     victim_champion: str,
     context: str = "",
     clip_path: str | None = None,
+    model_override: str | None = None,
 ) -> dict | None:
     """Analyze a kill with Gemini. Returns parsed JSON dict or None.
 
     The result is NOT validated here — the caller is responsible for
     running validate_description on result['description_fr'] and
     deciding whether to save it.
+
+    Returned dict carries internal _model / _usage / _latency_ms /
+    _raw_text keys that the caller (analyze_kill_row → _process_one)
+    forwards into the ai_annotations row for provenance tracking.
     """
     if not config.GEMINI_API_KEY:
         log.warn("gemini_no_api_key")
@@ -266,12 +304,13 @@ async def analyze_kill(
         return None
 
     text = ""
+    started_at = time.monotonic()
     try:
         genai.configure(api_key=config.GEMINI_API_KEY)
         # PR13 — allow per-call model override (used by lab generator
         # to A/B-test different models on the same clip). Defaults to
         # the configured analyzer model.
-        model_name = kill.get("_model_override") or config.GEMINI_MODEL_ANALYZER
+        model_name = model_override or config.GEMINI_MODEL_ANALYZER
         model = genai.GenerativeModel(model_name)
 
         if clip_path and os.path.exists(clip_path):
@@ -288,8 +327,11 @@ async def analyze_kill(
         text = (response.text or "").strip()
         text = _strip_code_fence(text)
         result = json.loads(text)
-        log.info("gemini_analysis_done", score=result.get("highlight_score"))
-        # Surface usage_metadata for lab cost accounting
+        elapsed_ms = int((time.monotonic() - started_at) * 1000)
+        log.info("gemini_analysis_done",
+                 score=result.get("highlight_score"),
+                 latency_ms=elapsed_ms)
+        # Surface usage_metadata for lab cost accounting + ai_annotations
         try:
             um = getattr(response, "usage_metadata", None)
             if um is not None:
@@ -301,6 +343,8 @@ async def analyze_kill(
         except Exception:
             pass
         result["_model"] = model_name
+        result["_latency_ms"] = elapsed_ms
+        result["_raw_text"] = text
         return result
     except json.JSONDecodeError:
         log.warn("gemini_invalid_json", text=text[:200] if text else "")
@@ -396,47 +440,117 @@ async def analyze_kill_row(kill: dict, clip_path: str | None = None) -> dict | N
         victim_champion=kill.get("victim_champion") or "?",
         context=". ".join(parts),
         clip_path=clip_path,
+        model_override=kill.get("_model_override"),
     )
 
 
 # ─── Daemon loop ────────────────────────────────────────────────────────
 
-async def run() -> int:
-    """Find kills in status='clipped' and run Gemini analysis.
+# Cap how many clips we attempt per analyzer pass. Gemini Flash-Lite is
+# free-tier capped at 950 RPD ≈ 39/hour. The cap is a safety bound
+# against pulling 5000 rows at once.
+ANALYZER_BATCH_SIZE = 80
 
-    Now reads the ground-truth columns (fight_type, matchup_lane,
-    lane_phase, kill_visible) so analyze_kill_row can pass them as
-    truth lines. Post-validates the description before saving — bad
-    descriptions stay in status='clipped' so the next pass retries.
+
+@run_logged()
+async def run() -> int:
+    """Analyzer main loop — queue-first, legacy scan as fallback.
+
+    Order :
+      1. Claim `clip.analyze` jobs from pipeline_jobs.
+      2. If empty, fall back to scanning kills.status='clipped' AND
+         enqueue jobs for what we find. Process them in this same pass
+         so the migration window doesn't stall.
+      3. Run the existing producer/consumer pipeline (Gemini analyzes
+         while next clip downloads from R2). The optional pipeline_jobs
+         row is attached to each kill dict via the `_pipeline_job` key
+         so _process_one can succeed/fail it after the Gemini pass.
+      4. On success : enqueue `og.generate`, `embedding.compute`, and
+         `event.map` for downstream modules.
     """
     log.info("analyzer_scan_start")
 
-    kills = safe_select(
-        "kills",
-        "id, killer_champion, victim_champion, is_first_blood, multi_kill, "
-        "tracked_team_involvement, fight_type, matchup_lane, lane_phase, "
-        "kill_visible, assistants, shutdown_bounty, retry_count, "
-        "clip_url_vertical, clip_url_horizontal",
-        status="clipped",
+    worker_id = f"analyzer-{os.getpid()}"
+
+    # ─── 1. Queue-first claim ──────────────────────────────────────
+    claimed = await asyncio.to_thread(
+        job_queue.claim,
+        worker_id,
+        ["clip.analyze"],
+        ANALYZER_BATCH_SIZE,
+        900,  # 15 min lease — Gemini calls + R2 download take time
     )
-    if not kills:
-        return 0
+
+    legacy_fallback_used = False
+    work_kills: list[dict] = []
+
+    for job in claimed:
+        kill_id = job.get("entity_id")
+        if not kill_id:
+            await asyncio.to_thread(
+                job_queue.fail, job["id"], "no entity_id on job",
+                60, "bad_payload",
+            )
+            continue
+        rows = safe_select(
+            "kills",
+            "id, killer_champion, victim_champion, is_first_blood, multi_kill, "
+            "tracked_team_involvement, fight_type, matchup_lane, lane_phase, "
+            "kill_visible, assistants, shutdown_bounty, retry_count, "
+            "clip_url_vertical, clip_url_horizontal, game_time_seconds",
+            id=kill_id,
+        )
+        if not rows:
+            await asyncio.to_thread(
+                job_queue.fail, job["id"], "kill row missing",
+                3600, "kill_deleted",
+            )
+            continue
+        # Attach the pipeline_jobs row so _process_one can ack it.
+        rows[0]["_pipeline_job"] = job
+        work_kills.append(rows[0])
+
+    # ─── 2. Legacy fallback if queue was empty ────────────────────
+    if not work_kills:
+        legacy_fallback_used = True
+        kills = safe_select(
+            "kills",
+            "id, killer_champion, victim_champion, is_first_blood, multi_kill, "
+            "tracked_team_involvement, fight_type, matchup_lane, lane_phase, "
+            "kill_visible, assistants, shutdown_bounty, retry_count, "
+            "clip_url_vertical, clip_url_horizontal, game_time_seconds",
+            status="clipped",
+        )
+        if not kills:
+            return 0
+        kills = kills[:ANALYZER_BATCH_SIZE]
+        # Enqueue for next pass so subsequent runs go through the queue.
+        # Idempotent via the unique index on (type, entity_type, entity_id).
+        enqueued = 0
+        for k in kills:
+            jid = await asyncio.to_thread(
+                job_queue.enqueue,
+                "clip.analyze", "kill", k["id"],
+                None, 50, None, 3,
+            )
+            if jid:
+                enqueued += 1
+        log.info(
+            "analyzer_legacy_fallback",
+            processing=len(kills), enqueued_for_next_pass=enqueued,
+        )
+        work_kills = kills
+    else:
+        log.info(
+            "analyzer_queue", claimed=len(claimed), processing=len(work_kills),
+        )
 
     # PR10-C : pipelined producer/consumer.
     # While clip N is being analyzed by Gemini (5s call + 4s rate-limit
     # wait), clip N+1 is already downloading from R2 (~5-10s). Effective
     # cadence drops to max(download, gemini) per clip ≈ 9-10s instead of
     # ~12-15s serial. ~1.3-2x throughput at zero quota cost.
-    #
-    # Architecture (see ANALYZER_PIPELINE_SPEC.md) :
-    #   - bounded asyncio.Queue (8 slots) provides backpressure when
-    #     Gemini stalls — downloaders block on put() instead of filling
-    #     disk
-    #   - 5 download workers parallelise R2 GETs
-    #   - 1 Gemini consumer drains the queue serially (Gemini's 4s rate
-    #     limit + 950 RPD daily cap make a single consumer the natural
-    #     bottleneck)
-    return await _run_pipelined(kills)
+    return await _run_pipelined(work_kills)
 
 
 # ─── Pipelined run ─────────────────────────────────────────────────────────
@@ -503,11 +617,30 @@ async def _process_one(kill: dict, clip_path: str | None,
                        counters: dict) -> None:
     """Run Gemini + commit results for a single kill. Mirrors the
     pre-refactor inline loop body.
+
+    PR23-arch : results are written to ai_annotations (versioned,
+    confidence-scored, provenance-tracked). The DB trigger
+    fn_sync_ai_annotation_to_kill keeps the legacy kills.* columns in
+    sync, so /scroll keeps working without code changes. The kills row
+    is only mutated here for fields that are NOT covered by the trigger
+    (status, retry_count, needs_reclip, kill_visible, caster_hype_level,
+    ai_qc_timer_sec, ai_qc_drift_sec, ai_pipeline_version).
+
+    Queue integration : when kill carries a `_pipeline_job` row (from
+    job_queue.claim), we ack it on success and fail it on rejection.
+    Downstream jobs (og.generate, embedding.compute, event.map) are
+    enqueued only on success.
     """
+    job = kill.get("_pipeline_job")  # may be None for legacy fallback path
     result = await analyze_kill_row(kill, clip_path=clip_path)
     _cleanup_clip(clip_path)
 
     if not result:
+        if job is not None:
+            await asyncio.to_thread(
+                job_queue.fail, job["id"],
+                "gemini returned no result", 300, "gemini_empty",
+            )
         return
 
     desc = result.get("description_fr")
@@ -534,59 +667,52 @@ async def _process_one(kill: dict, clip_path: str | None,
                 "kills", {"retry_count": current_retries + 1},
                 "id", kill["id"],
             )
+        if job is not None:
+            await asyncio.to_thread(
+                job_queue.fail, job["id"],
+                f"description_rejected: {reason}", 600, "desc_rejected",
+            )
         return
 
-    kill_visible_flag = bool(result.get("kill_visible_on_screen", True))
-    # PR14 — multi-language descriptions + AI thumbnail timestamp + per-clip QC
-    desc_en = (result.get("description_en") or "").strip() or None
-    desc_ko = (result.get("description_ko") or "").strip() or None
-    desc_es = (result.get("description_es") or "").strip() or None
-    thumb_ts = _safe_int(result.get("best_thumbnail_timestamp_in_clip_sec"))
+    # Build the patch (legacy kills.* fields still need direct update for
+    # the columns NOT mirrored by the trigger : status, kill_visible,
+    # qc fields, pipeline version). The denormalised description /
+    # tags / score columns are populated by the trigger from the
+    # ai_annotations row we insert below.
+    patch = _build_analysis_patch(result, kill)
+    needs_reclip_due_to_drift = bool(patch.get("needs_reclip"))
+    kill_visible_flag = bool(patch.get("kill_visible", True))
+    qc_drift_sec = patch.get("ai_qc_drift_sec")
 
-    # Parse in-game timer from "MM:SS" format → compute drift vs expected
-    qc_timer_sec: int | None = None
-    qc_drift_sec: int | None = None
-    timer_raw = (result.get("in_game_timer_at_clip_midpoint") or "").strip()
-    if timer_raw and timer_raw.upper() != "NONE":
-        m = re.match(r"(\d+):(\d+)", timer_raw)
-        if m:
-            qc_timer_sec = int(m.group(1)) * 60 + int(m.group(2))
-            expected = int(kill.get("game_time_seconds") or 0)
-            if expected > 0:
-                qc_drift_sec = abs(qc_timer_sec - expected)
-
-    needs_reclip_due_to_drift = (qc_drift_sec is not None and qc_drift_sec > 30)
-
-    patch = {
-        "highlight_score": _safe_float(result.get("highlight_score")),
-        "ai_tags": result.get("tags") or [],
-        "ai_description": desc,
-        "ai_description_fr": desc,                       # canonical FR copy
-        "ai_description_en": desc_en,
-        "ai_description_ko": desc_ko,
-        "ai_description_es": desc_es,
-        "ai_thumbnail_timestamp_sec": thumb_ts,
-        "ai_qc_timer_sec": qc_timer_sec,
-        "ai_qc_drift_sec": qc_drift_sec,
-        "ai_pipeline_version": "v2",
-        "kill_visible": kill_visible_flag,
-        "caster_hype_level": _safe_int(result.get("caster_hype_level")),
-        "status": "analyzed",
-    }
     if needs_reclip_due_to_drift:
-        # PR14 per-clip QC : drift > 30s = clip almost certainly shows
-        # the wrong moment. Flag for re-clip and DON'T promote to
-        # 'analyzed' (keep needs_reclip=true gate). Same retract path
-        # as the qc_sampler / quarantine_offset_zero flows.
-        patch["needs_reclip"] = True
         log.warn(
             "analyzer_qc_drift_detected",
             kill_id=kill["id"][:8],
             expected=int(kill.get("game_time_seconds") or 0),
-            actual=qc_timer_sec,
+            actual=patch.get("ai_qc_timer_sec"),
             drift=qc_drift_sec,
         )
-    safe_update("kills", patch, "id", kill["id"])
+
+    # ─── Write to ai_annotations (PR23-arch) ─────────────────────────
+    # 1. archive any previous current row for this kill
+    # 2. insert the new row with full provenance + cost + confidence
+    # The DB trigger then back-fills kills.ai_description_*, ai_tags,
+    # highlight_score, ai_thumbnail_timestamp_sec.
+    _archive_previous_annotation(kill["id"])
+    _insert_ai_annotation(kill, result, patch)
+
+    # ─── Update the rest of the kills row directly ──────────────────
+    # Strip fields that the trigger now writes — we still own status,
+    # qc, pipeline version, kill_visible, caster_hype_level.
+    trigger_owned = {
+        "highlight_score", "ai_tags", "ai_description", "ai_description_fr",
+        "ai_description_en", "ai_description_ko", "ai_description_es",
+        "ai_thumbnail_timestamp_sec",
+    }
+    direct_patch = {k: v for k, v in patch.items() if k not in trigger_owned}
+    if direct_patch:
+        safe_update("kills", direct_patch, "id", kill["id"])
+
     try:
         from services.event_qc import (
             tick_qc_described, tick_qc_visible,
@@ -603,6 +729,32 @@ async def _process_one(kill: dict, clip_path: str | None,
     except Exception as _e:
         log.warn("event_qc_tick_failed",
                  kill_id=kill["id"][:8], stage="analyzed", error=str(_e)[:120])
+
+    # ─── Queue handoff : ack + enqueue downstream jobs ─────────────
+    # Inherit priority bracket from parent job so editorial / live work
+    # keeps its lane through og + embedding + event.map.
+    priority = 50
+    if job is not None:
+        try:
+            priority = 70 if int(job.get("priority") or 50) >= 70 else 50
+        except Exception:
+            priority = 50
+        await asyncio.to_thread(
+            job_queue.succeed, job["id"],
+            {"highlight_score": patch.get("highlight_score")},
+        )
+
+    # Always enqueue downstream — these modules are queue-driven now.
+    # If the kill needs re-clip due to drift, we still enqueue these
+    # since the OG/embedding work doesn't change with a re-clip and
+    # the publisher will hold the kill back via needs_reclip.
+    for next_type in ("og.generate", "embedding.compute", "event.map"):
+        await asyncio.to_thread(
+            job_queue.enqueue,
+            next_type, "kill", kill["id"],
+            None, priority, None, 3,
+        )
+
     counters["analysed"] += 1
 
 
@@ -620,6 +772,15 @@ async def _gemini_consumer(out_q: "asyncio.Queue", n_producers: int,
             if remaining is not None and remaining <= 0:
                 log.warn("analyzer_daily_quota_reached")
                 _cleanup_clip(clip_path)
+                # Push the queue job back to pending with a long retry
+                # so we don't burn attempts on a drained quota. 2h gives
+                # the daily reset (07:00 UTC) plenty of room.
+                job = kill.get("_pipeline_job")
+                if job is not None:
+                    await asyncio.to_thread(
+                        job_queue.fail, job["id"],
+                        "gemini_daily_quota_reached", 7200, "gemini_quota",
+                    )
                 # Drain any in-flight items from downloaders so they
                 # can exit cleanly. Don't analyze them.
                 continue
@@ -629,6 +790,16 @@ async def _gemini_consumer(out_q: "asyncio.Queue", n_producers: int,
                 log.error("analyzer_consumer_error",
                           kill_id=kill.get("id", "?")[:8], error=str(e)[:200])
                 _cleanup_clip(clip_path)
+                # Surface unexpected exception to the queue so the row
+                # gets a retry. Without this, the lease eventually
+                # expires (15 min) and gets re-claimed — slower path.
+                job = kill.get("_pipeline_job")
+                if job is not None:
+                    await asyncio.to_thread(
+                        job_queue.fail, job["id"],
+                        f"analyzer_exception: {type(e).__name__}",
+                        300, "analyzer_exception",
+                    )
         finally:
             out_q.task_done()
 
@@ -680,3 +851,219 @@ def _safe_int(v) -> int | None:
         return int(v) if v is not None else None
     except (TypeError, ValueError):
         return None
+
+
+# ─── Analysis patch builder ────────────────────────────────────────────
+# Extracted from _process_one so reanalyze_backlog.py and the lab generator
+# can build the same patch shape. The patch is the SUPERSET of fields
+# updated on the kills row — the post-PR23 _process_one strips the
+# trigger-owned subset (description / tags / score / thumbnail) before
+# writing, but reanalyze_backlog.py wants the full patch returned to
+# decide what to log.
+
+def _build_analysis_patch(result: dict, kill: dict) -> dict:
+    """Convert a Gemini result dict into a kills-row update patch.
+
+    Includes the full set of fields (legacy denormalised + qc + status)
+    so callers can either write it directly (legacy backfill scripts)
+    or strip the trigger-owned subset (production analyzer path).
+    """
+    desc = result.get("description_fr")
+    desc_en = (result.get("description_en") or "").strip() or None
+    desc_ko = (result.get("description_ko") or "").strip() or None
+    desc_es = (result.get("description_es") or "").strip() or None
+    thumb_ts = _safe_int(result.get("best_thumbnail_timestamp_in_clip_sec"))
+    kill_visible_flag = bool(result.get("kill_visible_on_screen", True))
+
+    # Parse in-game timer from "MM:SS" format → compute drift vs expected
+    qc_timer_sec: int | None = None
+    qc_drift_sec: int | None = None
+    timer_raw = (result.get("in_game_timer_at_clip_midpoint") or "").strip()
+    if timer_raw and timer_raw.upper() != "NONE":
+        m = re.match(r"(\d+):(\d+)", timer_raw)
+        if m:
+            qc_timer_sec = int(m.group(1)) * 60 + int(m.group(2))
+            expected = int(kill.get("game_time_seconds") or 0)
+            if expected > 0:
+                qc_drift_sec = abs(qc_timer_sec - expected)
+
+    needs_reclip_due_to_drift = (qc_drift_sec is not None and qc_drift_sec > 30)
+
+    patch = {
+        "highlight_score": _safe_float(result.get("highlight_score")),
+        "ai_tags": result.get("tags") or [],
+        "ai_description": desc,
+        "ai_description_fr": desc,                       # canonical FR copy
+        "ai_description_en": desc_en,
+        "ai_description_ko": desc_ko,
+        "ai_description_es": desc_es,
+        "ai_thumbnail_timestamp_sec": thumb_ts,
+        "ai_qc_timer_sec": qc_timer_sec,
+        "ai_qc_drift_sec": qc_drift_sec,
+        "ai_pipeline_version": ANALYZER_PIPELINE_VERSION,
+        "kill_visible": kill_visible_flag,
+        "caster_hype_level": _safe_int(result.get("caster_hype_level")),
+        "status": "analyzed",
+    }
+    if needs_reclip_due_to_drift:
+        patch["needs_reclip"] = True
+    return patch
+
+
+# ─── ai_annotations writers (PR23-arch) ────────────────────────────────
+
+def _lookup_current_asset(kill_id: str) -> tuple[str | None, int | None]:
+    """Return (asset_id, version) of the current 'horizontal' or 'vertical'
+    asset for this kill, or (None, None) if migration 026 isn't applied
+    or no asset row exists. Either is acceptable — input_asset_id is
+    nullable on ai_annotations.
+    """
+    db = get_db()
+    if not db:
+        return None, None
+    try:
+        # Prefer horizontal (it's what Gemini analyses by default — the
+        # vertical is a crop). Fall back to vertical if horizontal is
+        # missing (older kills).
+        for asset_type in ("horizontal", "vertical"):
+            rows = db.select(
+                "kill_assets",
+                columns="id,version",
+                filters={"kill_id": kill_id, "type": asset_type, "is_current": "true"},
+            )
+            if rows:
+                row = rows[0]
+                return row.get("id"), row.get("version")
+    except Exception as e:
+        # Migration 026 may not yet be applied in some envs — that's fine,
+        # input_asset_id is nullable.
+        log.debug("ai_anno_asset_lookup_failed",
+                  kill_id=kill_id[:8], error=str(e)[:120])
+    return None, None
+
+
+def _archive_previous_annotation(kill_id: str) -> None:
+    """Flip any prior is_current=true annotations for this kill to false.
+
+    Required because ai_annotations has a UNIQUE INDEX on (kill_id) WHERE
+    is_current=true — inserting a new current row without first archiving
+    the old one would violate the constraint.
+    """
+    from datetime import datetime, timezone
+    db = get_db()
+    if not db:
+        return
+    try:
+        # PostgREST partial-eq update : flip is_current to false on the
+        # current row(s) for this kill.
+        import httpx as _httpx
+        params = {
+            "kill_id": f"eq.{kill_id}",
+            "is_current": "eq.true",
+        }
+        body = {
+            "is_current": False,
+            "archived_at": datetime.now(timezone.utc).isoformat(),
+        }
+        r = _httpx.patch(
+            f"{db.base}/ai_annotations",
+            headers=db.headers,
+            params=params,
+            json=body,
+            timeout=15.0,
+        )
+        # 200/204 = ok. 404/PGRST205 = table doesn't exist yet (mig 028
+        # not applied) — that's fine, _insert_ai_annotation will also
+        # silently no-op.
+        if r.status_code >= 400 and r.status_code != 404:
+            log.warn("ai_anno_archive_failed",
+                     kill_id=kill_id[:8],
+                     status=r.status_code, body=r.text[:200])
+    except Exception as e:
+        log.warn("ai_anno_archive_error",
+                 kill_id=kill_id[:8], error=str(e)[:120])
+
+
+def _insert_ai_annotation(kill: dict, result: dict, patch: dict) -> None:
+    """Insert one ai_annotations row with full provenance + confidence + cost.
+
+    Uses safe_insert so a Supabase outage falls through to the local
+    SQLite cache and the row is replayed on flush. The DB trigger
+    fn_sync_ai_annotation_to_kill takes care of back-filling
+    kills.ai_description_*, ai_tags, highlight_score on insert.
+    """
+    model_name = result.get("_model") or config.GEMINI_MODEL_ANALYZER
+    usage = result.get("_usage") or {}
+    input_tok = _safe_int(usage.get("prompt_tokens"))
+    output_tok = _safe_int(usage.get("candidates_tokens"))
+    cost_usd = compute_gemini_cost(model_name, input_tok, output_tok)
+    latency_ms = _safe_int(result.get("_latency_ms"))
+
+    confidence = _safe_float(result.get("confidence_score"))
+    if confidence is None:
+        confidence = 0.5
+    # Clamp to [0, 1] — we've seen models return >1 occasionally.
+    confidence = max(0.0, min(1.0, confidence))
+
+    asset_id, asset_version = _lookup_current_asset(kill["id"])
+
+    raw_response = {
+        "model": model_name,
+        "usage": usage,
+        # Truncated raw text for debugging — full payload would bloat
+        # the DB. 4 KB is enough to see the structure of any malformed
+        # reply.
+        "text_preview": (result.get("_raw_text") or "")[:4000],
+        # Echo the parsed values so audit can compare model output side-
+        # by-side with the post-validation patch.
+        "parsed": {
+            "highlight_score": result.get("highlight_score"),
+            "tags": result.get("tags"),
+            "description_fr": result.get("description_fr"),
+            "description_en": result.get("description_en"),
+            "description_ko": result.get("description_ko"),
+            "description_es": result.get("description_es"),
+            "kill_visible_on_screen": result.get("kill_visible_on_screen"),
+            "caster_hype_level": result.get("caster_hype_level"),
+            "in_game_timer_at_clip_midpoint": result.get("in_game_timer_at_clip_midpoint"),
+            "best_thumbnail_timestamp_in_clip_sec": result.get("best_thumbnail_timestamp_in_clip_sec"),
+        },
+    }
+
+    row = {
+        "kill_id": kill["id"],
+        "model_provider": "gemini",
+        "model_name": model_name,
+        "prompt_version": ANALYZER_PROMPT_VERSION,
+        "analysis_version": ANALYZER_PIPELINE_VERSION,
+        "input_asset_id": asset_id,
+        "input_asset_version": asset_version,
+        "highlight_score": patch.get("highlight_score"),
+        "ai_tags": patch.get("ai_tags") or [],
+        "ai_description_fr": patch.get("ai_description_fr"),
+        "ai_description_en": patch.get("ai_description_en"),
+        "ai_description_ko": patch.get("ai_description_ko"),
+        "ai_description_es": patch.get("ai_description_es"),
+        "ai_thumbnail_timestamp_sec": patch.get("ai_thumbnail_timestamp_sec"),
+        "confidence_score": confidence,
+        "raw_response": raw_response,
+        "input_tokens": input_tok,
+        "output_tokens": output_tok,
+        "cost_usd": cost_usd,
+        "latency_ms": latency_ms,
+        "is_current": True,
+    }
+
+    rec = safe_insert("ai_annotations", row)
+    if rec:
+        log.info(
+            "ai_anno_inserted",
+            kill_id=kill["id"][:8],
+            model=model_name,
+            confidence=round(confidence, 2),
+            cost_usd=cost_usd,
+            latency_ms=latency_ms,
+        )
+    else:
+        log.warn("ai_anno_insert_failed_or_cached",
+                 kill_id=kill["id"][:8], model=model_name)

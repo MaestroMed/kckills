@@ -17,6 +17,7 @@ import structlog
 
 from config import config
 from scheduler import scheduler
+from services.observability import run_logged
 from services.supabase_client import safe_select, safe_update
 
 log = structlog.get_logger()
@@ -88,6 +89,7 @@ def _format_vector(vec: list[float]) -> str:
     return "[" + ",".join(f"{v:.7f}" for v in vec) + "]"
 
 
+@run_logged()
 async def run() -> int:
     if not config.GEMINI_API_KEY:
         log.warn("embedder_no_api_key")

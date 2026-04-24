@@ -63,8 +63,9 @@ ROLE_MODULES: dict[str, list[str]] = {
     "discovery": ["sentinel", "harvester", "transitioner", "channel_discoverer",
                   "channel_reconciler", "match_planner", "event_mapper",
                   "vod_offset_finder"],
-    "control":   ["moderator", "job_runner", "kill_of_the_week",
-                  "push_notifier", "heartbeat", "watchdog"],
+    "control":   ["moderator", "job_runner", "job_dispatcher",
+                  "kill_of_the_week", "push_notifier", "heartbeat",
+                  "watchdog"],
 }
 
 ROLES = tuple(ROLE_MODULES.keys())
@@ -146,6 +147,11 @@ def _module_specs_for_role(role: str) -> list[tuple[str, int, str]]:
 async def run_child(role: str) -> None:
     """Run one role's modules under supervision."""
     import importlib
+
+    # Expose the role to the rest of the worker process so the
+    # observability decorator can stamp pipeline_runs.worker_id with
+    # `orchestrator-{role}-PID{pid}` instead of falling back to 'solo'.
+    os.environ["KCKILLS_WORKER_ROLE"] = role
 
     specs = _module_specs_for_role(role)
     log.info("child_start", role=role, modules=[s[0] for s in specs], pid=os.getpid())
