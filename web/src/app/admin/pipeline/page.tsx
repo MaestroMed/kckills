@@ -145,6 +145,12 @@ export default async function PipelineDashboardPage() {
         </div>
         <div className="flex gap-2">
           <Link
+            href="/admin/pipeline/run"
+            className="rounded-md border border-[var(--gold)]/60 bg-[var(--gold)]/10 px-3 py-1.5 text-xs font-bold text-[var(--gold)] hover:bg-[var(--gold)]/20"
+          >
+            Run backfills
+          </Link>
+          <Link
             href="/admin/pipeline/jobs"
             className="rounded-md border border-[var(--border-gold)] px-3 py-1.5 text-xs text-[var(--text-muted)] hover:text-[var(--gold)]"
           >

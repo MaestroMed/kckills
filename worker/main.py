@@ -61,6 +61,7 @@ DAEMON_MODULES: list[tuple[str, int, str]] = [
     ("qc_sampler",    21600, "modules.qc_sampler"),    # 6h — random 2% sampling -> clip_qc.verify (Gemini drift)
     ("job_runner",    30,    "modules.job_runner"),    # 30s — admin-triggered jobs + boost dispatch
     ("job_dispatcher", 60,   "modules.job_dispatcher"), # 60s — bridge legacy kills.status -> pipeline_jobs
+    ("admin_job_runner", 30, "modules.admin_job_runner"), # 30s — claim+exec worker.backfill jobs (whitelisted scripts)
     ("heartbeat",     21600, "modules.heartbeat"),     # 6h
     ("watchdog",      1800,  "modules.watchdog"),      # 30 min
 ]
