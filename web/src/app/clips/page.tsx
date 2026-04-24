@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { getKillsForGrid, isDataOnlyKill } from "@/lib/supabase/kills";
 import { loadRealData } from "@/lib/real-data";
 import { JsonLd, clipsCollectionLD } from "@/lib/seo/jsonld";
+import { getAssetMetadata, pickAssetUrl } from "@/lib/kill-assets";
 import { ClipsGrid, type ClipCard, type InitialFilters } from "./clips-grid";
 
 // 300s cache — /clips pulls 500 kills and filters client-side. The
@@ -66,13 +67,20 @@ export default async function ClipsPage({ searchParams }: { searchParams?: Promi
     .map((k) => {
       const matchExt = k.games?.matches?.external_id;
       const matchJson = matchExt ? data.matches.find((m) => m.id === matchExt) : null;
+      // Manifest-aware asset URLs (migration 026). Falls back to the
+      // legacy thumbnail_url / clip_url_vertical_low columns on rows
+      // that haven't been re-clipped through the new pipeline yet.
+      const thumbnail = pickAssetUrl(k, "thumbnail");
+      const thumbMeta = getAssetMetadata(k, "thumbnail");
       return {
         id: k.id,
         killerChampion: k.killer_champion ?? "?",
         victimChampion: k.victim_champion ?? "?",
         killerPlayerId: k.killer_player_id,
-        thumbnail: k.thumbnail_url,
-        clipVerticalLow: k.clip_url_vertical_low,
+        thumbnail,
+        thumbnailWidth: thumbMeta?.width ?? null,
+        thumbnailHeight: thumbMeta?.height ?? null,
+        clipVerticalLow: pickAssetUrl(k, "vertical_low"),
         highlightScore: k.highlight_score,
         avgRating: k.avg_rating,
         ratingCount: k.rating_count ?? 0,

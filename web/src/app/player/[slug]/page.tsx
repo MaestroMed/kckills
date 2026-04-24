@@ -9,6 +9,7 @@ import {
   getKillsByKillerChampion,
   type PublishedKillRow,
 } from "@/lib/supabase/kills";
+import { getAssetMetadata, pickAssetUrl } from "@/lib/kill-assets";
 import Image from "next/image";
 import Link from "next/link";
 import type { Metadata } from "next";
@@ -527,6 +528,11 @@ export default async function PlayerPage({ params }: Props) {
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
             {realKills.slice(0, 6).map((k) => {
               const isKcKill = k.tracked_team_involvement === "team_killer";
+              // Manifest-aware thumbnail (migration 026). Falls back
+              // to the legacy thumbnail_url column when the manifest
+              // hasn't been built yet for this row.
+              const thumbUrl = pickAssetUrl(k, "thumbnail");
+              const thumbMeta = getAssetMetadata(k, "thumbnail");
               return (
                 <Link
                   key={k.id}
@@ -534,12 +540,21 @@ export default async function PlayerPage({ params }: Props) {
                   className="group relative overflow-hidden rounded-2xl border border-[var(--border-gold)] bg-black transition-all hover:border-[var(--gold)]/60 hover:scale-[1.02] hover:-translate-y-1 hover:shadow-2xl hover:shadow-[var(--gold)]/20"
                   style={{ aspectRatio: "16/10" }}
                 >
-                  {k.thumbnail_url ? (
+                  {thumbUrl ? (
                     <Image
-                      src={k.thumbnail_url}
+                      src={thumbUrl}
                       alt={`${k.killer_champion} vs ${k.victim_champion}`}
                       fill
-                      sizes="(max-width: 768px) 100vw, 33vw"
+                      // Sizes hint matches the responsive 1/2/3-col
+                      // grid above. When the manifest carries the real
+                      // pixel dims we widen the largest tier so the
+                      // CDN serves the highest-quality variant that
+                      // fits the column on desktop.
+                      sizes={
+                        thumbMeta?.width && thumbMeta.width >= 1280
+                          ? "(max-width: 768px) 100vw, (max-width: 1024px) 50vw, 480px"
+                          : "(max-width: 768px) 100vw, 33vw"
+                      }
                       className="object-cover group-hover:scale-110 transition-transform duration-700"
                     />
                   ) : (

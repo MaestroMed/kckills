@@ -148,8 +148,26 @@ export interface PublishedKillRow {
   /** Status of the kill in the pipeline. 'published' = passed every
    *  QC gate. 'raw' = imported but never processed. UI consumers
    *  show data-only kills when status != 'published' but the row is
-   *  trusted (e.g. data_source='gol_gg'). */
+   *  trusted (e.g. data_source='gol_gg').
+   *
+   *  PR23-arch : `status` is being split into 4 dimensions
+   *  (pipeline_status / publication_status / qc_status / asset_status,
+   *  see migration 027). Both sets are populated during the migration
+   *  window via the `trg_sync_kill_status_split` trigger — the new
+   *  fields below are the source of truth, `status` is back-compat. */
   status: string | null;
+  /** PR23 split-status. Pipeline progression — independent of
+   *  publication. NULL on rows from before migration 027 ran. */
+  pipeline_status: string | null;
+  /** PR23 split-status. Visibility on the public site.
+   *  'published' / 'hidden' / 'draft' / 'publishable' / 'retracted'. */
+  publication_status: string | null;
+  /** PR23 split-status. Gemini QC verdict.
+   *  'pending' / 'passed' / 'failed' / 'human_review'. */
+  qc_status: string | null;
+  /** PR23 split-status. R2 file readiness.
+   *  'missing' / 'processing' / 'ready' / 'partial' / 'corrupted'. */
+  asset_status: string | null;
   games: {
     external_id: string;
     game_number: number;
@@ -203,6 +221,10 @@ const KILL_SELECT = `
   created_at,
   data_source,
   status,
+  pipeline_status,
+  publication_status,
+  qc_status,
+  asset_status,
   games!inner (
     external_id,
     game_number,
@@ -264,6 +286,10 @@ interface RawKillSelect {
   created_at?: string | null;
   data_source?: string | null;
   status?: string | null;
+  pipeline_status?: string | null;
+  publication_status?: string | null;
+  qc_status?: string | null;
+  asset_status?: string | null;
   games?: RawGameSelect | RawGameSelect[] | null;
 }
 
@@ -340,6 +366,10 @@ function normalize(row: RawKillSelect): PublishedKillRow {
     created_at: String(row.created_at ?? ""),
     data_source: row.data_source ?? null,
     status: row.status ?? null,
+    pipeline_status: row.pipeline_status ?? null,
+    publication_status: row.publication_status ?? null,
+    qc_status: row.qc_status ?? null,
+    asset_status: row.asset_status ?? null,
     games: gamesNormalized,
   };
 }
@@ -375,7 +405,15 @@ export const getPublishedKills = cache(async function getPublishedKills(
     const { data, error } = await supabase
       .from("kills")
       .select(KILL_SELECT)
-      .eq("status", "published")
+      // PR23 split-status : prefer publication_status when present.
+      // Fallback to legacy `status` for rows from before migration 027
+      // ran AND the trigger hasn't backfilled them yet (shouldn't
+      // happen on fresh deploys, but the OR guards the migration
+      // window).
+      .or(
+        "publication_status.eq.published," +
+          "and(publication_status.is.null,status.eq.published)",
+      )
       .eq("kill_visible", true)            // Gemini QC must have confirmed the kill is in-frame
       .not("clip_url_vertical", "is", null) // real MP4 on R2
       .not("thumbnail_url", "is", null)     // poster frame so the player isn't black on load
@@ -431,11 +469,17 @@ export const getKillsForGrid = cache(async function getKillsForGrid(
       ? createAnonSupabase()
       : await createServerSupabase();
 
-    // Bucket 1 : full clip cards
+    // Bucket 1 : full clip cards.
+    // PR23 split-status : "published" check uses publication_status when
+    // present, falls back to legacy `status` otherwise. The OR clause
+    // is the migration-window safety net.
     let publishedQuery = supabase
       .from("kills")
       .select(KILL_SELECT)
-      .eq("status", "published")
+      .or(
+        "publication_status.eq.published," +
+          "and(publication_status.is.null,status.eq.published)",
+      )
       .eq("kill_visible", true)
       .not("clip_url_vertical", "is", null)
       .not("thumbnail_url", "is", null)
@@ -451,11 +495,21 @@ export const getKillsForGrid = cache(async function getKillsForGrid(
       .order("game_time_seconds", { ascending: true })
       .limit(limit);
 
-    // Bucket 3 : livestats-derived data-only (clipping failed or pending)
+    // Bucket 3 : livestats-derived data-only (clipping failed or pending).
+    // PR23 split-status : "data-only livestats" filter uses
+    // pipeline_status='failed' when the new column is populated, falls
+    // back to status='clip_error' otherwise. We also keep the legacy
+    // 'analyzed' status case so kills that finished the pipeline but
+    // never got published (e.g. publisher tick missed) still surface
+    // as data-only cards.
     let livestatsDataOnlyQuery = supabase
       .from("kills")
       .select(KILL_SELECT)
-      .in("status", ["clip_error", "analyzed"])
+      .or(
+        "pipeline_status.eq.failed," +
+          "and(pipeline_status.is.null,status.eq.clip_error)," +
+          "and(pipeline_status.is.null,status.eq.analyzed)",
+      )
       .eq("data_source", "livestats")
       .not("killer_champion", "is", null)
       .not("victim_champion", "is", null)
@@ -540,7 +594,11 @@ export async function getKillById(id: string): Promise<PublishedKillRow | null> 
       .from("kills")
       .select(KILL_SELECT)
       .eq("id", id)
-      .eq("status", "published")
+      // PR23 split-status fallback (see getPublishedKills).
+      .or(
+        "publication_status.eq.published," +
+          "and(publication_status.is.null,status.eq.published)",
+      )
       .maybeSingle();
     if (error) {
       console.warn("[supabase/kills] getKillById error:", error.message);
@@ -575,7 +633,11 @@ export async function getKillsByMatchExternalId(
       supabase
         .from("kills")
         .select(KILL_SELECT)
-        .eq("status", "published")
+        // PR23 split-status fallback (see getPublishedKills).
+        .or(
+          "publication_status.eq.published," +
+            "and(publication_status.is.null,status.eq.published)",
+        )
         .eq("kill_visible", true)
         .eq("games.matches.external_id", matchExternalId)
         .order("game_time_seconds", { ascending: true }),
@@ -585,11 +647,16 @@ export async function getKillsByMatchExternalId(
         .eq("data_source", "gol_gg")
         .eq("games.matches.external_id", matchExternalId)
         .order("game_time_seconds", { ascending: true }),
-      // Bucket 3 : livestats kills that failed clipping or are pending
+      // Bucket 3 : livestats kills that failed clipping or are pending.
+      // PR23 split-status fallback (see getKillsForGrid).
       supabase
         .from("kills")
         .select(KILL_SELECT)
-        .in("status", ["clip_error", "analyzed"])
+        .or(
+          "pipeline_status.eq.failed," +
+            "and(pipeline_status.is.null,status.eq.clip_error)," +
+            "and(pipeline_status.is.null,status.eq.analyzed)",
+        )
         .eq("data_source", "livestats")
         .eq("games.matches.external_id", matchExternalId)
         .not("killer_champion", "is", null)
@@ -652,7 +719,11 @@ export async function getKillsByKillerChampion(
       supabase
         .from("kills")
         .select(KILL_SELECT)
-        .eq("status", "published")
+        // PR23 split-status fallback (see getPublishedKills).
+        .or(
+          "publication_status.eq.published," +
+            "and(publication_status.is.null,status.eq.published)",
+        )
         .eq("kill_visible", true)
         .eq("killer_champion", championName)
         .order("highlight_score", { ascending: false, nullsFirst: false })
@@ -667,10 +738,15 @@ export async function getKillsByKillerChampion(
       // Bucket 3 — same as getKillsForGrid : livestats kills stuck at
       // clip_error / analyzed get the data-only treatment so the player
       // profile shows them too.
+      // PR23 split-status fallback.
       supabase
         .from("kills")
         .select(KILL_SELECT)
-        .in("status", ["clip_error", "analyzed"])
+        .or(
+          "pipeline_status.eq.failed," +
+            "and(pipeline_status.is.null,status.eq.clip_error)," +
+            "and(pipeline_status.is.null,status.eq.analyzed)",
+        )
         .eq("data_source", "livestats")
         .eq("killer_champion", championName)
         .order("created_at", { ascending: false })

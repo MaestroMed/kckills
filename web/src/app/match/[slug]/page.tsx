@@ -3,6 +3,7 @@ import { loadRealData, getMatchById, displayRole } from "@/lib/real-data";
 import { championIconUrl } from "@/lib/constants";
 import { KC_LOGO, TEAM_LOGOS } from "@/lib/kc-assets";
 import { getKillsByMatchExternalId, type PublishedKillRow } from "@/lib/supabase/kills";
+import { pickAssetUrl } from "@/lib/kill-assets";
 import { ClipReel } from "@/components/ClipReel";
 import { MatchHero } from "@/components/match/MatchHero";
 import Image from "next/image";
@@ -70,11 +71,20 @@ export default async function MatchPage({ params }: Props) {
   //     event location (LEC studio for the canonical case), competitor
   //     count = 2. Google has special handling for SportsEvent in the
   //     match-up rich card carousel.
+  // Pick the best thumbnail to attribute to this match for rich result
+  // imagery — highest-scored kill that has a thumbnail (manifest
+  // first, legacy column second). No published clips → leave the
+  // image field off entirely rather than feeding Google a broken URL.
+  const heroKill = realKills
+    .filter((k) => pickAssetUrl(k, "thumbnail") !== null)
+    .sort((a, b) => (b.highlight_score ?? 0) - (a.highlight_score ?? 0))[0] ?? null;
+  const matchHeroImage = heroKill ? pickAssetUrl(heroKill, "thumbnail") : null;
   const matchJsonLd = {
     "@context": "https://schema.org",
     "@type": "SportsEvent",
     name: `Karmine Corp vs ${match.opponent.name} — ${match.stage}`,
     description: `Match LEC : Karmine Corp vs ${match.opponent.name} (${match.stage}, Bo${match.best_of}). Résultat : ${match.kc_score}-${match.opp_score} ${match.kc_won ? "victoire KC" : `victoire ${match.opponent.code}`}.`,
+    ...(matchHeroImage ? { image: matchHeroImage } : {}),
     startDate: match.date,
     eventStatus: "https://schema.org/EventScheduled",
     eventAttendanceMode: "https://schema.org/OnlineEventAttendanceMode",

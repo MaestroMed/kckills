@@ -9,12 +9,27 @@ import { isDescriptionClean } from "@/lib/scroll/sanitize-description";
 import { Breadcrumb } from "@/components/Breadcrumb";
 import { Description } from "@/components/i18n/Description";
 
+/**
+ * Default poster dimensions for vertical clip thumbnails when the
+ * kill_assets manifest is absent (legacy rows). Worker convention is
+ * 720×1280 (9:16), used as the intrinsic size hint for next/image so
+ * the layout doesn't shift on first paint.
+ */
+const DEFAULT_THUMB_W = 720;
+const DEFAULT_THUMB_H = 1280;
+
 export interface ClipCard {
   id: string;
   killerChampion: string;
   victimChampion: string;
   killerPlayerId: string | null;
   thumbnail: string | null;
+  /** Native thumbnail dimensions when the kill_assets manifest carries
+   *  them (migration 026). Used by <Image sizes>/intrinsic-size hints
+   *  to avoid layout shift on first paint. NULL = legacy row, fall
+   *  back to the responsive sizes string. */
+  thumbnailWidth?: number | null;
+  thumbnailHeight?: number | null;
   clipVerticalLow: string | null;
   highlightScore: number | null;
   avgRating: number | null;
@@ -344,13 +359,27 @@ function ClipCardComponent({ card }: { card: ClipCard }) {
           : "border-[var(--border-gold)]"
       }`}
     >
-      {/* Thumbnail or champion-icon fallback for data-only kills */}
-      <div className="relative aspect-[9/16] overflow-hidden bg-black">
+      {/* Thumbnail or champion-icon fallback for data-only kills.
+          Aspect ratio uses the kill_assets manifest dims when present
+          (rare 1:1 / 4:5 thumbnails get exact framing) and falls back
+          to the standard 9:16 vertical poster when absent. */}
+      <div
+        className="relative overflow-hidden bg-black"
+        style={{
+          aspectRatio:
+            card.thumbnailWidth && card.thumbnailHeight
+              ? `${card.thumbnailWidth} / ${card.thumbnailHeight}`
+              : `${DEFAULT_THUMB_W} / ${DEFAULT_THUMB_H}`,
+        }}
+      >
         {card.thumbnail ? (
           <Image
             src={card.thumbnail}
             alt={`${card.killerChampion} → ${card.victimChampion}`}
             fill
+            // Sizes hint matches the responsive grid breakpoints (50vw
+            // mobile, 25vw tablet, 16vw desktop). next/image still
+            // requests the right pixel density for the column width.
             sizes="(max-width: 640px) 50vw, (max-width: 1024px) 25vw, 16vw"
             className={`object-cover group-hover:scale-105 transition-transform duration-500 ${
               card.isDataOnly ? "opacity-60" : ""
