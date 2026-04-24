@@ -38,6 +38,8 @@
 export type EventType =
   // Scroll feed events
   | "feed.view"
+  | "feed.mode_live_entered"
+  | "feed.mode_live_exited"
   | "clip.viewed"
   | "clip.started"
   | "clip.completed"
@@ -63,7 +65,12 @@ export type EventType =
   // Auth
   | "auth.signup"
   | "auth.login"
-  | "auth.logout";
+  | "auth.logout"
+  // Push notifications
+  | "push.subscribed"
+  | "push.unsubscribed"
+  | "push.permission_denied"
+  | "push.preferences_updated";
 
 export type ClientKind = "mobile" | "desktop" | "tablet" | "pwa";
 export type NetworkClass = "fast" | "medium" | "slow";

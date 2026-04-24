@@ -27,6 +27,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { BgmPlayer } from "../BgmPlayer";
 import {
@@ -38,9 +39,11 @@ import { useFeedGesture } from "./hooks/useFeedGesture";
 import { useNetworkQuality } from "./hooks/useNetworkQuality";
 import { useFeedBuffer } from "./hooks/useFeedBuffer";
 import { useKeyboardShortcuts } from "./hooks/useKeyboardShortcuts";
+import { useLiveMatch } from "./hooks/useLiveMatch";
 import { EndOfFeedCard } from "./EndOfFeedCard";
 import { PullToRefreshIndicator } from "./PullToRefreshIndicator";
 import { KeyboardHelpOverlay } from "./KeyboardHelpOverlay";
+import { LiveBanner } from "./LiveBanner";
 import { ScrollChipBar, type ChipFilters } from "@/components/scroll/ScrollChipBar";
 import type { FeedItem } from "@/components/scroll/ScrollFeed";
 import { track } from "@/lib/analytics/track";
@@ -95,6 +98,81 @@ export function ScrollFeedV2({
 
   // ─── Network-driven quality (Phase 3) ─────────────────────────────
   const { quality, useLowQuality, effectiveType } = useNetworkQuality();
+
+  // ─── Live mode (Wave 4 P1) ────────────────────────────────────────
+  // Polls /api/live/kc-status every 60s. When KC has a match in
+  // `state='inProgress'`, isLive flips to true and we:
+  //   1. crank the SSR feed refresh from 30s → 15s (router.refresh)
+  //   2. mount the LiveBanner above the feed (red, animated, tappable)
+  //   3. fire feed.mode_live_entered / _exited analytics with duration
+  const live = useLiveMatch();
+  const liveStartRef = useRef<{ matchId?: string; startedAt: number } | null>(null);
+  const router = useRouter();
+
+  // Fire mode_live_entered / mode_live_exited analytics on transitions.
+  // We track the entry timestamp so the exit event can carry duration_ms.
+  useEffect(() => {
+    if (live.isLive) {
+      // Already in live mode for the same match → no-op (avoids double-firing
+      // on every poll while live).
+      if (liveStartRef.current?.matchId === live.matchId) return;
+      // Different match (or first entry) → close the previous if any, then open.
+      if (liveStartRef.current) {
+        track("feed.mode_live_exited", {
+          metadata: {
+            match_id: liveStartRef.current.matchId ?? null,
+            duration_ms: Date.now() - liveStartRef.current.startedAt,
+          },
+        });
+      }
+      liveStartRef.current = { matchId: live.matchId, startedAt: Date.now() };
+      track("feed.mode_live_entered", {
+        metadata: { match_id: live.matchId ?? null },
+      });
+    } else if (liveStartRef.current) {
+      // Live → idle transition.
+      track("feed.mode_live_exited", {
+        metadata: {
+          match_id: liveStartRef.current.matchId ?? null,
+          duration_ms: Date.now() - liveStartRef.current.startedAt,
+        },
+      });
+      liveStartRef.current = null;
+    }
+  }, [live.isLive, live.matchId]);
+
+  // SSR feed refresh cadence — 15s when live, 30s otherwise. Single
+  // setInterval whose callback dynamically reads `live.isLive` from a ref
+  // so we don't reschedule on every state change (which would make the
+  // first tick land at 15s+30s instead of at 15s after a live flip).
+  // Pattern matches the spec's "don't remount the query — adjust the option
+  // dynamically" requirement.
+  const isLiveRef = useRef(live.isLive);
+  useEffect(() => {
+    isLiveRef.current = live.isLive;
+  }, [live.isLive]);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    let timeoutId: number | null = null;
+    const tick = () => {
+      // router.refresh re-runs the RSC for /scroll, which re-fetches the
+      // SSR'd `itemsProp` from Supabase. Cheap (cached at the query layer
+      // by getPublishedKills's RLS-friendly query) and keeps the feed
+      // honest without a full client navigation.
+      try {
+        router.refresh();
+      } catch {
+        // ignore — refresh is best-effort, the user can pull-to-refresh
+      }
+      const next = isLiveRef.current ? 15_000 : 30_000;
+      timeoutId = window.setTimeout(tick, next);
+    };
+    // Bootstrap with the current cadence so the first tick aligns.
+    timeoutId = window.setTimeout(tick, isLiveRef.current ? 15_000 : 30_000);
+    return () => {
+      if (timeoutId != null) window.clearTimeout(timeoutId);
+    };
+  }, [router]);
 
   // ─── Viewport sizing ──────────────────────────────────────────────
   // CRITICAL: on mobile (iOS Safari especially), clientHeight can be 0
@@ -362,6 +440,20 @@ export function ScrollFeedV2({
       style={{ touchAction: "pan-y", overscrollBehavior: "contain" }}
     >
       <BgmPlayer />
+      {/* Live mode banner — portaled to <body> so it escapes overflow:hidden.
+          Tap → jump to index 0 (most recent kill). If the feed is empty,
+          the banner falls back to a Link to /match/[external_id]. */}
+      <LiveBanner
+        isLive={live.isLive}
+        matchId={live.matchId}
+        opponentCode={live.opponentCode}
+        gameNumber={live.gameNumber}
+        onTap={
+          visibleItems.length > 0
+            ? () => jumpTo(0)
+            : undefined
+        }
+      />
       {/* Top bar — outside the motion container so it doesn't translate. */}
       <div
         className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-4 py-3"
