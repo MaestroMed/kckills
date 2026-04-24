@@ -98,7 +98,20 @@ export function useHlsAttach() {
       quality: NetworkQuality = "auto",
     ) => {
       if (!hlsUrl) {
-        // No HLS available — set MP4 fallback if any.
+        // No HLS desired — destroy any pre-existing Hls.js instance on
+        // this <video> so the MP4 src takes over cleanly. Without this,
+        // a slot that was previously HLS-attached keeps the Hls.js
+        // listener alive and the new video.src write is silently
+        // overridden on the next manifest tick.
+        const existing = attachedRef.current.get(video);
+        if (existing) {
+          try {
+            existing.instance.destroy();
+          } catch {
+            /* ignore */
+          }
+          attachedRef.current.delete(video);
+        }
         if (fallbackMp4 && video.src !== fallbackMp4) {
           video.src = fallbackMp4;
         }

@@ -166,13 +166,22 @@ export function FeedPlayerPool({
       // Did this slot just take a new item? Update src (HLS-aware) + reset hasPlayed.
       if (itemIdx !== prevItemIdx) {
         const fallbackMp4 = pickSrc(item, isDesktop, useLowQuality);
+        // PR23.8 — On desktop with a horizontal MP4 available, SKIP HLS
+        // entirely. The HLS master playlist only carries the 9:16 vertical
+        // ladder (which is what the worker's hls_packager produces today),
+        // so on a 16:9 desktop viewport HLS would render the vertical clip
+        // letterboxed with massive black bars. Mobile (or desktop with
+        // no horizontal MP4 fallback) still uses HLS — that's where the
+        // adaptive bitrate actually pays off.
+        const useMp4Direct = isDesktop && !!item.clipHorizontal;
+        const hlsUrl = useMp4Direct ? null : (item.hlsMasterUrl ?? null);
         // attachHlsTo handles 3 cases internally:
         //   - HLS URL + Safari: native <video src=hls>
         //   - HLS URL + other:  hls.js attach (lazy-loaded)
         //   - No HLS URL:       falls through to fallbackMp4
         // It's async (lazy hls.js import) but fire-and-forget — the
         // poster covers the gap and play() retries via canplay listener.
-        void attachHlsTo(v, item.hlsMasterUrl ?? null, fallbackMp4, quality);
+        void attachHlsTo(v, hlsUrl, fallbackMp4, quality);
         v.poster = item.thumbnail ?? "";
         hasPlayedRef.current[s] = false;
       }
