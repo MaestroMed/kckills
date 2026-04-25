@@ -114,7 +114,12 @@ async def download_full_vod(youtube_id: str) -> str | None:
     cmd = [
         sys.executable, "-m", "yt_dlp",
         *_cookies_args(),
-        "--js-runtimes", "node",
+        # YouTube post-2026-04 requires JS runtime + EJS challenge solver
+        # to resolve the n-decoder. Without these, only image formats are
+        # returned and the download fails with "Requested format not
+        # available". deno is installed via winget, on PATH via main.py.
+        "--js-runtimes", "deno",
+        "--remote-components", "ejs:github",
         "-f", "bestvideo[height<=1080]+bestaudio/best[height<=1080]",
         "--merge-output-format", "mp4",
         "-o", vod_path,
@@ -722,6 +727,12 @@ async def _run_ytdlp(url: str, output_path: str, start: float, end: float) -> bo
     cmd = [
         sys.executable, "-m", "yt_dlp",
         *_cookies_args(),
+        # YouTube post-2026-04 requires JS runtime + EJS challenge solver
+        # to resolve the n-decoder. Without these, only image formats are
+        # returned and the download fails with "Requested format not
+        # available". deno is installed via winget, on PATH via main.py.
+        "--js-runtimes", "deno",
+        "--remote-components", "ejs:github",
         "--download-sections", f"*{start}-{end}",
         "--force-keyframes-at-cuts",
         "-f", "bestvideo[height<=1080]+bestaudio/best[height<=1080]",

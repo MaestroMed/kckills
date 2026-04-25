@@ -61,6 +61,25 @@ if sys.platform == "win32":
     # admin_job_runner) to use UTF-8 by default.
     os.environ.setdefault("PYTHONIOENCODING", "utf-8")
 
+# ─── Make `deno` discoverable by yt-dlp subprocesses ────────────────
+# yt-dlp ≥2026-04 needs a JavaScript runtime + EJS challenge solver
+# script to resolve YouTube's n-decoder. Without these, `--list-formats`
+# only returns image streams and the actual video download fails with
+# "Requested format is not available". Deno is the default supported
+# runtime per yt-dlp's EJS docs. Installed via winget on this machine,
+# but lives in a non-standard path — prepend it so subprocesses inherit.
+_DENO_CANDIDATES = [
+    os.path.expandvars(r"%LOCALAPPDATA%\Microsoft\WinGet\Packages\DenoLand.Deno_Microsoft.Winget.Source_8wekyb3d8bbwe"),
+    os.path.expandvars(r"%USERPROFILE%\.deno\bin"),
+    r"C:\Program Files\deno",
+]
+for _deno_dir in _DENO_CANDIDATES:
+    if os.path.isfile(os.path.join(_deno_dir, "deno.exe")):
+        _current_path = os.environ.get("PATH", "")
+        if _deno_dir not in _current_path:
+            os.environ["PATH"] = _deno_dir + os.pathsep + _current_path
+        break
+
 import structlog
 
 structlog.configure(
