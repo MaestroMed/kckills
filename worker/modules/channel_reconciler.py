@@ -1,50 +1,272 @@
 """
-CHANNEL_RECONCILER v3 — Match channel_videos rows to (match, game, content_type).
+CHANNEL_RECONCILER v4 — Match channel_videos rows to (match, game, content_type).
 
 V1 covered LEC 2024+ via @LEC's standardised "TEAMA vs TEAMB | HIGHLIGHTS"
 title format. V2 extended coverage to LFL / EUM / Worlds / First Stand /
 Kameto Clips / KC official channel content_types.
 
-V3 (PR25) FIXES THE 154-VIDEO BACKLOG. Three concrete bugs were stopping
-matches from ever being linked :
+V3 (PR25, Wave 2 commit 0d15cb0) widened the input set, swapped to ±7d
+windows, and switched to set-equal team matching.
 
-  A) The status filter was too tight. The discoverer scores most match
-     titles like "TH vs KC | HIGHLIGHTS" at relevance 0.5 (single \\bKC\\b
-     hit), which lands the row in `manual_review` — NOT `classified`.
-     V3 widens the input set to {discovered, classified, manual_review}
-     and re-attempts parsing.
+V4 (PR-arch P3, Wave 8) adds a CLASSIFY-AND-SKIP fast path BEFORE the
+expensive parser runs, so we stop spamming `unparseable` warnings on
+the 50+ "Karmine Life #N" videos per cycle. The classifier returns one
+of eight kinds :
 
-  B) The discoverer never persists `published_at`, so the v2 reconciler's
-     30-day default window was missing every historical video. V3 widens
-     to ±7 days when published_at exists, and falls back to the FULL
-     team-vs-team history when it doesn't (closest match by date wins).
+  - "match"      : full game VOD or live broadcast
+  - "highlight"  : recap / "best of" of a single game
+  - "vlog"       : "Karmine Life #N", behind-the-scenes
+  - "reveal"     : ANNONCE / REVEAL / ROSTER / MAILLOT / BUNDLE
+  - "reaction"   : REACT / "Kameto réagit"
+  - "interview"  : interview / 1ère interview
+  - "drama"      : drame / explique / raconte / déclaration
+  - "irrelevant" : no signal — fall through to the existing parser
 
-  C) The match-lookup was strictly ordered (team_a vs team_b expected to
-     appear in a specific blue/red slot). V3 matches on the SET of team
-     codes — KC/TH and TH/KC both hit the same matches row.
+Pre-filter behaviour :
+  - {vlog, reveal, reaction, interview, drama}  -> log INFO + status
+    'skipped_<kind>' (no parser, no warn, no log spam, idempotent).
+  - {match, highlight}  -> proceed to parse_title_for_match.
+  - irrelevant  -> behave like v3 (parser will likely return None and
+    the row lands in 'manual_review').
 
-Once a match is found we set :
-  status = 'matched'
-  matched_match_external_id = <external_id>
-  matched_game_number       = <int from "Game N" if any>
-  matched_at                = now()
-  kc_relevance_score        = max(existing, 0.7)   <- promote to "matched"
+V4 also adds :
+  - Per-channel kinds breakdown logged at end of each cycle.
+  - `_fuzzy_match_recent_kc()` fallback — for vague titles like
+    "Karmine Corp Highlights" with no opponent, tries to pin down a
+    unique recent (last 7d) KC match.
+  - Better Game-N parsing (no week/day required).
+  - Hard reject of non-LoL KC content (Valorant, Rocket League, etc.).
 
 Backward-compat : v1 LEC_HIGHLIGHTS_RE / LIVE_GAME_RE preserved unchanged.
+The v3 RECONCILE_STATUSES tuple is preserved. All v3 helpers
+(`parse_title_for_match`, `find_match_candidates`, `_pick_closest`,
+`reconcile_one`) keep their public signatures.
 """
 
 from __future__ import annotations
 
 import re
+from collections import Counter
 from datetime import datetime, timezone, timedelta
+from typing import Literal, Optional
 
 import httpx
 import structlog
 
-from services.observability import run_logged
+from services.observability import note, run_logged
 from services.supabase_client import get_db, safe_select, safe_update, safe_upsert
 
 log = structlog.get_logger()
+
+
+# ─── Video-kind classifier (v4) ───────────────────────────────────────
+
+VideoKind = Literal[
+    "match", "highlight", "vlog", "reveal", "reaction",
+    "interview", "drama", "irrelevant",
+]
+
+# Order matters : MOST-SPECIFIC first. We want "Karmine Life #45 | INTERVIEW"
+# to classify as "vlog", not "interview", because the leading tag wins.
+
+# Vlogs — Karmine Life series, behind the scenes
+_VLOG_RE = re.compile(
+    r"\b("
+    r"karmine\s*life|karminelife|"
+    r"behind[\s\-]+the[\s\-]+scenes|"
+    r"vlog|"
+    r"daily\s*kc|"
+    r"jour(?:n[ée]e?)?\s+(?:type|avec|chez)\s+kc|"
+    r"on\s+a\s+suivi|"
+    r"24h?\s*avec|"
+    r"dans\s+les\s+coulisses"
+    r")\b",
+    re.IGNORECASE,
+)
+
+# Reveals — roster announcements, jersey drops, bundle launches
+_REVEAL_RE = re.compile(
+    r"\b("
+    r"annonce|"
+    r"reveal|"
+    r"roster\s*(?:reveal|announce|annonce)?|"
+    r"new\s*(?:roster|joueur|signing)|"
+    r"signing|"
+    r"maillot|jersey|"
+    r"bundle|merch(?:andise)?|"
+    r"collection|drop|"
+    r"presentation|pr[ée]sentation\s+(?:du|de\s+la|des)\s+(?:roster|maillot|joueur)"
+    r")\b",
+    re.IGNORECASE,
+)
+
+# Reactions — REACT / Kameto réagit / "réaction de"
+_REACTION_RE = re.compile(
+    r"\b("
+    r"react(?:ion)?|"
+    r"r[ée]ag(?:it|issons|issent)|"
+    r"watch[\s\-]*party|"
+    r"kameto\s+r[ée]agit|"
+    r"on\s+r[ée]agit\s+[àa]"
+    r")\b",
+    re.IGNORECASE,
+)
+
+# Interviews — pure interview content (NOT post-match, which is its own thing)
+_INTERVIEW_RE = re.compile(
+    r"\b("
+    r"interview|itw|"
+    r"1[èe]re\s+interview|"
+    r"(?:premi[èe]re|first)\s+interview|"
+    r"(?:exclusif|exclusive)\s+interview|"
+    r"press[\s\-]*conference|"
+    r"conf[ée]rence\s+de\s+presse|"
+    r"face[\s\-]+[àa][\s\-]+face|"
+    r"questions[\s/]+r[ée]ponses|q\s*&\s*a"
+    r")\b",
+    re.IGNORECASE,
+)
+
+# Drama / news — "drame", "explique", "raconte", "déclaration"
+_DRAMA_RE = re.compile(
+    r"\b("
+    r"drame|"
+    r"explique\s+(?:tout|pourquoi|sa|son|le|la)|"
+    r"raconte\s+(?:tout|pourquoi|sa|son|le|la|comment)|"
+    r"d[ée]claration|"
+    r"clash|polemique|pol[ée]mique|"
+    r"r[ée]ponse\s+[àa]|"
+    r"on\s+vous\s+dit\s+tout"
+    r")\b",
+    re.IGNORECASE,
+)
+
+# Highlights — short recap / best-of / "TOP X plays"
+_HIGHLIGHT_RE = re.compile(
+    r"\b("
+    r"highlights?|"
+    r"recap|"
+    r"best\s+of|"
+    r"top\s+\d+\s+(?:plays?|moments?|kills?)|"
+    r"r[ée]sum[ée]"
+    r")\b",
+    re.IGNORECASE,
+)
+
+# Match VODs — explicit "Game N" / "BO[1-9]" / "vs/vs." between team codes.
+# We require BOTH a `vs` clause AND either Game/BO marker OR a tournament
+# tag, otherwise it's almost always a marketing video.
+_MATCH_VS_RE = re.compile(
+    r"\b[A-Z0-9.]{2,8}\s*v(?:s\.?|\.)?\s*[A-Z0-9.]{2,8}\b",
+    re.IGNORECASE,
+)
+_MATCH_GAME_BO_RE = re.compile(
+    r"\b("
+    r"game\s*[1-9]|"
+    r"bo[1-9]|"
+    r"best[\s\-]*of[\s\-]*[1-9]|"
+    r"week\s*\d+|semaine\s*\d+|"
+    r"playoff|finale?|grand[\s\-]*final|demi[\s\-]*finale?|quart"
+    r")\b",
+    re.IGNORECASE,
+)
+_LEAGUE_TAG_RE = re.compile(
+    r"\b("
+    r"#?lec|#?lfl|#?eum|#?lcs|#?lck|#?lpl|#?msi|"
+    r"worlds?|world\s*championship|"
+    r"first\s*stand|emea\s*masters?|eu\s*masters?"
+    r")\b",
+    re.IGNORECASE,
+)
+
+# Hard reject : KC operates teams in Valorant, Rocket League, Apex, TFT,
+# Fortnite, Trackmania, etc. None of them belong on a LoL-only platform.
+_NON_LOL_RE = re.compile(
+    r"\b("
+    r"valorant|val\s*game\s*changers|vct|"
+    r"rocket[\s\-]*league|rlcs|"
+    r"apex(?:\s*legends?)?|als|"
+    r"tft|teamfight[\s\-]*tactics|"
+    r"fortnite|fncs|"
+    r"trackmania|tm|"
+    r"counter[\s\-]*strike|cs2|csgo|"
+    r"street[\s\-]*fighter|sf6|"
+    r"smash(?:\s*bros?)?"
+    r")\b",
+    re.IGNORECASE,
+)
+
+
+def _classify_video_kind(title: str) -> VideoKind:
+    """Classify a YouTube video title into one of 8 buckets.
+
+    Used as a fast pre-filter so we don't waste cycles on Karmine Life
+    vlogs / reveals / reactions / interviews / drama videos that will
+    NEVER be linkable to a LEC match.
+
+    Order of checks is most-specific first :
+
+      1. Non-LoL games (Valorant, RL, Apex…)  -> "irrelevant"
+         (so the existing parser can mark them manual_review and the
+         operator sees them, but they don't waste a fuzzy lookup).
+      2. Vlog (Karmine Life / behind the scenes)  -> "vlog"
+      3. Reveal (annonce / roster / maillot / bundle)  -> "reveal"
+      4. Reaction (react / kameto réagit)  -> "reaction"
+      5. Interview (interview / itw / press conference)  -> "interview"
+      6. Drama (drame / explique / raconte / déclaration)  -> "drama"
+      7. Match (vs/vs. + Game N / BO / tournament tag)  -> "match"
+      8. Highlight (HIGHLIGHTS / recap / best of / TOP X)  -> "highlight"
+      9. Else  -> "irrelevant"
+    """
+    if not title:
+        return "irrelevant"
+
+    lower = title.lower()
+
+    # 1. Non-LoL — always wins, even if title contains "vs" or "highlights".
+    if _NON_LOL_RE.search(lower):
+        return "irrelevant"
+
+    # 2-6. Lifestyle / marketing / news content (ordered by typical KC channel
+    # frequency : vlogs are by far the most spammy bucket on Kameto Karmine).
+    if _VLOG_RE.search(lower):
+        return "vlog"
+    if _REVEAL_RE.search(lower):
+        return "reveal"
+    if _REACTION_RE.search(lower):
+        return "reaction"
+    if _INTERVIEW_RE.search(lower):
+        return "interview"
+    if _DRAMA_RE.search(lower):
+        return "drama"
+
+    # 7. Match VOD : requires a vs/vs. clause AND (Game N / BO / week / tournament).
+    has_vs = bool(_MATCH_VS_RE.search(title))
+    has_game_marker = bool(_MATCH_GAME_BO_RE.search(lower))
+    has_league_tag = bool(_LEAGUE_TAG_RE.search(lower))
+    if has_vs and (has_game_marker or has_league_tag):
+        # If title ALSO mentions HIGHLIGHTS / RECAP it's a highlight, not
+        # a full game VOD — but for prefilter purposes both lead to the
+        # parser, so the distinction is informational only.
+        if _HIGHLIGHT_RE.search(lower):
+            return "highlight"
+        return "match"
+
+    # 8. Highlight without a clear vs clause (KC retrospectives etc.)
+    if _HIGHLIGHT_RE.search(lower):
+        return "highlight"
+
+    # 9. Default fallback : let v3 parser have a go.
+    return "irrelevant"
+
+
+# Kinds that are pre-filtered out (skipped before the parser runs).
+SKIP_KINDS: frozenset[VideoKind] = frozenset({
+    "vlog", "reveal", "reaction", "interview", "drama",
+})
+
+# Kinds that are forwarded to the title parser.
+PARSE_KINDS: frozenset[VideoKind] = frozenset({"match", "highlight"})
 
 
 # ─── Regex bank (most-specific first) ─────────────────────────────────
@@ -56,6 +278,16 @@ LEC_HIGHLIGHTS_RE = re.compile(
 )
 LIVE_GAME_RE = re.compile(
     r"^([A-Z0-9]{2,4})\s*vs\.?\s*([A-Z0-9]{2,4})\s*Game\s*(\d)",
+    re.IGNORECASE,
+)
+
+# LEC with explicit "| LEC | Game N" tail (v4) — captures titles like
+# "KC vs. KOI | LEC | Game 2" that the v1 LIVE_GAME_RE misses because
+# of the pipe separators.
+LEC_PIPED_GAME_RE = re.compile(
+    r"^([A-Z0-9.]{2,8})\s*vs\.?\s*([A-Z0-9.]{2,8})\s*"
+    r"\|\s*(?:#?LEC|#?LFL|#?EUM|#?LCS|#?LCK|#?MSI|#?Worlds?)\s*"
+    r"\|\s*Game\s*(\d)",
     re.IGNORECASE,
 )
 
@@ -131,6 +363,7 @@ SPLIT_RE = re.compile(
     re.IGNORECASE,
 )
 GAME_N_RE = re.compile(r"\bGame\s*(\d)\b", re.IGNORECASE)
+BO_RE = re.compile(r"\bbo([1-9])\b", re.IGNORECASE)
 YEAR_RE = re.compile(r"\b(20[2-3]\d)\b")
 
 
@@ -231,16 +464,29 @@ def parse_title_for_match(title: str, role: str | None = None) -> dict | None:
     # 3. Match-coverage videos (LEC / LFL / EUM / Worlds / First Stand)
     out: dict = {}
 
-    # LEC (v1 backward-compat first)
-    m = LEC_HIGHLIGHTS_RE.search(title)
+    # LEC piped Game-N (v4 — "KC vs. KOI | LEC | Game 2")
+    m = LEC_PIPED_GAME_RE.search(title)
     if m:
         a, b = normalise_team(m.group(1)), normalise_team(m.group(2))
         if a not in NON_TEAM_TOKENS and b not in NON_TEAM_TOKENS:
             out["team_a"] = a
             out["team_b"] = b
+            out["game_n"] = int(m.group(3))
             out["league"] = "lec"
-            out["video_type"] = "game_highlights"
-            out["content_type"] = "highlights"
+            out["video_type"] = "single_game"
+            out["content_type"] = "single_game"
+
+    # LEC (v1 backward-compat first)
+    if not out:
+        m = LEC_HIGHLIGHTS_RE.search(title)
+        if m:
+            a, b = normalise_team(m.group(1)), normalise_team(m.group(2))
+            if a not in NON_TEAM_TOKENS and b not in NON_TEAM_TOKENS:
+                out["team_a"] = a
+                out["team_b"] = b
+                out["league"] = "lec"
+                out["video_type"] = "game_highlights"
+                out["content_type"] = "highlights"
 
     if not out:
         m = LIVE_GAME_RE.search(title)
@@ -321,6 +567,10 @@ def parse_title_for_match(title: str, role: str | None = None) -> dict | None:
     m = GAME_N_RE.search(title)
     if m and "game_n" not in out:
         out["game_n"] = int(m.group(1))
+
+    m = BO_RE.search(title)
+    if m and "bo" not in out:
+        out["bo"] = int(m.group(1))
 
     m = WEEK_DAY_RE.search(title) or WEEK_FR_RE.search(title)
     if m:
@@ -478,16 +728,131 @@ def _pick_closest(
     return min(candidates, key=_dist)
 
 
+# ─── Fuzzy fallback for vague titles (v4) ─────────────────────────────
+
+async def _fuzzy_match_recent_kc(
+    db,
+    title: str,
+    *,
+    published_at: datetime | None = None,
+    window_days: int = 7,
+) -> Optional[str]:
+    """Try to rescue vague titles like "Karmine Corp Highlights".
+
+    Strategy : the title says "KC" but no opponent. If there is exactly
+    ONE KC match within ±`window_days` of `published_at` (or "now" when
+    that's missing), return its external_id. Anything ambiguous returns
+    None — the caller will fall through to the existing manual_review
+    behaviour.
+
+    We DO NOT re-implement title parsing here — this is purely a
+    recency-based disambiguator. The caller is responsible for first
+    establishing that the title mentions KC at all.
+    """
+    if not title:
+        return None
+    low = title.lower()
+    # The title MUST explicitly mention Karmine Corp (otherwise we'd be
+    # guessing wildly). We accept the most common spellings.
+    if not re.search(r"\b(kc|karmine|karminecorp|karmine\s*corp)\b", low):
+        return None
+
+    pivot = published_at or datetime.now(timezone.utc)
+    window_start = (pivot - timedelta(days=window_days)).isoformat()
+    window_end = (pivot + timedelta(days=window_days)).isoformat()
+
+    candidates = _matches_in_window(
+        db,
+        window_start=window_start,
+        window_end=window_end,
+    )
+    kc_only = [
+        c for c in candidates
+        if {
+            (c.get("team_blue") or {}).get("code"),
+            (c.get("team_red") or {}).get("code"),
+        } & {"KC", "KCB"}
+    ]
+    if len(kc_only) == 1:
+        return kc_only[0].get("external_id")
+    # 0 or >1 → ambiguous, give up
+    return None
+
+
 # ─── Reconciliation per row ───────────────────────────────────────────
 
 async def reconcile_one(db, video: dict) -> str:
-    """Reconcile a single channel_video row. Returns the new status."""
+    """Reconcile a single channel_video row. Returns the new status.
+
+    V4 pre-filter : if the video is classified as vlog/reveal/reaction/
+    interview/drama, we mark it `skipped_<kind>` and return early with
+    that status. The caller's per-cycle counters use the returned status
+    to build the per-channel breakdown.
+    """
     video_id = video["id"]
     title = video.get("title") or ""
     role = video.get("channel_role")
+
+    # ─── V4 pre-filter — classify-and-skip ──────────────────────────
+    kind = _classify_video_kind(title)
+    video["_kind"] = kind  # exposed for the run() aggregator
+
+    if kind in SKIP_KINDS:
+        # Don't waste a parser call. Don't pollute logs at warn level.
+        # video_id is enough to dedupe ; full title omitted to minimise
+        # log noise (the operator can SQL-lookup the title if needed).
+        log.info(
+            "video_skipped",
+            video_id=video_id,
+            kind=kind,
+        )
+        new_status = f"skipped_{kind}"
+        safe_update(
+            "channel_videos",
+            {
+                "status": new_status,
+                "video_type": kind,
+                "content_type": kind,
+                "matched_at": datetime.now(timezone.utc).isoformat(),
+                "notes": f"V4 pre-filter: {kind}",
+            },
+            "id", video_id,
+        )
+        return new_status
+
     parsed = parse_title_for_match(title, role=role)
 
     if not parsed:
+        # V4 fuzzy fallback — vague KC mentions get one more shot.
+        if kind == "highlight":
+            ext_id = await _fuzzy_match_recent_kc(
+                db, title,
+                published_at=_parse_published_at(video.get("published_at")),
+            )
+            if ext_id:
+                log.info(
+                    "reconciler_match_found",
+                    video_id=video_id,
+                    match_ext_id=ext_id,
+                    via="fuzzy_recent_kc",
+                )
+                safe_update(
+                    "channel_videos",
+                    {
+                        "status": "matched",
+                        "video_type": "game_highlights",
+                        "content_type": "highlights",
+                        "matched_match_external_id": ext_id,
+                        "matched_at": datetime.now(timezone.utc).isoformat(),
+                        "kc_relevance_score": max(
+                            video.get("kc_relevance_score") or 0.0, 0.7,
+                        ),
+                        "notes": "V4 fuzzy fallback (recent KC match)",
+                    },
+                    "id", video_id,
+                )
+                return "matched"
+
         log.info(
             "reconciler_match_not_found",
             video_id=video_id,
@@ -548,14 +913,7 @@ async def reconcile_one(db, video: dict) -> str:
         )
         return "matched"
 
-    published_at: datetime | None = None
-    if video.get("published_at"):
-        try:
-            published_at = datetime.fromisoformat(
-                video["published_at"].replace("Z", "+00:00"),
-            )
-        except (ValueError, AttributeError):
-            published_at = None
+    published_at = _parse_published_at(video.get("published_at"))
 
     candidates = await find_match_candidates(db, parsed, published_at)
 
@@ -656,6 +1014,16 @@ async def reconcile_one(db, video: dict) -> str:
     return "matched"
 
 
+def _parse_published_at(raw: str | None) -> datetime | None:
+    """Tolerant ISO-8601 parser. Returns None on any failure."""
+    if not raw:
+        return None
+    try:
+        return datetime.fromisoformat(raw.replace("Z", "+00:00"))
+    except (ValueError, AttributeError):
+        return None
+
+
 # ─── Daemon loop ──────────────────────────────────────────────────────
 
 # Statuses we consider as candidates for re-reconciliation. The original
@@ -667,8 +1035,16 @@ RECONCILE_STATUSES = ("discovered", "classified", "manual_review")
 
 @run_logged()
 async def run() -> int:
-    """Reconcile pending channel_videos rows. Returns matched count."""
-    log.info("channel_reconciler_v3_start")
+    """Reconcile pending channel_videos rows. Returns matched count.
+
+    V4 changes :
+      - Per-row pre-filter via `_classify_video_kind` → skip vlogs/reveals
+        without parsing. Logged at INFO level (not warn) so cycle output
+        stays calm.
+      - Per-channel kinds breakdown logged at end of cycle and pushed
+        into pipeline_runs.metadata via observability.note().
+    """
+    log.info("channel_reconciler_v4_start")
 
     db = get_db()
     if not db:
@@ -677,8 +1053,13 @@ async def run() -> int:
 
     # `in.(...)` lets us pull all 3 statuses in one round-trip. Skip rows
     # that already have a match link (idempotent re-run safe).
+    # V4 also pulls channel display_name so we can group stats per channel.
     params: list[tuple[str, str]] = [
-        ("select", "id,channel_id,title,published_at,kc_relevance_score,channels!inner(role)"),
+        (
+            "select",
+            "id,channel_id,title,published_at,kc_relevance_score,"
+            "channels!inner(role,display_name)",
+        ),
         ("status", f"in.({','.join(RECONCILE_STATUSES)})"),
         ("matched_match_external_id", "is.null"),
         ("order", "created_at.desc"),
@@ -706,14 +1087,24 @@ async def run() -> int:
     for row in rows:
         ch = row.pop("channels", None) or {}
         row["channel_role"] = ch.get("role")
+        row["channel_name"] = ch.get("display_name") or "(unknown)"
 
     matched_count = 0
     not_found_count = 0
+    skipped_count = 0
+    # Per-channel kinds aggregator → {channel_name: {kind: N}}
+    per_channel_kinds: dict[str, Counter[str]] = {}
     for row in rows:
+        ch_name = row.get("channel_name") or "(unknown)"
+        bucket = per_channel_kinds.setdefault(ch_name, Counter())
         try:
             new_status = await reconcile_one(db, row)
+            kind = row.get("_kind") or "irrelevant"
+            bucket[kind] += 1
             if new_status == "matched":
                 matched_count += 1
+            elif new_status.startswith("skipped_"):
+                skipped_count += 1
             else:
                 not_found_count += 1
         except Exception as e:
@@ -722,11 +1113,44 @@ async def run() -> int:
                 video_id=row.get("id"),
                 error=str(e)[:200],
             )
+            bucket["error"] += 1
+
+    # Per-channel summary. One log line per channel — operator can spot
+    # channels that are 100% vlog and consider deprioritising them.
+    for ch_name, kinds in per_channel_kinds.items():
+        log.info(
+            "channel_reconciler_v4_done",
+            channel=ch_name,
+            kinds=dict(kinds),
+            matched=sum(
+                1 for r_ in rows
+                if r_.get("channel_name") == ch_name
+                and r_.get("_kind") in PARSE_KINDS
+            ),
+        )
+
+    # Aggregate kinds across all channels for pipeline_runs.metadata.
+    total_kinds: Counter[str] = Counter()
+    for kinds in per_channel_kinds.values():
+        total_kinds.update(kinds)
+
+    note(
+        items_scanned=len(rows),
+        items_processed=matched_count,
+        items_failed=not_found_count,
+        items_skipped=skipped_count,
+        kinds=dict(total_kinds),
+        per_channel={
+            ch_name: dict(kinds) for ch_name, kinds in per_channel_kinds.items()
+        },
+    )
 
     log.info(
-        "channel_reconciler_v3_done",
+        "channel_reconciler_v4_summary",
         processed=len(rows),
         matched=matched_count,
         not_matched=not_found_count,
+        skipped=skipped_count,
+        kinds=dict(total_kinds),
     )
     return matched_count
