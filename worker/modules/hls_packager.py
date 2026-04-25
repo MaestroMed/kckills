@@ -28,6 +28,7 @@ import structlog
 from config import config
 from services import r2_client
 from services.observability import run_logged
+from services.runtime_tuning import get_batch_size, get_parallelism
 from services.supabase_client import safe_select, safe_update
 
 log = structlog.get_logger()
@@ -38,11 +39,15 @@ log = structlog.get_logger()
 # still well under the 30min daemon interval. Critical because /scroll
 # UX needs HLS for adaptive bitrate on mobile — pre-PR11 only 33% of
 # published clips had HLS, leaving mobile users on raw MP4.
-MAX_PER_RUN = 100
+#
+# Tunable via KCKILLS_BATCH_HLS_PACKAGER (default 100).
+MAX_PER_RUN = get_batch_size("hls_packager")
 # Parallel ffmpeg workers per HLS pass. Each ffmpeg already saturates
 # ~6 cores via `-threads 0`, so 3 concurrent encodes on a 16-core box
 # leaves headroom for the rest of the daemon (clipper, analyzer downloads).
-CONCURRENCY = 4
+#
+# Tunable via KCKILLS_PARALLEL_HLS_PACKAGER (default 4).
+CONCURRENCY = get_parallelism("hls_packager")
 # HLS_DIR now comes from config (defaults to D:/kckills_worker/hls_temp
 # on the user's Gen5 NVMe, falls back to worker/hls_temp). This is an
 # I/O hot path — each clip writes ~40-80MB of .ts segments here during

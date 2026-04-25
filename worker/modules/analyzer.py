@@ -40,6 +40,11 @@ from scheduler import scheduler
 from services import job_queue
 from services.ai_pricing import compute_gemini_cost
 from services.observability import run_logged
+from services.runtime_tuning import (
+    get_batch_size,
+    get_lease_seconds,
+    get_parallelism,
+)
 from services.supabase_client import (
     get_db,
     safe_insert,
@@ -449,7 +454,10 @@ async def analyze_kill_row(kill: dict, clip_path: str | None = None) -> dict | N
 # Cap how many clips we attempt per analyzer pass. Gemini Flash-Lite is
 # free-tier capped at 950 RPD ≈ 39/hour. The cap is a safety bound
 # against pulling 5000 rows at once.
-ANALYZER_BATCH_SIZE = 80
+#
+# Tunable via KCKILLS_BATCH_ANALYZER (default 80).
+ANALYZER_BATCH_SIZE = get_batch_size("analyzer")
+ANALYZER_LEASE_SECONDS = get_lease_seconds("analyzer")
 
 
 @run_logged()
@@ -478,7 +486,7 @@ async def run() -> int:
         worker_id,
         ["clip.analyze"],
         ANALYZER_BATCH_SIZE,
-        900,  # 15 min lease — Gemini calls + R2 download take time
+        ANALYZER_LEASE_SECONDS,  # default 900s ; tunable via KCKILLS_LEASE_ANALYZER
     )
 
     legacy_fallback_used = False
@@ -556,7 +564,11 @@ async def run() -> int:
 # ─── Pipelined run ─────────────────────────────────────────────────────────
 
 QUEUE_MAX = 8
-DOWNLOAD_WORKERS = 5
+# Number of concurrent R2 download workers feeding the Gemini consumer.
+# Gemini itself is single-threaded (4s/call rate-limit) so adding more
+# downloaders past the queue depth = no benefit. Tunable via
+# KCKILLS_PARALLEL_ANALYZER (default 5).
+DOWNLOAD_WORKERS = get_parallelism("analyzer")
 SENTINEL: object = object()
 
 

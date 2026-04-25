@@ -35,6 +35,11 @@ from services.clip_hash import content_hash, perceptual_hash
 from services.ffmpeg_ops import video_codec_args
 from services.media_probe import probe_video
 from services.observability import run_logged
+from services.runtime_tuning import (
+    get_batch_size,
+    get_lease_seconds,
+    get_parallelism,
+)
 from services.supabase_batch import batched_safe_insert, batched_safe_update, get_writer
 from services.supabase_client import get_db, safe_select, safe_update
 
@@ -951,21 +956,30 @@ def _pick_best_thumbnail(candidates: list[str]) -> str | None:
 
 MAX_RETRY_COUNT = 3
 
-# Cap how many kills we attempt per pass. With CONCURRENCY=6 workers
-# at ~25s/clip (now that ffmpeg_cooldown dropped 5s -> 1s), 200 clips =
-# ~14 min per pass. The 300s daemon interval keeps ticking during the
-# pass, so the next run fires immediately after if there's still a
-# backlog. On a 16-core Ryzen the bottleneck is yt-dlp throttle
-# (scheduler-managed), not ffmpeg or disk I/O.
+# Cap how many kills we attempt per pass + worker fan-out.
 #
-# Empirical max throughput at these settings : ~400 clips/hour, validated
-# without YouTube 429s on a residential IP.
-BATCH_SIZE = 200
-# CONCURRENCY raised 6 -> 8 for NVENC: GPU is the bottleneck on RTX 4070 Ti
-# Ada Lovelace can run 8 concurrent NVENC sessions per consumer card (limit
-# enforced by NVIDIA driver). Each clipper worker also spawns yt-dlp +
-# ffmpeg, but ffmpeg now offloads encode to the GPU so CPU contention drops.
-CONCURRENCY = 8
+# These two scalars are now resolved at module-import time via
+# services.runtime_tuning, which reads :
+#   KCKILLS_BATCH_CLIPPER     (default 200)
+#   KCKILLS_PARALLEL_CLIPPER  (default 8 — NVENC fan-out on RTX 4070 Ti)
+#
+# History (preserved for context):
+#   With CONCURRENCY=6 workers at ~25s/clip (now that ffmpeg_cooldown
+#   dropped 5s -> 1s), 200 clips = ~14 min per pass. The 300s daemon
+#   interval keeps ticking during the pass, so the next run fires
+#   immediately after if there's still a backlog. On a 16-core Ryzen the
+#   bottleneck is yt-dlp throttle (scheduler-managed), not ffmpeg or disk I/O.
+#   Empirical max throughput : ~400 clips/hour, validated without YouTube
+#   429s on a residential IP.
+#
+#   CONCURRENCY raised 6 -> 8 for NVENC: GPU is the bottleneck on RTX 4070 Ti.
+#   Ada Lovelace can run 8 concurrent NVENC sessions per consumer card
+#   (limit enforced by NVIDIA driver). Each clipper worker also spawns
+#   yt-dlp + ffmpeg, but ffmpeg now offloads encode to the GPU so CPU
+#   contention drops.
+BATCH_SIZE = get_batch_size("clipper")
+CONCURRENCY = get_parallelism("clipper")
+CLIP_LEASE_SECONDS = get_lease_seconds("clipper")
 
 
 @run_logged()
@@ -996,7 +1010,7 @@ async def run() -> int:
         worker_id,
         ["clip.create"],
         BATCH_SIZE,
-        600,  # 10 min lease — long enough for a slow ffmpeg pass
+        CLIP_LEASE_SECONDS,  # default 600s ; tunable via KCKILLS_LEASE_CLIPPER
     )
 
     legacy_fallback_used = False
