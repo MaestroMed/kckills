@@ -101,6 +101,7 @@ DAEMON_MODULES: list[tuple[str, int, str]] = [
     ("admin_job_runner", 30, "modules.admin_job_runner"), # 30s — claim+exec worker.backfill jobs (whitelisted scripts)
     ("heartbeat",     21600, "modules.heartbeat"),     # 6h
     ("watchdog",      1800,  "modules.watchdog"),      # 30 min
+    ("queue_health",  300,   "modules.queue_health"),  # 5 min — Wave 6 P2 : stale-lock release + queue-depth snapshot + Discord pings on threshold breach
 ]
 
 RESTART_DELAY = 10  # seconds between a module crash and its next attempt
