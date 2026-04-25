@@ -102,6 +102,18 @@ const ALLOWED_EVENT_TYPES = new Set<string>([
   // by isPerfVitalMetadata() — name in the 6-tuple, value finite number,
   // rating in the 3-tuple. Anything malformed is dropped (best-effort).
   "perf.vital",
+  // ─── Wave 11 — HLS adaptive bitrate (Agent DE) ─────────────────────
+  // Whitelisted in migration 047 (user_events_event_type_check extend).
+  // metadata: { delivery: 'hls' | 'mp4' } — fired once per kill the
+  // FeedPlayerPool successfully attaches a source to.
+  "clip.delivery",
+  // ─── Wave 11 — Recommendation engine (Agent DI) ────────────────────
+  // FOLLOW-UP MIGRATION REQUIRED : extend user_events_event_type_check
+  // (last touched in migration 041 / 047) to whitelist this value. Until
+  // then, inserts are silently dropped by Postgres (logged server-side,
+  // swallowed client-side per the tracker's best-effort design). Same
+  // pattern as the Wave 6/7/9 events when they first landed.
+  "feed.recommendation_score",
 ]);
 
 // ─── perf.vital metadata contract ──────────────────────────────────────

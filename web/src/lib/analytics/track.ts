@@ -103,7 +103,25 @@ export type EventType =
   //     id: string,                                      // unique per metric instance
   //     navigation_type?: string,                        // 'navigate'|'back-forward-cache'|...
   //     page_path?: string }                             // window.location.pathname
-  | "perf.vital";
+  | "perf.vital"
+  // Wave 11 — HLS adaptive bitrate scroll player (Agent DE). Fired once
+  // per clip the FeedPlayerPool successfully attaches a source to, with
+  // metadata { delivery: 'hls' | 'mp4' }. Lets the admin RUM dashboard
+  // measure HLS adoption + spot regressions where the fallback path is
+  // hit too often (e.g. CDN issues with the .m3u8 manifest). Whitelisted
+  // in migration 047 alongside the user_events CHECK extend.
+  | "clip.delivery"
+  // Wave 11 — Recommendation engine (Agent DI). Fired by
+  // useRecommendationFeed once per recommended clip surfaced into the
+  // scroll feed. Carries the cosine similarity (0..1) the recommender
+  // returned plus the anchor count so we can correlate ranking quality
+  // with engagement downstream.
+  // metadata contract : { similarity: number, anchors: number }
+  // Note : the DB CHECK constraint hasn't been extended yet — until a
+  // follow-up migration whitelists this value, inserts are silently
+  // dropped by Postgres (best-effort tracker). The API gate accepts
+  // the event so the request validates client-side.
+  | "feed.recommendation_score";
 
 // ─── perf.vital metadata contract ──────────────────────────────────────
 // Exported so WebVitalsReporter can build a strict-typed payload and so

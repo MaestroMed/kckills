@@ -54,7 +54,8 @@ import {
   useFeedPlayer,
   type SlotPriority,
 } from "./hooks/useFeedPlayer";
-import { useHlsAttach } from "./hooks/useHlsAttach";
+import { useHlsPlayer } from "./hooks/useHlsPlayer";
+import { track } from "@/lib/analytics/track";
 
 /**
  * Versioned-asset manifest (kills.assets_manifest, migration 026).
@@ -155,8 +156,23 @@ export function FeedPlayerPool({
    *  reassignment and reset hasPlayed accordingly. */
   const prevSlotItemRef = useRef<number[]>([...slotItemIndex]);
 
-  /** HLS adapter — lazy-loads hls.js on first non-Safari attach. */
-  const { attachHlsTo } = useHlsAttach();
+  /** HLS adapter (Wave 11 — Agent DE) — lazy-loads hls.js on first
+   *  non-Safari attach via the shared `hls-loader.ts` dynamic import.
+   *  The hook returns "hls" | "mp4" | "none" so we can record the
+   *  delivery channel for analytics. */
+  const { attach: attachHls, detach: detachHls } = useHlsPlayer();
+
+  /** Track which kill_id has already had a `clip.delivery` event fired
+   *  so we send exactly one analytics ping per kill regardless of how
+   *  many times the slot is reused. */
+  const deliveryReportedRef = useRef<Set<string>>(new Set());
+
+  /** Track the current delivery channel ("hls"/"mp4") per slot so the
+   *  onPlay handler can include it in the kc:clip-played CustomEvent
+   *  detail without having to re-derive from the URL string. */
+  const slotDeliveryRef = useRef<Array<"hls" | "mp4" | null>>(
+    Array.from({ length: POOL_SIZE }, () => null),
+  );
 
   /** Sync mute state across all 5 elements when shared mute toggles. */
   useEffect(() => {
@@ -198,13 +214,54 @@ export function FeedPlayerPool({
         // adaptive bitrate actually pays off.
         const useMp4Direct = isDesktop && !!item.clipHorizontal;
         const hlsUrl = useMp4Direct ? null : (item.hlsMasterUrl ?? null);
-        // attachHlsTo handles 3 cases internally:
-        //   - HLS URL + Safari: native <video src=hls>
-        //   - HLS URL + other:  hls.js attach (lazy-loaded)
-        //   - No HLS URL:       falls through to fallbackMp4
-        // It's async (lazy hls.js import) but fire-and-forget — the
-        // poster covers the gap and play() retries via canplay listener.
-        void attachHlsTo(v, hlsUrl, fallbackMp4, quality);
+
+        // Wave 11 (Agent DE) — explicit attach/detach order matters for
+        // pool reuse :
+        //   1. Detach any previous hls.js instance bound to this <video>.
+        //      Without this, a slot that was HLS-attached keeps the MSE
+        //      listener alive and any subsequent video.src write is
+        //      silently overridden on the next manifest tick.
+        //   2. Set the MP4 src as the safe baseline. If HLS attach
+        //      succeeds, it'll override; if it fails (no MSE, hls.js
+        //      load error, etc.), the MP4 stays in place as graceful
+        //      fallback so we always play SOMETHING.
+        //   3. Fire-and-forget the HLS attach. The hook returns the
+        //      actual delivery channel ("hls" | "mp4" | "none") so we
+        //      can record it for analytics. Awaiting would block the
+        //      slot transition — the poster covers the visual gap and
+        //      play() retries via the browser's canplay listener.
+        detachHls(v);
+        if (fallbackMp4 && v.src !== fallbackMp4) {
+          v.src = fallbackMp4;
+        }
+        // Capture stable refs for the async closure — `s` and `item`
+        // are loop-scoped and may be reassigned before the promise
+        // resolves on the next tick.
+        const capturedItemId = item.id;
+        const capturedSlot = s;
+        void attachHls(v, hlsUrl).then((delivery) => {
+          // "none" means the attach was called with null URL — that's
+          // the MP4-only path. The actual delivery channel is "mp4".
+          const channel: "hls" | "mp4" = delivery === "hls" ? "hls" : "mp4";
+          slotDeliveryRef.current[capturedSlot] = channel;
+          // Fire analytics exactly once per kill — pool reuse across
+          // swipes means a kill can land in multiple slots over a
+          // session, but we only care about the first delivery
+          // decision (the channel never changes for a given kill_id
+          // once chosen).
+          if (!deliveryReportedRef.current.has(capturedItemId)) {
+            deliveryReportedRef.current.add(capturedItemId);
+            try {
+              track("clip.delivery", {
+                entityType: "kill",
+                entityId: capturedItemId,
+                metadata: { delivery: channel },
+              });
+            } catch {
+              /* tracker is silent on failure by design */
+            }
+          }
+        });
         v.poster = item.thumbnail ?? "";
         hasPlayedRef.current[s] = false;
       }
@@ -236,8 +293,14 @@ export function FeedPlayerPool({
     itemHeight,
     isDesktop,
     useLowQuality,
-    quality,
+    // `quality` is intentionally NOT in this deps array : the Wave 11
+    // useHlsPlayer hook ignores it (capLevelToPlayerSize handles the
+    // ladder cap automatically per video size). Keeping it as a prop
+    // for API compat in case a future revision re-introduces a manual
+    // startLevel override.
     resetOnFirstPlay,
+    attachHls,
+    detachHls,
   ]);
 
   /** Live drag tracker — when containerY is provided, this fires on
@@ -351,8 +414,17 @@ export function FeedPlayerPool({
             const item = items[itemIdx];
             if (!item || itemIdx !== activeIndex) return;
             try {
+              // Wave 11 — include delivery channel ("hls" / "mp4") so
+              // FeedItem's analytics hook + downstream listeners can
+              // correlate clip.started with the delivery method without
+              // having to inspect the source URL.
               window.dispatchEvent(
-                new CustomEvent("kc:clip-played", { detail: { itemId: item.id } }),
+                new CustomEvent("kc:clip-played", {
+                  detail: {
+                    itemId: item.id,
+                    delivery: slotDeliveryRef.current[slotIdx] ?? "mp4",
+                  },
+                }),
               );
             } catch {
               /* CustomEvent unsupported in some sandboxes */

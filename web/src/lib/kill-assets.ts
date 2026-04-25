@@ -175,3 +175,115 @@ export function getAssetDimensions(
   if (entry.width == null || entry.height == null) return null;
   return { width: entry.width, height: entry.height };
 }
+
+// ─── HLS-aware helpers (Wave 11 — Agent DE) ──────────────────────────
+
+/**
+ * Read the HLS master playlist URL for a kill. Prefers the manifest
+ * (migration 026) and falls back to the legacy `kills.hls_master_url`
+ * column. Returns null when the worker hasn't packaged HLS for this kill
+ * yet — the caller is expected to fall back to MP4 in that case.
+ *
+ * Convenience wrapper around pickAssetUrl(kill, "hls_master") so caller
+ * sites read like the intent (`pickHlsUrl(kill)`) rather than the
+ * implementation (`pickAssetUrl(kill, "hls_master")`).
+ */
+export function pickHlsUrl(kill: KillAssetsView): string | null {
+  return pickAssetUrl(kill, "hls_master");
+}
+
+/**
+ * Result of `pickHlsOrFallback` — discriminated union on `type` so the
+ * caller knows whether it received an HLS manifest (must attach via
+ * hls.js / Safari native) or a plain MP4 URL (just set `<video src>`).
+ *
+ * width/height come from the manifest entry when available, so the
+ * caller can set <video> aspect-ratio CSS without layout shift. Both
+ * are nullable because the worker's probe_video() is best-effort.
+ */
+export type DeliveryKind = "hls" | "mp4";
+
+export interface HlsOrFallbackPick {
+  type: DeliveryKind;
+  url: string;
+  width: number | null;
+  height: number | null;
+  /** When type === "mp4", also reports WHICH mp4 variant was picked
+   *  (matches the AssetType union of pickBestForViewport). Useful for
+   *  analytics + the FeedPlayerPool's aspect-ratio CSS. NULL on the
+   *  HLS path since the master playlist itself doesn't carry a single
+   *  asset type — adaptive bitrate makes that question moot. */
+  mp4Variant: AssetType | null;
+}
+
+/**
+ * Pick HLS when available, fall back to the best MP4 for the viewport.
+ *
+ * Rationale (Wave 11) : the worker's hls_packager produces an adaptive
+ * bitrate ladder (480p / 720p / 1080p) that handles network variation
+ * automatically. When `kills.hls_master_url` is populated we should
+ * always prefer it over the static MP4 chain, regardless of the
+ * viewport — HLS works for both vertical (mobile) and horizontal
+ * (desktop) viewports because the player re-frames at decode time.
+ *
+ * When HLS isn't available (most legacy kills today, plus any kill
+ * the packager hasn't processed yet), we fall through to the existing
+ * `pickBestForViewport` MP4 selection logic so the experience stays
+ * identical to pre-HLS behaviour.
+ *
+ * Returns null only when the kill has NO playable video of any type
+ * (data-only rows from gol.gg historical backfill). Callers must
+ * handle null and render a stats-only card variant.
+ *
+ * NOTE for desktop callers : if you want the 16:9 horizontal MP4
+ * specifically (e.g. because today's HLS ladder only carries the 9:16
+ * vertical from the worker's packager), pass `preferMp4OnDesktop: true`
+ * which short-circuits the HLS path when both `hls_master_url` and
+ * `clip_url_horizontal` are present. This mirrors the PR23.8 behaviour
+ * already in FeedPlayerPool.pickSrc.
+ */
+export function pickHlsOrFallback(
+  kill: KillAssetsView,
+  opts: {
+    isDesktop: boolean;
+    lowQuality: boolean;
+    /** Skip HLS on desktop when a horizontal MP4 exists. Default false.
+     *  Set to true if your HLS ladder is vertical-only (e.g. today's
+     *  worker output) and you want the native 16:9 on landscape
+     *  viewports. */
+    preferMp4OnDesktop?: boolean;
+  },
+): HlsOrFallbackPick | null {
+  const skipHls = opts.preferMp4OnDesktop === true && opts.isDesktop &&
+    pickAssetUrl(kill, "horizontal") !== null;
+
+  if (!skipHls) {
+    const hlsUrl = pickHlsUrl(kill);
+    if (hlsUrl) {
+      // Try to surface dims from the vertical (or horizontal on desktop)
+      // entry as a hint for layout — HLS itself doesn't carry these in
+      // a static field.
+      const dimSource = opts.isDesktop ? "horizontal" : "vertical";
+      const dims = getAssetDimensions(kill, dimSource);
+      return {
+        type: "hls",
+        url: hlsUrl,
+        width: dims?.width ?? null,
+        height: dims?.height ?? null,
+        mp4Variant: null,
+      };
+    }
+  }
+
+  // Fall through to the existing MP4 viewport selection.
+  const mp4 = pickBestForViewport(kill, opts);
+  if (!mp4) return null;
+  const dims = getAssetDimensions(kill, mp4.type);
+  return {
+    type: "mp4",
+    url: mp4.url,
+    width: dims?.width ?? null,
+    height: dims?.height ?? null,
+    mp4Variant: mp4.type,
+  };
+}
