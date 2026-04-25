@@ -175,6 +175,13 @@ def _gate_reason(kill: dict) -> str | None:
     Mirrors the legacy filters (skipped_invisible / skipped_low_score /
     skipped_no_desc / skipped_needs_reclip) so the queue path produces
     the same publish set as the scan path.
+
+    PR-arch P3 (og_refresher) — also gate on killer_champion +
+    victim_champion. The Pillow render expects both as non-empty strings
+    and would otherwise emit "KC · ?" / "Opponent · ?" placeholders that
+    look broken on Twitter / Discord cards. Treat empty/None as a soft
+    skip — the og_refresher will re-enqueue these once the harvester
+    fills the missing fields.
     """
     if kill.get("needs_reclip") is True:
         return "needs_reclip"
@@ -183,6 +190,10 @@ def _gate_reason(kill: dict) -> str | None:
     hs = kill.get("highlight_score")
     if hs is not None and hs < 3.0:
         return "low_highlight_score"
+    if not (kill.get("killer_champion") or "").strip():
+        return "no_killer_champion"
+    if not (kill.get("victim_champion") or "").strip():
+        return "no_victim_champion"
     if not kill.get("ai_description"):
         return "no_description"
     return None
@@ -309,6 +320,8 @@ async def run() -> int:
         "kill_invisible": 0,
         "low_highlight_score": 0,
         "no_description": 0,
+        "no_killer_champion": 0,
+        "no_victim_champion": 0,
     }
 
     for job in claimed:

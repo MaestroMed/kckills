@@ -62,7 +62,12 @@ def _get_client():
         return _client
 
 
-def _upload_sync(file_path: str, key: str, content_type: str) -> bool:
+def _upload_sync(
+    file_path: str,
+    key: str,
+    content_type: str,
+    cache_control: str = "public, max-age=31536000, immutable",
+) -> bool:
     client = _get_client()
     if client is None:
         return False
@@ -74,8 +79,11 @@ def _upload_sync(file_path: str, key: str, content_type: str) -> bool:
             ExtraArgs={
                 "ContentType": content_type,
                 # Public-readable via the custom domain — R2 does not require ACLs,
-                # but setting Cache-Control helps CDN behaviour.
-                "CacheControl": "public, max-age=31536000, immutable",
+                # but setting Cache-Control helps CDN behaviour. Default is 1 yr
+                # immutable (clips never change once written under their key).
+                # Callers like upload_og override with a shorter window because
+                # the bytes CAN change in-place when ai_description is rewritten.
+                "CacheControl": cache_control,
             },
         )
         return True
@@ -88,8 +96,14 @@ async def upload(
     file_path: str,
     key: str,
     content_type: str = "application/octet-stream",
+    cache_control: str = "public, max-age=31536000, immutable",
 ) -> str | None:
-    """Upload a file to R2. Returns public URL or None."""
+    """Upload a file to R2. Returns public URL or None.
+
+    `cache_control` overrides the default 1-year immutable header — pass
+    a shorter value (e.g. "public, max-age=2592000" for 30 days) for
+    artefacts that may be rewritten in place under a stable key.
+    """
     if not os.path.exists(file_path):
         log.warn("r2_upload_no_file", path=file_path)
         return None
@@ -100,7 +114,9 @@ async def upload(
     await scheduler.wait_for("r2")
 
     # boto3 is sync — run it in a thread so we don't block the event loop.
-    ok = await asyncio.to_thread(_upload_sync, file_path, key, content_type)
+    ok = await asyncio.to_thread(
+        _upload_sync, file_path, key, content_type, cache_control,
+    )
     if not ok:
         return None
 
@@ -203,8 +219,24 @@ async def upload_moment(moment_id: str, local_path: str, format_suffix: str) -> 
 
 
 async def upload_og(kill_id: str, local_path: str) -> str | None:
-    """Upload an OG image to R2 under og/ prefix."""
-    return await upload(local_path, f"og/{kill_id}.png", "image/png")
+    """Upload an OG image to R2 under og/ prefix.
+
+    Cache-Control : 30 days (vs the 1-year-immutable default) because
+    the OG image bytes can be regenerated in-place under the same key
+    when the AI description / score / multi-kill flag changes — see
+    modules/og_refresher.py. A 30-day window is long enough that the
+    Cloudflare edge cache absorbs the share-card storm of a viral kill
+    but short enough that a regen propagates within a month worst-case.
+    The og_refresher also bumps `kills.updated_at` which feeds the
+    JSON-LD freshness signal in the page metadata, so most consumers
+    pick up the new image well before the cache expires.
+    """
+    return await upload(
+        local_path,
+        f"og/{kill_id}.png",
+        "image/png",
+        cache_control="public, max-age=2592000",
+    )
 
 
 def ping() -> bool:
