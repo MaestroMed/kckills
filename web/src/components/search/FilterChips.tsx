@@ -27,7 +27,7 @@
  *   - Focus ring visible on every interactive element.
  */
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { ERAS } from "@/lib/eras";
 
@@ -80,8 +80,30 @@ async function loadFacets(): Promise<Facets> {
 }
 
 // ─── Component ────────────────────────────────────────────────────────
+//
+// Wrapped in <Suspense> per Next.js 15 requirement — see SearchBar.tsx
+// for the full rationale. /search page imports this AND useSearchParams
+// inside it would break SSG of any page that the chip strip transitively
+// reaches via a layout import.
+function FilterChipsFallback() {
+  return (
+    <div className="flex h-10 items-center gap-2" aria-hidden="true">
+      <div className="h-7 w-16 animate-pulse rounded-full bg-white/5" />
+      <div className="h-7 w-20 animate-pulse rounded-full bg-white/5" />
+      <div className="h-7 w-24 animate-pulse rounded-full bg-white/5" />
+    </div>
+  );
+}
 
 export function FilterChips() {
+  return (
+    <Suspense fallback={<FilterChipsFallback />}>
+      <FilterChipsInner />
+    </Suspense>
+  );
+}
+
+function FilterChipsInner() {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();

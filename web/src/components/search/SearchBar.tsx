@@ -21,7 +21,7 @@
  * Wave 4 audit). We use plain useState + useEffect with a debounce ref.
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { track } from "@/lib/analytics/track";
 
@@ -76,8 +76,36 @@ function pushRecent(query: string): void {
 }
 
 // ─── Component ────────────────────────────────────────────────────────
+//
+// Next.js 15 requires every consumer of useSearchParams() to be wrapped
+// in <Suspense> — without it, importing SearchBar into a server-rendered
+// page (navbar.tsx is mounted on every public page including /kill/[id])
+// forces that whole page off SSG with a build-time prerender error :
+//   "useSearchParams() should be wrapped in a suspense boundary at
+//    page /kill/[id]"
+// We split into a private SearchBarInner that owns the hook and a public
+// SearchBar wrapper that adds the Suspense fence + a minimal fallback
+// that matches the input's height/width so the navbar doesn't reflow.
+function SearchBarFallback({ className = "" }: { className?: string }) {
+  return (
+    <div
+      className={`relative flex items-center gap-2 rounded-lg border border-[var(--border-gold)] bg-black/30 px-3 py-2 ${className}`}
+      aria-hidden="true"
+    >
+      <div className="h-4 w-32 animate-pulse rounded bg-white/5" />
+    </div>
+  );
+}
 
-export function SearchBar({
+export function SearchBar(props: SearchBarProps) {
+  return (
+    <Suspense fallback={<SearchBarFallback className={props.className} />}>
+      <SearchBarInner {...props} />
+    </Suspense>
+  );
+}
+
+function SearchBarInner({
   initialQuery,
   autoFocus = false,
   className = "",
