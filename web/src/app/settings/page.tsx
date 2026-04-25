@@ -5,12 +5,41 @@ import { useState, useCallback, useEffect } from "react";
 import { BadgeRow } from "@/components/BadgeChip";
 import { NotificationSettings } from "@/components/settings/NotificationSettings";
 import { LanguageSettings } from "@/components/settings/LanguageSettings";
+import { RiotLinkCard, type RiotLinkProfile } from "@/components/settings/RiotLinkCard";
 
 export default function SettingsPage() {
   const [exportStatus, setExportStatus] = useState<"idle" | "loading" | "done" | "error" | "auth">("idle");
   const [deleteStatus, setDeleteStatus] = useState<"idle" | "confirming" | "deleting" | "done" | "error" | "auth">("idle");
   const [userBadges, setUserBadges] = useState<string[]>([]);
   const [userName, setUserName] = useState<string | null>(null);
+  const [riotProfile, setRiotProfile] = useState<RiotLinkProfile | null>(null);
+  const [riotAvailable, setRiotAvailable] = useState<boolean>(false);
+  const [loggedIn, setLoggedIn] = useState<boolean>(false);
+  const [callbackState, setCallbackState] = useState<{
+    ok?: boolean;
+    warn?: string | null;
+    error?: string | null;
+  }>({});
+
+  // Read the Riot callback query params once on mount and clean the URL
+  // so a refresh doesn't replay the toast.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const linked = params.get("riot_linked") === "true";
+      const warn = params.get("riot_warn");
+      const error = params.get("riot_error");
+      if (linked || warn || error) {
+        setCallbackState({ ok: linked, warn: warn ?? null, error: error ?? null });
+        params.delete("riot_linked");
+        params.delete("riot_warn");
+        params.delete("riot_error");
+        const cleaned = window.location.pathname + (params.toString() ? `?${params.toString()}` : "");
+        window.history.replaceState({}, "", cleaned);
+      }
+    } catch { /* swallow */ }
+  }, []);
 
   // Fetch user profile on mount
   useEffect(() => {
@@ -21,8 +50,40 @@ export default function SettingsPage() {
           const data = await res.json();
           setUserBadges((data.profile?.badges as string[]) ?? []);
           setUserName(data.profile?.discord_username ?? null);
+          setLoggedIn(true);
+          if (data.profile?.riot_summoner_name) {
+            const champs = Array.isArray(data.profile?.riot_top_champions)
+              ? data.profile.riot_top_champions
+              : [];
+            setRiotProfile({
+              summonerName: data.profile.riot_summoner_name ?? null,
+              tag: data.profile.riot_tag ?? null,
+              rank: data.profile.riot_rank ?? null,
+              topChampions: champs,
+              linkedAt: data.profile.riot_linked_at ?? null,
+            });
+          }
         }
       } catch { /* not logged in */ }
+    })();
+  }, []);
+
+  // Detect whether the Riot link flow is configured server-side. We hit
+  // the start route HEAD-style — a 503 means env vars missing, anything
+  // else (302 included) means available.
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch("/api/auth/riot/start", {
+          method: "GET",
+          redirect: "manual",
+        });
+        // 503 = explicit "not configured". 0 / opaqueredirect = a redirect
+        // Riot would have served, which means the route is wired up.
+        setRiotAvailable(res.status !== 503);
+      } catch {
+        setRiotAvailable(false);
+      }
     })();
   }, []);
 
@@ -109,18 +170,12 @@ export default function SettingsPage() {
       <NotificationSettings />
 
       {/* Riot Link (optional) */}
-      <section className="rounded-xl border border-[var(--border-gold)] bg-[var(--bg-surface)] p-5 space-y-3">
-        <h2 className="font-display font-semibold">Lier ton compte Riot</h2>
-        <p className="text-sm text-[var(--text-muted)]">
-          Optionnel. Affiche ton rank et tes top champions sur ton profil.
-        </p>
-        <button
-          className="rounded-lg border border-[var(--border-gold)] px-4 py-2 text-sm text-[var(--text-muted)] opacity-50 cursor-not-allowed"
-          disabled
-        >
-          Bient&ocirc;t disponible
-        </button>
-      </section>
+      <RiotLinkCard
+        available={riotAvailable}
+        loggedIn={loggedIn}
+        profile={riotProfile}
+        callbackState={callbackState}
+      />
 
       {/* Data export (RGPD) */}
       <section className="rounded-xl border border-[var(--border-gold)] bg-[var(--bg-surface)] p-5 space-y-3">

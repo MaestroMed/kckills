@@ -75,6 +75,14 @@ export type EventType =
   | "auth.signup"
   | "auth.login"
   | "auth.logout"
+  // Riot link (optional secondary OAuth — fired by /api/auth/riot/* +
+  // RiotLinkCard). Requires migration 040 to extend the user_events
+  // event_type CHECK constraint, otherwise inserts are silently dropped
+  // by Postgres (the tracker is best-effort by design — same pattern as
+  // the Wave 6 events).
+  | "auth.riot_linked"
+  | "auth.riot_unlinked"
+  | "riot.link_started"
   // Push notifications
   | "push.subscribed"
   | "push.unsubscribed"

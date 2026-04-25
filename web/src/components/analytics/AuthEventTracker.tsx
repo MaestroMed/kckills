@@ -28,7 +28,11 @@ export function AuthEventTracker() {
       // Clear the cookie immediately — even if the track call fails we
       // don't want to refire on subsequent navigations.
       document.cookie = `${COOKIE_NAME}=; path=/; max-age=0; SameSite=Lax`;
-      if (value === "auth.signup" || value === "auth.login") {
+      if (
+        value === "auth.signup" ||
+        value === "auth.login" ||
+        value === "auth.riot_linked"
+      ) {
         track(value);
       }
     } catch {

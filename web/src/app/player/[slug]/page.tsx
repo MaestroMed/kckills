@@ -5,6 +5,7 @@ import { PLAYER_PHOTOS } from "@/lib/kc-assets";
 import { PortraitCubeMorph } from "@/components/PortraitCubeMorph";
 import { ClipReel } from "@/components/ClipReel";
 import { getPlayerByIgn } from "@/lib/supabase/players";
+import { getPublicRiotStatsBySummoner } from "@/lib/supabase/riot_profile";
 import {
   getKillsByKillerChampion,
   type PublishedKillRow,
@@ -155,6 +156,12 @@ export default async function PlayerPage({ params }: Props) {
   // backfill hasn't run yet — the reel then renders its empty state.
   const playerRow = await getPlayerByIgn(name);
   const playerId = playerRow?.id ?? null;
+
+  // Optional Riot link: when this KC player has connected their Riot
+  // account on kckills (via /settings), surface their rank + top
+  // champions in a sidebar. Lookup is best-effort + case-insensitive on
+  // riot_summoner_name — silently absent when no link exists.
+  const riotStats = await getPublicRiotStatsBySummoner(name);
 
   // Best clips = highest KDA games
   const bestClips = [...stats.matchHistory]
@@ -482,6 +489,98 @@ export default async function PlayerPage({ params }: Props) {
           </div>
         </div>
       </section>
+
+      {/* ═══ RIOT STATS — surfaced when the player linked their Riot acct ═══
+          Optional. Pulled from profiles where riot_summoner_name == player IGN.
+          Renders nothing when no link exists, so the page stays unchanged for
+          players who haven't connected. */}
+      {riotStats && (riotStats.rank || riotStats.topChampions.length > 0) && (
+        <section className="relative max-w-7xl mx-auto px-6 py-12">
+          <div className="flex items-center gap-3 mb-6">
+            <span className="h-px w-12 bg-[var(--gold)]" />
+            <span className="font-data text-[10px] uppercase tracking-[0.3em] font-bold text-[var(--gold)]">
+              Riot stats &middot; profil li&eacute;
+            </span>
+          </div>
+          <div className="grid gap-4 md:grid-cols-3">
+            {/* Summoner identity */}
+            <div className="rounded-2xl border border-[var(--border-gold)] bg-[var(--bg-surface)] p-5 space-y-2">
+              <p className="text-[10px] uppercase tracking-[0.3em] text-[var(--text-muted)]">
+                Compte Riot
+              </p>
+              <p className="font-display text-2xl font-black text-[var(--gold)] leading-tight break-words">
+                {riotStats.summonerName}
+                {riotStats.tag && (
+                  <span className="font-data text-base text-[var(--text-muted)]">
+                    #{riotStats.tag}
+                  </span>
+                )}
+              </p>
+              {riotStats.linkedAt && (
+                <p className="text-[10px] text-[var(--text-muted)] opacity-70">
+                  Li&eacute; le{" "}
+                  {new Date(riotStats.linkedAt).toLocaleDateString("fr-FR", {
+                    day: "numeric",
+                    month: "short",
+                    year: "numeric",
+                  })}
+                </p>
+              )}
+            </div>
+
+            {/* Rank */}
+            <div className="rounded-2xl border border-[var(--gold)]/30 bg-[var(--gold)]/5 p-5 space-y-2">
+              <p className="text-[10px] uppercase tracking-[0.3em] text-[var(--text-muted)]">
+                Rank Solo/Duo
+              </p>
+              {riotStats.rank ? (
+                <p className="font-display text-3xl font-black text-[var(--gold)] leading-tight">
+                  {riotStats.rank}
+                </p>
+              ) : (
+                <p className="text-sm text-[var(--text-muted)]">
+                  Aucun rank Solo/Duo cette saison.
+                </p>
+              )}
+            </div>
+
+            {/* Top champions */}
+            <div className="rounded-2xl border border-[var(--border-gold)] bg-[var(--bg-surface)] p-5 space-y-3">
+              <p className="text-[10px] uppercase tracking-[0.3em] text-[var(--text-muted)]">
+                Top {riotStats.topChampions.length} champions
+              </p>
+              {riotStats.topChampions.length === 0 ? (
+                <p className="text-sm text-[var(--text-muted)]">
+                  Pas de mastery enregistr&eacute;e.
+                </p>
+              ) : (
+                <ul className="grid grid-cols-5 gap-2">
+                  {riotStats.topChampions.map((c) => (
+                    <li
+                      key={c.champ_id}
+                      className="flex flex-col items-center gap-1"
+                      title={`${c.name} \u2014 niveau ${c.level} \u00b7 ${c.points.toLocaleString("fr-FR")} pts`}
+                    >
+                      <div className="relative h-10 w-10 rounded-full overflow-hidden border border-[var(--border-gold)] bg-[var(--bg-elevated)]">
+                        <Image
+                          src={championIconUrl(c.name)}
+                          alt={c.name}
+                          fill
+                          sizes="40px"
+                          className="object-cover"
+                        />
+                      </div>
+                      <span className="text-[9px] font-data text-[var(--text-muted)]">
+                        M{c.level}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </div>
+        </section>
+      )}
 
       {/* ═══ CLIP-CENTRIC REELS — driven by killer/victim_player_id ═══ */}
       {playerId && (

@@ -77,6 +77,14 @@ const ALLOWED_EVENT_TYPES = new Set<string>([
   "auth.signup",
   "auth.login",
   "auth.logout",
+  // ─── Wave 7 — Riot OAuth optional linking (Agent AG) ───────────────
+  // FOLLOW-UP MIGRATION REQUIRED: extend user_events_event_type_check
+  // CHECK constraint (migration 040) to whitelist these. Until then,
+  // inserts silently drop on the DB side (logged server-side, swallowed
+  // client-side per the tracker's best-effort design).
+  "auth.riot_linked",
+  "auth.riot_unlinked",
+  "riot.link_started",
   // ─── Wave 6 — scroll feed UX polish (Agent AB) ─────────────────────
   // FOLLOW-UP MIGRATION REQUIRED: extend user_events_event_type_check
   // CHECK constraint to whitelist these values. Until then, inserts
