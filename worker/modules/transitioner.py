@@ -12,6 +12,15 @@ The `kills.status` flip is preserved because :
     when the queue is empty
 
 Runs every 5 min in the daemon. Cheap query — small kill set per pass.
+
+Team-agnostic note (PR-loltok BA, Apr 2026)
+───────────────────────────────────────────
+This module is already team-agnostic at the SQL level — it operates on
+`kills.status='raw'` regardless of which team the kill belongs to. The
+team filter is applied upstream by the harvester/sentinel via
+services.team_config.is_tracked. We import the module here as a
+compile-time signal that this code path is part of the LoLTok foundation
+(downstream filtering decisions should also flow through team_config).
 """
 from __future__ import annotations
 
@@ -19,7 +28,7 @@ import asyncio
 
 import structlog
 
-from services import job_queue
+from services import job_queue, team_config  # noqa: F401 — imported for team-aware ecosystem
 from services.observability import run_logged
 from services.supabase_client import safe_select, safe_update
 
@@ -34,7 +43,15 @@ async def run() -> int:
       3. Flip kills.status='vod_found' for back-compat with the legacy
          clipper scan + admin views.
     """
-    log.info("transitioner_start")
+    # Team-aware observability — log how many teams this worker tracks so
+    # operators can spot the difference between pilot mode (1 team = KC)
+    # and LoLTok mode (50+ teams) at a glance.
+    tracked = team_config.load_tracked_teams()
+    log.info(
+        "transitioner_start",
+        tracked_teams=len(tracked),
+        primary_team=tracked[0].slug if tracked else None,
+    )
 
     # All raw kills (small set in steady state — only kills not yet
     # transitioned). PostgREST default 1000-row cap is fine here.

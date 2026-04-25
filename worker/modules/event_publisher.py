@@ -43,7 +43,7 @@ from datetime import datetime, timezone
 import httpx
 import structlog
 
-from services import job_queue
+from services import job_queue, team_config  # noqa: F401 — exposes tracked-team context to publish gates
 from services.observability import run_logged
 from services.supabase_client import get_db, safe_update
 
@@ -240,12 +240,18 @@ def _process_publish_check(job: dict) -> bool:
     ok_kill = _flip_kill_published(kill_id)
     ok_event = _stamp_event_published(event_id)
     if ok_kill and ok_event:
+        # `tracked_team_involvement` is the LoLTok-era log field — the DB
+        # column is still `kc_involvement` (legacy from migration 014) but
+        # semantically it's the same concept. We log under the new name
+        # so dashboards built post-LoLTok parse cleanly. The DB column
+        # rename is a future, breaking migration outside this PR's scope.
+        involvement = ev.get("kc_involvement")
         log.info(
             "event_published",
             event_id=event_id[:8],
             kill_id=kill_id[:8],
             type=ev.get("event_type"),
-            kc=ev.get("kc_involvement"),
+            tracked_team_involvement=involvement,
         )
         return True
     return False

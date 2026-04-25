@@ -48,7 +48,7 @@ from datetime import datetime, timezone, timedelta
 import httpx
 import structlog
 
-from services import job_queue
+from services import job_queue, team_config  # noqa: F401 — imported so QC stays team-aware
 from services.observability import run_logged
 from services.supabase_client import get_db, safe_insert
 
@@ -511,7 +511,14 @@ async def run() -> int:
     """Score recent published clips by risk, enqueue clip_qc.verify on
     anything above RISK_THRESHOLD (cap = SAMPLE_PICK_SIZE).
     """
-    log.info("qc_sampler_start", strategy="risk_based")
+    # Team-aware observability (PR-loltok BA) — log tracked team count so
+    # operators can correlate QC volume with the worker's deployment mode.
+    tracked = team_config.load_tracked_teams()
+    log.info(
+        "qc_sampler_start",
+        strategy="risk_based",
+        tracked_teams=len(tracked),
+    )
 
     db = get_db()
     if not db:

@@ -53,6 +53,7 @@ from typing import Literal, Optional
 import httpx
 import structlog
 
+from services import team_config
 from services.observability import note, run_logged
 from services.supabase_client import get_db, safe_select, safe_update, safe_upsert
 
@@ -370,7 +371,17 @@ YEAR_RE = re.compile(r"\b(20[2-3]\d)\b")
 # ─── Team-code aliases ────────────────────────────────────────────────
 # Keys are normalised (no dot/space/dash, uppercase). Values are the
 # canonical 2-4 letter codes stored in the `teams.code` column.
-TEAM_ALIAS: dict[str, str] = {
+#
+# PR-loltok BA : this dict is now SEEDED with manual entries (legacy LFL
+# clutter that pre-dates the catalog) and EXTENDED at startup with
+# whatever services/team_config.all_aliases() returns. Tracking a new
+# team via teams.json automatically gets its aliases registered here too.
+#
+# The legacy entries are kept as a backstop because (a) they cover
+# defunct teams (Astralis, Excel) we don't want to redocument in
+# teams.json, and (b) they preserve byte-identical normalisation
+# behaviour for the EtoStark demo.
+_LEGACY_TEAM_ALIAS: dict[str, str] = {
     "KARMINE": "KC", "KCORP": "KC", "KARMINECORP": "KC",
     "KCB": "KCB", "KARMINEB": "KCB",
     "VITB": "VITB", "VITALITYBEE": "VITB", "BEE": "VITB",
@@ -401,6 +412,35 @@ TEAM_ALIAS: dict[str, str] = {
     "TOPESPORTS": "TES",
     "CTBC": "CFO", "FLYINGOYSTER": "CFO",
 }
+
+
+def _build_team_alias() -> dict[str, str]:
+    """Merge legacy hardcoded aliases with the team_config catalog.
+
+    Catalog entries WIN on collision so that an explicit alias in
+    teams.json (added by the operator at runtime) overrides a stale
+    hardcoded one. The keys are already normalised in both sources
+    (uppercase, no separators).
+    """
+    merged = dict(_LEGACY_TEAM_ALIAS)
+    try:
+        catalog_aliases = team_config.all_aliases()
+        # Normalise the catalog keys with the same regex used at lookup
+        # time so the comparison is consistent (catalog stores
+        # "KARMINE CORP" but reconciler sees "KARMINECORP").
+        for raw_alias, code in catalog_aliases.items():
+            cleaned = re.sub(r"[\s.\-]", "", raw_alias).upper()
+            if cleaned and code:
+                merged[cleaned] = code
+    except Exception:
+        # Defensive — never let a teams.json typo break reconciliation.
+        # Falls back to the legacy hardcoded dict.
+        pass
+    return merged
+
+
+# Built once at import. Restart the worker after editing teams.json.
+TEAM_ALIAS: dict[str, str] = _build_team_alias()
 
 
 def normalise_team(code: str) -> str:

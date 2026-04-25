@@ -41,7 +41,7 @@ import time
 import urllib.parse
 import urllib.request
 from dataclasses import dataclass
-from typing import Optional
+from typing import Iterable, Optional
 
 import structlog
 
@@ -104,7 +104,14 @@ class GolggGameSummary:
     red_team_id: Optional[int]
     red_team_name: Optional[str]
     red_won: Optional[bool]
-    kc_side: Optional[str]            # "blue" | "red" | None if KC didn't play
+    # Side of the *tracked* team (the one this backfill is following),
+    # derived against the tracked_team_ids set passed to the client.
+    # "blue" | "red" | None when the tracked team didn't play this game.
+    # Kept under the legacy name kc_side for backwards compatibility with
+    # the existing KC backfill (scripts/backfill_golgg.py reads .kc_side).
+    kc_side: Optional[str]
+    # Synonym — what the new generic code uses. Same value as kc_side.
+    tracked_side: Optional[str] = None
 
 
 class GolggClient:
@@ -117,10 +124,58 @@ class GolggClient:
         self,
         min_delay_seconds: float = DEFAULT_MIN_DELAY,
         user_agent: str = DEFAULT_UA,
+        tracked_team_ids: Optional[Iterable[int]] = None,
     ):
+        """Init.
+
+        tracked_team_ids : the set of gol.gg numeric team ids that
+            represent the *tracked* team across years. For KC that's
+            {1223, 1535, 1881, 2166, 2533, 2899}. We use it to populate
+            GolggGameSummary.tracked_side / kc_side. If None, defaults to
+            the legacy hard-coded KC ids (preserves old behaviour for
+            the existing backfill_golgg.py script).
+        """
         self.min_delay = min_delay_seconds
         self.user_agent = user_agent
         self._last_request_at: float = 0.0
+        # Default to the historical KC ids so the existing KC backfill
+        # script keeps working unchanged. Generic backfill_team.py passes
+        # the resolved per-team set explicitly.
+        if tracked_team_ids is None:
+            self.tracked_team_ids: set[int] = {1223, 1535, 1881, 2166, 2533, 2899}
+        else:
+            self.tracked_team_ids = set(int(x) for x in tracked_team_ids)
+
+    @classmethod
+    def from_tracked_team(
+        cls,
+        team,  # services.team_config.TrackedTeam — annotated loose to avoid circular import
+        *,
+        min_delay_seconds: float = DEFAULT_MIN_DELAY,
+        user_agent: str = DEFAULT_UA,
+    ) -> "GolggClient":
+        """Build a GolggClient seeded from a services.team_config.TrackedTeam.
+
+        Reads the team's `golgg_team_id` (the headline current id) AND
+        every value in `golgg_team_ids_history` (past LFL/LEC ids) so a
+        single backfill walks the team's full history. Falls back to the
+        legacy KC hardcoded ids when neither field is populated (which
+        means the catalog hasn't been backfilled yet for this team — the
+        clip can still be parsed, it just won't get tracked_side info).
+        """
+        ids: set[int] = set()
+        if getattr(team, "golgg_team_id", None):
+            ids.add(int(team.golgg_team_id))
+        for v in (getattr(team, "golgg_team_ids_history", None) or {}).values():
+            try:
+                ids.add(int(v))
+            except (TypeError, ValueError):
+                continue
+        return cls(
+            min_delay_seconds=min_delay_seconds,
+            user_agent=user_agent,
+            tracked_team_ids=ids if ids else None,
+        )
 
     # ── HTTP plumbing ────────────────────────────────────────────────
 
@@ -434,15 +489,14 @@ class GolggClient:
             red_team_name = name_text.strip() or name_attr.strip()
             red_won = result.upper() == "WIN"
 
-        # Determine which side KC was on. KC's known historical team_ids
-        # on gol.gg : 1223 (LFL early), 1535 (LFL later), 2166 (LEC).
-        # Adding more here over time is cheap.
-        kc_team_ids = {1223, 1535, 2166}
-        kc_side: Optional[str] = None
-        if blue_team_id in kc_team_ids:
-            kc_side = "blue"
-        elif red_team_id in kc_team_ids:
-            kc_side = "red"
+        # Determine which side the *tracked* team was on. The set of
+        # known team ids is configured per-client (default = KC's full
+        # history, see __init__).
+        tracked_side: Optional[str] = None
+        if blue_team_id in self.tracked_team_ids:
+            tracked_side = "blue"
+        elif red_team_id in self.tracked_team_ids:
+            tracked_side = "red"
 
         return GolggGameSummary(
             golgg_game_id=golgg_game_id,
@@ -454,8 +508,164 @@ class GolggClient:
             red_team_id=red_team_id,
             red_team_name=red_team_name,
             red_won=red_won,
-            kc_side=kc_side,
+            kc_side=tracked_side,           # legacy alias
+            tracked_side=tracked_side,
         )
+
+
+    # ── High-level helper for the generic backfill ────────────────────
+
+    def scrape_team_kills(
+        self,
+        team_slug: str,
+        year: int,
+        golgg_team_id: int,
+        tournament_labels: Optional[list[str]] = None,
+    ) -> list[dict]:
+        """Convenience wrapper used by scripts/backfill_team.py.
+
+        Walks every tournament that the team played in `year`, fetches
+        each game's timeline, and returns a flat list of kill dicts ready
+        to be persisted by the caller. Each dict has :
+
+            external_id          — synthetic, "golgg_{game_id}_{seq}"
+            game_id_external     — "golgg_game_{game_id}"
+            match_id_external    — "golgg_match_{game_id}" (no real
+                                   match grouping in gol.gg matchlist)
+            game_time_seconds    — int
+            killer_alias / victim_alias — IGN as displayed by gol.gg
+            killer_champion / victim_champion — champ key
+            assist_champions     — list[str]
+            multi_kill           — None | "double" | "triple" | "quadra" | "penta"
+            is_first_blood       — bool
+            tracked_team_involvement  — "team_killer" | "team_victim" | None
+            data_source          — "gol_gg"
+            confidence           — "verified"
+            patch                — game patch (str | None)
+            duration_seconds     — int | None
+            tournament           — the URL label this game came from
+
+        tournament_labels lets the caller pass an explicit list of
+        gol.gg tournament strings to walk (e.g. ["LEC Spring Season 2024",
+        "LEC Summer Season 2024"]). When omitted, falls back to a
+        reasonable default set per league (see _default_tournament_labels).
+        """
+        labels = tournament_labels or _default_tournament_labels(year)
+        out: list[dict] = []
+
+        # Make sure the tracked team set includes this team for the
+        # summary parsing to mark sides correctly.
+        self.tracked_team_ids = self.tracked_team_ids | {int(golgg_team_id)}
+
+        for label in labels:
+            try:
+                stubs = self.list_team_games(team_id=golgg_team_id, tournament=label)
+            except Exception as e:
+                log.warn("scrape_team_kills_list_failed",
+                         team_slug=team_slug, year=year, tournament=label,
+                         error=str(e)[:120])
+                continue
+            if not stubs:
+                continue
+
+            for stub in stubs:
+                try:
+                    summary, raw_kills = self.fetch_game_full(stub.golgg_game_id)
+                except Exception as e:
+                    log.warn("scrape_team_kills_game_failed",
+                             game=stub.golgg_game_id, error=str(e)[:120])
+                    continue
+                if summary is None or not raw_kills:
+                    continue
+
+                annotated = annotate_multi_kills(raw_kills)
+                tracked_side = summary.tracked_side or summary.kc_side
+
+                for seq, a in enumerate(annotated):
+                    involvement: Optional[str] = None
+                    if tracked_side == a["side"]:
+                        involvement = "team_killer"
+                    elif tracked_side and tracked_side != a["side"]:
+                        involvement = "team_victim"
+
+                    out.append({
+                        "external_id": f"golgg_{stub.golgg_game_id}_{seq}",
+                        "game_id_external": f"golgg_game_{stub.golgg_game_id}",
+                        "match_id_external": f"golgg_match_{stub.golgg_game_id}",
+                        "game_time_seconds": a["game_time_seconds"],
+                        "killer_alias": a["killer_player"],
+                        "killer_champion": a["killer_champion"],
+                        "victim_alias": a["victim_player"],
+                        "victim_champion": a["victim_champion"],
+                        "assist_champions": a["assists"],
+                        "multi_kill": a["multi_kill"],
+                        "is_first_blood": a["is_first_blood"],
+                        "tracked_team_involvement": involvement,
+                        "data_source": "gol_gg",
+                        "confidence": "verified",
+                        "patch": summary.patch,
+                        "duration_seconds": summary.duration_seconds,
+                        "tournament": label,
+                        "blue_team_name": summary.blue_team_name,
+                        "red_team_name": summary.red_team_name,
+                        "blue_won": summary.blue_won,
+                        "red_won": summary.red_won,
+                        "date": stub.date,
+                        "opponent_code": stub.opponent_code,
+                    })
+        return out
+
+
+# ── Default tournament labels per year ─────────────────────────────────
+
+def _default_tournament_labels(year: int) -> list[str]:
+    """Return the set of gol.gg tournament URL labels we'll try for a
+    given year when the caller doesn't pass an explicit list. Covers the
+    LEC main labels — extend as new splits land. The scraper tolerates
+    404s (returns []) so over-shooting is cheap.
+    """
+    if year >= 2026:
+        # 2026 introduced the "Versus" split + the "YYYY <Phase>" naming.
+        return [
+            f"LEC {year} Versus Season",
+            f"LEC {year} Versus Playoffs",
+            f"LEC {year} Spring Season",
+            f"LEC {year} Spring Playoffs",
+            f"LEC {year} Summer Season",
+            f"LEC {year} Summer Playoffs",
+            f"First Stand {year}",
+        ]
+    if year == 2025:
+        return [
+            "LEC Winter 2025",
+            "LEC 2025 Winter Playoffs",
+            "LEC 2025 Spring Season",
+            "LEC 2025 Spring Playoffs",
+            "LEC 2025 Summer Season",
+            "LEC 2025 Summer Playoffs",
+            "First Stand 2025",
+        ]
+    if year == 2024:
+        return [
+            "LEC Winter Season 2024",
+            "LEC Spring Season 2024",
+            "LEC Summer Season 2024",
+            "LEC Summer Playoffs 2024",
+            "LEC Season Finals 2024",
+        ]
+    # 2021-2023 was LFL (and EU Masters) for KC. Generic teams in those
+    # years probably also need league-specific labels, but this is the
+    # best generic default we can offer.
+    return [
+        f"LFL Spring {year}",
+        f"LFL Spring Playoffs {year}",
+        f"LFL Summer {year}",
+        f"LFL Summer Playoffs {year}",
+        f"EU Masters Spring {year}",
+        f"EU Masters Summer {year}",
+        f"LEC Spring {year}",
+        f"LEC Summer {year}",
+    ]
 
 
 # ── Multi-kill / first-blood derivation (post-processing) ───────────
