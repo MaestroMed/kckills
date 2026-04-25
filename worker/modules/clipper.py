@@ -33,6 +33,7 @@ from scheduler import scheduler
 from services import job_queue, r2_client
 from services.clip_hash import content_hash, perceptual_hash
 from services.ffmpeg_ops import video_codec_args
+from services.local_paths import LocalPaths
 from services.media_probe import probe_video
 from services.observability import run_logged
 from services.runtime_tuning import (
@@ -91,7 +92,11 @@ def _build_overlay_filter(
     return ",".join(parts)
 
 
-VODS_DIR = os.environ.get("LOLTOK_VODS_DIR", os.path.join(os.path.dirname(__file__), "..", "vods"))
+# PR-loltok DH : VODS_DIR now flows through services.local_paths so
+# the same code lands on Mehdi's D:/ Gen5 NVMe in pilot mode and on
+# /var/cache/kckills inside a Linux container. Override via
+# KCKILLS_VODS_DIR / KCKILLS_DATA_ROOT.
+VODS_DIR = LocalPaths.vods_dir()
 
 
 async def download_full_vod(youtube_id: str) -> str | None:

@@ -20,16 +20,15 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
+# PR-loltok DH : path resolution flows through services.local_paths so
+# `manager.py status` works on Mehdi's Windows box (D:/), inside a
+# Docker container (/cache/...), and on a fresh Linux dev VM
+# (/var/cache/kckills). Same env-var menu used by config.py.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from services.local_paths import LocalPaths  # noqa: E402
 
-def _data_root() -> Path:
-    if os.path.isdir("D:/"):
-        return Path("D:/kckills_worker")
-    return Path(__file__).resolve().parent
-
-DATA_ROOT = _data_root()
-DEFAULT_STATUS_FILE = DATA_ROOT / "orchestrator_status.json"
-STATUS_FILE = Path(os.getenv("KCKILLS_ORCHESTRATOR_STATUS_FILE",
-                             str(DEFAULT_STATUS_FILE)))
+DATA_ROOT = Path(LocalPaths.data_root())
+STATUS_FILE = Path(LocalPaths.status_file())
 COMMAND_FILE = STATUS_FILE.with_name("orchestrator_command.json")
 
 VALID_ROLES = ("clipper", "analyzer", "discovery", "control", "all")

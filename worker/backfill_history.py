@@ -28,12 +28,18 @@ load_dotenv()
 sys.path.insert(0, os.path.dirname(__file__))
 
 from services.supabase_client import safe_select, safe_insert, safe_update
+from services.league_config import get_league_lolesports_id
 
 API = "https://esports-api.lolesports.com/persisted/gw"
 KEY = os.environ.get("LOL_ESPORTS_API_KEY", "0TvQnueqKa5mxJntVWt0w4LpLfEkrV1Ta8rQBb9Z")
 HEADERS = {"x-api-key": KEY}
 
-LEC_LEAGUE_ID = "98767991302996019"
+# PR-loltok DH : pulled from the `leagues` table via league_config
+# instead of a hardcoded constant. Same value at runtime, but the
+# script auto-adapts to any new league seeded into the table — no
+# edit needed when LoLTok adds LCS / LCK / LPL backfills. Resolved
+# once at module load (cheap, deterministic).
+LEC_LEAGUE_ID = get_league_lolesports_id("lec") or "98767991302996019"
 
 # All LEC tournaments since 2024
 TOURNAMENTS = [

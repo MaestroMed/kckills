@@ -48,11 +48,12 @@ MAX_PER_RUN = get_batch_size("hls_packager")
 #
 # Tunable via KCKILLS_PARALLEL_HLS_PACKAGER (default 4).
 CONCURRENCY = get_parallelism("hls_packager")
-# HLS_DIR now comes from config (defaults to D:/kckills_worker/hls_temp
-# on the user's Gen5 NVMe, falls back to worker/hls_temp). This is an
-# I/O hot path — each clip writes ~40-80MB of .ts segments here during
-# encoding before upload to R2.
-HLS_DIR = config.HLS_DIR
+# PR-loltok DH : HLS_DIR is resolved at USE-SITE (not snapshotted at
+# module-load) by calling config.HLS_DIR @property each time we need
+# it. Mid-process changes to KCKILLS_HLS_DIR actually take effect —
+# pre-PR the module-level snapshot meant the orchestrator had to be
+# fully restarted to relocate HLS scratch space. Use-site call :
+# `os.path.join(config.HLS_DIR, kill_id)` inside package_clip().
 
 
 async def _source_has_audio(src_path: str) -> bool:
@@ -86,7 +87,9 @@ async def package_clip(kill_id: str, mp4_url: str) -> str | None:
 
     Returns the master.m3u8 R2 URL on success, None on failure.
     """
-    work_dir = os.path.join(HLS_DIR, kill_id)
+    # config.HLS_DIR is a @property delegating to LocalPaths.hls_temp_dir
+    # — re-resolved every call so mid-process env changes take effect.
+    work_dir = os.path.join(config.HLS_DIR, kill_id)
     os.makedirs(work_dir, exist_ok=True)
 
     src_path = os.path.join(work_dir, "src.mp4")

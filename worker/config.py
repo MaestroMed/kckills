@@ -21,8 +21,25 @@ class Config:
     LOLESPORTS_API_URL = "https://esports-api.lolesports.com/persisted/gw"
     LOLESPORTS_FEED_URL = "https://feed.lolesports.com/livestats/v1"
     LOLESPORTS_API_KEY = "0TvQnueqKa5mxJntVWt0w4LpLfEkrV1Ta8rQBb9Z"
-    LEC_LEAGUE_ID = "98767991302996019"
     KC_CODES = {"KC"}
+
+    # PR-loltok DH : LEC league id is no longer hardcoded as a class
+    # constant. Single-source-of-truth is the `leagues` table accessed
+    # via services.league_config.get_league_lolesports_id("lec").
+    # Static lookup in services.league_id_lookup is the cold-start
+    # fallback (DB unreachable / unseeded).
+    #
+    # `@property` is preserved (not deleted) because services.lolesports_api
+    # falls back to `config.LEC_LEAGUE_ID` when no league_id is passed
+    # explicitly — admin scripts and the legacy single-league code path
+    # still rely on this default. Lazy resolution avoids triggering a
+    # DB call on import.
+    @property
+    def LEC_LEAGUE_ID(self) -> str:
+        from services.league_config import get_league_lolesports_id
+        resolved = get_league_lolesports_id("lec")
+        # Last-resort literal — same value that lived here pre-refactor.
+        return resolved or "98767991302996019"
 
     # ─── YouTube ─────────────────────────────────────────────
     YOUTUBE_API_KEY: str = os.getenv("YOUTUBE_API_KEY", "")

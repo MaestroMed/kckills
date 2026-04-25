@@ -113,8 +113,15 @@ def _classify_moment_event(moment: dict) -> str:
     return "other"
 
 
-def _kc_involvement_from_kill(kill: dict) -> str:
-    """Translate kills.tracked_team_involvement → game_events.kc_involvement."""
+def _tracked_team_involvement_from_kill(kill: dict) -> str:
+    """Translate kills.tracked_team_involvement → game_events.tracked_team_involvement.
+
+    PR-loltok DH (migration 045) renamed the destination column on
+    game_events from kc_involvement → tracked_team_involvement. The
+    VALUE vocabulary (kc_winner / kc_loser / kc_neutral / no_kc) is
+    unchanged — the value sweep ships separately to avoid coupling
+    the rename with a wider refactor.
+    """
     tti = kill.get("tracked_team_involvement")
     if tti == "team_killer":
         return "kc_winner"
@@ -125,8 +132,12 @@ def _kc_involvement_from_kill(kill: dict) -> str:
     return "no_kc"
 
 
-def _kc_involvement_from_moment(moment: dict) -> str:
-    """Translate moments.kc_involvement → game_events.kc_involvement."""
+def _tracked_team_involvement_from_moment(moment: dict) -> str:
+    """Translate moments.kc_involvement → game_events.tracked_team_involvement.
+
+    Note : the SOURCE column moments.kc_involvement is NOT renamed in
+    migration 045. Only the destination column on game_events was.
+    """
     mi = moment.get("kc_involvement")
     if mi == "kc_aggressor":
         return "kc_winner"
@@ -161,7 +172,12 @@ def _kill_to_event_row(kill: dict) -> dict:
         "primary_target_player_id": kill.get("victim_player_id"),
         "primary_target_champion": kill.get("victim_champion"),
         "secondary_actors": assistants,
-        "kc_involvement": _kc_involvement_from_kill(kill),
+        # PR-loltok DH (migration 045) : column renamed kc_involvement →
+        # tracked_team_involvement on game_events. INSERTs use the new
+        # name unconditionally — the operator MUST apply migration 045
+        # before restarting onto this code. event_publisher has the
+        # read-side migration-window fallback.
+        "tracked_team_involvement": _tracked_team_involvement_from_kill(kill),
         "kill_id": kill["id"],
         # QC ticks pre-derived from current kill state — same logic as
         # migration 014 backfill, so re-mapping a game gives identical
@@ -202,7 +218,8 @@ def _moment_to_event_row(moment: dict) -> dict:
             - (moment.get("start_time_seconds") or 0)
         ),
         "secondary_actors": [],
-        "kc_involvement": _kc_involvement_from_moment(moment),
+        # PR-loltok DH (migration 045) — see _kill_to_event_row above.
+        "tracked_team_involvement": _tracked_team_involvement_from_moment(moment),
         "moment_id": moment["id"],
         "qc_clip_produced": moment.get("clip_url_vertical") is not None,
         "qc_clip_validated": (

@@ -56,6 +56,24 @@ PUBLISH_BATCH = 100
 RETRACT_BATCH = 50
 
 
+# PR-loltok DH (migration 045) : column was renamed
+# game_events.kc_involvement → game_events.tracked_team_involvement.
+# We try the new name first and fall back to the legacy name on
+# PostgREST 42703 ("column does not exist") so the worker keeps
+# publishing even if the operator restarts before applying migration
+# 045. Once migration is applied, the fallback path never fires.
+_INVOLVEMENT_COL_NEW = "tracked_team_involvement"
+_INVOLVEMENT_COL_LEGACY = "kc_involvement"
+
+
+def _involvement_value(ev: dict) -> str | None:
+    """Return the involvement classification regardless of which column
+    name is in play (pre/post migration 045)."""
+    if _INVOLVEMENT_COL_NEW in ev:
+        return ev.get(_INVOLVEMENT_COL_NEW)
+    return ev.get(_INVOLVEMENT_COL_LEGACY)
+
+
 async def _fetch_publishable(db) -> list[dict]:
     """Get events that should now appear on the site but haven't been
     flipped to status='published' yet.
@@ -67,31 +85,46 @@ async def _fetch_publishable(db) -> list[dict]:
 
     We additionally filter on kill_id IS NOT NULL to avoid trying to
     publish moment-only events (no kills row to flip yet).
+
+    Tries the post-migration-045 column name first, falls back to the
+    legacy name on PostgREST 42703 so this code is forward+backward
+    compatible across the migration boundary.
     """
-    try:
-        r = httpx.get(
-            f"{db.base}/game_events",
-            headers=db.headers,
-            params={
-                "select": "id,kill_id,event_type,kc_involvement",
-                "is_publishable": "eq.true",
-                "published_at": "is.null",
-                "kill_id": "not.is.null",
-                "limit": PUBLISH_BATCH,
-            },
-            timeout=15.0,
-        )
-        if r.status_code != 200:
+    for col in (_INVOLVEMENT_COL_NEW, _INVOLVEMENT_COL_LEGACY):
+        try:
+            r = httpx.get(
+                f"{db.base}/game_events",
+                headers=db.headers,
+                params={
+                    "select": f"id,kill_id,event_type,{col}",
+                    "is_publishable": "eq.true",
+                    "published_at": "is.null",
+                    "kill_id": "not.is.null",
+                    "limit": PUBLISH_BATCH,
+                },
+                timeout=15.0,
+            )
+            if r.status_code == 200:
+                return r.json() or []
+            # 42703 = undefined_column. Fall through to the legacy name
+            # only if we just tried the new one. Otherwise log + bail.
+            if col == _INVOLVEMENT_COL_NEW and "42703" in r.text:
+                log.info(
+                    "event_publisher_publishable_pre_migration_045_fallback",
+                    note="game_events.tracked_team_involvement absent, "
+                         "falling back to kc_involvement",
+                )
+                continue
             log.warn(
                 "event_publisher_publishable_query_failed",
                 status=r.status_code,
                 body=r.text[:200],
             )
             return []
-        return r.json() or []
-    except Exception as e:
-        log.warn("event_publisher_publishable_query_threw", error=str(e)[:120])
-        return []
+        except Exception as e:
+            log.warn("event_publisher_publishable_query_threw", error=str(e)[:120])
+            return []
+    return []
 
 
 async def _fetch_retractable(db) -> list[dict]:
@@ -204,25 +237,37 @@ def _process_publish_check(job: dict) -> bool:
     # Re-fetch the event row — its is_publishable may have flipped
     # back to FALSE between enqueue and process (e.g. clip_qc just
     # caught drift). We don't want to publish a now-failing kill.
-    try:
-        r = httpx.get(
-            f"{db.base}/game_events",
-            headers=db.headers,
-            params={
-                "select": "id,kill_id,event_type,kc_involvement,is_publishable,published_at",
-                "id": f"eq.{event_id}",
-                "limit": 1,
-            },
-            timeout=15.0,
-        )
-        r.raise_for_status()
-        rows = r.json() or []
-        if not rows:
+    #
+    # Same migration-045 fallback dance as _fetch_publishable : try
+    # the new column name first, fall through to the legacy name on
+    # 42703 (column doesn't exist).
+    ev: dict | None = None
+    for col in (_INVOLVEMENT_COL_NEW, _INVOLVEMENT_COL_LEGACY):
+        try:
+            r = httpx.get(
+                f"{db.base}/game_events",
+                headers=db.headers,
+                params={
+                    "select": f"id,kill_id,event_type,{col},is_publishable,published_at",
+                    "id": f"eq.{event_id}",
+                    "limit": 1,
+                },
+                timeout=15.0,
+            )
+            if r.status_code == 200:
+                rows = r.json() or []
+                if not rows:
+                    return False
+                ev = rows[0]
+                break
+            if col == _INVOLVEMENT_COL_NEW and "42703" in r.text:
+                continue
+            r.raise_for_status()
+        except Exception as e:
+            log.warn("publish_check_fetch_failed",
+                     event_id=event_id[:8], error=str(e)[:120])
             return False
-        ev = rows[0]
-    except Exception as e:
-        log.warn("publish_check_fetch_failed",
-                 event_id=event_id[:8], error=str(e)[:120])
+    if ev is None:
         return False
 
     # No-op cases — return True so the job marks succeeded.
@@ -240,12 +285,11 @@ def _process_publish_check(job: dict) -> bool:
     ok_kill = _flip_kill_published(kill_id)
     ok_event = _stamp_event_published(event_id)
     if ok_kill and ok_event:
-        # `tracked_team_involvement` is the LoLTok-era log field — the DB
-        # column is still `kc_involvement` (legacy from migration 014) but
-        # semantically it's the same concept. We log under the new name
-        # so dashboards built post-LoLTok parse cleanly. The DB column
-        # rename is a future, breaking migration outside this PR's scope.
-        involvement = ev.get("kc_involvement")
+        # Migration 045 renamed kc_involvement → tracked_team_involvement
+        # to match kills.tracked_team_involvement. _involvement_value()
+        # pulls the value regardless of which name is current on this
+        # worker (pre/post-restart on the new code).
+        involvement = _involvement_value(ev)
         log.info(
             "event_published",
             event_id=event_id[:8],
