@@ -92,7 +92,37 @@ export type EventType =
   | "push.subscribed"
   | "push.unsubscribed"
   | "push.permission_denied"
-  | "push.preferences_updated";
+  | "push.preferences_updated"
+  // Wave 9 — Real User Monitoring (Agent AL). Fired once per Core Web
+  // Vital sample by WebVitalsReporter (mounted in the root layout).
+  // Whitelisted in migration 041 alongside the user_events CHECK extend.
+  // metadata contract :
+  //   { name: 'CLS' | 'FCP' | 'FID' | 'INP' | 'LCP' | 'TTFB',
+  //     value: number,                                   // ms or unitless (CLS)
+  //     rating: 'good' | 'needs-improvement' | 'poor',
+  //     id: string,                                      // unique per metric instance
+  //     navigation_type?: string,                        // 'navigate'|'back-forward-cache'|...
+  //     page_path?: string }                             // window.location.pathname
+  | "perf.vital";
+
+// ─── perf.vital metadata contract ──────────────────────────────────────
+// Exported so WebVitalsReporter can build a strict-typed payload and so
+// the admin aggregation route can share the literal types. Keep in sync
+// with web/src/app/api/track/route.ts isPerfVitalMetadata() validator and
+// supabase/migrations/041_user_events_perf_vital.sql.
+
+export type WebVitalName = "CLS" | "FCP" | "FID" | "INP" | "LCP" | "TTFB";
+export type WebVitalRating = "good" | "needs-improvement" | "poor";
+
+export interface PerfVitalMetadata {
+  name: WebVitalName;
+  value: number;
+  rating: WebVitalRating;
+  id: string;
+  navigation_type?: string;
+  page_path?: string;
+  [key: string]: unknown;
+}
 
 export type ClientKind = "mobile" | "desktop" | "tablet" | "pwa";
 export type NetworkClass = "fast" | "medium" | "slow";

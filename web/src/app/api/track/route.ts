@@ -97,7 +97,48 @@ const ALLOWED_EVENT_TYPES = new Set<string>([
   "feed.scroll_restored",
   "feed.offline_entered",
   "feed.offline_exited",
+  // ─── Wave 9 — Real User Monitoring (Agent AL) ──────────────────────
+  // Whitelisted in migration 041. metadata contract is enforced below
+  // by isPerfVitalMetadata() — name in the 6-tuple, value finite number,
+  // rating in the 3-tuple. Anything malformed is dropped (best-effort).
+  "perf.vital",
 ]);
+
+// ─── perf.vital metadata contract ──────────────────────────────────────
+const ALLOWED_PERF_VITAL_NAMES = new Set([
+  "CLS",
+  "FCP",
+  "FID",
+  "INP",
+  "LCP",
+  "TTFB",
+]);
+const ALLOWED_PERF_VITAL_RATINGS = new Set([
+  "good",
+  "needs-improvement",
+  "poor",
+]);
+
+/**
+ * Strict shape check for perf.vital metadata. Required keys :
+ *   - name   in CLS/FCP/FID/INP/LCP/TTFB
+ *   - value  finite number
+ *   - rating in good/needs-improvement/poor
+ *
+ * Optional keys (id, navigation_type, page_path) are sanitised by the
+ * generic sanitiseMetadata pipeline above. Anything failing this check
+ * causes the whole event to be dropped — we don't want a partial RUM
+ * record polluting the admin dashboard aggregations.
+ */
+function isPerfVitalMetadata(md: Record<string, unknown>): boolean {
+  const name = md.name;
+  if (typeof name !== "string" || !ALLOWED_PERF_VITAL_NAMES.has(name)) return false;
+  const value = md.value;
+  if (typeof value !== "number" || !Number.isFinite(value)) return false;
+  const rating = md.rating;
+  if (typeof rating !== "string" || !ALLOWED_PERF_VITAL_RATINGS.has(rating)) return false;
+  return true;
+}
 
 const ALLOWED_CLIENT_KINDS = new Set(["mobile", "desktop", "tablet", "pwa"]);
 const ALLOWED_NETWORK_CLASSES = new Set(["fast", "medium", "slow"]);
@@ -252,11 +293,20 @@ function normaliseEvent(raw: RawEvent): NormalisedEvent | null {
   const localeRaw = asTrimmedString(raw.locale, 8);
   const locale = localeRaw && /^[a-z]{2}$/i.test(localeRaw) ? localeRaw.toLowerCase() : null;
 
+  const metadata = sanitiseMetadata(raw.metadata);
+
+  // perf.vital events MUST carry a valid {name, value, rating} payload
+  // — otherwise the row would land in user_events but be useless to the
+  // admin RUM dashboard. Drop the whole event if the contract isn't met.
+  if (eventType === "perf.vital" && !isPerfVitalMetadata(metadata)) {
+    return null;
+  }
+
   return {
     event_type: eventType,
     entity_type: asTrimmedString(raw.entity_type, 32),
     entity_id: asTrimmedString(raw.entity_id, 64),
-    metadata: sanitiseMetadata(raw.metadata),
+    metadata,
     client_kind: clientKind,
     network_class: networkClass,
     locale,
