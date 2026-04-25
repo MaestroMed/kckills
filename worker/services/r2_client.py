@@ -1,151 +1,38 @@
-"""Cloudflare R2 upload client (boto3 S3-compatible).
+"""Cloudflare R2 upload client — now a thin async facade over a pluggable
+``StorageBackend``.
 
-Uses boto3 directly instead of shelling out to the AWS CLI:
-- Cross-platform (no aws executable on Windows PCs)
-- Reliable error handling
-- No env var leakage between subprocess calls
-- Connection pooling
+Historical context : every worker module imported ``r2_client`` and called
+``upload_clip`` / ``upload_versioned`` / ``upload_og`` / ``upload`` on it.
+We're keeping that public surface 100% intact so no consumer needs to
+change. Internally each function now :
+
+1. Resolves the active ``StorageBackend`` via
+   ``services.storage_factory.get_storage_backend()`` (R2 by default —
+   byte-identical to the old behaviour).
+2. Computes the canonical key via ``services.storage_backend.key_layout``.
+3. Calls the sync backend method via ``asyncio.to_thread`` to avoid
+   blocking the worker event loop.
+4. Catches and logs any error, returning ``None`` (matches the old
+   error semantics — never let the pipeline crash on an upload).
+
+To swap backends, set ``KCKILLS_STORAGE_BACKEND=s3|gcs`` and provide the
+relevant credentials. See ``storage_factory.py`` for the env var list.
 """
 
 from __future__ import annotations
 
 import asyncio
 import os
-import threading
+
 import structlog
 
 from config import config
 from scheduler import scheduler
 
+from .storage_backend import key_layout
+from .storage_factory import get_storage_backend
+
 log = structlog.get_logger()
-
-
-_client = None
-_client_lock = threading.Lock()
-
-
-def _get_client():
-    """Lazy-init a shared boto3 S3 client targeting the R2 endpoint."""
-    global _client
-    if _client is not None:
-        return _client
-    with _client_lock:
-        if _client is not None:
-            return _client
-        if not (
-            config.R2_ACCOUNT_ID
-            and config.R2_ACCESS_KEY_ID
-            and config.R2_SECRET_ACCESS_KEY
-        ):
-            return None
-        try:
-            import boto3
-            from botocore.config import Config as BotoConfig
-        except ImportError:
-            log.error("boto3_not_installed")
-            return None
-
-        endpoint = f"https://{config.R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
-        _client = boto3.client(
-            "s3",
-            endpoint_url=endpoint,
-            aws_access_key_id=config.R2_ACCESS_KEY_ID,
-            aws_secret_access_key=config.R2_SECRET_ACCESS_KEY,
-            region_name="auto",
-            config=BotoConfig(
-                signature_version="s3v4",
-                retries={"max_attempts": 3, "mode": "standard"},
-                connect_timeout=10,
-                read_timeout=60,
-            ),
-        )
-        return _client
-
-
-def _upload_sync(
-    file_path: str,
-    key: str,
-    content_type: str,
-    cache_control: str = "public, max-age=31536000, immutable",
-) -> bool:
-    client = _get_client()
-    if client is None:
-        return False
-    try:
-        client.upload_file(
-            Filename=file_path,
-            Bucket=config.R2_BUCKET_NAME,
-            Key=key,
-            ExtraArgs={
-                "ContentType": content_type,
-                # Public-readable via the custom domain — R2 does not require ACLs,
-                # but setting Cache-Control helps CDN behaviour. Default is 1 yr
-                # immutable (clips never change once written under their key).
-                # Callers like upload_og override with a shorter window because
-                # the bytes CAN change in-place when ai_description is rewritten.
-                "CacheControl": cache_control,
-            },
-        )
-        return True
-    except Exception as e:
-        log.error("r2_upload_failed", key=key, error=str(e))
-        return False
-
-
-async def upload(
-    file_path: str,
-    key: str,
-    content_type: str = "application/octet-stream",
-    cache_control: str = "public, max-age=31536000, immutable",
-) -> str | None:
-    """Upload a file to R2. Returns public URL or None.
-
-    `cache_control` overrides the default 1-year immutable header — pass
-    a shorter value (e.g. "public, max-age=2592000" for 30 days) for
-    artefacts that may be rewritten in place under a stable key.
-    """
-    if not os.path.exists(file_path):
-        log.warn("r2_upload_no_file", path=file_path)
-        return None
-    if not config.R2_ACCOUNT_ID or not config.R2_ACCESS_KEY_ID:
-        log.warn("r2_not_configured")
-        return None
-
-    await scheduler.wait_for("r2")
-
-    # boto3 is sync — run it in a thread so we don't block the event loop.
-    ok = await asyncio.to_thread(
-        _upload_sync, file_path, key, content_type, cache_control,
-    )
-    if not ok:
-        return None
-
-    public_url = (config.R2_PUBLIC_URL or "").rstrip("/")
-    if public_url:
-        url = f"{public_url}/{key}"
-    else:
-        # Fallback: direct R2 URL (not CDN-cached, for dev only)
-        url = f"https://{config.R2_BUCKET_NAME}.{config.R2_ACCOUNT_ID}.r2.cloudflarestorage.com/{key}"
-
-    log.info("r2_uploaded", key=key, size=os.path.getsize(file_path))
-    return url
-
-
-async def upload_clip(kill_id: str, local_path: str, format_suffix: str) -> str | None:
-    """Upload a clip file to R2 under clips/ prefix.
-
-    format_suffix is one of: 'h', 'v', 'v_low', 'thumb'.
-
-    LEGACY flat-key layout — kept for back-compat with the kills.clip_url_*
-    columns. New code should call `upload_versioned` which produces
-    `clips/{game_id}/{kill_id}/v{N}/{file}` keys and feeds the kill_assets
-    table introduced in migration 026.
-    """
-    ext = "jpg" if format_suffix == "thumb" else "mp4"
-    folder = "thumbnails" if format_suffix == "thumb" else "clips"
-    key = f"{folder}/{kill_id}_{format_suffix}.{ext}"
-    ct = "image/jpeg" if ext == "jpg" else "video/mp4"
-    return await upload(local_path, key, ct)
 
 
 # ─── Asset-type metadata for the versioned layout ───────────────────────
@@ -162,6 +49,97 @@ ASSET_TYPE_META: dict[str, dict[str, str]] = {
     "og_image":     {"file": "og.png",         "content_type": "image/png",   "db_type": "og_image"},
     "preview_gif":  {"file": "preview.gif",    "content_type": "image/gif",   "db_type": "preview_gif"},
 }
+
+
+# Mapping from the legacy short suffix ('h','v','v_low','thumb') used by
+# upload_clip / upload_moment to the KeyLayout ClipKind ('h','v','vl','thumb').
+# Only "v_low" → "vl" is non-trivial.
+_SUFFIX_TO_KIND: dict[str, str] = {
+    "h":     "h",
+    "v":     "v",
+    "v_low": "vl",
+    "thumb": "thumb",
+}
+
+
+def _backend_configured() -> bool:
+    """Return True iff the active backend has the credentials needed to
+    actually talk to its storage. Used as the early-exit gate that the
+    old code expressed as "if not config.R2_ACCOUNT_ID".
+    """
+    # The factory always returns SOMETHING — even with missing creds —
+    # because backend selection is independent of credential presence.
+    # We mirror the original "is R2 configured ?" check here so the
+    # warning message stays unchanged for the operator.
+    return bool(
+        config.R2_ACCOUNT_ID
+        and config.R2_ACCESS_KEY_ID
+        and config.R2_SECRET_ACCESS_KEY
+    )
+
+
+# ─── Core upload primitive ──────────────────────────────────────────────
+
+
+async def upload(
+    file_path: str,
+    key: str,
+    content_type: str = "application/octet-stream",
+    cache_control: str = "public, max-age=31536000, immutable",
+) -> str | None:
+    """Upload a file to the active storage backend. Returns public URL or None.
+
+    `cache_control` overrides the default 1-year immutable header — pass
+    a shorter value (e.g. "public, max-age=2592000" for 30 days) for
+    artefacts that may be rewritten in place under a stable key.
+    """
+    if not os.path.exists(file_path):
+        log.warn("r2_upload_no_file", path=file_path)
+        return None
+    if not _backend_configured():
+        log.warn("r2_not_configured")
+        return None
+
+    await scheduler.wait_for("r2")
+
+    backend = get_storage_backend()
+    try:
+        # boto3 / GCS clients are sync — run off the event loop.
+        url = await asyncio.to_thread(
+            backend.upload_file,
+            key,
+            file_path,
+            content_type=content_type,
+            cache_control=cache_control,
+        )
+    except Exception as e:
+        log.error("r2_upload_failed", key=key, error=str(e))
+        return None
+
+    log.info("r2_uploaded", key=key, size=os.path.getsize(file_path))
+    return url
+
+
+# ─── High-level wrappers (public API — preserved verbatim) ──────────────
+
+
+async def upload_clip(kill_id: str, local_path: str, format_suffix: str) -> str | None:
+    """Upload a clip file under the legacy flat layout.
+
+    format_suffix is one of: 'h', 'v', 'v_low', 'thumb'.
+
+    LEGACY flat-key layout — kept for back-compat with the kills.clip_url_*
+    columns. New code should call `upload_versioned` which produces
+    `clips/{game_id}/{kill_id}/v{N}/{file}` keys and feeds the kill_assets
+    table introduced in migration 026.
+    """
+    kind = _SUFFIX_TO_KIND.get(format_suffix)
+    if kind is None:
+        log.error("upload_clip_bad_suffix", suffix=format_suffix)
+        return None
+    key = key_layout.clip(kill_id, kind)  # game_id=None → legacy flat path
+    ct = "image/jpeg" if format_suffix == "thumb" else "video/mp4"
+    return await upload(local_path, key, ct)
 
 
 def versioned_key(game_id: str, kill_id: str, version: int, asset_type: str) -> str:
@@ -207,19 +185,21 @@ async def upload_versioned(
 
 
 async def upload_moment(moment_id: str, local_path: str, format_suffix: str) -> str | None:
-    """Upload a moment clip to R2 under moments/ prefix.
+    """Upload a moment clip under the moments/ + moment_thumbs/ prefixes.
 
     format_suffix is one of: 'h', 'v', 'v_low', 'thumb'.
     """
-    ext = "jpg" if format_suffix == "thumb" else "mp4"
-    folder = "moment_thumbs" if format_suffix == "thumb" else "moments"
-    key = f"{folder}/{moment_id}_{format_suffix}.{ext}"
-    ct = "image/jpeg" if ext == "jpg" else "video/mp4"
+    kind = _SUFFIX_TO_KIND.get(format_suffix)
+    if kind is None:
+        log.error("upload_moment_bad_suffix", suffix=format_suffix)
+        return None
+    key = key_layout.moment(moment_id, kind)  # type: ignore[arg-type]
+    ct = "image/jpeg" if format_suffix == "thumb" else "video/mp4"
     return await upload(local_path, key, ct)
 
 
 async def upload_og(kill_id: str, local_path: str) -> str | None:
-    """Upload an OG image to R2 under og/ prefix.
+    """Upload an OG image under ``og/{kill_id}.png``.
 
     Cache-Control : 30 days (vs the 1-year-immutable default) because
     the OG image bytes can be regenerated in-place under the same key
@@ -233,19 +213,28 @@ async def upload_og(kill_id: str, local_path: str) -> str | None:
     """
     return await upload(
         local_path,
-        f"og/{kill_id}.png",
+        key_layout.og(kill_id),
         "image/png",
         cache_control="public, max-age=2592000",
     )
 
 
 def ping() -> bool:
-    """Quick sanity check: is R2 reachable and credentials valid?"""
-    client = _get_client()
-    if client is None:
+    """Quick sanity check : is the active backend reachable + creds valid ?
+
+    Implemented as a HEAD on a key we don't expect to exist — backends
+    treat missing keys as ``None`` rather than an error, so the
+    distinction we care about is "did the network call complete vs blow
+    up". A blow-up means bad creds / wrong endpoint / DNS failure / etc.
+    """
+    if not _backend_configured():
         return False
     try:
-        client.head_bucket(Bucket=config.R2_BUCKET_NAME)
+        backend = get_storage_backend()
+        # Probe a key that intentionally doesn't exist. ``None`` is a
+        # valid result — what we're confirming is that the SDK call
+        # round-tripped without raising.
+        backend.head("__ping__/does-not-exist")
         return True
     except Exception as e:
         log.warn("r2_ping_failed", error=str(e))
