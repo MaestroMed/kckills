@@ -69,6 +69,9 @@ const ALLOWED_EVENT_TYPES = new Set<string>([
   "search.executed",
   "timeline.era_selected",
   "comment.created",
+  // ─── Wave 7 — comment voting (Agent AF) ───────────────────────────
+  // Whitelisted in migration 038 alongside the comment_votes table.
+  "comment.voted",
   "language.changed",
   "quality.changed",
   "mute.toggled",

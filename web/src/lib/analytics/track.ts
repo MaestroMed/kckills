@@ -66,6 +66,11 @@ export type EventType =
   | "timeline.era_selected"
   // Interaction
   | "comment.created"
+  // Wave 7 — comment voting (Agent AF). Fired by CommentSheetV2 +
+  // KillInteractions when a user toggles a vote on a comment.
+  // metadata: { vote: -1 | 0 | 1, prev: -1 | 0 | 1 }. Whitelisted in
+  // migration 038 alongside the comment_votes table.
+  | "comment.voted"
   | "language.changed"
   | "quality.changed"
   | "mute.toggled"

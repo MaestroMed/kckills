@@ -10,7 +10,7 @@
  * Layout:
  *   - 90vh height (TikTok ~85% of viewport, leaves a peek of the clip)
  *   - Drag handle at top — drag down to dismiss, drag up rubber-bands
- *   - Header: count + close button
+ *   - Header: count + sort toggle (Latest / Top) + close button
  *   - Scrollable list (replies threaded inline, max depth 3)
  *   - Sticky input at bottom (sends on Enter or button click)
  *
@@ -22,14 +22,23 @@
  *   - Idempotent: opening multiple times re-fetches with AbortController
  *   - keyboard: Escape closes, Enter submits (if not in textarea)
  *
- * Server contract: GET /api/kills/[id]/comment returns {data:[{id,content,
- * created_at,profile,replies}]}, POST returns the inserted row with
- * profile joined.
+ * Wave 7 (Agent AF) additions:
+ *   - Per-comment up/down vote buttons (CommentVote) with optimistic UI
+ *     and 401 → onAuthRequired flow shared with the comment composer.
+ *   - Sort toggle: Latest (default) / Top — Top uses Wilson lower-bound
+ *     confidence-based sort (lib/comments.ts → commentWilsonScore()).
+ *
+ * Server contract: GET /api/kills/[id]/comment returns comments enriched
+ * with `upvotes`, `downvote_count`, `user_vote`. POST returns the
+ * inserted row with profile joined.
  */
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { motion, AnimatePresence, useMotionValue } from "framer-motion";
 import { ReportButton } from "./ReportButton";
+import { CommentVote } from "./CommentVote";
+import { CommentSortToggle } from "./CommentSortToggle";
+import { sortComments, type CommentSortMode } from "@/lib/comments";
 
 interface ApiProfile {
   id?: string;
@@ -47,6 +56,10 @@ interface ApiComment {
   profile?: ApiProfile | null;
   replies?: ApiComment[];
   moderation_status?: string | null;
+  // Wave 7 additions — see /api/kills/[id]/comment GET enrichment
+  upvotes?: number | null;
+  downvote_count?: number | null;
+  user_vote?: number | null;
 }
 
 interface UiComment {
@@ -55,9 +68,15 @@ interface UiComment {
   avatar?: string;
   text: string;
   time: string;
+  createdAtMs: number;
   pending?: boolean;
   modPending?: boolean;
   replies?: UiComment[];
+  // Vote state (defaults to 0/0/0 when the server omits the fields, e.g.
+  // for optimistic rows we just inserted client-side).
+  upvotes: number;
+  downvoteCount: number;
+  userVote: -1 | 0 | 1;
 }
 
 interface Props {
@@ -78,6 +97,7 @@ export function CommentSheetV2({ killId, isOpen, onClose, onAuthRequired }: Prop
   const [postText, setPostText] = useState("");
   const [posting, setPosting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [sortMode, setSortMode] = useState<CommentSortMode>("latest");
   const errorTimerRef = useRef<number | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const y = useMotionValue(0);
@@ -142,7 +162,11 @@ export function CommentSheetV2({ killId, isOpen, onClose, onAuthRequired }: Prop
       user: "Toi",
       text: trimmed,
       time: "maintenant",
+      createdAtMs: Date.now(),
       pending: true,
+      upvotes: 0,
+      downvoteCount: 0,
+      userVote: 0,
     };
     setComments((prev) => [optimistic, ...prev]);
     setPostText("");
@@ -188,9 +212,41 @@ export function CommentSheetV2({ killId, isOpen, onClose, onAuthRequired }: Prop
     }
   }, [killId, posting, postText, onAuthRequired, flashError]);
 
+  /** Update vote state for a single comment (top-level OR reply) without
+   *  re-fetching. The CommentVote children call this on successful POST. */
+  const handleVoteChange = useCallback(
+    (commentId: string, state: { upvotes: number; downvotes: number; userVote: -1 | 0 | 1 }) => {
+      setComments((prev) =>
+        prev.map((c) =>
+          c.id === commentId
+            ? { ...c, upvotes: state.upvotes, downvoteCount: state.downvotes, userVote: state.userVote }
+            : c.replies
+              ? {
+                  ...c,
+                  replies: c.replies.map((r) =>
+                    r.id === commentId
+                      ? { ...r, upvotes: state.upvotes, downvoteCount: state.downvotes, userVote: state.userVote }
+                      : r,
+                  ),
+                }
+              : c,
+        ),
+      );
+    },
+    [],
+  );
+
   const totalComments = comments.reduce(
     (acc, c) => acc + 1 + (c.replies?.length ?? 0),
     0,
+  );
+
+  // Apply the current sort mode. Pending comments always stay at the top
+  // (sortComments() handles that internally). Replies inside each thread
+  // remain in their server order — we don't re-sort the inner list.
+  const sortedComments = useMemo(
+    () => sortComments(comments, sortMode),
+    [comments, sortMode],
   );
 
   return (
@@ -234,8 +290,8 @@ export function CommentSheetV2({ killId, isOpen, onClose, onAuthRequired }: Prop
             </div>
 
             {/* Header */}
-            <div className="flex items-center justify-between px-5 pb-3 border-b border-white/5">
-              <div>
+            <div className="flex items-center justify-between gap-3 px-5 pb-3 border-b border-white/5">
+              <div className="min-w-0">
                 <h3 className="font-display text-lg font-bold text-white leading-none">
                   Commentaires
                 </h3>
@@ -243,26 +299,35 @@ export function CommentSheetV2({ killId, isOpen, onClose, onAuthRequired }: Prop
                   {totalComments} {totalComments <= 1 ? "message" : "messages"}
                 </p>
               </div>
-              <button
-                onClick={onClose}
-                className="flex h-9 w-9 items-center justify-center rounded-full bg-white/8 hover:bg-white/15 transition-colors"
-                aria-label="Fermer"
-              >
-                <svg className="h-4 w-4 text-white/75" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
+              <div className="flex items-center gap-2">
+                <CommentSortToggle mode={sortMode} onChange={setSortMode} />
+                <button
+                  onClick={onClose}
+                  className="flex h-9 w-9 items-center justify-center rounded-full bg-white/8 hover:bg-white/15 transition-colors"
+                  aria-label="Fermer"
+                >
+                  <svg className="h-4 w-4 text-white/75" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
             </div>
 
             {/* Comments list */}
             <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
               {loading ? (
                 <CommentSkeletons />
-              ) : comments.length === 0 ? (
+              ) : sortedComments.length === 0 ? (
                 <EmptyState />
               ) : (
-                comments.map((c) => (
-                  <CommentRow key={c.id} comment={c} depth={0} />
+                sortedComments.map((c) => (
+                  <CommentRow
+                    key={c.id}
+                    comment={c}
+                    depth={0}
+                    onAuthRequired={onAuthRequired}
+                    onVoteChange={handleVoteChange}
+                  />
                 ))
               )}
             </div>
@@ -329,14 +394,24 @@ export function CommentSheetV2({ killId, isOpen, onClose, onAuthRequired }: Prop
 
 const MAX_DEPTH = 3;
 
-function CommentRow({ comment, depth }: { comment: UiComment; depth: number }) {
+interface RowProps {
+  comment: UiComment;
+  depth: number;
+  onAuthRequired?: () => void;
+  onVoteChange: (commentId: string, state: { upvotes: number; downvotes: number; userVote: -1 | 0 | 1 }) => void;
+}
+
+function CommentRow({ comment, depth, onAuthRequired, onVoteChange }: RowProps) {
   const indent = Math.min(depth, MAX_DEPTH);
   // Optimistic + pending comments don't have a real server id yet —
-  // skip the report button so we don't POST against `opt-…` ids.
-  const reportable =
-    !comment.pending &&
-    !comment.id.startsWith("opt-") &&
-    !comment.id.startsWith("local-");
+  // skip the report + vote buttons so we don't POST against `opt-…` ids.
+  const isLocalId =
+    comment.pending ||
+    comment.id.startsWith("opt-") ||
+    comment.id.startsWith("local-");
+  const reportable = !isLocalId;
+  const votable = !isLocalId && !comment.modPending;
+
   return (
     <div style={{ marginLeft: indent > 0 ? `${indent * 14}px` : 0 }}>
       <div
@@ -365,6 +440,18 @@ function CommentRow({ comment, depth }: { comment: UiComment; depth: number }) {
           >
             {comment.text}
           </p>
+          {votable && (
+            <div className="mt-1.5">
+              <CommentVote
+                commentId={comment.id}
+                initialUpvotes={comment.upvotes}
+                initialDownvotes={comment.downvoteCount}
+                initialUserVote={comment.userVote}
+                onAuthRequired={onAuthRequired}
+                onChange={(state) => onVoteChange(comment.id, state)}
+              />
+            </div>
+          )}
         </div>
         {reportable && (
           <ReportButton
@@ -378,7 +465,13 @@ function CommentRow({ comment, depth }: { comment: UiComment; depth: number }) {
       {comment.replies && comment.replies.length > 0 && (
         <div className="mt-3 space-y-3 border-l border-white/8 pl-3">
           {comment.replies.map((r) => (
-            <CommentRow key={r.id} comment={r} depth={depth + 1} />
+            <CommentRow
+              key={r.id}
+              comment={r}
+              depth={depth + 1}
+              onAuthRequired={onAuthRequired}
+              onVoteChange={onVoteChange}
+            />
           ))}
         </div>
       )}
@@ -432,13 +525,21 @@ function EmptyState() {
 // ─── Mappers ──────────────────────────────────────────────────────────
 
 function toUi(c: ApiComment): UiComment {
+  const createdAtMs = c.created_at ? new Date(c.created_at).getTime() : Date.now();
+  const userVoteRaw = c.user_vote;
+  const userVote: -1 | 0 | 1 =
+    userVoteRaw === -1 || userVoteRaw === 1 ? userVoteRaw : 0;
   return {
     id: String(c.id ?? ""),
     user: String(c.profile?.discord_username ?? c.profile?.username ?? "Anonyme"),
     avatar: c.profile?.discord_avatar_url ?? undefined,
     text: String(c.content ?? c.body ?? ""),
     time: c.created_at ? formatTimeAgo(c.created_at) : "",
+    createdAtMs,
     modPending: c.moderation_status === "pending",
+    upvotes: typeof c.upvotes === "number" ? c.upvotes : 0,
+    downvoteCount: typeof c.downvote_count === "number" ? c.downvote_count : 0,
+    userVote,
     replies: Array.isArray(c.replies) ? c.replies.map(toUi) : undefined,
   };
 }
