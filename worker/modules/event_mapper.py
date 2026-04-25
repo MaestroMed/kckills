@@ -63,7 +63,18 @@ import structlog
 
 from services import job_queue
 from services.observability import run_logged
+from services.schema_cache import table_exists
 from services.supabase_client import get_db, safe_select, safe_update
+
+# Column set we actually SELECT from `moments`. Used by table_exists() to
+# probe table+column shape once per process and skip the call entirely if
+# the table is missing or the columns drifted (silences a 400 spam loop —
+# `start_epoch` was a planned column that was never shipped).
+_MOMENTS_COLUMNS = (
+    "id,game_id,start_epoch,start_time_seconds,end_time_seconds,"
+    "classification,kc_involvement,blue_team_gold,red_team_gold,gold_swing,"
+    "clip_url_vertical,kill_visible,ai_description,status"
+)
 
 log = structlog.get_logger()
 
@@ -264,16 +275,16 @@ async def map_game(db, game: dict) -> dict:
     counters["kills_in_game"] = len(kills)
 
     # Moments table : same select but moment-shaped columns. May be empty
-    # if migration 002 wasn't applied yet — we handle that gracefully.
-    try:
-        moments = safe_select(
-            "moments",
-            "id,game_id,start_epoch,start_time_seconds,end_time_seconds,"
-            "classification,kc_involvement,blue_team_gold,red_team_gold,gold_swing,"
-            "clip_url_vertical,kill_visible,ai_description,status",
-            game_id=gid,
-        ) or []
-    except Exception:
+    # if migration 002 wasn't applied yet OR if the column set drifted
+    # (e.g. `start_epoch` was planned but never shipped). The shape probe
+    # in schema_cache silences both cases without log noise — we only hit
+    # Supabase if the table+columns are actually queryable.
+    if table_exists("moments", columns=_MOMENTS_COLUMNS):
+        try:
+            moments = safe_select("moments", _MOMENTS_COLUMNS, game_id=gid) or []
+        except Exception:
+            moments = []
+    else:
         moments = []
     counters["moments_in_game"] = len(moments)
 
