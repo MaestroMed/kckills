@@ -31,6 +31,7 @@ import {
   type Lang,
   isLang,
 } from "./lang";
+import { locales } from "./locales";
 
 interface LangContextShape {
   lang: Lang;
@@ -128,4 +129,92 @@ export function useLang(): LangContextShape {
 /** Read-only hook (lighter — no setter). */
 export function useCurrentLang(): Lang {
   return useContext(LangContext).lang;
+}
+
+// ════════════════════════════════════════════════════════════════════
+// useT() — Translation hook
+// ════════════════════════════════════════════════════════════════════
+
+/**
+ * Walk a dotted-path key into a nested dict. Returns `undefined` if
+ * any segment misses (so we can fall back to FR / the key itself).
+ *
+ * Example : walk(fr, "feed.mode_live") → "KC EN LIVE"
+ */
+function walk(dict: unknown, path: string): string | undefined {
+  if (!dict || typeof dict !== "object") return undefined;
+  let cur: unknown = dict;
+  for (const seg of path.split(".")) {
+    if (cur && typeof cur === "object" && seg in (cur as Record<string, unknown>)) {
+      cur = (cur as Record<string, unknown>)[seg];
+    } else {
+      return undefined;
+    }
+  }
+  return typeof cur === "string" ? cur : undefined;
+}
+
+/**
+ * Substitute {placeholder} markers with vars values.
+ * No fancy ICU — just `{name}` → vars.name.toString().
+ *
+ * Example : interp("Hello {name}", { name: "Mehdi" }) → "Hello Mehdi"
+ */
+function interp(template: string, vars?: Record<string, string | number>): string {
+  if (!vars) return template;
+  return template.replace(/\{(\w+)\}/g, (match, key) => {
+    const v = vars[key];
+    return v === undefined ? match : String(v);
+  });
+}
+
+export type TranslateFn = (key: string, vars?: Record<string, string | number>) => string;
+
+/**
+ * Translation hook. Returns a `t()` function that walks the active
+ * locale's dictionary and falls back to FR (then the key itself) if
+ * a key is missing.
+ *
+ * Usage :
+ *   const t = useT();
+ *   <button>{t("common.rate")}</button>
+ *   <p>{t("rating.n_ratings", { n: 42 })}</p>
+ *
+ * SSR-safe : during SSR / before client hydration, the active lang is
+ * whatever LangProvider received as `initialLang` (server-resolved
+ * via getServerLang) — the dict lookup is pure synchronous.
+ *
+ * If a key is missing in the active language but present in FR :
+ *   → returns the FR value (graceful degradation during migration)
+ * If missing in BOTH the active lang and FR :
+ *   → returns the key string itself (debug-friendly — easy to spot)
+ *
+ * Performance : the returned `t` is stable per `lang` (memoised), so
+ * passing it as a prop won't trigger unnecessary re-renders.
+ */
+export function useT(): TranslateFn {
+  const lang = useCurrentLang();
+  return useMemo<TranslateFn>(() => {
+    const activeDict = locales[lang];
+    const frDict = locales.fr;
+    return (key: string, vars?: Record<string, string | number>) => {
+      const fromActive = walk(activeDict, key);
+      if (fromActive !== undefined) return interp(fromActive, vars);
+      const fromFr = walk(frDict, key);
+      if (fromFr !== undefined) return interp(fromFr, vars);
+      // Missing everywhere — return the key so it shows up loudly in
+      // the UI and is easy to grep for.
+      return key;
+    };
+  }, [lang]);
+}
+
+/**
+ * Lower-level helper for cases where you need both the active lang AND
+ * the translator (e.g. building lang-aware URLs, choosing date locales).
+ */
+export function useLangT(): { lang: Lang; t: TranslateFn } {
+  const lang = useCurrentLang();
+  const t = useT();
+  return useMemo(() => ({ lang, t }), [lang, t]);
 }

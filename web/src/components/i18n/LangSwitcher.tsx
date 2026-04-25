@@ -10,6 +10,9 @@
  *
  * Visually compact (4 small flag chips) so it fits in the header
  * without dominating it.
+ *
+ * Mobile : dropdown options are at least 44px tall (WCAG AA tap target).
+ * Languages : FR / EN / KO (한국어) / ES — extended Wave 5 with KO + ES.
  */
 
 import { useState, useEffect } from "react";
@@ -57,7 +60,7 @@ export function LangSwitcher({
               onClick={() => setOpen(false)}
               className="fixed inset-0 z-40"
             />
-            <div className="absolute right-0 top-full mt-1 z-50 min-w-[140px] rounded-md border border-[var(--border-gold)] bg-[var(--bg-elevated)] py-1 shadow-lg">
+            <div className="absolute right-0 top-full mt-1 z-50 min-w-[160px] rounded-md border border-[var(--border-gold)] bg-[var(--bg-elevated)] py-1 shadow-lg">
               {LANGS.map((code) => {
                 const m = LANG_META[code];
                 const active = mounted && code === lang;
@@ -74,7 +77,7 @@ export function LangSwitcher({
                       setLang(code);
                       setOpen(false);
                     }}
-                    className={`flex w-full items-center gap-2.5 px-3 py-1.5 text-left text-xs transition-colors ${
+                    className={`flex w-full items-center gap-2.5 px-3 py-3 min-h-[44px] text-left text-xs transition-colors ${
                       active
                         ? "bg-[var(--gold)]/10 text-[var(--gold)]"
                         : "text-[var(--text-secondary)] hover:bg-[var(--bg-surface)] hover:text-white"
