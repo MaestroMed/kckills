@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useState, useEffect } from "react";
 import { CommandPaletteButton } from "./CommandPalette";
 import { LangSwitcher } from "./i18n/LangSwitcher";
+import { SearchBar } from "./search/SearchBar";
 
 // Clip-centric nav — only what matters. Logo links to home, no "Accueil" item.
 // /best and /recent merged into /clips (filterable + chronological by default).
@@ -88,6 +89,13 @@ export function Navbar() {
 
         {/* Right side — Search + Lang + CTA + Auth */}
         <div className="hidden items-center gap-3 md:flex">
+          {/* Wave 6 — inline search bar wired to /search FTS (CLAUDE.md §6.5).
+              Width-capped so it doesn't crowd the right cluster on tablet.
+              The Cmd-K palette stays for power users who prefer the modal
+              (faster intra-page nav, deeper static index). */}
+          <div className="hidden lg:block w-[220px]">
+            <SearchBar showRecent={false} />
+          </div>
           <CommandPaletteButton />
           <LangSwitcher />
           {user ? (
@@ -119,6 +127,17 @@ export function Navbar() {
           </Link>
         </div>
 
+        {/* Mobile : search icon + menu button */}
+        <Link
+          href="/search"
+          className="md:hidden flex h-11 w-11 items-center justify-center rounded-lg text-[var(--text-secondary)] hover:text-[var(--gold)] hover:bg-[var(--bg-elevated)] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--gold)]"
+          aria-label="Recherche"
+        >
+          <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 1 1-14 0 7 7 0 0 1 14 0z" />
+          </svg>
+        </Link>
+
         {/* Mobile menu button — meets WCAG 4.4 (target ≥ 44px on touch) */}
         <button
           type="button"
@@ -141,6 +160,11 @@ export function Navbar() {
       {/* Mobile menu */}
       {mobileOpen && (
         <div id="mobile-nav" className="border-t border-[var(--border-gold)] px-4 py-3 md:hidden space-y-1">
+          {/* Wave 6 — inline search bar in the mobile drawer. Tapping a
+              recent search closes the drawer naturally via navigation. */}
+          <div className="pb-2">
+            <SearchBar />
+          </div>
           {NAV_LINKS.map((link) => (
             <Link
               key={link.href}
