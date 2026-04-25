@@ -71,12 +71,36 @@ def cli_args() -> list[str]:
     """Return the yt-dlp CLI flag(s) for cookies, or empty list if
     cookies aren't configured.
 
+    Source priority :
+      1. KCKILLS_YT_COOKIES_FIREFOX_PROFILE — name of a Firefox profile
+         the user logs into YouTube with ONCE (e.g. "kckills-scraper").
+         Firefox doesn't have App-Bound Encryption like Chrome 127+, so
+         yt-dlp can read its cookie SQLite directly forever — zero export
+         maintenance, cookies stay valid as long as the YouTube session
+         on that profile stays valid (months for inactive profiles).
+         **This is the recommended setup.** Returns
+         `--cookies-from-browser firefox:<profile>` directly.
+      2. KCKILLS_YT_COOKIES_FILE — Netscape cookies.txt path. Falls back
+         to this if Firefox isn't configured. Requires periodic re-export.
+      3. KCKILLS_YT_COOKIES_CHROME_PROFILE — same as file but reads from
+         Chrome profile via browser_cookie3. Broken on Chrome 127+ due
+         to App-Bound Encryption — kept for legacy.
+
     Idempotent : if the cached file is stale and we can refresh it,
     we do so silently. If refresh fails, we still return the flag
     pointing at the (stale) file — yt-dlp will try with old cookies
     rather than fall back to anon, since the old cookies are usually
     still valid for a while.
     """
+    # Firefox profile — preferred path. yt-dlp's --cookies-from-browser
+    # reads the profile's cookies.sqlite directly — no DPAPI, no export.
+    ff_profile = os.getenv("KCKILLS_YT_COOKIES_FIREFOX_PROFILE", "").strip()
+    if ff_profile:
+        # `firefox:<profile>` tells yt-dlp to look up the profile by name
+        # in the default Firefox profile root. Works on Windows / macOS /
+        # Linux uniformly.
+        return ["--cookies-from-browser", f"firefox:{ff_profile}"]
+
     if not _ensure_fresh():
         return []
     if not COOKIES_PATH.exists():
@@ -87,6 +111,7 @@ def cli_args() -> list[str]:
 def status() -> dict:
     """For diagnostics — return what mode is configured + whether
     the cookies file is present + how old it is."""
+    src_firefox = os.getenv("KCKILLS_YT_COOKIES_FIREFOX_PROFILE", "").strip()
     src_file = os.getenv("KCKILLS_YT_COOKIES_FILE", "").strip()
     src_profile = os.getenv("KCKILLS_YT_COOKIES_CHROME_PROFILE", "").strip()
     info: dict = {
@@ -95,7 +120,10 @@ def status() -> dict:
         "file_exists": COOKIES_PATH.exists(),
         "file_age_s": int(time.time() - COOKIES_PATH.stat().st_mtime) if COOKIES_PATH.exists() else None,
     }
-    if src_file:
+    if src_firefox:
+        info["mode"] = "firefox_profile"
+        info["source"] = src_firefox
+    elif src_file:
         info["mode"] = "file"
         info["source"] = src_file
     elif src_profile:
