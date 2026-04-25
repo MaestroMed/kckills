@@ -5,11 +5,27 @@ For each completed KC match not yet in the DB:
 1. Upsert the `matches` row (by external_id)
 2. Upsert every `games` row linked to that match via match_id FK
 3. Extract & store VOD metadata from getEventDetails when available
+
+PR-loltok BB — multi-league sentinel
+====================================
+Pre-PR : `run()` made ONE getSchedule call against the LEC league_id
+hardcoded in config.LEC_LEAGUE_ID. The pilot was LEC-only by birth.
+
+Post-PR : `run()` reads `services.league_config.load_tracked_leagues()`
+and loops over EVERY tracked league. Default env
+`KCKILLS_TRACKED_LEAGUES=lec` → byte-identical behavior to today (one
+schedule scan, LEC only). Set `KCKILLS_TRACKED_LEAGUES=lec,lcs,lck`
+for 3 leagues, or `*` for every active league in the `leagues` table.
+
+The match-discovery / team-resolution / game-upsert logic INSIDE the
+per-event loop is unchanged ; only the outer driver is new.
 """
+
+from __future__ import annotations
 
 import structlog
 
-from services import lolesports_api, discord_webhook
+from services import discord_webhook, league_config, lolesports_api
 from services.observability import run_logged
 from services.supabase_client import safe_insert, safe_select, safe_upsert
 
@@ -59,12 +75,34 @@ def _resolve_team_id(team: dict) -> str | None:
     return rows[0]["id"] if rows else None
 
 
-@run_logged()
-async def run() -> int:
-    """Scan the LEC schedule for new completed KC matches. Returns the count of newly-processed matches."""
-    log.info("sentinel_scan_start")
+async def _scan_league_schedule(league: league_config.TrackedLeague) -> int:
+    """Scan ONE league's schedule. Returns the count of new matches.
 
-    events, _next = await lolesports_api.get_schedule()
+    Extracted from `run()` so the multi-league outer loop can call it
+    once per tracked league. The body is the same per-event processing
+    that pre-PR ran inline ; only the league_id parameter is now
+    explicit instead of falling through to config.LEC_LEAGUE_ID.
+
+    Skips silently when the league has no `lolesports_league_id` (e.g.
+    a Leaguepedia-only league) — the scraping pipeline owned by Agent
+    BD handles those leagues via a different code path.
+    """
+    if not league.lolesports_league_id:
+        log.info(
+            "sentinel_skip_no_lolesports_id",
+            league=str(league),
+        )
+        return 0
+
+    log.info(
+        "sentinel_scan_league",
+        league=str(league),
+        lolesports_id=league.lolesports_league_id,
+    )
+
+    events, _next = await lolesports_api.get_schedule(
+        league_id=league.lolesports_league_id,
+    )
     new_matches = 0
 
     # PR23.12 — pre-insert upcoming/inProgress matches AND completed.
@@ -250,10 +288,52 @@ async def run() -> int:
                     blue=team_a.get("code", "?"),
                     red=team_b.get("code", "?"),
                     games=len(detail_match.get("games", []) or []),
-                    tournament=event.get("league", {}).get("name", "LEC"),
+                    tournament=event.get("league", {}).get("name", league.short_name),
                 )
             except Exception:
                 pass
 
-    log.info("sentinel_scan_done", new_matches=new_matches)
+    log.info(
+        "sentinel_scan_league_done",
+        league=str(league),
+        new_matches=new_matches,
+    )
     return new_matches
+
+
+@run_logged()
+async def run() -> int:
+    """Scan EVERY tracked league for new completed matches.
+
+    Returns the total count of newly-processed matches across all
+    leagues. Default `KCKILLS_TRACKED_LEAGUES=lec` → byte-identical to
+    the pre-PR pilot (one schedule scan, LEC only).
+    """
+    log.info("sentinel_scan_start")
+    leagues = league_config.load_tracked_leagues()
+    log.info(
+        "sentinel_tracked_leagues",
+        count=len(leagues),
+        slugs=[t.slug for t in leagues],
+    )
+
+    total_new = 0
+    for league in leagues:
+        try:
+            total_new += await _scan_league_schedule(league)
+        except Exception as e:
+            # NEVER let one league's failure abort the others. The
+            # observability decorator captures the run-level error
+            # summary ; the per-league error is logged here.
+            log.warn(
+                "sentinel_league_scan_failed",
+                league=str(league),
+                error=str(e)[:200],
+            )
+
+    log.info(
+        "sentinel_scan_done",
+        leagues_scanned=len(leagues),
+        new_matches=total_new,
+    )
+    return total_new
