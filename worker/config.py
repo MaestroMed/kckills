@@ -3,6 +3,12 @@
 import os
 from dotenv import load_dotenv
 
+# Path resolution is delegated to LocalPaths so the same Config works
+# on Mehdi's Windows box (D:/kckills_worker), inside a Docker container
+# (/cache/...), and on a fresh Linux dev VM (/var/cache/kckills). See
+# worker/services/local_paths.py for the full resolver + env-var menu.
+from services.local_paths import LocalPaths
+
 load_dotenv()
 
 
@@ -136,20 +142,36 @@ class Config:
     }
 
     # ─── Paths ───────────────────────────────────────────────
-    # CLIPS_DIR + HLS_DIR are I/O hot paths : every clip writes 50-100MB
-    # through CLIPS_DIR and ffmpeg reads/writes it 4 times (h, v, v_low,
-    # thumb). On the user's machine C:/ is at 2GB free and D:/ is a Gen5
-    # NVMe with ~975GB free — we default to D:/ when present for both
-    # speed and breathing room. Override via KCKILLS_CLIPS_DIR /
-    # KCKILLS_HLS_DIR env vars if you need a different layout.
-    _DEFAULT_DATA_ROOT = "D:/kckills_worker" if os.path.isdir("D:/") else os.path.dirname(__file__)
-    CLIPS_DIR = os.getenv("KCKILLS_CLIPS_DIR", os.path.join(_DEFAULT_DATA_ROOT, "clips"))
-    HLS_DIR = os.getenv("KCKILLS_HLS_DIR", os.path.join(_DEFAULT_DATA_ROOT, "hls_temp"))
-    THUMBNAILS_DIR = os.getenv("KCKILLS_THUMBNAILS_DIR", os.path.join(_DEFAULT_DATA_ROOT, "thumbnails"))
-    # Local SQLite buffer for writes when Supabase is slow/down. Stays
-    # on the worker source dir because (a) it's tiny (~10MB max) and
-    # (b) we want it inside the source tree for backup-with-source.
-    CACHE_DB = os.path.join(os.path.dirname(__file__), "local_cache.db")
+    # All paths are resolved through services.local_paths.LocalPaths so
+    # they work cross-platform :
+    #   * Mehdi's Windows box → D:/kckills_worker/<sub> (his Gen5 NVMe)
+    #   * Linux container     → /var/cache/kckills/<sub> (or whatever
+    #                           KCKILLS_DATA_ROOT mounts to)
+    #   * Per-path overrides  → KCKILLS_VODS_DIR, KCKILLS_CLIPS_DIR,
+    #                           KCKILLS_HLS_DIR, KCKILLS_THUMBNAILS_DIR,
+    #                           KCKILLS_CACHE_DB
+    # `@property` lets every existing call site (`config.CLIPS_DIR`)
+    # keep working unchanged — re-resolved per access so env-var
+    # changes during the same process actually take effect.
+    @property
+    def CLIPS_DIR(self) -> str:
+        return LocalPaths.clips_dir()
+
+    @property
+    def HLS_DIR(self) -> str:
+        return LocalPaths.hls_temp_dir()
+
+    @property
+    def THUMBNAILS_DIR(self) -> str:
+        return LocalPaths.thumbnails_dir()
+
+    @property
+    def VODS_DIR(self) -> str:
+        return LocalPaths.vods_dir()
+
+    @property
+    def CACHE_DB(self) -> str:
+        return LocalPaths.cache_db()
 
     # ─── Data Dragon ─────────────────────────────────────────
     DDRAGON_VERSION = "16.7.1"

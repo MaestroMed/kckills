@@ -1,0 +1,101 @@
+# LoLTok / KCKills Worker — .dockerignore
+# Anything matched here is excluded from the Docker build context.
+# Keep the build context SMALL — every byte travels to the daemon
+# and then into the image's COPY layer. The worker source itself is
+# ~3MB ; without this file we'd be sending GB of clips/vods/cache.
+
+# ── Python noise ───────────────────────────────────────────────
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+.coverage
+htmlcov/
+
+# ── Local virtualenvs ──────────────────────────────────────────
+.venv/
+venv/
+env/
+
+# ── Tests + dev fixtures (not needed in production image) ──────
+tests/
+fixtures/
+deep_qc/
+
+# ── Local data — these MUST NOT travel into the image ──────────
+# (they'd be mounted as volumes at runtime instead)
+worker/cache/
+worker/clips/
+worker/thumbnails/
+worker/vods/
+worker/hls_temp/
+worker/logs/
+worker/local_cache.db
+worker/local_cache.db-journal
+worker/local_cache.db-wal
+worker/local_cache.db-shm
+
+# ── Mehdi's hardcoded D:/ paths (Windows-only, would 404 anyway
+#     but listing them documents intent) ─────────────────────────
+D:/kckills_worker/
+
+# ── Secrets — passed at runtime via -e or --env-file, NEVER baked
+#     into the image ─────────────────────────────────────────────
+.env
+.env.*
+!.env.example
+worker/.env
+worker/.env.*
+!worker/.env.example
+worker/.youtube_cookies.txt
+worker/youtube_cookies.txt
+*.pem
+*.key
+*.crt
+
+# ── Generated artefacts (ad-hoc backfill / audit runs) ─────────
+worker/*.json
+worker/audit_*.json
+worker/assist_*.json
+worker/clip_descriptions_audit*
+worker/kc_lec_schedule.json
+worker/worker_startup.log
+worker/orchestrator_status.json
+worker/orchestrator_command.json
+
+# ── Web monorepo sibling — Dockerfile is worker-only ───────────
+web/
+supabase/
+docs/
+data/
+db/
+scripts/
+.claude/
+
+# ── Editor / IDE / OS noise ────────────────────────────────────
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+
+# ── Git internals (we don't ship .git history into the image) ──
+.git/
+.gitignore
+.github/
+
+# ── Documentation that doesn't need to be IN the image ─────────
+*.md
+!worker/README.md
+
+# ── Build / CI artefacts ───────────────────────────────────────
+node_modules/
+.next/
+dist/
+build/
