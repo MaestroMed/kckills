@@ -39,6 +39,7 @@ from typing import Any, Optional
 import structlog
 
 from services.observability import run_logged
+from services.push_throttle import PushThrottle
 from services.supabase_client import get_db
 
 log = structlog.get_logger()
@@ -197,6 +198,36 @@ async def _broadcast_one(db, notif: dict[str, Any], vapid: dict[str, str]) -> No
         log.info("push_notifier_silenced",
                  notif=notif_id, kind=kind, silenced=silenced_count)
 
+    # PR-arch P2 — Wave 9 throttle. Drop subs that have hit a rate
+    # limit (per-kind quota, global rolling cap, quiet hours, or
+    # already-delivered dedupe key). Each drop is logged.
+    throttle = PushThrottle(db_client=db)
+    dedupe_key = notif.get("dedupe_key")
+    throttled_count = 0
+    allowed_subs: list[dict[str, Any]] = []
+    for s in subs:
+        decision = throttle.should_send(s["id"], kind, dedupe_key=dedupe_key)
+        if decision.allowed:
+            allowed_subs.append(s)
+        else:
+            throttled_count += 1
+            log.info(
+                "push_throttled",
+                notif=notif_id,
+                kind=kind,
+                subscription_id=s["id"],
+                reason=decision.reason,
+            )
+    if throttled_count:
+        log.info(
+            "push_notifier_throttled",
+            notif=notif_id,
+            kind=kind,
+            throttled=throttled_count,
+            remaining=len(allowed_subs),
+        )
+    subs = allowed_subs
+
     if not subs:
         # Stamp sent_at so we don't keep retrying an empty broadcast.
         try:
@@ -230,16 +261,40 @@ async def _broadcast_one(db, notif: dict[str, Any], vapid: dict[str, str]) -> No
     failed = sum(1 for d in deliveries if d["status"] == "failed")
     expired = sum(1 for d in deliveries if d["status"] == "expired")
 
+    # Stamp kind on each delivery so the throttle's per-kind lookback
+    # query (idx_push_deliveries_throttle) hits a single-table index.
+    # Best-effort — old DBs without migration 042 will reject the
+    # column and PostgREST will 400. We retry without the field.
+    for d in deliveries:
+        d.setdefault("kind", kind)
+
     # Bulk insert deliveries (best-effort — chunk to avoid huge payloads).
     for chunk_start in range(0, len(deliveries), 200):
         chunk = deliveries[chunk_start:chunk_start + 200]
         try:
-            httpx.post(
+            r = httpx.post(
                 f"{db.base}/push_deliveries",
                 headers=db.headers,
                 json=chunk,
                 timeout=20,
             )
+            # Migration-042 fallback: if `kind` or `coalesced_count`
+            # columns aren't yet applied, PostgREST returns 400 with
+            # PGRST204. Strip the unknown fields and retry once.
+            if r.status_code == 400 and (
+                "PGRST204" in r.text
+                or "column" in r.text.lower()
+            ):
+                stripped = [
+                    {k: v for k, v in d.items() if k not in ("kind", "coalesced_count")}
+                    for d in chunk
+                ]
+                httpx.post(
+                    f"{db.base}/push_deliveries",
+                    headers=db.headers,
+                    json=stripped,
+                    timeout=20,
+                )
         except Exception as e:
             log.warn("push_notifier_deliveries_insert_failed",
                      error=str(e), batch_size=len(chunk))
