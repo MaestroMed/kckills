@@ -50,6 +50,14 @@ export const en: FrDict = {
     profile: "Profile",
     admin: "Admin",
     about: "About",
+    clips: "Clips",
+    cta_scroll_kills: "Scroll the kills",
+    cta_login: "Log in",
+    menu_open: "Open menu",
+    menu_close: "Close menu",
+    search_aria: "Global search",
+    search_short: "Search",
+    search_placeholder: "Player, era, match, page…",
   },
 
   feed: {
@@ -146,6 +154,17 @@ export const en: FrDict = {
     contact_support: "Contact support",
     offline_message: "You are offline. Check your connection.",
     video_failed: "Clip failed to load",
+    back_home: "Back to home",
+    route_title: "The server got first-blooded.",
+    route_body: "An unexpected error occurred while rendering this page.",
+    route_ref: "ref",
+    global_title: "The site got fully wiped.",
+    global_body: "A fatal error prevented the page from loading.",
+    not_found_title: "Page not found",
+    not_found_body: "This page does not exist in the KC universe. It may have been deleted, moved, or never existed.",
+    not_found_meta_title: "404 — Page not found",
+    not_found_meta_description: "This page does not exist in the Karmine Corp universe.",
+    not_found_cta_clips: "Watch the kills",
   },
 
   settings: {
@@ -196,6 +215,15 @@ export const en: FrDict = {
     sort_recent: "Most recent",
     sort_top: "Top rated",
     sort_hype: "Most hyped",
+    palette_navigate: "navigate",
+    palette_open: "open",
+    palette_close: "close",
+    palette_group_pages: "Pages",
+    palette_group_eras: "Eras",
+    palette_group_players: "Players",
+    palette_group_champions: "Champions",
+    palette_group_clips: "Clips",
+    palette_group_matches: "Matches",
   },
 
   player: {

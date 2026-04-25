@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import { withSentryConfig } from "@sentry/nextjs";
 
 const securityHeaders = [
   { key: "X-Frame-Options", value: "DENY" },
@@ -52,4 +53,28 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default nextConfig;
+// ─── Sentry wrapper (PR-loltok DB — Wave 11) ──────────────────────────
+// DSN-conditional : missing NEXT_PUBLIC_SENTRY_DSN keeps prod builds
+// Sentry-free. Source maps upload only when SENTRY_AUTH_TOKEN is set,
+// so contributors without a token can still build successfully.
+const sentryWebpackPluginOptions = {
+  org: process.env.SENTRY_ORG,
+  project: process.env.SENTRY_PROJECT,
+  authToken: process.env.SENTRY_AUTH_TOKEN,
+  silent: !process.env.CI,
+  sourcemaps: { disable: !process.env.SENTRY_AUTH_TOKEN },
+  // Tunnel client → /monitoring (same-origin) → Sentry, bypass ad blockers.
+  tunnelRoute: "/monitoring",
+  hideSourceMaps: true,
+  errorHandler: (err: Error) => {
+    // eslint-disable-next-line no-console
+    console.warn("[sentry-webpack-plugin] non-fatal:", err.message);
+  },
+  reactComponentAnnotation: { enabled: false },
+  disableLogger: true,
+  automaticVercelMonitors: false,
+};
+
+export default process.env.NEXT_PUBLIC_SENTRY_DSN
+  ? withSentryConfig(nextConfig, sentryWebpackPluginOptions)
+  : nextConfig;

@@ -69,6 +69,14 @@ const _fr = {
     profile: "Profil",
     admin: "Admin",
     about: "À propos",
+    clips: "Clips",
+    cta_scroll_kills: "Scroll les kills",
+    cta_login: "Connexion",
+    menu_open: "Ouvrir le menu",
+    menu_close: "Fermer le menu",
+    search_aria: "Recherche globale",
+    search_short: "Rechercher",
+    search_placeholder: "Joueur, époque, match, page…",
   },
 
   feed: {
@@ -165,6 +173,17 @@ const _fr = {
     contact_support: "Contacter le support",
     offline_message: "Tu es hors ligne. Vérifie ta connexion.",
     video_failed: "Le clip n'a pas pu se charger",
+    back_home: "Retour à l'accueil",
+    route_title: "Le serveur s'est fait first-blood.",
+    route_body: "Une erreur inattendue est survenue pendant le rendu de cette page.",
+    route_ref: "ref",
+    global_title: "Le site s'est fait wipe complet.",
+    global_body: "Une erreur fatale a empêché le chargement de la page.",
+    not_found_title: "Page introuvable",
+    not_found_body: "Cette page n'existe pas dans l'univers KC. Elle a peut-être été supprimée, déplacée, ou n'a jamais existé.",
+    not_found_meta_title: "404 — Page introuvable",
+    not_found_meta_description: "Cette page n'existe pas dans l'univers de la Karmine Corp.",
+    not_found_cta_clips: "Voir les kills",
   },
 
   settings: {
@@ -215,6 +234,15 @@ const _fr = {
     sort_recent: "Plus récent",
     sort_top: "Mieux notés",
     sort_hype: "Plus hypés",
+    palette_navigate: "naviguer",
+    palette_open: "ouvrir",
+    palette_close: "fermer",
+    palette_group_pages: "Pages",
+    palette_group_eras: "Époques",
+    palette_group_players: "Joueurs",
+    palette_group_champions: "Champions",
+    palette_group_clips: "Clips",
+    palette_group_matches: "Matchs",
   },
 
   player: {

@@ -56,6 +56,14 @@ export const ko: FrDict = {
     profile: "프로필",
     admin: "관리자",
     about: "소개",
+    clips: "클립",
+    cta_scroll_kills: "킬 스크롤",
+    cta_login: "로그인",
+    menu_open: "메뉴 열기",
+    menu_close: "메뉴 닫기",
+    search_aria: "전체 검색",
+    search_short: "검색",
+    search_placeholder: "선수, 시대, 경기, 페이지…",
   },
 
   feed: {
@@ -152,6 +160,17 @@ export const ko: FrDict = {
     contact_support: "고객 지원에 문의",
     offline_message: "오프라인입니다. 연결을 확인하세요.",
     video_failed: "클립을 불러오지 못했습니다",
+    back_home: "홈으로 돌아가기",
+    route_title: "서버가 퍼스트 블러드 당했습니다.",
+    route_body: "이 페이지를 렌더링하는 중 예기치 않은 오류가 발생했습니다.",
+    route_ref: "ref",
+    global_title: "사이트가 완전히 와이프되었습니다.",
+    global_body: "치명적인 오류로 페이지를 불러올 수 없습니다.",
+    not_found_title: "페이지를 찾을 수 없습니다",
+    not_found_body: "이 페이지는 KC 세계에 존재하지 않습니다. 삭제되었거나 이동되었거나 처음부터 없었을 수 있습니다.",
+    not_found_meta_title: "404 — 페이지를 찾을 수 없습니다",
+    not_found_meta_description: "이 페이지는 카르민 콥(Karmine Corp) 세계에 존재하지 않습니다.",
+    not_found_cta_clips: "킬 보기",
   },
 
   settings: {
@@ -202,6 +221,15 @@ export const ko: FrDict = {
     sort_recent: "최신순",
     sort_top: "평점순",
     sort_hype: "화제순",
+    palette_navigate: "이동",
+    palette_open: "열기",
+    palette_close: "닫기",
+    palette_group_pages: "페이지",
+    palette_group_eras: "시대",
+    palette_group_players: "선수",
+    palette_group_champions: "챔피언",
+    palette_group_clips: "클립",
+    palette_group_matches: "경기",
   },
 
   player: {

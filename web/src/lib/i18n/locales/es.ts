@@ -53,6 +53,14 @@ export const es: FrDict = {
     profile: "Perfil",
     admin: "Admin",
     about: "Acerca de",
+    clips: "Clips",
+    cta_scroll_kills: "Scroll los kills",
+    cta_login: "Conexión",
+    menu_open: "Abrir el menú",
+    menu_close: "Cerrar el menú",
+    search_aria: "Búsqueda global",
+    search_short: "Buscar",
+    search_placeholder: "Jugador, era, partido, página…",
   },
 
   feed: {
@@ -149,6 +157,17 @@ export const es: FrDict = {
     contact_support: "Contactar soporte",
     offline_message: "Estás sin conexión. Verifica tu conexión.",
     video_failed: "El clip no se pudo cargar",
+    back_home: "Volver al inicio",
+    route_title: "El servidor recibió un first-blood.",
+    route_body: "Ocurrió un error inesperado al renderizar esta página.",
+    route_ref: "ref",
+    global_title: "El sitio recibió un wipe completo.",
+    global_body: "Un error fatal impidió que la página se cargara.",
+    not_found_title: "Página no encontrada",
+    not_found_body: "Esta página no existe en el universo KC. Es posible que haya sido eliminada, movida o que nunca haya existido.",
+    not_found_meta_title: "404 — Página no encontrada",
+    not_found_meta_description: "Esta página no existe en el universo de Karmine Corp.",
+    not_found_cta_clips: "Ver los kills",
   },
 
   settings: {
@@ -199,6 +218,15 @@ export const es: FrDict = {
     sort_recent: "Más recientes",
     sort_top: "Mejor calificados",
     sort_hype: "Más hype",
+    palette_navigate: "navegar",
+    palette_open: "abrir",
+    palette_close: "cerrar",
+    palette_group_pages: "Páginas",
+    palette_group_eras: "Eras",
+    palette_group_players: "Jugadores",
+    palette_group_champions: "Campeones",
+    palette_group_clips: "Clips",
+    palette_group_matches: "Partidos",
   },
 
   player: {

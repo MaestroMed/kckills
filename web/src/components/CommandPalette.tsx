@@ -30,6 +30,7 @@ import { useRouter } from "next/navigation";
 import kcMatchesJson from "@/data/kc_matches.json";
 import { ERAS } from "@/lib/eras";
 import { ALUMNI } from "@/lib/alumni";
+import { useT, type TranslateFn } from "@/lib/i18n/use-lang";
 
 // ─── Index types ────────────────────────────────────────────────────────────
 
@@ -292,17 +293,23 @@ function clipRowToEntry(c: ClipPaletteRow): Entry {
 
 // ─── Component ──────────────────────────────────────────────────────────────
 
-const GROUP_LABELS: Record<Group, string> = {
-  page: "Pages",
-  era: "Epoques",
-  player: "Joueurs",
-  champion: "Champions",
-  clip: "Clips",
-  match: "Matchs",
-};
+// Group label resolver — keys live in search.palette_group_* (i18n).
+// We keep a function rather than a constant so the labels follow the
+// active locale. Default FR values match the previous static labels.
+function groupLabel(group: Group, t: TranslateFn): string {
+  switch (group) {
+    case "page":     return t("search.palette_group_pages");
+    case "era":      return t("search.palette_group_eras");
+    case "player":   return t("search.palette_group_players");
+    case "champion": return t("search.palette_group_champions");
+    case "clip":     return t("search.palette_group_clips");
+    case "match":    return t("search.palette_group_matches");
+  }
+}
 const GROUP_ORDER: Group[] = ["page", "era", "player", "champion", "clip", "match"];
 
 export function CommandPalette() {
+  const t = useT();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [active, setActive] = useState(0);
@@ -428,7 +435,7 @@ export function CommandPalette() {
     <div
       role="dialog"
       aria-modal="true"
-      aria-label="Recherche globale"
+      aria-label={t("nav.search_aria")}
       className="fixed inset-0 z-[400] flex items-start justify-center bg-black/80 backdrop-blur-md pt-[12vh] px-4"
       onClick={() => setOpen(false)}
     >
@@ -451,7 +458,7 @@ export function CommandPalette() {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={onKeyDown}
-            placeholder="Joueur, epoque, match, page..."
+            placeholder={t("nav.search_placeholder")}
             className="flex-1 bg-transparent text-[var(--text-primary)] placeholder-[var(--text-muted)] outline-none font-medium"
             autoComplete="off"
             spellCheck={false}
@@ -465,7 +472,7 @@ export function CommandPalette() {
         <div className="max-h-[60vh] overflow-y-auto px-2 py-2" role="listbox">
           {grouped.flat.length === 0 ? (
             <div className="px-4 py-10 text-center text-sm text-[var(--text-muted)]">
-              Aucun resultat pour <span className="text-[var(--gold)]">&ldquo;{query}&rdquo;</span>
+              {t("search.no_results", { query })}
             </div>
           ) : (
             GROUP_ORDER.map((group) => {
@@ -474,7 +481,7 @@ export function CommandPalette() {
               return (
                 <div key={group} className="mb-2 last:mb-0">
                   <div className="px-3 py-1.5 text-[10px] font-display font-bold uppercase tracking-[0.2em] text-[var(--text-muted)]">
-                    {GROUP_LABELS[group]}
+                    {groupLabel(group, t)}
                   </div>
                   <ul className="space-y-0.5">
                     {entries.map((entry) => {
@@ -529,9 +536,9 @@ export function CommandPalette() {
         {/* Footer hints */}
         <div className="flex items-center justify-between border-t border-[var(--border-gold)] bg-[var(--bg-primary)]/60 px-4 py-2 text-[10px] text-[var(--text-muted)]">
           <div className="flex items-center gap-3">
-            <span className="flex items-center gap-1"><Kbd>{"\u2191"}</Kbd><Kbd>{"\u2193"}</Kbd>naviguer</span>
-            <span className="flex items-center gap-1"><Kbd>{"\u21B5"}</Kbd>ouvrir</span>
-            <span className="flex items-center gap-1"><Kbd>ESC</Kbd>fermer</span>
+            <span className="flex items-center gap-1"><Kbd>{"\u2191"}</Kbd><Kbd>{"\u2193"}</Kbd>{t("search.palette_navigate")}</span>
+            <span className="flex items-center gap-1"><Kbd>{"\u21B5"}</Kbd>{t("search.palette_open")}</span>
+            <span className="flex items-center gap-1"><Kbd>ESC</Kbd>{t("search.palette_close")}</span>
           </div>
           <span className="hidden sm:inline">KCKILLS search</span>
         </div>
@@ -562,6 +569,7 @@ function Kbd({ children }: { children: React.ReactNode }) {
  * window event so it doesn't need a React context handshake.
  */
 export function CommandPaletteButton({ className = "" }: { className?: string }) {
+  const t = useT();
   const [mac, setMac] = useState(false);
   useEffect(() => {
     setMac(typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform));
@@ -570,13 +578,13 @@ export function CommandPaletteButton({ className = "" }: { className?: string })
     <button
       type="button"
       onClick={() => window.dispatchEvent(new Event("kckills:open-palette"))}
-      aria-label="Recherche globale"
+      aria-label={t("nav.search_aria")}
       className={`flex items-center gap-2 rounded-lg border border-[var(--border-gold)] bg-[var(--bg-surface)] px-2.5 py-1.5 text-xs text-[var(--text-muted)] transition-all hover:border-[var(--gold)]/50 hover:text-[var(--gold)] ${className}`}
     >
       <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 1 1-14 0 7 7 0 0 1 14 0z" />
       </svg>
-      <span className="hidden lg:inline">Rechercher</span>
+      <span className="hidden lg:inline">{t("nav.search_short")}</span>
       <kbd className="hidden sm:inline-flex h-4 items-center rounded border border-[var(--border-gold)] bg-[var(--bg-elevated)] px-1 font-data text-[9px] text-[var(--text-secondary)]">
         {mac ? "\u2318" : "Ctrl"} K
       </kbd>

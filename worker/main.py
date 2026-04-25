@@ -80,6 +80,18 @@ for _deno_dir in _DENO_CANDIDATES:
             os.environ["PATH"] = _deno_dir + os.pathsep + _current_path
         break
 
+# ─── Sentry init (Wave 11 / DB) ──────────────────────────────────────
+# Must run BEFORE structlog so the SDK can hook into stdlib logging
+# early. No-op when KCKILLS_SENTRY_DSN_WORKER is unset — see
+# services/observability_sentry.py for the full design.
+try:
+    from services.observability_sentry import init_sentry as _init_sentry
+    _init_sentry()
+except Exception:
+    # Defensive : Sentry must NEVER block the worker from starting,
+    # even if its own init blows up.
+    pass
+
 import structlog
 
 structlog.configure(
@@ -117,6 +129,7 @@ DAEMON_MODULES: list[tuple[str, int, str]] = [
     ("og_generator",      _get_interval("og_generator"),      "modules.og_generator"),           # default 900s   — 15 min
     ("event_publisher",   _get_interval("event_publisher"),   "modules.event_publisher"),        # default 300s   — bridge game_events.is_publishable -> kills.status (PR6-D)
     ("embedder",          _get_interval("embedder"),          "modules.embedder"),               # default 1800s  — Gemini embedding-001 -> kills.embedding (PR17)
+    ("translator",        _get_interval("translator"),        "modules.translator"),             # default 1800s  — Wave 11 : DeepSeek FR->EN/KO/ES (gated KCKILLS_TRANSLATOR_ENABLED)
     ("moderator",         _get_interval("moderator"),         "modules.moderator"),              # default 180s   — Haiku comment moderation
     ("discord_autopost",  _get_interval("discord_autopost"),  "modules.discord_autopost"),       # default 60s    — auto-share high-score kills (P2 Phase 3)
     ("hls_packager",      _get_interval("hls_packager"),      "modules.hls_packager"),           # default 1800s  — HLS adaptive bitrate

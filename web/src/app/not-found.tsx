@@ -1,7 +1,12 @@
 import Image from "next/image";
 import Link from "next/link";
 import { championSplashUrl } from "@/lib/constants";
+import { getServerT } from "@/lib/i18n/getServerLang";
 
+// Metadata uses the FR canonical strings — Next.js generates static
+// metadata at build time, before per-request locale resolution. The
+// in-page body still flips to the active locale at request time via
+// getServerT() below.
 export const metadata = {
   title: "404 — Page introuvable",
   description: "Cette page n'existe pas dans l'univers de la Karmine Corp.",
@@ -11,7 +16,8 @@ export const metadata = {
 const NOT_FOUND_CHAMPS = ["Jhin", "Yasuo", "Aphelios", "Kaisa", "Zed", "Ahri"];
 const randomChamp = NOT_FOUND_CHAMPS[Math.floor(Math.random() * NOT_FOUND_CHAMPS.length)];
 
-export default function NotFound() {
+export default async function NotFound() {
+  const { t } = await getServerT();
   return (
     <div className="-mx-4 -mt-6 relative min-h-[85vh] overflow-hidden flex items-center justify-center">
       {/* Full-screen champion splash background */}
@@ -59,12 +65,11 @@ export default function NotFound() {
 
         {/* Subtitle */}
         <p className="font-display text-2xl md:text-4xl font-bold text-white mt-2 uppercase tracking-tight">
-          Page introuvable
+          {t("errors.not_found_title")}
         </p>
 
         <p className="text-base md:text-lg text-[var(--text-muted)] mt-6 max-w-xl mx-auto leading-relaxed">
-          Cette page n&apos;existe pas dans l&apos;univers KC. Elle a peut-&ecirc;tre
-          &eacute;t&eacute; supprim&eacute;e, d&eacute;plac&eacute;e, ou n&apos;a jamais exist&eacute;.
+          {t("errors.not_found_body")}
         </p>
 
         {/* CTAs */}
@@ -73,13 +78,13 @@ export default function NotFound() {
             href="/"
             className="rounded-xl bg-[var(--gold)] px-8 py-4 font-display text-sm font-bold uppercase tracking-widest text-[var(--bg-primary)] transition-all hover:bg-[var(--gold-bright)] hover:shadow-2xl hover:shadow-[var(--gold)]/30 hover:scale-105 active:scale-95"
           >
-            Retour &agrave; l&apos;accueil
+            {t("errors.back_home")}
           </Link>
           <Link
             href="/scroll"
             className="rounded-xl border border-[var(--border-gold)] px-8 py-4 font-display text-sm font-bold uppercase tracking-widest text-[var(--text-secondary)] transition-all hover:border-[var(--gold)]/40 hover:text-[var(--gold)]"
           >
-            Voir les kills
+            {t("errors.not_found_cta_clips")}
           </Link>
         </div>
 
