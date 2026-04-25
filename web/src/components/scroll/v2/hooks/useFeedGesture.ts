@@ -32,7 +32,7 @@
  */
 
 import { useGesture } from "@use-gesture/react";
-import { animate, useMotionValue } from "framer-motion";
+import { animate, useMotionValue } from "motion/react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   FAST_FLICK_VELOCITY,

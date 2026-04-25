@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
-import { m, AnimatePresence } from "framer-motion";
+import { m, AnimatePresence } from "motion/react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { ERAS, type Era } from "@/lib/eras";

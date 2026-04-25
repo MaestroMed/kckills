@@ -35,7 +35,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, motion } from "motion/react";
 import { pickAssetUrl, pickBestForViewport } from "@/lib/kill-assets";
 import { track } from "@/lib/analytics/track";
 import { StarRating } from "@/components/star-rating";

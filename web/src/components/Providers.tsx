@@ -1,6 +1,6 @@
 "use client";
 
-import { LazyMotion, domAnimation } from "framer-motion";
+import { LazyMotion, domAnimation } from "motion/react";
 import { ToastProvider } from "./Toast";
 import { CommandPalette } from "./CommandPalette";
 import { KonamiBlueWall } from "./KonamiBlueWall";

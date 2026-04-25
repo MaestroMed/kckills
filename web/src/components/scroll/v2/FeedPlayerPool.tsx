@@ -48,7 +48,7 @@
  */
 
 import { useEffect, useMemo, useRef } from "react";
-import { useMotionValue, useMotionValueEvent, type MotionValue } from "framer-motion";
+import { useMotionValue, useMotionValueEvent, type MotionValue } from "motion/react";
 import {
   POOL_SIZE,
   useFeedPlayer,

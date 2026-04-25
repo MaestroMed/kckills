@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { useMotionValue, animate, useInView } from "framer-motion";
+import { useMotionValue, animate, useInView } from "motion/react";
 
 type FormatType = "integer" | "decimal1" | "percent1" | "percent0";
 

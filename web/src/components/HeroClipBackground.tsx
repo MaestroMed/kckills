@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { m, AnimatePresence } from "framer-motion";
+import { m, AnimatePresence } from "motion/react";
 
 interface ClipEntry {
   /** YouTube 11-char videoId. Omit if using mp4Url instead. */

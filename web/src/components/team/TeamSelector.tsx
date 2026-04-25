@@ -32,7 +32,7 @@
 
 import { useState, useEffect, useRef, useMemo, useCallback, useId } from "react";
 import { useRouter } from "next/navigation";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence } from "motion/react";
 
 interface WireTeam {
   slug: string;

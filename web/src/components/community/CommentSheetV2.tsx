@@ -34,7 +34,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { motion, AnimatePresence, useMotionValue } from "framer-motion";
+import { motion, AnimatePresence, useMotionValue } from "motion/react";
 import { ReportButton } from "./ReportButton";
 import { CommentVote } from "./CommentVote";
 import { CommentSortToggle } from "./CommentSortToggle";
