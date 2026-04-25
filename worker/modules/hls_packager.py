@@ -132,17 +132,28 @@ async def package_clip(kill_id: str, mp4_url: str) -> str | None:
             # NVENC per-output args. p4 + tune hq is balanced for ABR ladder.
             # No multipass on HLS — wall time matters more than 5% quality
             # because hls.js negotiates the variant down anyway.
+            #
+            # PR-arch hotfix : `-b_ref_mode middle` REQUIRES `-profile:v high`
+            # (B-frames as reference frames are a high-profile-only feature).
+            # Without explicit `-profile high`, NVENC defaults to `main`
+            # profile → fails with "Could not open encoder before EOF" +
+            # "Task finished with error code: -22 (Invalid argument)" → no
+            # frames written → entire HLS packaging job dies.
+            # Also added `-g:v:{idx} 60` for 2s GOP alignment which is the
+            # HLS standard segment boundary and lets hls.js seek cleanly.
             def _nv(idx: str, b: str, mx: str, bs: str) -> list[str]:
                 return [
                     "-c:v:" + idx, "h264_nvenc",
                     "-preset:v:" + idx, "p4",
                     "-tune:v:" + idx, "hq",
+                    "-profile:v:" + idx, "high",
                     "-rc:v:" + idx, "vbr",
                     "-b:v:" + idx, b,
                     "-maxrate:v:" + idx, mx,
                     "-bufsize:v:" + idx, bs,
                     "-bf:v:" + idx, "3",
                     "-b_ref_mode:v:" + idx, "middle",
+                    "-g:v:" + idx, "60",
                     "-pix_fmt:v:" + idx, "yuv420p",
                 ]
             variant_args = (
