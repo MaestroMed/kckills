@@ -318,7 +318,31 @@ export function FeedPlayerPool({
             const v = e.currentTarget;
             const itemIdx = slotItemIndex[slotIdx];
             const item = items[itemIdx];
-            if (item) onError(item.id, v.currentSrc || v.src);
+            if (!item) return;
+            // Best-effort error code lookup. HTMLMediaElement.error is a
+            // MediaError with a numeric .code in the MEDIA_ERR_* enum.
+            // We translate to a stable string for analytics legibility.
+            const mediaErr = (v as HTMLVideoElement).error;
+            const code = mediaErr ? mediaErrorCodeName(mediaErr.code) : "unknown";
+            // Notify the parent (drops the item from the feed in v1+ flow).
+            onError(item.id, v.currentSrc || v.src);
+            // Wave 6 — broadcast a custom event so FeedItem can swap to
+            // <FeedItemError /> in-place without unmounting the gesture
+            // container. Mirrors the kc:clip-played / kc:clip-ended
+            // pattern from Wave 1+2.
+            try {
+              window.dispatchEvent(
+                new CustomEvent("kc:clip-error", {
+                  detail: {
+                    itemId: item.id,
+                    errorCode: code,
+                    src: v.currentSrc || v.src,
+                  },
+                }),
+              );
+            } catch {
+              /* CustomEvent unsupported in some sandboxes */
+            }
           }}
           onPlay={() => {
             // Notify analytics — only fire for the LIVE slot to avoid
@@ -386,6 +410,24 @@ function pickSrc(item: PoolItem, isDesktop: boolean, useLowQuality: boolean): st
   if (useLowQuality && item.clipVerticalLow) return item.clipVerticalLow;
   if (isDesktop && item.clipHorizontal) return item.clipHorizontal;
   return item.clipVertical;
+}
+
+/** Map an HTMLMediaError numeric code to a stable string suitable for
+ *  analytics. Unknown codes fall back to "media_err_<n>" so we can
+ *  spot novel failure modes in the dashboard. */
+function mediaErrorCodeName(code: number): string {
+  switch (code) {
+    case 1:
+      return "MEDIA_ERR_ABORTED";
+    case 2:
+      return "MEDIA_ERR_NETWORK";
+    case 3:
+      return "MEDIA_ERR_DECODE";
+    case 4:
+      return "MEDIA_ERR_SRC_NOT_SUPPORTED";
+    default:
+      return `media_err_${code}`;
+  }
 }
 
 /** Translate slot priority into video element flags. */

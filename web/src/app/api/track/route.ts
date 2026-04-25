@@ -77,6 +77,15 @@ const ALLOWED_EVENT_TYPES = new Set<string>([
   "auth.signup",
   "auth.login",
   "auth.logout",
+  // ─── Wave 6 — scroll feed UX polish (Agent AB) ─────────────────────
+  // FOLLOW-UP MIGRATION REQUIRED: extend user_events_event_type_check
+  // CHECK constraint to whitelist these values. Until then, inserts
+  // will be silently dropped by Postgres (logged server-side, swallowed
+  // client-side per the tracker's best-effort design).
+  "clip.error",
+  "feed.scroll_restored",
+  "feed.offline_entered",
+  "feed.offline_exited",
 ]);
 
 const ALLOWED_CLIENT_KINDS = new Set(["mobile", "desktop", "tablet", "pwa"]);

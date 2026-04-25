@@ -44,6 +44,9 @@ import { EndOfFeedCard } from "./EndOfFeedCard";
 import { PullToRefreshIndicator } from "./PullToRefreshIndicator";
 import { KeyboardHelpOverlay } from "./KeyboardHelpOverlay";
 import { LiveBanner } from "./LiveBanner";
+import { OfflineBanner, useIsOffline } from "./OfflineBanner";
+import { FeedItemSkeleton } from "./FeedItemSkeleton";
+import { useScrollRestore } from "./hooks/useScrollRestore";
 import { ScrollChipBar, type ChipFilters } from "@/components/scroll/ScrollChipBar";
 import type { FeedItem } from "@/components/scroll/ScrollFeed";
 import { track } from "@/lib/analytics/track";
@@ -141,28 +144,40 @@ export function ScrollFeedV2({
     }
   }, [live.isLive, live.matchId]);
 
+  // ─── Offline detection (Wave 6 — Agent AB) ────────────────────────
+  // Drives the bottom OfflineBanner + pauses the SSR auto-refresh loop
+  // below so we don't burn router.refresh() calls while the request will
+  // 100% fail. The cached clips already in the player pool keep playing
+  // because the browser already downloaded them.
+  const isOffline = useIsOffline();
+
   // SSR feed refresh cadence — 15s when live, 30s otherwise. Single
-  // setInterval whose callback dynamically reads `live.isLive` from a ref
-  // so we don't reschedule on every state change (which would make the
-  // first tick land at 15s+30s instead of at 15s after a live flip).
-  // Pattern matches the spec's "don't remount the query — adjust the option
-  // dynamically" requirement.
+  // setInterval whose callback dynamically reads `live.isLive` + `offline`
+  // from refs so we don't reschedule on every state change (which would
+  // make the first tick land at 15s+30s instead of at 15s after a live
+  // flip). Pattern matches the spec's "don't remount the query — adjust
+  // the option dynamically" requirement.
   const isLiveRef = useRef(live.isLive);
   useEffect(() => {
     isLiveRef.current = live.isLive;
   }, [live.isLive]);
+  const isOfflineRef = useRef(isOffline);
+  useEffect(() => {
+    isOfflineRef.current = isOffline;
+  }, [isOffline]);
   useEffect(() => {
     if (typeof window === "undefined") return;
     let timeoutId: number | null = null;
     const tick = () => {
-      // router.refresh re-runs the RSC for /scroll, which re-fetches the
-      // SSR'd `itemsProp` from Supabase. Cheap (cached at the query layer
-      // by getPublishedKills's RLS-friendly query) and keeps the feed
-      // honest without a full client navigation.
-      try {
-        router.refresh();
-      } catch {
-        // ignore — refresh is best-effort, the user can pull-to-refresh
+      // Skip the actual refresh while offline — the request would fail
+      // and we'd just waste a network attempt + risk noisy errors. The
+      // banner is already telling the user; let cached content shine.
+      if (!isOfflineRef.current) {
+        try {
+          router.refresh();
+        } catch {
+          // ignore — refresh is best-effort
+        }
       }
       const next = isLiveRef.current ? 15_000 : 30_000;
       timeoutId = window.setTimeout(tick, next);
@@ -215,17 +230,35 @@ export function ScrollFeedV2({
     [items, brokenIds],
   );
 
-  // ─── Resolve initial index from ?kill=<id> deep link ─────────────
+  // ─── Scroll restore (Wave 6 — Agent AB) ───────────────────────────
+  // sessionStorage-backed, 30-min expiry. Returns a non-null index when
+  // the user is returning from a /kill/[id] back-nav AND the same kill
+  // is still in the current items[]. We let an explicit ?kill=<id>
+  // deep link override the restore (hasDeepLink=true).
+  const { restoreIndex, persist: persistScrollPos } = useScrollRestore({
+    items: visibleItems,
+    hasDeepLink: !!initialKillId,
+  });
+
+  // ─── Resolve initial index from ?kill=<id> deep link or restore ──
+  // Priority: explicit deep link > sessionStorage restore > top of feed.
   const initialIndex = useMemo(() => {
-    if (!initialKillId) return 0;
-    const idx = visibleItems.findIndex((it) => it.id === initialKillId);
-    return idx >= 0 ? idx : 0;
-  }, [initialKillId, visibleItems]);
+    if (initialKillId) {
+      const idx = visibleItems.findIndex((it) => it.id === initialKillId);
+      if (idx >= 0) return idx;
+    }
+    if (restoreIndex != null) return restoreIndex;
+    return 0;
+  }, [initialKillId, restoreIndex, visibleItems]);
 
   // ─── URL state sync — fired on every snap commit ─────────────────
   const handleActiveChange = (idx: number) => {
-    if (idx === 0) return; // don't dirty URL on the initial snap
     const item = visibleItems[idx];
+    // Always persist the latest position to sessionStorage — even
+    // index 0, so a user who scrolled to item 5, scrolled back to 0,
+    // then navigated away gets the correct restore on return.
+    persistScrollPos(item?.id);
+    if (idx === 0) return; // don't dirty URL on the initial snap
     if (!item || typeof window === "undefined") return;
     try {
       const url = new URL(window.location.href);
@@ -539,6 +572,7 @@ export function ScrollFeedV2({
                   total={visibleItems.length}
                   itemHeight={itemHeight}
                   isActive={isActive}
+                  onAutoSkipNext={() => jumpTo(i + 1)}
                 />
               </div>
             );
@@ -555,6 +589,7 @@ export function ScrollFeedV2({
                   total={visibleItems.length}
                   itemHeight={itemHeight}
                   isActive={isActive}
+                  onAutoSkipNext={() => jumpTo(i + 1)}
                 />
               </div>
             );
@@ -579,15 +614,46 @@ export function ScrollFeedV2({
           );
         })}
 
+        {/* Skeleton placeholder (Wave 6 — Agent AB) — sits at the tail
+            slot WHEN the user is within the last 2 items AND a refresh
+            is in flight (isRefreshing) so the next snap doesn't drop into
+            a black void while the SSR re-fetch resolves. The
+            EndOfFeedCard renders one slot further down. */}
+        {visibleItems.length > 0 &&
+          itemHeight > 0 &&
+          isRefreshing &&
+          activeIndex >= Math.max(0, visibleItems.length - 2) && (
+            <div
+              key="feed-skeleton-tail"
+              style={{
+                position: "absolute",
+                top: visibleItems.length * itemHeight,
+                left: 0,
+                right: 0,
+                height: itemHeight,
+              }}
+            >
+              <FeedItemSkeleton itemHeight={itemHeight} />
+            </div>
+          )}
+
         {/* End-of-feed card (Phase 5) — virtual item at index N.
             Same gesture model as real items, the user lands here by
-            swiping past the last clip. */}
+            swiping past the last clip. When the skeleton is being shown
+            above (refreshing tail), we shift the EndOfFeedCard down by
+            one slot so both can coexist visibly during the brief refresh
+            window. */}
         {visibleItems.length > 0 && itemHeight > 0 && (
           <div
             key="end-of-feed"
             style={{
               position: "absolute",
-              top: visibleItems.length * itemHeight,
+              top:
+                (visibleItems.length +
+                  (isRefreshing && activeIndex >= Math.max(0, visibleItems.length - 2)
+                    ? 1
+                    : 0)) *
+                itemHeight,
               left: 0,
               right: 0,
               height: itemHeight,
@@ -601,6 +667,12 @@ export function ScrollFeedV2({
           </div>
         )}
       </motion.div>
+
+      {/* Wave 6 — bottom offline banner. Slides in when navigator.onLine
+          flips false, fires feed.offline_entered/exited analytics with
+          a duration_ms metric. Doesn't block any interaction (pointer-
+          events: none on the wrapper). */}
+      <OfflineBanner />
 
       {/* Drag indicator — subtle dot grid showing position in feed */}
       {visibleItems.length > 1 && (

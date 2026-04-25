@@ -49,6 +49,14 @@ export type EventType =
   | "clip.liked"
   | "clip.rated"
   | "clip.opened"
+  // Wave 6 — scroll feed UX polish (Agent AB).
+  // Fired by FeedItemError when a video element 404s / decodes-fail.
+  // Fired by FeedItem swipe-left handler / share keyboard shortcut.
+  // Fired by FeedItem offline transitions for retention diagnostics.
+  | "clip.error"
+  | "feed.scroll_restored"
+  | "feed.offline_entered"
+  | "feed.offline_exited"
   // Browse
   | "page.viewed"
   | "player.opened"
