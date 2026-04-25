@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { KpiTile, type KpiTone } from "./KpiTile";
+import { WebVitalsTile } from "./WebVitalsTile";
 import type { DashboardKpis } from "@/app/api/admin/dashboard/kpis/route";
 import type { ModuleHealth } from "@/app/api/admin/dashboard/health/route";
 
@@ -97,7 +98,10 @@ export function LiveDashboard() {
       </div>
 
       {/* ─── Hero KPIs ──────────────────────────────────────────── */}
-      <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+      {/* Wave 11 / Agent DG : ajout du 5e tile (Web Vitals).
+          La grille passe de 4 à 5 colonnes sur xl pour rester homogène,
+          stacke 2 par ligne sur sm/md, et 1 par ligne en mobile. */}
+      <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3">
         <KpiTile
           label="Kills publiés (24h)"
           value={kpis?.kills24h ?? null}
@@ -160,6 +164,10 @@ export function LiveDashboard() {
           sub="failures non triées sur 24h"
           loading={loading}
         />
+        {/* Wave 11 / Agent DG — RUM Web Vitals tile.
+            Auto-refresh independent (60s vs 30s ici) — vitals data
+            change peu donc pas besoin de polluer la fenêtre Network. */}
+        <WebVitalsTile />
       </section>
 
       {/* ─── Per-module health table ─────────────────────────────── */}
