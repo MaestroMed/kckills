@@ -25,7 +25,7 @@
  *   - Phase 6: keyboard shortcuts (basic ↑↓ + space already wired here)
  */
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { motion } from "motion/react";
@@ -40,6 +40,7 @@ import { useNetworkQuality } from "./hooks/useNetworkQuality";
 import { useFeedBuffer } from "./hooks/useFeedBuffer";
 import { useKeyboardShortcuts } from "./hooks/useKeyboardShortcuts";
 import { useLiveMatch } from "./hooks/useLiveMatch";
+import { useRecommendationFeed } from "./hooks/useRecommendationFeed";
 import { EndOfFeedCard } from "./EndOfFeedCard";
 import { PullToRefreshIndicator } from "./PullToRefreshIndicator";
 import { KeyboardHelpOverlay } from "./KeyboardHelpOverlay";
@@ -48,8 +49,77 @@ import { OfflineBanner, useIsOffline } from "./OfflineBanner";
 import { FeedItemSkeleton } from "./FeedItemSkeleton";
 import { useScrollRestore } from "./hooks/useScrollRestore";
 import { ScrollChipBar, type ChipFilters } from "@/components/scroll/ScrollChipBar";
-import type { FeedItem } from "@/components/scroll/ScrollFeed";
+import type {
+  FeedItem,
+  VideoFeedItem,
+} from "@/components/scroll/ScrollFeed";
+import type { RecommendedKillRow } from "@/lib/supabase/recommendations";
 import { track } from "@/lib/analytics/track";
+
+/**
+ * Wave 11 — Recommendation engine feature flag (Agent DI).
+ *
+ * NEXT_PUBLIC_RECOMMENDATIONS_ENABLED defaults to OFF. When false (or
+ * unset) the scroll feed renders byte-identically to today : the
+ * server-rendered `items` are passed straight through, no anchor
+ * tracking, no /api/scroll/recommendations call.
+ *
+ * Flip to "true" to enable per-session similarity-based recommendations
+ * (anchored on the last 5 actively-watched kills, blended with Wilson
+ * via personalizedFeedScore). The env var must be exposed at build time
+ * because we read it client-side.
+ */
+const RECOMMENDATIONS_ENABLED =
+  process.env.NEXT_PUBLIC_RECOMMENDATIONS_ENABLED === "true";
+
+/**
+ * Build a minimal VideoFeedItem from a RecommendedKillRow. Kept
+ * deliberately conservative — we don't have the per-game roster
+ * snapshot here (that lives in kc_matches.json server-side), so player
+ * IGNs default to null and the consumer falls back to "?" naming.
+ */
+function recommendationToFeedItem(row: RecommendedKillRow): VideoFeedItem | null {
+  const k = row.kill;
+  if (!k.id || !k.clip_url_vertical || !k.thumbnail_url) return null;
+  return {
+    kind: "video",
+    id: k.id,
+    score: row.similarity, // raw cosine — re-ranking happens elsewhere if needed
+    killerPlayerId: k.killer_player_id,
+    killerChampion: k.killer_champion ?? "?",
+    victimChampion: k.victim_champion ?? "?",
+    killerName: null,
+    victimName: null,
+    minuteBucket: k.game_minute_bucket,
+    fightType: k.fight_type,
+    clipVertical: k.clip_url_vertical,
+    clipVerticalLow: k.clip_url_vertical_low ?? null,
+    clipHorizontal: k.clip_url_horizontal ?? null,
+    hlsMasterUrl: k.hls_master_url ?? null,
+    assetsManifest: k.assets_manifest ?? null,
+    thumbnail: k.thumbnail_url ?? null,
+    highlightScore: k.highlight_score ?? null,
+    avgRating: k.avg_rating ?? null,
+    ratingCount: k.rating_count,
+    aiDescription: k.ai_description ?? null,
+    aiDescriptionFr: k.ai_description_fr ?? null,
+    aiDescriptionEn: k.ai_description_en ?? null,
+    aiDescriptionKo: k.ai_description_ko ?? null,
+    aiDescriptionEs: k.ai_description_es ?? null,
+    aiTags: k.ai_tags ?? [],
+    multiKill: k.multi_kill,
+    isFirstBlood: k.is_first_blood,
+    kcInvolvement: k.tracked_team_involvement,
+    gameTimeSeconds: k.game_time_seconds ?? 0,
+    gameNumber: k.games?.game_number ?? 1,
+    matchExternalId: k.games?.matches?.external_id ?? "",
+    matchStage: k.games?.matches?.stage ?? "LEC",
+    matchDate: k.games?.matches?.scheduled_at ?? k.created_at,
+    opponentCode: "LEC",
+    kcWon: null,
+    matchScore: null,
+  };
+}
 
 interface Props {
   items: FeedItem[];
@@ -464,6 +534,35 @@ export function ScrollFeedV2({
       }),
     [visibleItems],
   );
+
+  // ─── Recommendation engine wire-up (Wave 11 — Agent DI) ───────────
+  // Stable callback for the hook so the dependency array doesn't churn.
+  // The mapper itself is pure and has no closure dependencies that
+  // change at runtime.
+  const toFeedItemCb = useCallback(
+    (row: RecommendedKillRow) => recommendationToFeedItem(row),
+    [],
+  );
+  const recFeed = useRecommendationFeed<FeedItem>({
+    seedItems: visibleItems,
+    activeIndex,
+    enabled: RECOMMENDATIONS_ENABLED,
+    toFeedItem: toFeedItemCb,
+  });
+  // Whenever the recommendation hook produces a longer list than the
+  // current `items`, append the new items into the source state so
+  // every downstream consumer (gesture, pool, scroll-restore) sees
+  // them. We diff by id to avoid a useless re-render when nothing new
+  // has landed.
+  useEffect(() => {
+    if (!RECOMMENDATIONS_ENABLED) return;
+    if (recFeed.items.length <= items.length) return;
+    setItems((prev) => {
+      const seen = new Set(prev.map((it) => it.id));
+      const additions = recFeed.items.filter((it) => !seen.has(it.id));
+      return additions.length === 0 ? prev : [...prev, ...additions];
+    });
+  }, [recFeed.items, items.length]);
 
   return (
     <div
