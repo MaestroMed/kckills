@@ -5,6 +5,17 @@ import { useState, useEffect } from "react";
 import { CommandPaletteButton } from "./CommandPalette";
 import { LangSwitcher } from "./i18n/LangSwitcher";
 import { SearchBar } from "./search/SearchBar";
+import { LeagueNav } from "./league/LeagueNav";
+
+// PR-loltok BC : env-gated multi-league chip strip.
+// `NEXT_PUBLIC_LOLTOK_PUBLIC` is exposed to the client bundle via the
+// NEXT_PUBLIC_ prefix, so the same value is read on server (RSC parent)
+// and client (this component) — there's no hydration mismatch.
+//
+// Default `false` → the chip strip is hidden, the navbar looks
+// byte-identical to today's KC pilot. Set to `true` in Vercel env to
+// flip on the LoLTok multi-team navigation.
+const LOLTOK_PUBLIC = process.env.NEXT_PUBLIC_LOLTOK_PUBLIC === "true";
 
 // Clip-centric nav — only what matters. Logo links to home, no "Accueil" item.
 // /best and /recent merged into /clips (filterable + chronological by default).
@@ -156,6 +167,14 @@ export function Navbar() {
           </svg>
         </button>
       </div>
+
+      {/* PR-loltok BC : LeagueNav chip strip — only mounts when
+          NEXT_PUBLIC_LOLTOK_PUBLIC=true. In KC pilot mode (default)
+          the component returns null so the navbar is identical to
+          today's homepage. The chip strip sits BELOW the main nav row
+          so it scrolls horizontally on mobile without disrupting the
+          burger / search button. */}
+      <LeagueNav enabled={LOLTOK_PUBLIC} />
 
       {/* Mobile menu */}
       {mobileOpen && (
