@@ -79,6 +79,7 @@ DEFAULTS: Final[dict[str, dict[str, int]]] = {
     "heartbeat":           {"parallel": 1, "interval": 21600,"batch":   1, "lease":   60},
     "watchdog":            {"parallel": 1, "interval": 1800, "batch":   1, "lease":   60},
     "queue_health":        {"parallel": 1, "interval":  300, "batch":   1, "lease":   60},
+    "dlq_drainer":         {"parallel": 1, "interval": 1800, "batch":  50, "lease":  120},
 }
 
 # Generic fallback when a module isn't listed above. Conservative on

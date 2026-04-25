@@ -65,6 +65,7 @@ SCRIPT_WHITELIST: set[str] = {
     "backfill_clip_errors",
     "backfill_stuck_pipeline",
     "recon_videos_now",
+    "dlq_drain",
 }
 
 # Per-script flag schema. Each entry maps an arg name (as it arrives in
@@ -91,6 +92,13 @@ SCRIPT_ARG_SCHEMA: dict[str, dict[str, tuple[str, str]]] = {
     },
     "recon_videos_now": {
         # No CLI flags ; the script takes no args.
+    },
+    "dlq_drain": {
+        "dry_run":     ("--dry-run",     "bool"),
+        "type":        ("--type",        "value"),
+        "error_code":  ("--error-code",  "value"),
+        "since_days":  ("--since-days",  "value"),
+        "limit":       ("--limit",       "value"),
     },
 }
 

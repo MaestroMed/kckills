@@ -117,13 +117,18 @@ def test_unknown_script_fails_with_forbidden_script_code(captured_outcomes):
 
 
 def test_script_whitelist_constants():
-    """The 3 known scripts MUST be in the whitelist (regression guard)."""
+    """The known scripts MUST be in the whitelist (regression guard).
+
+    Wave 9 added `dlq_drain` to the whitelist so the admin UI can
+    schedule the bulk DLQ recovery from /admin/pipeline/dlq.
+    """
     from modules.admin_job_runner import SCRIPT_WHITELIST
 
     expected = {
         "backfill_clip_errors",
         "backfill_stuck_pipeline",
         "recon_videos_now",
+        "dlq_drain",
     }
     assert SCRIPT_WHITELIST == expected, (
         f"whitelist drift detected. Expected {expected}, got {SCRIPT_WHITELIST}"

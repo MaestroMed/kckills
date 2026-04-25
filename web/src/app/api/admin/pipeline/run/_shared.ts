@@ -24,6 +24,7 @@ export const ADMIN_RUN_WHITELIST = new Set<string>([
   "backfill_clip_errors",
   "backfill_stuck_pipeline",
   "recon_videos_now",
+  "dlq_drain",
 ]);
 
 /** Map UI-provided priority to a queue priority. Default 80 = above

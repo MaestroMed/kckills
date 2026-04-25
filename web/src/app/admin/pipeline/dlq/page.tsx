@@ -8,12 +8,16 @@
  *   - Cancel  : mark the DLQ row as `resolution_status='cancelled'`
  *               without re-queueing — known issue / acceptable loss.
  *
- * Both actions hit POST /api/admin/pipeline/dlq/[id]/{requeue,cancel}
- * which writes an admin_actions audit row before mutating state.
+ * Both per-row actions hit POST /api/admin/pipeline/dlq/[id]/{requeue,cancel}.
+ *
+ * Wave 9 P2 also adds bulk drain buttons that schedule the
+ * scripts/dlq_drain.py script via /api/admin/pipeline/dlq/bulk —
+ * useful when 800+ rows are pending and per-row clicks aren't realistic.
  */
 import Link from "next/link";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { DlqRowActions } from "./row-actions";
+import { DlqBulkDrain } from "./bulk-drain";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 30;
@@ -57,6 +61,20 @@ export default async function DlqPage() {
     byErrorCode.set(k, (byErrorCode.get(k) ?? 0) + 1);
   }
 
+  // Total counts by error_code across ALL pending DLQ rows (not just
+  // the 200-row preview above) — gives the operator an accurate sense
+  // of the backlog before they click "Drain now".
+  const { data: allCodes } = await sb
+    .from("dead_letter_jobs")
+    .select("error_code")
+    .eq("resolution_status", "pending");
+  const totalByCode = new Map<string, number>();
+  for (const r of (allCodes ?? []) as { error_code: string | null }[]) {
+    const k = r.error_code ?? "unknown";
+    totalByCode.set(k, (totalByCode.get(k) ?? 0) + 1);
+  }
+  const totalPending = (allCodes ?? []).length;
+
   return (
     <div className="space-y-6">
       <header className="flex items-center justify-between">
@@ -65,7 +83,8 @@ export default async function DlqPage() {
             Dead Letter Queue
           </h1>
           <p className="text-xs text-[var(--text-muted)] mt-0.5">
-            Jobs ayant épuisé leurs retries. Triage manuel : requeue ou cancel.
+            Jobs ayant épuisé leurs retries. Triage manuel ou drain
+            automatique.
           </p>
         </div>
         <div className="flex gap-2">
@@ -93,29 +112,57 @@ export default async function DlqPage() {
         </div>
       ) : (
         <>
-          {/* Summary strip — counts per error_code */}
-          <section className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2">
-            {[...byErrorCode.entries()]
-              .sort((a, b) => b[1] - a[1])
-              .map(([code, count]) => (
-                <div
-                  key={code}
-                  className="rounded-lg border border-[var(--border-gold)] bg-[var(--bg-surface)] px-3 py-2"
-                >
-                  <p className="text-[10px] text-[var(--text-muted)] uppercase tracking-widest truncate">
-                    {code}
-                  </p>
-                  <p className="font-mono text-base font-bold text-[var(--orange)]">
-                    {count}
-                  </p>
-                </div>
-              ))}
-          </section>
+          {/* Bulk drain controls — Wave 9 P2 */}
+          <DlqBulkDrain totalPending={totalPending} />
 
-          {/* Pending DLQ list */}
+          {/* Summary strip — counts per error_code (across ALL pending,
+              not just the displayed 200-row preview) with sparkline-style
+              relative bars. */}
           <section>
             <h2 className="font-display text-[10px] uppercase tracking-widest text-[var(--text-muted)] mb-3">
-              Pending ({rows.length})
+              Répartition par error_code ({totalPending} total)
+            </h2>
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
+              {[...totalByCode.entries()]
+                .sort((a, b) => b[1] - a[1])
+                .map(([code, count]) => {
+                  const max = Math.max(
+                    ...[...totalByCode.values()],
+                    1,
+                  );
+                  const pct = Math.round((count / max) * 100);
+                  return (
+                    <div
+                      key={code}
+                      className="rounded-lg border border-[var(--border-gold)] bg-[var(--bg-surface)] px-3 py-2"
+                    >
+                      <p className="text-[10px] text-[var(--text-muted)] uppercase tracking-widest truncate">
+                        {code}
+                      </p>
+                      <div className="flex items-baseline justify-between gap-2 mt-1">
+                        <p className="font-mono text-base font-bold text-[var(--orange)]">
+                          {count}
+                        </p>
+                        <div
+                          className="flex-1 h-1.5 rounded-full bg-[var(--bg-elevated)] overflow-hidden ml-2"
+                          aria-hidden
+                        >
+                          <div
+                            className="h-full bg-[var(--orange)]/60"
+                            style={{ width: `${pct}%` }}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+            </div>
+          </section>
+
+          {/* Pending DLQ list (last 200) */}
+          <section>
+            <h2 className="font-display text-[10px] uppercase tracking-widest text-[var(--text-muted)] mb-3">
+              Pending — derniers {rows.length}
             </h2>
             <div className="rounded-xl border border-[var(--border-gold)] bg-[var(--bg-surface)] divide-y divide-[var(--border-gold)]/30">
               {rows.map((row) => (

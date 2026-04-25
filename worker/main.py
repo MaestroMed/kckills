@@ -131,6 +131,7 @@ DAEMON_MODULES: list[tuple[str, int, str]] = [
     ("heartbeat",         _get_interval("heartbeat"),         "modules.heartbeat"),              # default 21600s — 6h
     ("watchdog",          _get_interval("watchdog"),          "modules.watchdog"),               # default 1800s  — 30 min
     ("queue_health",      _get_interval("queue_health"),      "modules.queue_health"),           # default 300s   — Wave 6 P2 : stale-lock + queue snapshot
+    ("dlq_drainer",       _get_interval("dlq_drainer"),       "modules.dlq_drainer"),            # default 1800s  — Wave 9 : auto-recover fresh DLQ entries
 ]
 
 RESTART_DELAY = 10  # seconds between a module crash and its next attempt
