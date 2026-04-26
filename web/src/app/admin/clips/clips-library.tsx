@@ -141,6 +141,10 @@ export function ClipsLibrary() {
     if (filters.multiKill !== "any") params.set("multi_kill", filters.multiKill);
     if (filters.dateFrom) params.set("from", filters.dateFrom);
     if (filters.dateTo) params.set("to", filters.dateTo);
+    // Wave 12 anti-pollution filter — pass clip_context value if not "any".
+    if (filters.clipContext && filters.clipContext !== "any") {
+      params.set("clip_context", filters.clipContext);
+    }
     params.set("sort", sort);
     params.set("limit", String(limit));
 

@@ -26,6 +26,23 @@ export type KcRoleFilter = "any" | "team_killer" | "team_victim" | "team_assist"
 
 export type MultiKillFilter = "any" | "double" | "triple" | "quadra" | "penta";
 
+// Wave 12 anti-pollution — clip_context filter values from the analyzer's
+// new ai_clip_context column. "any" = no filter (default), each named
+// value filters down to that specific category, and "pollution" is the
+// composite OR-filter for everything that isn't `live_gameplay`.
+export type ClipContextFilter =
+  | "any"
+  | "live_gameplay"
+  | "replay"
+  | "draft"
+  | "lobby"
+  | "loading"
+  | "plateau"
+  | "transition"
+  | "other"
+  | "null"          // not yet re-QC'd (pre-Wave-12 backlog)
+  | "pollution";    // any of replay/draft/lobby/loading/plateau/transition/other
+
 export interface ClipFilterValue {
   q: string;
   status: ClipStatusFilter;
@@ -38,6 +55,9 @@ export interface ClipFilterValue {
   hidden: "false" | "true" | "only";
   hasDescription: "" | "true" | "false";
   fightTypes: string[];
+  // Wave 12 anti-pollution — filter clips by their Gemini-classified
+  // context. Default "any" preserves the historical UX.
+  clipContext: ClipContextFilter;
 }
 
 export const DEFAULT_CLIP_FILTERS: ClipFilterValue = {
@@ -52,6 +72,7 @@ export const DEFAULT_CLIP_FILTERS: ClipFilterValue = {
   hidden: "false",
   hasDescription: "",
   fightTypes: [],
+  clipContext: "any",
 };
 
 const STATUS_OPTIONS: { value: ClipStatusFilter; label: string }[] = [
@@ -76,6 +97,25 @@ const MULTI_OPTIONS: { value: MultiKillFilter; label: string }[] = [
   { value: "triple", label: "Triple" },
   { value: "quadra", label: "Quadra" },
   { value: "penta", label: "Penta" },
+];
+
+// Wave 12 anti-pollution options for the clip_context filter dropdown.
+// `pollution` is the convenience composite that surfaces ALL non-
+// gameplay clips at once (the operator's daily "what did the AI miss?"
+// review). `null` exposes the pre-Wave-12 backlog that hasn't been
+// re-classified yet.
+const CLIP_CONTEXT_OPTIONS: { value: ClipContextFilter; label: string }[] = [
+  { value: "any",            label: "Tous contextes" },
+  { value: "pollution",      label: "🔴 Pollution (toutes)" },
+  { value: "live_gameplay",  label: "✅ Live gameplay" },
+  { value: "plateau",        label: "Plateau / studio" },
+  { value: "replay",         label: "Replay LEC" },
+  { value: "draft",          label: "Champion select" },
+  { value: "lobby",          label: "End-of-game lobby" },
+  { value: "loading",        label: "Loading screen" },
+  { value: "transition",     label: "Transition entre games" },
+  { value: "other",          label: "Autre / ambigu" },
+  { value: "null",           label: "Pas encore re-QC'd" },
 ];
 
 const FIGHT_TYPES = [
@@ -150,6 +190,22 @@ export function ClipFilterBar({ value, onChange, onReset }: Props) {
           aria-label="Multi-kill"
         >
           {MULTI_OPTIONS.map((o) => (
+            <option key={o.value} value={o.value}>
+              {o.label}
+            </option>
+          ))}
+        </select>
+
+        {/* Wave 12 anti-pollution clip_context filter — primary daily-
+            review surface. Operator picks "🔴 Pollution" to review
+            everything the AI flagged as non-gameplay in one pass. */}
+        <select
+          value={value.clipContext}
+          onChange={(e) => update({ clipContext: e.target.value as ClipContextFilter })}
+          className="rounded-md border border-[var(--border-gold)] bg-[var(--bg-primary)] px-2 py-1.5 text-xs"
+          aria-label="Catégorie clip_context (Wave 12 anti-pollution)"
+        >
+          {CLIP_CONTEXT_OPTIONS.map((o) => (
             <option key={o.value} value={o.value}>
               {o.label}
             </option>

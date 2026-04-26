@@ -31,6 +31,10 @@ export async function GET(req: NextRequest) {
   const hidden = sp.get("hidden"); // 'true' hides, 'only' shows only hidden, null shows both
   const hasDescription = sp.get("has_description");
   const involvement = sp.get("involvement") ?? "team_killer";
+  // Wave 12 anti-pollution clip_context filter (see analyzer prompt rule 9).
+  // Values : "any" (default), one of the 8 enum values, "null", or
+  // "pollution" (composite OR for everything that isn't live_gameplay).
+  const clipContext = sp.get("clip_context");
   const sort = sp.get("sort") ?? "score_desc";
   const limit = Math.min(500, parseInt(sp.get("limit") ?? "100", 10));
 
@@ -42,7 +46,7 @@ export async function GET(req: NextRequest) {
         "avg_rating, rating_count, comment_count, impression_count, " +
         "clip_url_vertical, thumbnail_url, ai_description, ai_tags, " +
         "multi_kill, is_first_blood, tracked_team_involvement, " +
-        "kill_visible, fight_type, needs_reclip, created_at, updated_at, " +
+        "kill_visible, ai_clip_context, fight_type, needs_reclip, created_at, updated_at, " +
         "games!inner (game_number, matches!inner (external_id, stage, scheduled_at))",
       { count: "exact" },
     )
@@ -55,6 +59,21 @@ export async function GET(req: NextRequest) {
   if (hidden === "only") query = query.eq("kill_visible", false);
   else if (hidden === "true") query = query.eq("kill_visible", true);
   // null/"false" = show both
+
+  // Wave 12 anti-pollution filter — apply BEFORE the visibility check
+  // because the operator may want to see all `plateau` clips
+  // independently of whether they're already hidden.
+  if (clipContext && clipContext !== "any") {
+    if (clipContext === "pollution") {
+      // Anything classified but NOT live_gameplay
+      query = query.not("ai_clip_context", "is", null)
+                   .neq("ai_clip_context", "live_gameplay");
+    } else if (clipContext === "null") {
+      query = query.is("ai_clip_context", null);
+    } else {
+      query = query.eq("ai_clip_context", clipContext);
+    }
+  }
 
   if (hasDescription === "true") query = query.not("ai_description", "is", null);
   else if (hasDescription === "false") query = query.is("ai_description", null);
