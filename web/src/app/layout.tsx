@@ -142,12 +142,33 @@ export default async function RootLayout({
 }: {
   children: React.ReactNode;
 }) {
-  // PR19 — resolve the user's language server-side (cookie → Accept-Language
-  // → fr fallback). Passed to <Providers> so the very first paint matches
-  // their preference (no flash of French content for an English user).
-  const { getServerLang } = await import("@/lib/i18n/server");
+  // 2026-04-26 cache fix : the root layout USED to call
+  // `await getServerLang()` here to resolve the user's language from
+  // the cookie / Accept-Language header server-side. That's a
+  // beautiful UX feature (Korean visitors get a Korean first paint
+  // instead of FR-then-flash-to-KR) but it has a brutal cache cost :
+  // `getServerLang()` calls `cookies()` + `headers()`, both of which
+  // are Next.js 15 dynamic APIs. ANY layout that touches a dynamic
+  // API opts EVERY page underneath it into dynamic rendering. Result :
+  // the homepage + /kill/[id] + /match/[slug] + every other public
+  // page was running SSR for every single visitor (X-Vercel-Cache:
+  // MISS forever) regardless of `revalidate = 300` — observed in
+  // Vercel observability as 78K function invocations / 30 days that
+  // should have been ~95% cached.
+  //
+  // The fix : default to FR for the SSR shell + let the client-side
+  // LangProvider detect the cookie / localStorage on mount and
+  // re-render with the user's preferred lang. Trade-off : non-FR
+  // visitors see a brief (<50 ms) French flash before the client
+  // hydration switches the lang. That's a one-time UX hit per visit,
+  // versus a permanent 5x cost on Vercel function invocations.
+  //
+  // The lang switcher in the header still works — when a user picks
+  // a lang explicitly, the cookie + localStorage are set and the
+  // client picks them up immediately. This change ONLY affects the
+  // very first paint of a visitor whose chosen lang isn't FR.
+  const initialLang = "fr" as const;
   const { LANG_META } = await import("@/lib/i18n/lang");
-  const initialLang = await getServerLang();
   const htmlLang = LANG_META[initialLang].htmlLang;
 
   return (

@@ -77,11 +77,19 @@ export function LangProvider({
   const router = useRouter();
   const [lang, setLangState] = useState<Lang>(initialLang ?? DEFAULT_LANG);
 
-  // On mount, read the persisted choice (cookie / localStorage). This
-  // catches the case where initialLang wasn't passed and the user has
-  // a non-default preference saved.
+  // On mount, read the persisted choice (cookie / localStorage) and
+  // upgrade to it if it differs from initialLang.
+  //
+  // 2026-04-26 cache-fix update : the previous implementation
+  // short-circuited when initialLang was provided, on the assumption
+  // that the server had already resolved it correctly. That stopped
+  // working once we removed `getServerLang()` from the root layout to
+  // unlock CDN caching — the server now ALWAYS sends initialLang="fr"
+  // (the SSR cache-friendly default) and the client must re-detect
+  // for non-FR users. We accept the brief lang-flash for non-FR
+  // visitors (a single re-render before paint stabilises) in exchange
+  // for ~95% Vercel cache hit rate on the homepage.
   useEffect(() => {
-    if (initialLang) return;
     const stored = readCookieLang() ?? readStorageLang();
     if (stored && stored !== lang) setLangState(stored);
     // eslint-disable-next-line react-hooks/exhaustive-deps
