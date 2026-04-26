@@ -242,78 +242,54 @@ def _moment_to_event_row(moment: dict) -> dict:
 
 def _bulk_insert_events(db, rows: list[dict]) -> int:
     """POST a batch of events to PostgREST. Idempotent via unique partial
-    indexes on kill_id / moment_id.
+    indexes on kill_id / moment_id — duplicates are silently dropped via
+    Prefer: resolution=ignore-duplicates.
 
-    Two-step strategy (2026-04-27 fix) :
-      * Split rows by which unique target they hit : kill rows have a
-        non-null kill_id ; moment rows have a non-null moment_id. The
-        partial unique indexes (`uniq_game_events_kill` and
-        `uniq_game_events_moment`) require us to tell PostgREST WHICH
-        target column to ON-CONFLICT against.
-      * POST each subset with the matching `on_conflict=<col>` query
-        param + `Prefer: resolution=ignore-duplicates` so duplicates are
-        silently dropped on the server side instead of bubbling up as
-        409 conflicts.
+    Note (2026-04-27) : we tried to use `?on_conflict=kill_id` to make
+    duplicates a no-op INSTEAD of a 409. That returned 42P10 ("no
+    unique or exclusion constraint matching the ON CONFLICT
+    specification") because the unique indexes are PARTIAL
+    (`WHERE kill_id IS NOT NULL`) and PostgREST can't infer the partial
+    expression from just the column name. Reverted to the original
+    plain INSERT — duplicates still log a 409 warning but the row
+    doesn't get inserted twice. Cosmetic noise only, no data integrity
+    impact. A proper fix would need to either (a) rebuild the index as
+    a NON-partial constraint, or (b) drop the unique index and rely on
+    application-level dedup before the bulk insert.
 
-    Without on_conflict the server falls back to a regular INSERT and
-    returns 409 on the first duplicate — that's the spam we used to see
-    in production logs as `event_mapper_insert_failed status=409 ...
-    duplicate key value violates unique constraint`. Harmless but noisy
-    and made it hard to spot real failures.
-
-    Returns the total number of NEW rows inserted across both subsets
-    (PostgREST returns the inserted set when Prefer=return=representation).
+    Returns the number of new rows inserted (best-effort; PostgREST
+    returns the inserted set when Prefer=return=representation).
     """
     if not rows:
         return 0
-
-    headers_kill = {
+    headers = {
         **db.headers,
         "Content-Type": "application/json",
         "Prefer": "resolution=ignore-duplicates,return=representation",
     }
-    headers_moment = dict(headers_kill)
-
-    kill_rows = [r for r in rows if r.get("kill_id") is not None]
-    moment_rows = [r for r in rows if r.get("moment_id") is not None and r.get("kill_id") is None]
-    other_rows = [r for r in rows if r.get("kill_id") is None and r.get("moment_id") is None]
-
-    inserted_total = 0
-
-    def _post(subset_rows: list[dict], on_conflict: str | None, headers: dict) -> int:
-        if not subset_rows:
-            return 0
-        url = f"{db.base}/game_events"
-        if on_conflict:
-            url = f"{url}?on_conflict={on_conflict}"
-        try:
-            r = httpx.post(url, headers=headers, json=subset_rows, timeout=30.0)
-            if r.status_code in (200, 201):
-                inserted = r.json() or []
-                return len(inserted)
-            # 409 still possible if the on_conflict target was wrong ;
-            # surface it so we can debug. For "real" failures (4xx other
-            # than 409, or 5xx) we keep the loud log so they're noticed.
-            level = log.debug if r.status_code == 409 else log.warn
-            level(
-                "event_mapper_insert_failed",
-                status=r.status_code,
-                body=r.text[:300],
-                on_conflict=on_conflict,
-                batch_size=len(subset_rows),
-            )
-            return 0
-        except Exception as e:
-            log.error("event_mapper_insert_threw", error=str(e)[:200])
-            return 0
-
-    inserted_total += _post(kill_rows, "kill_id", headers_kill)
-    inserted_total += _post(moment_rows, "moment_id", headers_moment)
-    # Other rows (neither kill_id nor moment_id) — no unique constraint
-    # to clash with, plain insert. Should be empty in practice but kept
-    # for forward-compat with any future event type without a natural key.
-    inserted_total += _post(other_rows, None, headers_kill)
-    return inserted_total
+    try:
+        r = httpx.post(
+            f"{db.base}/game_events",
+            headers=headers,
+            json=rows,
+            timeout=30.0,
+        )
+        if r.status_code in (200, 201):
+            inserted = r.json() or []
+            return len(inserted)
+        # 409 = duplicate (idempotent skip). 400 / 5xx = real failure.
+        # Lower the warning level for 409 so it doesn't drown real bugs.
+        level = log.debug if r.status_code == 409 else log.warn
+        level(
+            "event_mapper_insert_failed",
+            status=r.status_code,
+            body=r.text[:300],
+            batch_size=len(rows),
+        )
+        return 0
+    except Exception as e:
+        log.error("event_mapper_insert_threw", error=str(e)[:200])
+        return 0
 
 
 # ─── Per-game mapping ─────────────────────────────────────────────────
