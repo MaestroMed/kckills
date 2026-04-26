@@ -154,18 +154,77 @@ export default async function RootLayout({
     <html lang={htmlLang}>
       <head>
         <link rel="manifest" href="/manifest.json" />
+        {/* ─── Preconnects ────────────────────────────────────────────
+            Wave 7 perf audit (2026-04-25, Agent AE) — every cold mobile
+            visit pays a fresh DNS+TLS handshake (~120-150 ms each) the
+            moment the parser hits the first <Image src="https://…" />
+            referencing one of these origins. Preconnecting in the doc
+            head warms the connection in parallel with HTML parsing so
+            the first poster / champion icon / R2 asset paints faster.
+
+              • fonts.googleapis.com / fonts.gstatic.com — already in
+                use for Oswald/Inter Tight/JetBrains Mono.
+              • clips.kckills.com — primary R2 CDN for clips, posters,
+                thumbnails, OG images. Hit on EVERY page that renders
+                a kill (scroll, kill detail, search, player, top, …).
+              • ddragon.leagueoflegends.com — champion icons + splashes
+                (home roster band, kill detail, player profile).
+              • *.r2.cloudflarestorage.com — legacy R2 direct hostname
+                for assets not yet migrated behind the custom domain.
+
+            crossOrigin="" is required for fetch-style CORS preconnect
+            on the gstatic & R2 endpoints; HTML lint flags `crossOrigin`
+            on origins that don't need credentials but the spec is happy. */}
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
-        {/* Preload the primary display font so the hero headline renders without FOIT */}
+        <link rel="preconnect" href="https://clips.kckills.com" crossOrigin="" />
+        <link rel="preconnect" href="https://ddragon.leagueoflegends.com" />
+        <link rel="dns-prefetch" href="https://r2.cloudflarestorage.com" />
+        {/* ─── Non-blocking Google Fonts ──────────────────────────────
+            Wave 7 perf audit (2026-04-25) — the previous setup shipped
+            BOTH a `<link rel="preload" as="style">` AND a render-blocking
+            `<link rel=stylesheet>` for the same URL. The stylesheet
+            form blocked first paint until the CSS roundtrip resolved
+            (~200-400 ms on 4G).
+
+            New pattern (canonical async-CSS recipe):
+              1. `<link rel="preload" as="style">` warms the request so
+                 it lands in the browser cache early.
+              2. `<link rel="stylesheet" media="print">` LOADS the same
+                 URL but with a media query that doesn't apply to screen
+                 — the browser fetches it but DOES NOT render-block.
+                 The inline script below flips `media` to `"all"` once
+                 it loads. Net effect: zero render-block, fonts apply
+                 the moment they finish downloading.
+              3. <noscript> fallback ships the blocking version for
+                 crawlers + JS-off users.
+
+            display=swap is on the URL itself — text paints in the
+            fallback font immediately, then re-renders in Oswald/Inter
+            once available. Eliminates FOIT entirely. */}
         <link
           rel="preload"
           as="style"
           href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Inter+Tight:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;700&display=swap"
         />
         <link
-          href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Inter+Tight:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;700&display=swap"
+          id="kc-fonts"
           rel="stylesheet"
+          href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Inter+Tight:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;700&display=swap"
+          media="print"
         />
+        <script
+          dangerouslySetInnerHTML={{
+            __html:
+              "(function(){var l=document.getElementById('kc-fonts');if(l){l.addEventListener('load',function(){l.media='all'});if(l.sheet){l.media='all'}}})();",
+          }}
+        />
+        <noscript>
+          <link
+            rel="stylesheet"
+            href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Inter+Tight:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;700&display=swap"
+          />
+        </noscript>
         {/* JSON-LD structured data for SEO */}
         <script
           type="application/ld+json"

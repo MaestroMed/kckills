@@ -10,12 +10,22 @@ export default function robots(): MetadataRoute.Robots {
       {
         userAgent: "*",
         allow: "/",
-        disallow: ["/api/", "/auth/", "/_next/", "/settings", "/review", "/era/darkness"],
+        // /admin/ added per Phase 4 SEO spec — never want the
+        // editorial / pipeline / moderation surface in the index.
+        disallow: [
+          "/api/",
+          "/admin/",
+          "/auth/",
+          "/_next/",
+          "/settings",
+          "/review",
+          "/era/darkness",
+        ],
       },
       {
         userAgent: "Googlebot",
         allow: "/",
-        disallow: ["/api/", "/auth/", "/review", "/era/darkness"],
+        disallow: ["/api/", "/admin/", "/auth/", "/review", "/era/darkness"],
       },
     ],
     sitemap: `${SITE_URL}/sitemap.xml`,

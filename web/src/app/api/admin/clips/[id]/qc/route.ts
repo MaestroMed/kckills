@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { logAdminAction, requireAdmin } from "@/lib/admin/audit";
+import { deriveActorRole, logAdminAction, requireAdmin } from "@/lib/admin/audit";
 import { createServerSupabase } from "@/lib/supabase/server";
 
 /**
@@ -20,7 +20,7 @@ import { createServerSupabase } from "@/lib/supabase/server";
  */
 
 export async function POST(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
   const admin = await requireAdmin();
@@ -45,6 +45,9 @@ export async function POST(
     action: "kill.qc_requested",
     entityType: "kill",
     entityId: id,
+    after: { job_id: data.id },
+    actorRole: deriveActorRole(admin),
+    request: req,
   });
   return NextResponse.json({ job_id: data.id });
 }

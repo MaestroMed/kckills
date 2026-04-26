@@ -7,6 +7,16 @@ import { championIconUrl } from "@/lib/constants";
 import { TEAM_LOGOS } from "@/lib/kc-assets";
 import { isDescriptionClean } from "@/lib/scroll/sanitize-description";
 import { Breadcrumb } from "@/components/Breadcrumb";
+import { Description } from "@/components/i18n/Description";
+
+/**
+ * Default poster dimensions for vertical clip thumbnails when the
+ * kill_assets manifest is absent (legacy rows). Worker convention is
+ * 720×1280 (9:16), used as the intrinsic size hint for next/image so
+ * the layout doesn't shift on first paint.
+ */
+const DEFAULT_THUMB_W = 720;
+const DEFAULT_THUMB_H = 1280;
 
 export interface ClipCard {
   id: string;
@@ -14,6 +24,12 @@ export interface ClipCard {
   victimChampion: string;
   killerPlayerId: string | null;
   thumbnail: string | null;
+  /** Native thumbnail dimensions when the kill_assets manifest carries
+   *  them (migration 026). Used by <Image sizes>/intrinsic-size hints
+   *  to avoid layout shift on first paint. NULL = legacy row, fall
+   *  back to the responsive sizes string. */
+  thumbnailWidth?: number | null;
+  thumbnailHeight?: number | null;
   clipVerticalLow: string | null;
   highlightScore: number | null;
   avgRating: number | null;
@@ -21,6 +37,12 @@ export interface ClipCard {
   commentCount: number;
   impressionCount: number;
   aiDescription: string | null;
+  // PR14 multi-language descriptions — picked client-side by <Description>
+  // via the active LangProvider. Optional so existing callers compile.
+  aiDescriptionFr?: string | null;
+  aiDescriptionEn?: string | null;
+  aiDescriptionKo?: string | null;
+  aiDescriptionEs?: string | null;
   aiTags: string[];
   multiKill: string | null;
   isFirstBlood: boolean;
@@ -34,6 +56,11 @@ export interface ClipCard {
   kcWon: boolean | null;
   matchScore: string | null;
   createdAt: string;
+  /** PR23 — true if this kill has no clip on R2 (gol.gg historical
+   *  backfill). The grid renders a stats-only card variant : same
+   *  metadata layout, no <video> player, the thumbnail (if any) +
+   *  champion icons stand in as the visual. */
+  isDataOnly?: boolean;
 }
 
 type SortKey = "recent" | "score" | "rating" | "impressions";
@@ -317,22 +344,76 @@ function ClipCardComponent({ card }: { card: ClipCard }) {
   const showDesc = isDescriptionClean(card.aiDescription);
   const oppLogo = TEAM_LOGOS[card.opponentCode];
 
+  // PR23 — data-only kills (gol.gg historical, no clip on R2) deep-link
+  // to /kill/[id] instead of /scroll. /scroll requires a playable clip
+  // and would just bounce them. /kill/[id] handles the no-clip case
+  // gracefully (shows the stats card).
+  const href = card.isDataOnly ? `/kill/${card.id}` : `/scroll?kill=${card.id}`;
+
   return (
     <Link
-      href={`/scroll?kill=${card.id}`}
-      className="group relative flex flex-col overflow-hidden rounded-xl border border-[var(--border-gold)] bg-[var(--bg-surface)] hover:border-[var(--gold)]/60 hover:-translate-y-0.5 transition-all"
+      href={href}
+      className={`group relative flex flex-col overflow-hidden rounded-xl border bg-[var(--bg-surface)] hover:border-[var(--gold)]/60 hover:-translate-y-0.5 transition-all ${
+        card.isDataOnly
+          ? "border-[var(--border-subtle)]"
+          : "border-[var(--border-gold)]"
+      }`}
     >
-      {/* Thumbnail */}
-      <div className="relative aspect-[9/16] overflow-hidden bg-black">
+      {/* Thumbnail or champion-icon fallback for data-only kills.
+          Aspect ratio uses the kill_assets manifest dims when present
+          (rare 1:1 / 4:5 thumbnails get exact framing) and falls back
+          to the standard 9:16 vertical poster when absent. */}
+      <div
+        className="relative overflow-hidden bg-black"
+        style={{
+          aspectRatio:
+            card.thumbnailWidth && card.thumbnailHeight
+              ? `${card.thumbnailWidth} / ${card.thumbnailHeight}`
+              : `${DEFAULT_THUMB_W} / ${DEFAULT_THUMB_H}`,
+        }}
+      >
         {card.thumbnail ? (
           <Image
             src={card.thumbnail}
             alt={`${card.killerChampion} → ${card.victimChampion}`}
             fill
+            // Sizes hint matches the responsive grid breakpoints (50vw
+            // mobile, 25vw tablet, 16vw desktop). next/image still
+            // requests the right pixel density for the column width.
             sizes="(max-width: 640px) 50vw, (max-width: 1024px) 25vw, 16vw"
-            className="object-cover group-hover:scale-105 transition-transform duration-500"
+            className={`object-cover group-hover:scale-105 transition-transform duration-500 ${
+              card.isDataOnly ? "opacity-60" : ""
+            }`}
           />
+        ) : card.isDataOnly ? (
+          // Data-only without thumbnail : show large champion icons as the
+          // visual identity. Better than an empty black card.
+          <div className="absolute inset-0 flex flex-col items-center justify-center bg-gradient-to-br from-[var(--bg-elevated)] to-[var(--bg-surface)] gap-3">
+            <Image
+              src={championIconUrl(card.killerChampion)}
+              alt=""
+              width={56}
+              height={56}
+              className="rounded-lg border-2 border-[var(--gold)]/40"
+            />
+            <span className="text-[var(--gold)]/60 text-2xl">↓</span>
+            <Image
+              src={championIconUrl(card.victimChampion)}
+              alt=""
+              width={48}
+              height={48}
+              className="rounded-lg border-2 border-white/20 opacity-60"
+            />
+          </div>
         ) : null}
+
+        {/* "Data" pill — top-right ; clear visual signal that this is
+            a stats-only entry without a clip. */}
+        {card.isDataOnly && (
+          <span className="absolute top-1.5 right-1.5 z-20 rounded bg-black/70 backdrop-blur-sm px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-[var(--text-muted)]">
+            data
+          </span>
+        )}
 
         {/* Top overlay: opponent + date */}
         <div className="absolute top-1.5 left-1.5 right-1.5 flex items-center justify-between text-[10px] z-10">
@@ -405,9 +486,17 @@ function ClipCardComponent({ card }: { card: ClipCard }) {
           <span>{dateStr}</span>
         </div>
         {showDesc && (
-          <p className="text-[10px] text-white/70 italic leading-tight mt-1 line-clamp-2">
-            {card.aiDescription}
-          </p>
+          <Description
+            kill={{
+              ai_description: card.aiDescription,
+              ai_description_fr: card.aiDescriptionFr ?? null,
+              ai_description_en: card.aiDescriptionEn ?? null,
+              ai_description_ko: card.aiDescriptionKo ?? null,
+              ai_description_es: card.aiDescriptionEs ?? null,
+            }}
+            as="p"
+            className="text-[10px] text-white/70 italic leading-tight mt-1 line-clamp-2"
+          />
         )}
       </div>
     </Link>

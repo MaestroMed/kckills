@@ -25,9 +25,10 @@
  *   - Phase 6: keyboard shortcuts (basic ↑↓ + space already wired here)
  */
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { motion } from "framer-motion";
+import { useRouter } from "next/navigation";
+import { motion } from "motion/react";
 import { BgmPlayer } from "../BgmPlayer";
 import {
   FeedItemVideo,
@@ -38,11 +39,87 @@ import { useFeedGesture } from "./hooks/useFeedGesture";
 import { useNetworkQuality } from "./hooks/useNetworkQuality";
 import { useFeedBuffer } from "./hooks/useFeedBuffer";
 import { useKeyboardShortcuts } from "./hooks/useKeyboardShortcuts";
+import { useLiveMatch } from "./hooks/useLiveMatch";
+import { useRecommendationFeed } from "./hooks/useRecommendationFeed";
 import { EndOfFeedCard } from "./EndOfFeedCard";
 import { PullToRefreshIndicator } from "./PullToRefreshIndicator";
 import { KeyboardHelpOverlay } from "./KeyboardHelpOverlay";
+import { LiveBanner } from "./LiveBanner";
+import { OfflineBanner, useIsOffline } from "./OfflineBanner";
+import { FeedItemSkeleton } from "./FeedItemSkeleton";
+import { useScrollRestore } from "./hooks/useScrollRestore";
 import { ScrollChipBar, type ChipFilters } from "@/components/scroll/ScrollChipBar";
-import type { FeedItem } from "@/components/scroll/ScrollFeed";
+import type {
+  FeedItem,
+  VideoFeedItem,
+} from "@/components/scroll/ScrollFeed";
+import type { RecommendedKillRow } from "@/lib/supabase/recommendations";
+import { track } from "@/lib/analytics/track";
+
+/**
+ * Wave 11 — Recommendation engine feature flag (Agent DI).
+ *
+ * NEXT_PUBLIC_RECOMMENDATIONS_ENABLED defaults to OFF. When false (or
+ * unset) the scroll feed renders byte-identically to today : the
+ * server-rendered `items` are passed straight through, no anchor
+ * tracking, no /api/scroll/recommendations call.
+ *
+ * Flip to "true" to enable per-session similarity-based recommendations
+ * (anchored on the last 5 actively-watched kills, blended with Wilson
+ * via personalizedFeedScore). The env var must be exposed at build time
+ * because we read it client-side.
+ */
+const RECOMMENDATIONS_ENABLED =
+  process.env.NEXT_PUBLIC_RECOMMENDATIONS_ENABLED === "true";
+
+/**
+ * Build a minimal VideoFeedItem from a RecommendedKillRow. Kept
+ * deliberately conservative — we don't have the per-game roster
+ * snapshot here (that lives in kc_matches.json server-side), so player
+ * IGNs default to null and the consumer falls back to "?" naming.
+ */
+function recommendationToFeedItem(row: RecommendedKillRow): VideoFeedItem | null {
+  const k = row.kill;
+  if (!k.id || !k.clip_url_vertical || !k.thumbnail_url) return null;
+  return {
+    kind: "video",
+    id: k.id,
+    score: row.similarity, // raw cosine — re-ranking happens elsewhere if needed
+    killerPlayerId: k.killer_player_id,
+    killerChampion: k.killer_champion ?? "?",
+    victimChampion: k.victim_champion ?? "?",
+    killerName: null,
+    victimName: null,
+    minuteBucket: k.game_minute_bucket,
+    fightType: k.fight_type,
+    clipVertical: k.clip_url_vertical,
+    clipVerticalLow: k.clip_url_vertical_low ?? null,
+    clipHorizontal: k.clip_url_horizontal ?? null,
+    hlsMasterUrl: k.hls_master_url ?? null,
+    assetsManifest: k.assets_manifest ?? null,
+    thumbnail: k.thumbnail_url ?? null,
+    highlightScore: k.highlight_score ?? null,
+    avgRating: k.avg_rating ?? null,
+    ratingCount: k.rating_count,
+    aiDescription: k.ai_description ?? null,
+    aiDescriptionFr: k.ai_description_fr ?? null,
+    aiDescriptionEn: k.ai_description_en ?? null,
+    aiDescriptionKo: k.ai_description_ko ?? null,
+    aiDescriptionEs: k.ai_description_es ?? null,
+    aiTags: k.ai_tags ?? [],
+    multiKill: k.multi_kill,
+    isFirstBlood: k.is_first_blood,
+    kcInvolvement: k.tracked_team_involvement,
+    gameTimeSeconds: k.game_time_seconds ?? 0,
+    gameNumber: k.games?.game_number ?? 1,
+    matchExternalId: k.games?.matches?.external_id ?? "",
+    matchStage: k.games?.matches?.stage ?? "LEC",
+    matchDate: k.games?.matches?.scheduled_at ?? k.created_at,
+    opponentCode: "LEC",
+    kcWon: null,
+    matchScore: null,
+  };
+}
 
 interface Props {
   items: FeedItem[];
@@ -74,8 +151,113 @@ export function ScrollFeedV2({
   // Sync prop changes (e.g. URL filter changes triggering server re-render).
   useEffect(() => setItems(itemsProp), [itemsProp]);
 
+  // ─── feed.view analytics — fired once on mount ────────────────────
+  useEffect(() => {
+    // Snapshot the chip filters into a flat metadata blob (no nested
+    // objects > 1KB, no PII). The /api/track sanitiser drops anything
+    // suspicious server-side, but keeping it lean is cheaper.
+    const meta: Record<string, unknown> = { count: itemsProp.length };
+    if (chipFilters) {
+      if (chipFilters.player) meta.player = chipFilters.player;
+      if (chipFilters.fight) meta.fight = chipFilters.fight;
+      if (chipFilters.side) meta.side = chipFilters.side;
+      if (chipFilters.multiKillsOnly) meta.multi = true;
+      if (chipFilters.firstBloodsOnly) meta.fb = true;
+    }
+    track("feed.view", { metadata: meta });
+    // Run once per mount — re-runs on URL filter changes via remount.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // ─── Network-driven quality (Phase 3) ─────────────────────────────
   const { quality, useLowQuality, effectiveType } = useNetworkQuality();
+
+  // ─── Live mode (Wave 4 P1) ────────────────────────────────────────
+  // Polls /api/live/kc-status every 60s. When KC has a match in
+  // `state='inProgress'`, isLive flips to true and we:
+  //   1. crank the SSR feed refresh from 30s → 15s (router.refresh)
+  //   2. mount the LiveBanner above the feed (red, animated, tappable)
+  //   3. fire feed.mode_live_entered / _exited analytics with duration
+  const live = useLiveMatch();
+  const liveStartRef = useRef<{ matchId?: string; startedAt: number } | null>(null);
+  const router = useRouter();
+
+  // Fire mode_live_entered / mode_live_exited analytics on transitions.
+  // We track the entry timestamp so the exit event can carry duration_ms.
+  useEffect(() => {
+    if (live.isLive) {
+      // Already in live mode for the same match → no-op (avoids double-firing
+      // on every poll while live).
+      if (liveStartRef.current?.matchId === live.matchId) return;
+      // Different match (or first entry) → close the previous if any, then open.
+      if (liveStartRef.current) {
+        track("feed.mode_live_exited", {
+          metadata: {
+            match_id: liveStartRef.current.matchId ?? null,
+            duration_ms: Date.now() - liveStartRef.current.startedAt,
+          },
+        });
+      }
+      liveStartRef.current = { matchId: live.matchId, startedAt: Date.now() };
+      track("feed.mode_live_entered", {
+        metadata: { match_id: live.matchId ?? null },
+      });
+    } else if (liveStartRef.current) {
+      // Live → idle transition.
+      track("feed.mode_live_exited", {
+        metadata: {
+          match_id: liveStartRef.current.matchId ?? null,
+          duration_ms: Date.now() - liveStartRef.current.startedAt,
+        },
+      });
+      liveStartRef.current = null;
+    }
+  }, [live.isLive, live.matchId]);
+
+  // ─── Offline detection (Wave 6 — Agent AB) ────────────────────────
+  // Drives the bottom OfflineBanner + pauses the SSR auto-refresh loop
+  // below so we don't burn router.refresh() calls while the request will
+  // 100% fail. The cached clips already in the player pool keep playing
+  // because the browser already downloaded them.
+  const isOffline = useIsOffline();
+
+  // SSR feed refresh cadence — 15s when live, 30s otherwise. Single
+  // setInterval whose callback dynamically reads `live.isLive` + `offline`
+  // from refs so we don't reschedule on every state change (which would
+  // make the first tick land at 15s+30s instead of at 15s after a live
+  // flip). Pattern matches the spec's "don't remount the query — adjust
+  // the option dynamically" requirement.
+  const isLiveRef = useRef(live.isLive);
+  useEffect(() => {
+    isLiveRef.current = live.isLive;
+  }, [live.isLive]);
+  const isOfflineRef = useRef(isOffline);
+  useEffect(() => {
+    isOfflineRef.current = isOffline;
+  }, [isOffline]);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    let timeoutId: number | null = null;
+    const tick = () => {
+      // Skip the actual refresh while offline — the request would fail
+      // and we'd just waste a network attempt + risk noisy errors. The
+      // banner is already telling the user; let cached content shine.
+      if (!isOfflineRef.current) {
+        try {
+          router.refresh();
+        } catch {
+          // ignore — refresh is best-effort
+        }
+      }
+      const next = isLiveRef.current ? 15_000 : 30_000;
+      timeoutId = window.setTimeout(tick, next);
+    };
+    // Bootstrap with the current cadence so the first tick aligns.
+    timeoutId = window.setTimeout(tick, isLiveRef.current ? 15_000 : 30_000);
+    return () => {
+      if (timeoutId != null) window.clearTimeout(timeoutId);
+    };
+  }, [router]);
 
   // ─── Viewport sizing ──────────────────────────────────────────────
   // CRITICAL: on mobile (iOS Safari especially), clientHeight can be 0
@@ -118,17 +300,35 @@ export function ScrollFeedV2({
     [items, brokenIds],
   );
 
-  // ─── Resolve initial index from ?kill=<id> deep link ─────────────
+  // ─── Scroll restore (Wave 6 — Agent AB) ───────────────────────────
+  // sessionStorage-backed, 30-min expiry. Returns a non-null index when
+  // the user is returning from a /kill/[id] back-nav AND the same kill
+  // is still in the current items[]. We let an explicit ?kill=<id>
+  // deep link override the restore (hasDeepLink=true).
+  const { restoreIndex, persist: persistScrollPos } = useScrollRestore({
+    items: visibleItems,
+    hasDeepLink: !!initialKillId,
+  });
+
+  // ─── Resolve initial index from ?kill=<id> deep link or restore ──
+  // Priority: explicit deep link > sessionStorage restore > top of feed.
   const initialIndex = useMemo(() => {
-    if (!initialKillId) return 0;
-    const idx = visibleItems.findIndex((it) => it.id === initialKillId);
-    return idx >= 0 ? idx : 0;
-  }, [initialKillId, visibleItems]);
+    if (initialKillId) {
+      const idx = visibleItems.findIndex((it) => it.id === initialKillId);
+      if (idx >= 0) return idx;
+    }
+    if (restoreIndex != null) return restoreIndex;
+    return 0;
+  }, [initialKillId, restoreIndex, visibleItems]);
 
   // ─── URL state sync — fired on every snap commit ─────────────────
   const handleActiveChange = (idx: number) => {
-    if (idx === 0) return; // don't dirty URL on the initial snap
     const item = visibleItems[idx];
+    // Always persist the latest position to sessionStorage — even
+    // index 0, so a user who scrolled to item 5, scrolled back to 0,
+    // then navigated away gets the correct restore on return.
+    persistScrollPos(item?.id);
+    if (idx === 0) return; // don't dirty URL on the initial snap
     if (!item || typeof window === "undefined") return;
     try {
       const url = new URL(window.location.href);
@@ -318,6 +518,7 @@ export function ScrollFeedV2({
             clipVerticalLow: it.clipVerticalLow,
             clipHorizontal: it.clipHorizontal,
             hlsMasterUrl: it.hlsMasterUrl ?? null,
+            assetsManifest: it.assetsManifest ?? null,
             thumbnail: it.thumbnail,
           };
         }
@@ -327,11 +528,41 @@ export function ScrollFeedV2({
           clipVerticalLow: null,
           clipHorizontal: null,
           hlsMasterUrl: null,
+          assetsManifest: null,
           thumbnail: null,
         };
       }),
     [visibleItems],
   );
+
+  // ─── Recommendation engine wire-up (Wave 11 — Agent DI) ───────────
+  // Stable callback for the hook so the dependency array doesn't churn.
+  // The mapper itself is pure and has no closure dependencies that
+  // change at runtime.
+  const toFeedItemCb = useCallback(
+    (row: RecommendedKillRow) => recommendationToFeedItem(row),
+    [],
+  );
+  const recFeed = useRecommendationFeed<FeedItem>({
+    seedItems: visibleItems,
+    activeIndex,
+    enabled: RECOMMENDATIONS_ENABLED,
+    toFeedItem: toFeedItemCb,
+  });
+  // Whenever the recommendation hook produces a longer list than the
+  // current `items`, append the new items into the source state so
+  // every downstream consumer (gesture, pool, scroll-restore) sees
+  // them. We diff by id to avoid a useless re-render when nothing new
+  // has landed.
+  useEffect(() => {
+    if (!RECOMMENDATIONS_ENABLED) return;
+    if (recFeed.items.length <= items.length) return;
+    setItems((prev) => {
+      const seen = new Set(prev.map((it) => it.id));
+      const additions = recFeed.items.filter((it) => !seen.has(it.id));
+      return additions.length === 0 ? prev : [...prev, ...additions];
+    });
+  }, [recFeed.items, items.length]);
 
   return (
     <div
@@ -341,6 +572,20 @@ export function ScrollFeedV2({
       style={{ touchAction: "pan-y", overscrollBehavior: "contain" }}
     >
       <BgmPlayer />
+      {/* Live mode banner — portaled to <body> so it escapes overflow:hidden.
+          Tap → jump to index 0 (most recent kill). If the feed is empty,
+          the banner falls back to a Link to /match/[external_id]. */}
+      <LiveBanner
+        isLive={live.isLive}
+        matchId={live.matchId}
+        opponentCode={live.opponentCode}
+        gameNumber={live.gameNumber}
+        onTap={
+          visibleItems.length > 0
+            ? () => jumpTo(0)
+            : undefined
+        }
+      />
       {/* Top bar — outside the motion container so it doesn't translate. */}
       <div
         className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-4 py-3"
@@ -426,6 +671,7 @@ export function ScrollFeedV2({
                   total={visibleItems.length}
                   itemHeight={itemHeight}
                   isActive={isActive}
+                  onAutoSkipNext={() => jumpTo(i + 1)}
                 />
               </div>
             );
@@ -442,6 +688,7 @@ export function ScrollFeedV2({
                   total={visibleItems.length}
                   itemHeight={itemHeight}
                   isActive={isActive}
+                  onAutoSkipNext={() => jumpTo(i + 1)}
                 />
               </div>
             );
@@ -466,15 +713,46 @@ export function ScrollFeedV2({
           );
         })}
 
+        {/* Skeleton placeholder (Wave 6 — Agent AB) — sits at the tail
+            slot WHEN the user is within the last 2 items AND a refresh
+            is in flight (isRefreshing) so the next snap doesn't drop into
+            a black void while the SSR re-fetch resolves. The
+            EndOfFeedCard renders one slot further down. */}
+        {visibleItems.length > 0 &&
+          itemHeight > 0 &&
+          isRefreshing &&
+          activeIndex >= Math.max(0, visibleItems.length - 2) && (
+            <div
+              key="feed-skeleton-tail"
+              style={{
+                position: "absolute",
+                top: visibleItems.length * itemHeight,
+                left: 0,
+                right: 0,
+                height: itemHeight,
+              }}
+            >
+              <FeedItemSkeleton itemHeight={itemHeight} />
+            </div>
+          )}
+
         {/* End-of-feed card (Phase 5) — virtual item at index N.
             Same gesture model as real items, the user lands here by
-            swiping past the last clip. */}
+            swiping past the last clip. When the skeleton is being shown
+            above (refreshing tail), we shift the EndOfFeedCard down by
+            one slot so both can coexist visibly during the brief refresh
+            window. */}
         {visibleItems.length > 0 && itemHeight > 0 && (
           <div
             key="end-of-feed"
             style={{
               position: "absolute",
-              top: visibleItems.length * itemHeight,
+              top:
+                (visibleItems.length +
+                  (isRefreshing && activeIndex >= Math.max(0, visibleItems.length - 2)
+                    ? 1
+                    : 0)) *
+                itemHeight,
               left: 0,
               right: 0,
               height: itemHeight,
@@ -488,6 +766,12 @@ export function ScrollFeedV2({
           </div>
         )}
       </motion.div>
+
+      {/* Wave 6 — bottom offline banner. Slides in when navigator.onLine
+          flips false, fires feed.offline_entered/exited analytics with
+          a duration_ms metric. Doesn't block any interaction (pointer-
+          events: none on the wrapper). */}
+      <OfflineBanner />
 
       {/* Drag indicator — subtle dot grid showing position in feed */}
       {visibleItems.length > 1 && (

@@ -1,11 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
-import { createBrowserClient } from "@supabase/ssr";
-
 /**
- * Admin login — three paths:
+ * Admin login — three paths (PR-loltok EE polish) :
  *   1. Email + password (Supabase Auth signInWithPassword)
  *      - Uses KCKILLS_ADMIN_EMAILS allowlist on the server
  *      - Multi-admin friendly, real per-person credentials
@@ -13,9 +9,41 @@ import { createBrowserClient } from "@supabase/ssr";
  *   3. Discord OAuth (Supabase Auth signInWithOAuth)
  *      - Uses KCKILLS_ADMIN_DISCORD_IDS allowlist on the server
  *
- * The form lets the user pick the path that fits their setup.
+ * The form lets the user pick the path that fits their setup. Auto-
+ * redirects on success to ?from=… or /admin.
+ *
+ * Layout chrome — the parent /admin/layout.tsx already detects the
+ * /admin/login pathname via x-pathname header and skips the sidebar +
+ * topbar + auth gate. This page just renders the centered card.
+ *
+ * Easter egg : type the Konami code (↑↑↓↓←→←→ba) or "iddqd" anywhere
+ * on the page (outside inputs) to trigger a "🐺 vibe maximale" floating
+ * effect for 4s. Pure cosmetic, no backend impact.
  */
-export function LoginForm({ searchParamsPromise }: { searchParamsPromise?: Promise<{ from?: string; token?: string }> }) {
+
+import { useState, useEffect, useRef } from "react";
+import { useRouter } from "next/navigation";
+import { createBrowserClient } from "@supabase/ssr";
+import { AdminButton } from "@/components/admin/ui/AdminButton";
+
+const KONAMI = [
+  "ArrowUp",
+  "ArrowUp",
+  "ArrowDown",
+  "ArrowDown",
+  "ArrowLeft",
+  "ArrowRight",
+  "ArrowLeft",
+  "ArrowRight",
+  "b",
+  "a",
+];
+
+export function LoginForm({
+  searchParamsPromise,
+}: {
+  searchParamsPromise?: Promise<{ from?: string; token?: string; next?: string }>;
+}) {
   const router = useRouter();
   const [mode, setMode] = useState<"email" | "token" | "signup">("email");
   const [email, setEmail] = useState("");
@@ -25,17 +53,60 @@ export function LoginForm({ searchParamsPromise }: { searchParamsPromise?: Promi
   const [info, setInfo] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [from, setFrom] = useState("/admin");
+  const [vibe, setVibe] = useState(false);
+  const konamiBuf = useRef<string[]>([]);
+  const iddqdBuf = useRef<string>("");
 
   useEffect(() => {
     if (!searchParamsPromise) return;
     searchParamsPromise.then((sp) => {
-      if (sp?.from) setFrom(sp.from);
+      const target = sp?.next ?? sp?.from;
+      if (target) setFrom(target);
       if (sp?.token) {
         setToken(sp.token);
         setMode("token");
       }
     });
   }, [searchParamsPromise]);
+
+  // ─── Easter egg listeners ────────────────────────────────────────────
+  useEffect(() => {
+    function trigger() {
+      setVibe(true);
+      window.setTimeout(() => setVibe(false), 4000);
+    }
+    function handler(e: KeyboardEvent) {
+      const target = e.target as HTMLElement | null;
+      // Skip while user is typing credentials
+      if (
+        target &&
+        (target.tagName === "INPUT" || target.tagName === "TEXTAREA")
+      )
+        return;
+
+      // Konami: track last KONAMI.length keys
+      konamiBuf.current = [...konamiBuf.current, e.key].slice(-KONAMI.length);
+      if (
+        konamiBuf.current.length === KONAMI.length &&
+        konamiBuf.current.every((k, i) => k.toLowerCase() === KONAMI[i].toLowerCase())
+      ) {
+        konamiBuf.current = [];
+        trigger();
+        return;
+      }
+
+      // "iddqd" word match — Doom god-mode cheat
+      if (e.key.length === 1) {
+        iddqdBuf.current = (iddqdBuf.current + e.key).slice(-5);
+        if (iddqdBuf.current.toLowerCase() === "iddqd") {
+          iddqdBuf.current = "";
+          trigger();
+        }
+      }
+    }
+    document.addEventListener("keydown", handler);
+    return () => document.removeEventListener("keydown", handler);
+  }, []);
 
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "";
@@ -51,7 +122,7 @@ export function LoginForm({ searchParamsPromise }: { searchParamsPromise?: Promi
     setSubmitting(true);
     try {
       if (!supabase) {
-        setError("Supabase not configured");
+        setError("Supabase n'est pas configuré");
         return;
       }
       const { error: signErr } = await supabase.auth.signInWithPassword({
@@ -62,8 +133,6 @@ export function LoginForm({ searchParamsPromise }: { searchParamsPromise?: Promi
         setError(signErr.message);
         return;
       }
-      // Cookie is set by Supabase. requireAdmin will check the email
-      // against KCKILLS_ADMIN_EMAILS server-side.
       router.push(from);
       router.refresh();
     } finally {
@@ -78,7 +147,7 @@ export function LoginForm({ searchParamsPromise }: { searchParamsPromise?: Promi
     setSubmitting(true);
     try {
       if (!supabase) {
-        setError("Supabase not configured");
+        setError("Supabase n'est pas configuré");
         return;
       }
       const { error: signErr } = await supabase.auth.signUp({
@@ -90,7 +159,7 @@ export function LoginForm({ searchParamsPromise }: { searchParamsPromise?: Promi
         return;
       }
       setInfo(
-        "Account created. Check your email for a confirmation link, then ask the admin to add your email to KCKILLS_ADMIN_EMAILS.",
+        "Compte créé. Vérifie ta boîte mail pour le lien de confirmation, puis demande à l'admin d'ajouter ton email à KCKILLS_ADMIN_EMAILS.",
       );
     } finally {
       setSubmitting(false);
@@ -110,8 +179,8 @@ export function LoginForm({ searchParamsPromise }: { searchParamsPromise?: Promi
       if (r.ok) {
         router.push(from);
       } else {
-        const data = await r.json();
-        setError(data.error ?? "Invalid token");
+        const data = await r.json().catch(() => ({}));
+        setError(data.error ?? "Token invalide");
       }
     } finally {
       setSubmitting(false);
@@ -120,7 +189,7 @@ export function LoginForm({ searchParamsPromise }: { searchParamsPromise?: Promi
 
   const submitDiscord = async () => {
     if (!supabase) {
-      setError("Supabase not configured");
+      setError("Supabase n'est pas configuré");
       return;
     }
     setSubmitting(true);
@@ -135,131 +204,239 @@ export function LoginForm({ searchParamsPromise }: { searchParamsPromise?: Promi
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-6">
-      <div className="w-full max-w-sm space-y-4 rounded-2xl border border-[var(--border-gold)] bg-[var(--bg-surface)] p-6">
-        <div className="text-center">
-          <h1 className="font-display text-xl font-black text-[var(--gold)]">Admin Access</h1>
-          <p className="text-xs text-[var(--text-muted)] mt-1">Backoffice KCKILLS</p>
-        </div>
-
-        {/* Mode tabs */}
-        <div className="flex gap-1 text-[10px] uppercase tracking-widest border border-[var(--border-gold)] rounded-lg p-1">
-          {(["email", "signup", "token"] as const).map((m) => (
-            <button
-              key={m}
-              type="button"
-              onClick={() => { setMode(m); setError(null); setInfo(null); }}
-              className={`flex-1 py-1.5 rounded-md transition-colors ${
-                mode === m ? "bg-[var(--gold)]/20 text-[var(--gold)]" : "text-[var(--text-muted)] hover:text-white"
-              }`}
-            >
-              {m === "email" ? "Sign in" : m === "signup" ? "Sign up" : "Token"}
-            </button>
-          ))}
-        </div>
-
-        {mode === "email" && (
-          <form onSubmit={submitEmail} className="space-y-3">
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="email@example.com"
-              autoFocus
-              required
-              autoComplete="email"
-              className="w-full rounded-lg border border-[var(--border-gold)] bg-[var(--bg-primary)] px-3 py-2 text-sm text-[var(--text-primary)] outline-none focus:border-[var(--gold)]"
-            />
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="Password"
-              required
-              autoComplete="current-password"
-              className="w-full rounded-lg border border-[var(--border-gold)] bg-[var(--bg-primary)] px-3 py-2 text-sm text-[var(--text-primary)] outline-none focus:border-[var(--gold)]"
-            />
-            {error && <p className="text-xs text-[var(--red)]">{error}</p>}
-            <button
-              type="submit"
-              disabled={submitting || !email.trim() || !password}
-              className="w-full rounded-lg bg-[var(--gold)] py-2.5 text-sm font-bold text-black hover:bg-[var(--gold-bright)] disabled:opacity-50"
-            >
-              {submitting ? "..." : "Sign in"}
-            </button>
-            <button
-              type="button"
-              onClick={submitDiscord}
-              disabled={submitting}
-              className="w-full rounded-lg border border-[#5865F2]/40 bg-[#5865F2]/10 py-2 text-sm font-bold text-[#5865F2] hover:bg-[#5865F2]/20 disabled:opacity-50"
-            >
-              Continue with Discord
-            </button>
-          </form>
-        )}
-
-        {mode === "signup" && (
-          <form onSubmit={submitSignup} className="space-y-3">
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="email@example.com"
-              autoFocus
-              required
-              autoComplete="email"
-              className="w-full rounded-lg border border-[var(--border-gold)] bg-[var(--bg-primary)] px-3 py-2 text-sm text-[var(--text-primary)] outline-none focus:border-[var(--gold)]"
-            />
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="Password (min 8 chars)"
-              required
-              autoComplete="new-password"
-              minLength={8}
-              className="w-full rounded-lg border border-[var(--border-gold)] bg-[var(--bg-primary)] px-3 py-2 text-sm text-[var(--text-primary)] outline-none focus:border-[var(--gold)]"
-            />
-            {error && <p className="text-xs text-[var(--red)]">{error}</p>}
-            {info && <p className="text-xs text-[var(--green)]">{info}</p>}
-            <button
-              type="submit"
-              disabled={submitting || !email.trim() || password.length < 8}
-              className="w-full rounded-lg bg-[var(--gold)] py-2.5 text-sm font-bold text-black hover:bg-[var(--gold-bright)] disabled:opacity-50"
-            >
-              {submitting ? "..." : "Create account"}
-            </button>
-            <p className="text-[10px] text-[var(--text-muted)] text-center leading-relaxed">
-              After signup, ask the admin to add your email to <code className="text-[var(--gold)]">KCKILLS_ADMIN_EMAILS</code>.
-              You won&apos;t have access until then.
-            </p>
-          </form>
-        )}
-
-        {mode === "token" && (
-          <form onSubmit={submitToken} className="space-y-3">
-            <input
-              type="password"
-              value={token}
-              onChange={(e) => setToken(e.target.value)}
-              placeholder="Admin token"
-              required
-              className="w-full rounded-lg border border-[var(--border-gold)] bg-[var(--bg-primary)] px-3 py-2 text-sm text-[var(--text-primary)] outline-none focus:border-[var(--gold)]"
-            />
-            {error && <p className="text-xs text-[var(--red)]">{error}</p>}
-            <button
-              type="submit"
-              disabled={submitting || !token.trim()}
-              className="w-full rounded-lg bg-[var(--gold)] py-2.5 text-sm font-bold text-black hover:bg-[var(--gold-bright)] disabled:opacity-50"
-            >
-              {submitting ? "..." : "Sign in with token"}
-            </button>
-            <p className="text-[10px] text-[var(--text-muted)] text-center">
-              Set <code className="text-[var(--gold)]">KCKILLS_ADMIN_TOKEN</code> env var on Vercel.
-            </p>
-          </form>
-        )}
+    <div className="relative min-h-screen flex items-center justify-center p-6 bg-[var(--bg-primary)]">
+      {/* Hextech ambient background */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 overflow-hidden"
+      >
+        <div className="absolute -top-32 -left-32 h-96 w-96 rounded-full bg-[var(--gold)]/5 blur-3xl" />
+        <div className="absolute -bottom-32 -right-32 h-96 w-96 rounded-full bg-[var(--blue-kc)]/5 blur-3xl" />
       </div>
+
+      <div className="relative w-full max-w-sm space-y-5">
+        {/* Logo + heading */}
+        <div className="text-center">
+          <div className="mx-auto mb-3 flex h-16 w-16 items-center justify-center rounded-2xl border border-[var(--gold)]/40 bg-[var(--bg-surface)] shadow-[0_0_24px_var(--gold)/15]">
+            <span className="font-display text-3xl font-black text-[var(--gold)]">
+              KC
+            </span>
+          </div>
+          <h1 className="font-display text-2xl font-black text-[var(--gold)]">
+            Backoffice KCKILLS
+          </h1>
+          <p className="text-[11px] uppercase tracking-widest text-[var(--text-muted)] mt-1">
+            Admin Access
+          </p>
+        </div>
+
+        <div className="rounded-2xl border border-[var(--border-gold)] bg-[var(--bg-surface)] p-6 space-y-4 shadow-2xl">
+          {/* Mode tabs */}
+          <div
+            role="tablist"
+            aria-label="Méthode de connexion"
+            className="flex gap-1 text-[10px] uppercase tracking-widest border border-[var(--border-gold)] rounded-lg p-1"
+          >
+            {(["email", "signup", "token"] as const).map((m) => (
+              <button
+                key={m}
+                role="tab"
+                aria-selected={mode === m}
+                type="button"
+                onClick={() => {
+                  setMode(m);
+                  setError(null);
+                  setInfo(null);
+                }}
+                className={`flex-1 py-1.5 rounded-md transition-colors ${
+                  mode === m
+                    ? "bg-[var(--gold)]/20 text-[var(--gold)]"
+                    : "text-[var(--text-muted)] hover:text-white"
+                }`}
+              >
+                {m === "email"
+                  ? "Connexion"
+                  : m === "signup"
+                    ? "Inscription"
+                    : "Token"}
+              </button>
+            ))}
+          </div>
+
+          {mode === "email" && (
+            <form onSubmit={submitEmail} className="space-y-3">
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="email@example.com"
+                autoFocus
+                required
+                autoComplete="email"
+                className="w-full rounded-lg border border-[var(--border-gold)] bg-[var(--bg-primary)] px-3 py-2.5 text-sm text-[var(--text-primary)] outline-none focus:border-[var(--gold)]"
+              />
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Mot de passe"
+                required
+                autoComplete="current-password"
+                className="w-full rounded-lg border border-[var(--border-gold)] bg-[var(--bg-primary)] px-3 py-2.5 text-sm text-[var(--text-primary)] outline-none focus:border-[var(--gold)]"
+              />
+              {error && (
+                <p
+                  role="alert"
+                  className="rounded-lg border border-[var(--red)]/40 bg-[var(--red)]/10 px-3 py-2 text-xs text-[var(--red)]"
+                >
+                  {error}
+                </p>
+              )}
+              <AdminButton
+                type="submit"
+                fullWidth
+                size="lg"
+                variant="primary"
+                disabled={submitting || !email.trim() || !password}
+                loading={submitting}
+              >
+                Se connecter
+              </AdminButton>
+              <button
+                type="button"
+                onClick={submitDiscord}
+                disabled={submitting}
+                className="w-full rounded-lg border border-[#5865F2]/40 bg-[#5865F2]/10 py-2.5 text-sm font-bold text-[#5865F2] hover:bg-[#5865F2]/20 disabled:opacity-50 transition-colors"
+              >
+                <span aria-hidden="true">⌬</span> Continuer avec Discord
+              </button>
+            </form>
+          )}
+
+          {mode === "signup" && (
+            <form onSubmit={submitSignup} className="space-y-3">
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="email@example.com"
+                autoFocus
+                required
+                autoComplete="email"
+                className="w-full rounded-lg border border-[var(--border-gold)] bg-[var(--bg-primary)] px-3 py-2.5 text-sm text-[var(--text-primary)] outline-none focus:border-[var(--gold)]"
+              />
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Mot de passe (8 chars min)"
+                required
+                autoComplete="new-password"
+                minLength={8}
+                className="w-full rounded-lg border border-[var(--border-gold)] bg-[var(--bg-primary)] px-3 py-2.5 text-sm text-[var(--text-primary)] outline-none focus:border-[var(--gold)]"
+              />
+              {error && (
+                <p
+                  role="alert"
+                  className="rounded-lg border border-[var(--red)]/40 bg-[var(--red)]/10 px-3 py-2 text-xs text-[var(--red)]"
+                >
+                  {error}
+                </p>
+              )}
+              {info && (
+                <p
+                  role="status"
+                  className="rounded-lg border border-[var(--green)]/40 bg-[var(--green)]/10 px-3 py-2 text-xs text-[var(--green)]"
+                >
+                  {info}
+                </p>
+              )}
+              <AdminButton
+                type="submit"
+                fullWidth
+                size="lg"
+                variant="primary"
+                disabled={submitting || !email.trim() || password.length < 8}
+                loading={submitting}
+              >
+                Créer un compte
+              </AdminButton>
+              <p className="text-[10px] text-[var(--text-muted)] text-center leading-relaxed">
+                Après l&apos;inscription, demande à l&apos;admin d&apos;ajouter ton email à{" "}
+                <code className="text-[var(--gold)]">KCKILLS_ADMIN_EMAILS</code>.
+                Tu n&apos;auras pas accès tant que ce n&apos;est pas fait.
+              </p>
+            </form>
+          )}
+
+          {mode === "token" && (
+            <form onSubmit={submitToken} className="space-y-3">
+              <input
+                type="password"
+                value={token}
+                onChange={(e) => setToken(e.target.value)}
+                placeholder="Admin token"
+                required
+                autoFocus
+                className="w-full rounded-lg border border-[var(--border-gold)] bg-[var(--bg-primary)] px-3 py-2.5 text-sm text-[var(--text-primary)] outline-none focus:border-[var(--gold)] font-mono"
+              />
+              {error && (
+                <p
+                  role="alert"
+                  className="rounded-lg border border-[var(--red)]/40 bg-[var(--red)]/10 px-3 py-2 text-xs text-[var(--red)]"
+                >
+                  {error}
+                </p>
+              )}
+              <AdminButton
+                type="submit"
+                fullWidth
+                size="lg"
+                variant="primary"
+                disabled={submitting || !token.trim()}
+                loading={submitting}
+              >
+                Se connecter avec un token
+              </AdminButton>
+              <p className="text-[10px] text-[var(--text-muted)] text-center leading-relaxed">
+                Token oublié ? Vérifie la variable d&apos;env{" "}
+                <code className="text-[var(--gold)]">KCKILLS_ADMIN_TOKEN</code>{" "}
+                sur Vercel.
+              </p>
+            </form>
+          )}
+        </div>
+
+        <p className="text-center text-[10px] text-[var(--text-disabled)]">
+          KCKILLS — Every kill. Rated. Remembered.
+        </p>
+      </div>
+
+      {/* Easter egg vibe overlay */}
+      {vibe && (
+        <div
+          aria-hidden="true"
+          className="pointer-events-none fixed inset-0 z-[200] flex items-center justify-center"
+        >
+          <div className="text-center animate-[vibePulse_4s_ease-out_forwards]">
+            <p className="font-display text-7xl md:text-9xl font-black text-[var(--gold)] drop-shadow-[0_0_20px_var(--gold)]">
+              🐺
+            </p>
+            <p className="mt-2 font-display text-2xl md:text-4xl font-black uppercase tracking-widest text-[var(--gold-bright)] drop-shadow-[0_0_12px_var(--gold)]">
+              vibe maximale
+            </p>
+          </div>
+          <style>{`
+            @keyframes vibePulse {
+              0%   { opacity: 0; transform: scale(0.5); }
+              15%  { opacity: 1; transform: scale(1.1); }
+              30%  { transform: scale(1); }
+              80%  { opacity: 1; }
+              100% { opacity: 0; transform: scale(1.4); }
+            }
+          `}</style>
+        </div>
+      )}
     </div>
   );
 }

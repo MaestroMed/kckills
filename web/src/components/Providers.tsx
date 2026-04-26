@@ -1,12 +1,16 @@
 "use client";
 
-import { LazyMotion, domAnimation } from "framer-motion";
+import { LazyMotion, domAnimation } from "motion/react";
 import { ToastProvider } from "./Toast";
 import { CommandPalette } from "./CommandPalette";
 import { KonamiBlueWall } from "./KonamiBlueWall";
 import { PwaInstallPrompt } from "./PwaInstallPrompt";
 import { LangProvider } from "@/lib/i18n/use-lang";
 import type { Lang } from "@/lib/i18n/lang";
+import { AuthEventTracker } from "./analytics/AuthEventTracker";
+import { WebVitalsReporter } from "./analytics/WebVitalsReporter";
+import { FloatingPlayerProvider } from "@/lib/audio/use-floating-player";
+import { WolfFloatingPlayer } from "./player/WolfFloatingPlayer";
 
 /**
  * App-wide providers.
@@ -36,10 +40,15 @@ export function Providers({
     <LangProvider initialLang={initialLang}>
       <LazyMotion features={domAnimation} strict>
         <ToastProvider>
-          {children}
-          <CommandPalette />
-          <KonamiBlueWall />
-          <PwaInstallPrompt />
+          <FloatingPlayerProvider>
+            {children}
+            <CommandPalette />
+            <KonamiBlueWall />
+            <PwaInstallPrompt />
+            <AuthEventTracker />
+            <WebVitalsReporter />
+            <WolfFloatingPlayer />
+          </FloatingPlayerProvider>
         </ToastProvider>
       </LazyMotion>
     </LangProvider>

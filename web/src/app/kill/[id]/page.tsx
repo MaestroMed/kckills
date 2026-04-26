@@ -8,6 +8,8 @@ import { getKillById, getKillsByMatchExternalId, getPublishedKills, type Publish
 import { KillInteractions } from "./interactions";
 import { KillCinematicView } from "@/components/kill/KillCinematicView";
 import { SimilarClipsCarousel } from "@/components/kill/SimilarClipsCarousel";
+import { getAssetMetadata, pickAssetUrl } from "@/lib/kill-assets";
+import { JsonLd, breadcrumbLD } from "@/lib/seo/jsonld";
 import type { Metadata } from "next";
 
 // ISR: pre-render the top N clips at build time, regenerate every 10 min
@@ -143,6 +145,20 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
       // crawler never sees a 404 even if og_image_url isn't backfilled
       // yet — the route falls through to the site hero image.
       const ogImage = `/api/og/${id}`;
+      // Manifest-aware video meta : prefer the horizontal entry from
+      // assets_manifest (with its real width/height) over the legacy
+      // clip_url_horizontal column. Falls back to the column when the
+      // manifest is absent (older rows).
+      const horizontalUrl = pickAssetUrl(kill, "horizontal");
+      const horizontalMeta = getAssetMetadata(kill, "horizontal");
+      const ogVideo = horizontalUrl
+        ? {
+            url: horizontalUrl,
+            width: horizontalMeta?.width ?? 1920,
+            height: horizontalMeta?.height ?? 1080,
+            type: "video/mp4" as const,
+          }
+        : null;
       return {
         title,
         description,
@@ -155,16 +171,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
           siteName: "KCKILLS",
           locale: "fr_FR",
           images: [{ url: ogImage, width: 1200, height: 630, alt: title }],
-          videos: kill.clip_url_horizontal
-            ? [
-                {
-                  url: kill.clip_url_horizontal,
-                  width: 1920,
-                  height: 1080,
-                  type: "video/mp4",
-                },
-              ]
-            : undefined,
+          videos: ogVideo ? [ogVideo] : undefined,
         },
         twitter: {
           card: "player",
@@ -206,16 +213,22 @@ export default async function KillDetailPage({ params }: Props) {
       // JSON-LD VideoObject for SEO — helps Google index clips as videos
       // and surface them in the video search vertical. Schema.org spec:
       // https://schema.org/VideoObject
+      // Prefer the manifest URLs over the legacy columns so freshly-
+      // re-encoded clips (worker bumps the version) get indexed
+      // immediately on next ISR pass.
       const canonicalUrl = `https://kckills.com/kill/${id}`;
-      const videoJsonLd = kill.clip_url_horizontal ? {
+      const ldHorizontalUrl = pickAssetUrl(kill, "horizontal");
+      const ldThumbnailUrl =
+        pickAssetUrl(kill, "thumbnail") ?? pickAssetUrl(kill, "og_image") ?? undefined;
+      const videoJsonLd = ldHorizontalUrl ? {
         "@context": "https://schema.org",
         "@type": "VideoObject",
         name: `${kill.killer_champion} \u2192 ${kill.victim_champion} \u2014 KC vs ${opponent.code}`,
         description:
           kill.ai_description ??
           `Kill highlight from KC vs ${opponent.code} \u2014 ${kill.killer_champion} eliminates ${kill.victim_champion}.`,
-        thumbnailUrl: kill.thumbnail_url ?? kill.og_image_url ?? undefined,
-        contentUrl: kill.clip_url_horizontal,
+        thumbnailUrl: ldThumbnailUrl,
+        contentUrl: ldHorizontalUrl,
         embedUrl: canonicalUrl,
         uploadDate: kill.created_at,
         // Duration is best-effort: V1 clips average ~14-22s, we use a
@@ -282,19 +295,38 @@ export default async function KillDetailPage({ params }: Props) {
       if (matchExtIdForRelated) {
         const all = await getKillsByMatchExternalId(matchExtIdForRelated).catch(() => []);
         relatedKills = all
-          .filter((k) => k.id !== id && k.thumbnail_url)
+          // Manifest-aware filter — keep any kill that has a thumbnail
+          // either in the new manifest OR the legacy column. Prevents
+          // freshly-clipped (manifest-only) rows from being filtered out.
+          .filter((k) => k.id !== id && pickAssetUrl(k, "thumbnail") !== null)
           .sort((a, b) => (b.highlight_score ?? 0) - (a.highlight_score ?? 0))
           .slice(0, 12)
           .map((k) => ({
             id: k.id,
             killer_champion: k.killer_champion,
             victim_champion: k.victim_champion,
-            thumbnail_url: k.thumbnail_url,
+            thumbnail_url: pickAssetUrl(k, "thumbnail"),
             highlight_score: k.highlight_score,
             multi_kill: k.multi_kill,
             is_first_blood: k.is_first_blood,
           }));
       }
+
+      // Breadcrumb JSON-LD — Home > Match > Kill. Helps Google build
+      // the "site nav" rich result that surfaces alongside the video
+      // carousel. The match link is included only when we have a
+      // resolved external_id so the URL is canonical.
+      const matchExtId = kill.games?.matches?.external_id;
+      const breadcrumbJsonLd = breadcrumbLD([
+        { name: "Accueil", url: "/" },
+        ...(matchExtId
+          ? [{ name: `KC vs ${opponent.code}`, url: `/match/${matchExtId}` }]
+          : []),
+        {
+          name: `${kill.killer_champion ?? "?"} \u2192 ${kill.victim_champion ?? "?"}`,
+          url: `/kill/${id}`,
+        },
+      ]);
 
       return (
         <>
@@ -304,6 +336,7 @@ export default async function KillDetailPage({ params }: Props) {
               dangerouslySetInnerHTML={{ __html: JSON.stringify(videoJsonLd) }}
             />
           )}
+          <JsonLd data={breadcrumbJsonLd} />
           <KillCinematicView
             kill={kill}
             opponent={opponent}

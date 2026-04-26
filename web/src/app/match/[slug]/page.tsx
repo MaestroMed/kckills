@@ -3,8 +3,11 @@ import { loadRealData, getMatchById, displayRole } from "@/lib/real-data";
 import { championIconUrl } from "@/lib/constants";
 import { KC_LOGO, TEAM_LOGOS } from "@/lib/kc-assets";
 import { getKillsByMatchExternalId, type PublishedKillRow } from "@/lib/supabase/kills";
+import { pickAssetUrl } from "@/lib/kill-assets";
 import { ClipReel } from "@/components/ClipReel";
 import { MatchHero } from "@/components/match/MatchHero";
+import { MatchTimeline } from "@/components/match/MatchTimeline";
+import { JsonLd, breadcrumbLD } from "@/lib/seo/jsonld";
 import Image from "next/image";
 import Link from "next/link";
 import type { Metadata } from "next";
@@ -20,8 +23,36 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const data = loadRealData();
   const match = getMatchById(data, slug);
   if (!match) return { title: "Match introuvable \u2014 KCKILLS" };
+  const title = `KC vs ${match.opponent.code} \u2014 ${match.stage}`;
+  const description = `Karmine Corp ${match.kc_score}-${match.opp_score} ${match.opponent.name} (${match.stage}, Bo${match.best_of}) — clips, stats par game, timeline des kills.`;
+  const canonicalPath = `/match/${match.id}`;
   return {
-    title: `KC vs ${match.opponent.code} \u2014 ${match.stage} \u2014 KCKILLS`,
+    title,
+    description,
+    alternates: { canonical: canonicalPath },
+    openGraph: {
+      title: `${title} \u2014 KCKILLS`,
+      description,
+      type: "website",
+      url: canonicalPath,
+      siteName: "KCKILLS",
+      locale: "fr_FR",
+      images: [
+        {
+          url: "/images/hero-bg.jpg",
+          width: 1920,
+          height: 1280,
+          alt: `KC vs ${match.opponent.name} \u2014 ${match.stage}`,
+        },
+      ],
+    },
+    twitter: {
+      card: "summary_large_image",
+      title: `${title} \u2014 KCKILLS`,
+      description,
+      images: ["/images/hero-bg.jpg"],
+      creator: "@KarmineCorp",
+    },
   };
 }
 
@@ -70,11 +101,20 @@ export default async function MatchPage({ params }: Props) {
   //     event location (LEC studio for the canonical case), competitor
   //     count = 2. Google has special handling for SportsEvent in the
   //     match-up rich card carousel.
+  // Pick the best thumbnail to attribute to this match for rich result
+  // imagery — highest-scored kill that has a thumbnail (manifest
+  // first, legacy column second). No published clips → leave the
+  // image field off entirely rather than feeding Google a broken URL.
+  const heroKill = realKills
+    .filter((k) => pickAssetUrl(k, "thumbnail") !== null)
+    .sort((a, b) => (b.highlight_score ?? 0) - (a.highlight_score ?? 0))[0] ?? null;
+  const matchHeroImage = heroKill ? pickAssetUrl(heroKill, "thumbnail") : null;
   const matchJsonLd = {
     "@context": "https://schema.org",
     "@type": "SportsEvent",
     name: `Karmine Corp vs ${match.opponent.name} — ${match.stage}`,
     description: `Match LEC : Karmine Corp vs ${match.opponent.name} (${match.stage}, Bo${match.best_of}). Résultat : ${match.kc_score}-${match.opp_score} ${match.kc_won ? "victoire KC" : `victoire ${match.opponent.code}`}.`,
+    ...(matchHeroImage ? { image: matchHeroImage } : {}),
     startDate: match.date,
     eventStatus: "https://schema.org/EventScheduled",
     eventAttendanceMode: "https://schema.org/OnlineEventAttendanceMode",
@@ -109,12 +149,71 @@ export default async function MatchPage({ params }: Props) {
     url: `https://kckills.com/match/${match.id}`,
   };
 
+  // ItemList of VideoObject — gives Google a richer view of the kills
+  // available on the match page (clip carousel rich-result candidate).
+  // Cap at 25 items to keep the LD payload bounded ; the in-page UI
+  // already paginates / lazy-loads beyond that. Only emit when we
+  // have at least one clip with a thumbnail (otherwise the
+  // VideoObject entries would be missing the required `thumbnailUrl`
+  // field and Google would reject the snippet entirely).
+  const SITE_ORIGIN =
+    process.env.NEXT_PUBLIC_SITE_URL ??
+    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "https://kckills.com");
+  const clipKillsForLd = realKills
+    .filter((k) => pickAssetUrl(k, "thumbnail") !== null)
+    .sort((a, b) => (b.highlight_score ?? 0) - (a.highlight_score ?? 0))
+    .slice(0, 25);
+  const videoListJsonLd = clipKillsForLd.length > 0
+    ? {
+        "@context": "https://schema.org",
+        "@type": "ItemList",
+        name: `Clips Karmine Corp — KC vs ${match.opponent.code}`,
+        description: `Liste des kills clipp\u00e9s pour le match Karmine Corp vs ${match.opponent.name} (${match.stage}).`,
+        numberOfItems: clipKillsForLd.length,
+        itemListOrder: "https://schema.org/ItemListOrderDescending",
+        itemListElement: clipKillsForLd.map((k, i) => {
+          const thumb = pickAssetUrl(k, "thumbnail");
+          const clip = pickAssetUrl(k, "vertical") ?? pickAssetUrl(k, "horizontal");
+          const name =
+            k.killer_champion && k.victim_champion
+              ? `${k.killer_champion} \u00e9limine ${k.victim_champion}`
+              : `Clip KC #${i + 1}`;
+          return {
+            "@type": "ListItem",
+            position: i + 1,
+            url: `${SITE_ORIGIN}/kill/${k.id}`,
+            item: {
+              "@type": "VideoObject",
+              name,
+              description:
+                k.ai_description ??
+                `Highlight Karmine Corp vs ${match.opponent.name} (${match.stage}).`,
+              thumbnailUrl: thumb ?? undefined,
+              uploadDate: k.created_at || match.date,
+              ...(clip ? { contentUrl: clip } : {}),
+              embedUrl: `${SITE_ORIGIN}/kill/${k.id}`,
+            },
+          };
+        }),
+      }
+    : null;
+
+  // BreadcrumbList — Home > Matches > KC vs OPP. Helps Google build
+  // the site-nav rich result alongside the SportsEvent card.
+  const breadcrumbJsonLd = breadcrumbLD([
+    { name: "Accueil", url: "/" },
+    { name: "Matchs", url: "/matches" },
+    { name: `KC vs ${match.opponent.code}`, url: `/match/${match.id}` },
+  ]);
+
   return (
     <div className="space-y-8">
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(matchJsonLd) }}
       />
+      <JsonLd data={breadcrumbJsonLd} />
+      {videoListJsonLd && <JsonLd data={videoListJsonLd} />}
       {/* Breadcrumb */}
       <nav className="flex items-center gap-2 text-sm text-[var(--text-muted)]">
         <Link href="/" className="hover:text-[var(--gold)]">Accueil</Link>
@@ -210,6 +309,43 @@ export default async function MatchPage({ params }: Props) {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Interactive scrubbable timeline — one strip per game in the
+          BO. Each kill is a clickable dot ; hover shows a thumbnail
+          tooltip ; click opens the KillLightbox modal with the clip
+          auto-playing. Mobile-first, keyboard-navigable. Mounts only
+          when at least one published clip exists for this match —
+          otherwise the per-game `AggregateDots` strips below cover
+          the data-only fallback. */}
+      {totalRealKills > 0 && (
+        <section
+          aria-labelledby="match-timeline-heading"
+          className="space-y-3"
+        >
+          <div className="flex items-baseline justify-between">
+            <h2
+              id="match-timeline-heading"
+              className="font-display text-sm font-bold uppercase tracking-widest text-[var(--gold)]"
+            >
+              Timeline interactive
+            </h2>
+            <p className="text-[10px] text-[var(--text-muted)]">
+              Tape ou survole une pastille pour prévisualiser — clique pour ouvrir le clip.
+            </p>
+          </div>
+          <MatchTimeline
+            games={match.games.map((g) => ({
+              id: g.id,
+              number: g.number,
+              kc_kills: g.kc_kills,
+              opp_kills: g.opp_kills,
+            }))}
+            kills={realKills}
+            opponentCode={match.opponent.code}
+            opponentName={match.opponent.name}
+          />
+        </section>
       )}
 
       {/* Games */}

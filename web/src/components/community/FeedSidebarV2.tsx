@@ -22,11 +22,19 @@
  * Desktop: same layout, just bigger hit targets via `variant="wide"`.
  */
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import Link from "next/link";
 import { LikeButton } from "./LikeButton";
 import { CommentSheetV2 } from "./CommentSheetV2";
 import { InlineAuthPrompt } from "./InlineAuthPrompt";
+import { ReportButton, type ReportButtonController } from "./ReportButton";
+import { track } from "@/lib/analytics/track";
+
+// Long-press duration to open the report sheet directly. 500ms is the
+// industry-standard threshold (iOS context menus, Android long-press).
+// Less feels accidental on horizontal-scroll surfaces, more feels
+// unresponsive.
+const LONG_PRESS_MS = 500;
 
 interface Props {
   killId: string;
@@ -53,6 +61,51 @@ export function FeedSidebarV2({
   >(null);
   const [showComments, setShowComments] = useState(false);
   const [shareSheet, setShareSheet] = useState(false);
+  // Long-press shortcut → opens the report sheet without going through
+  // the "..." dropdown. We hand a ref to ReportButton and call .open()
+  // when the pointer-down survives 500ms.
+  const reportControllerRef = useRef<ReportButtonController | null>(null);
+  const longPressTimerRef = useRef<number | null>(null);
+  const longPressFiredRef = useRef(false);
+
+  const startLongPress = (e: React.PointerEvent) => {
+    // Ignore secondary buttons + non-primary pointers (e.g. right
+    // mouse button, hover-only stylus).
+    if (e.button !== 0 && e.pointerType === "mouse") return;
+    longPressFiredRef.current = false;
+    if (longPressTimerRef.current != null) {
+      window.clearTimeout(longPressTimerRef.current);
+    }
+    longPressTimerRef.current = window.setTimeout(() => {
+      longPressFiredRef.current = true;
+      // Vibrate on supported devices for physical feedback that the
+      // long-press fired — matches Android long-press affordance.
+      try {
+        navigator.vibrate?.(15);
+      } catch {
+        /* not supported, fine */
+      }
+      reportControllerRef.current?.open();
+    }, LONG_PRESS_MS);
+  };
+
+  const cancelLongPress = () => {
+    if (longPressTimerRef.current != null) {
+      window.clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+  };
+
+  const stopLongPressCapture = (e: React.PointerEvent) => {
+    cancelLongPress();
+    // If the long-press fired, swallow the click that follows so the
+    // ReportButton's own onClick doesn't toggle the sheet a second
+    // time. ReactSynthetic events don't bubble after stopPropagation.
+    if (longPressFiredRef.current) {
+      e.stopPropagation();
+      e.preventDefault();
+    }
+  };
 
   const shareUrl =
     typeof window !== "undefined"
@@ -61,6 +114,7 @@ export function FeedSidebarV2({
 
   const handleShare = async (e: React.MouseEvent) => {
     e.stopPropagation();
+    track("clip.shared", { entityType: "kill", entityId: killId });
     if (typeof navigator !== "undefined" && typeof navigator.share === "function") {
       try {
         await navigator.share({
@@ -109,6 +163,11 @@ export function FeedSidebarV2({
           type="button"
           onClick={(e) => {
             e.stopPropagation();
+            track("clip.opened", {
+              entityType: "kill",
+              entityId: killId,
+              metadata: { surface: "comments" },
+            });
             setShowComments(true);
           }}
           aria-label={`Commentaires (${initialCommentCount})`}
@@ -184,6 +243,38 @@ export function FeedSidebarV2({
             </svg>
           </div>
         </Link>
+
+        {/* Report — tertiary action, smallest visual weight. The user-
+            triggered QC loop : flagging here enqueues a qc.verify job
+            so the worker re-checks the clip / re-runs Gemini analysis.
+
+            Mobile-first gesture : long-press (500ms) opens the report
+            sheet directly without going through the "..." dropdown.
+            Tap behaviour is unchanged. The wrapping <span> is the
+            gesture surface — we can't put pointer handlers on the
+            ReportButton itself because it has its own onClick logic
+            and we want the long-press to short-circuit the click. */}
+        <span
+          onPointerDown={startLongPress}
+          onPointerUp={stopLongPressCapture}
+          onPointerCancel={cancelLongPress}
+          onPointerLeave={cancelLongPress}
+          // Suppress the iOS context-menu (text callout) on a long
+          // press — we're using long-press for our own gesture.
+          onContextMenu={(e) => {
+            if (longPressFiredRef.current) e.preventDefault();
+          }}
+          style={{ touchAction: "manipulation", WebkitTouchCallout: "none" }}
+          className="inline-flex"
+        >
+          <ReportButton
+            targetType="kill"
+            targetId={killId}
+            size="md"
+            ariaLabel="Signaler ce kill"
+            controllerRef={reportControllerRef}
+          />
+        </span>
       </div>
 
       {/* Comment sheet — lazy mount via the isOpen prop driving its

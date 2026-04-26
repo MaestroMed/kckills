@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerSupabase } from "@/lib/supabase/server";
-import { requireAdmin } from "@/lib/admin/audit";
+import { deriveActorRole, logAdminAction, requireAdmin } from "@/lib/admin/audit";
 
 const VALID_ROLES = ["top", "jungle", "mid", "bottom", "support"];
 
@@ -35,13 +35,14 @@ export async function PATCH(
   const { error } = await sb.from("players").update(patch).eq("id", id);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  await sb.from("admin_actions").insert({
-    actor_label: "admin",
+  await logAdminAction({
     action: "player.edit",
-    entity_type: "player",
-    entity_id: id,
+    entityType: "player",
+    entityId: id,
     before: before ? Object.fromEntries(Object.keys(patch).map((k) => [k, (before as Record<string, unknown>)[k]])) : null,
     after: patch,
+    actorRole: deriveActorRole(admin),
+    request,
   });
 
   return NextResponse.json({ ok: true });

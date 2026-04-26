@@ -21,9 +21,76 @@ Usage:
 from __future__ import annotations
 
 import asyncio
+import io
+import os
 import sys
 import time
 import traceback
+
+# ─── Force UTF-8 console output on Windows ───────────────────────────
+# Without this, structlog's ConsoleRenderer crashes on emoji-bearing
+# log lines (Kameto YouTube titles like "💀 Kameto bouge un Sett 😳")
+# because the default Windows console codepage is cp1252 which can't
+# encode anything outside Latin-1. The result is a UnicodeEncodeError
+# inside the log handler that bubbles up as `error="'charmap' codec
+# can't encode character '\\U0001f602'"`. The errors don't break the
+# pipeline (the log line is dropped) but they pollute the output and
+# we lose the actual title we were trying to log.
+#
+# stdout.reconfigure(encoding='utf-8', errors='replace') was added in
+# Python 3.7 and is a no-op on already-UTF-8 streams (Linux/macOS).
+if sys.platform == "win32":
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")  # type: ignore[attr-defined]
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")  # type: ignore[attr-defined]
+    except (AttributeError, io.UnsupportedOperation):
+        # Older Python or a stream that can't be reconfigured (e.g.
+        # piped through `tee`). Fall back to wrapping with TextIOWrapper.
+        try:
+            sys.stdout = io.TextIOWrapper(  # type: ignore[assignment]
+                sys.stdout.buffer, encoding="utf-8", errors="replace",
+                line_buffering=True,
+            )
+            sys.stderr = io.TextIOWrapper(  # type: ignore[assignment]
+                sys.stderr.buffer, encoding="utf-8", errors="replace",
+                line_buffering=True,
+            )
+        except Exception:
+            pass  # last-resort — keep going with whatever we have
+    # Belt-and-braces: also tell child Python processes (subprocess,
+    # admin_job_runner) to use UTF-8 by default.
+    os.environ.setdefault("PYTHONIOENCODING", "utf-8")
+
+# ─── Make `deno` discoverable by yt-dlp subprocesses ────────────────
+# yt-dlp ≥2026-04 needs a JavaScript runtime + EJS challenge solver
+# script to resolve YouTube's n-decoder. Without these, `--list-formats`
+# only returns image streams and the actual video download fails with
+# "Requested format is not available". Deno is the default supported
+# runtime per yt-dlp's EJS docs. Installed via winget on this machine,
+# but lives in a non-standard path — prepend it so subprocesses inherit.
+_DENO_CANDIDATES = [
+    os.path.expandvars(r"%LOCALAPPDATA%\Microsoft\WinGet\Packages\DenoLand.Deno_Microsoft.Winget.Source_8wekyb3d8bbwe"),
+    os.path.expandvars(r"%USERPROFILE%\.deno\bin"),
+    r"C:\Program Files\deno",
+]
+for _deno_dir in _DENO_CANDIDATES:
+    if os.path.isfile(os.path.join(_deno_dir, "deno.exe")):
+        _current_path = os.environ.get("PATH", "")
+        if _deno_dir not in _current_path:
+            os.environ["PATH"] = _deno_dir + os.pathsep + _current_path
+        break
+
+# ─── Sentry init (Wave 11 / DB) ──────────────────────────────────────
+# Must run BEFORE structlog so the SDK can hook into stdlib logging
+# early. No-op when KCKILLS_SENTRY_DSN_WORKER is unset — see
+# services/observability_sentry.py for the full design.
+try:
+    from services.observability_sentry import init_sentry as _init_sentry
+    _init_sentry()
+except Exception:
+    # Defensive : Sentry must NEVER block the worker from starting,
+    # even if its own init blows up.
+    pass
 
 import structlog
 
@@ -37,30 +104,47 @@ structlog.configure(
 
 log = structlog.get_logger()
 
-# Module intervals in seconds. The order in the daemon is intentional:
-# sentinel finds matches → harvester fills kills → clipper produces videos →
-# analyzer tags them → og_generator publishes them.
+# Module intervals are now resolved via services.runtime_tuning :
+#   * KCKILLS_INTERVAL_<MODULE>=N  → operator override per module
+#   * KCKILLS_LOW_POWER=1          → doubles every interval (gaming mode)
+#   * Otherwise the DEFAULTS table in runtime_tuning provides the
+#     historic values listed in the comments below — same numbers as
+#     before this knob existed, so worker behaviour is byte-identical
+#     when no env var is set.
+#
+# The order is intentional: sentinel finds matches → harvester fills
+# kills → clipper produces videos → analyzer tags them → og_generator
+# publishes them.
+from services.runtime_tuning import get_interval as _get_interval
+
 DAEMON_MODULES: list[tuple[str, int, str]] = [
     # (name, interval_seconds, dotted import path)
-    ("sentinel",      300,   "modules.sentinel"),      # 5 min
-    ("harvester",     600,   "modules.harvester"),     # 10 min
-    ("event_mapper",  600,   "modules.event_mapper"),  # 10 min — populate canonical game_events table (PR6-B)
-    ("transitioner",  300,   "modules.transitioner"),  # 5 min — raw -> vod_found
-    ("vod_offset_finder", 3600, "modules.vod_offset_finder"),  # 1h — recover NULL vod_offset_seconds via Live Stats epoch alignment
-    ("clipper",       300,   "modules.clipper"),       # 5 min
-    ("analyzer",      600,   "modules.analyzer"),      # 10 min
-    ("og_generator",  900,   "modules.og_generator"),  # 15 min
-    ("event_publisher", 300, "modules.event_publisher"), # 5 min — bridge game_events.is_publishable -> kills.status (PR6-D)
-    ("embedder",      1800,  "modules.embedder"),      # 30 min — Gemini text-embedding-004 -> kills.embedding for similarity (PR17)
-    ("moderator",     180,   "modules.moderator"),     # 3 min — Haiku comment moderation
-    ("hls_packager",  1800,  "modules.hls_packager"),  # 30 min — HLS adaptive bitrate (5 clips/run)
-    ("channel_discoverer", 21600, "modules.channel_discoverer"),  # 6h — Kameto pivot K-Phase 0
-    ("channel_reconciler", 3600, "modules.channel_reconciler"),   # 1h — K-Phase 1 (channel_videos -> matches)
-    ("match_planner", 3600,  "modules.match_planner"), # 1h — pre-schedule next 21d KC matches + boost jobs
-    ("qc_sampler",    21600, "modules.qc_sampler"),    # 6h — random 2% sampling -> clip_qc.verify (Gemini drift)
-    ("job_runner",    30,    "modules.job_runner"),    # 30s — admin-triggered jobs + boost dispatch
-    ("heartbeat",     21600, "modules.heartbeat"),     # 6h
-    ("watchdog",      1800,  "modules.watchdog"),      # 30 min
+    ("sentinel",          _get_interval("sentinel"),          "modules.sentinel"),               # default 300s   — 5 min
+    ("harvester",         _get_interval("harvester"),         "modules.harvester"),              # default 600s   — 10 min
+    ("event_mapper",      _get_interval("event_mapper"),      "modules.event_mapper"),           # default 600s   — populate canonical game_events table (PR6-B)
+    ("transitioner",      _get_interval("transitioner"),      "modules.transitioner"),           # default 300s   — raw -> vod_found
+    ("vod_offset_finder", _get_interval("vod_offset_finder"), "modules.vod_offset_finder_v2"),   # default 3600s  — multi-candidate scan (PR23.3)
+    ("clipper",           _get_interval("clipper"),           "modules.clipper"),                # default 300s   — 5 min
+    ("analyzer",          _get_interval("analyzer"),          "modules.analyzer"),               # default 600s   — 10 min
+    ("og_generator",      _get_interval("og_generator"),      "modules.og_generator"),           # default 900s   — 15 min
+    ("event_publisher",   _get_interval("event_publisher"),   "modules.event_publisher"),        # default 300s   — bridge game_events.is_publishable -> kills.status (PR6-D)
+    ("embedder",          _get_interval("embedder"),          "modules.embedder"),               # default 1800s  — Gemini embedding-001 -> kills.embedding (PR17)
+    ("translator",        _get_interval("translator"),        "modules.translator"),             # default 1800s  — Wave 11 : DeepSeek FR->EN/KO/ES (gated KCKILLS_TRANSLATOR_ENABLED)
+    ("moderator",         _get_interval("moderator"),         "modules.moderator"),              # default 180s   — Haiku comment moderation
+    ("discord_autopost",  _get_interval("discord_autopost"),  "modules.discord_autopost"),       # default 60s    — auto-share high-score kills (P2 Phase 3)
+    ("hls_packager",      _get_interval("hls_packager"),      "modules.hls_packager"),           # default 1800s  — HLS adaptive bitrate
+    ("channel_discoverer",  _get_interval("channel_discoverer"),  "modules.channel_discoverer"), # default 21600s — Kameto pivot K-Phase 0
+    ("channel_reconciler",  _get_interval("channel_reconciler"),  "modules.channel_reconciler"), # default 3600s  — K-Phase 1
+    ("vod_fallback_finder", _get_interval("vod_fallback_finder"), "modules.vod_fallback_finder"),# default 1800s  — bridge reconciled videos -> game_vod_sources
+    ("match_planner",     _get_interval("match_planner"),     "modules.match_planner"),          # default 3600s  — pre-schedule next 21d KC matches
+    ("qc_sampler",        _get_interval("qc_sampler"),        "modules.qc_sampler"),             # default 21600s — random 2% sampling
+    ("job_runner",        _get_interval("job_runner"),        "modules.job_runner"),             # default 30s    — admin-triggered jobs + boost dispatch
+    ("job_dispatcher",    _get_interval("job_dispatcher"),    "modules.job_dispatcher"),         # default 60s    — bridge legacy kills.status -> pipeline_jobs
+    ("admin_job_runner",  _get_interval("admin_job_runner"),  "modules.admin_job_runner"),       # default 30s    — claim+exec worker.backfill jobs
+    ("heartbeat",         _get_interval("heartbeat"),         "modules.heartbeat"),              # default 21600s — 6h
+    ("watchdog",          _get_interval("watchdog"),          "modules.watchdog"),               # default 1800s  — 30 min
+    ("queue_health",      _get_interval("queue_health"),      "modules.queue_health"),           # default 300s   — Wave 6 P2 : stale-lock + queue snapshot
+    ("dlq_drainer",       _get_interval("dlq_drainer"),       "modules.dlq_drainer"),            # default 1800s  — Wave 9 : auto-recover fresh DLQ entries
 ]
 
 RESTART_DELAY = 10  # seconds between a module crash and its next attempt

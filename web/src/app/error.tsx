@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect } from "react";
+import { useT } from "@/lib/i18n/use-lang";
 
 export default function RootError({
   error,
@@ -10,6 +11,7 @@ export default function RootError({
   error: Error & { digest?: string };
   reset: () => void;
 }) {
+  const t = useT();
   useEffect(() => {
     // Surface the error to any attached monitoring (Vercel/Sentry/console).
     console.error("[kckills] route error:", error);
@@ -21,15 +23,15 @@ export default function RootError({
         GG WP
       </p>
       <h1 className="font-display text-2xl font-bold">
-        Le serveur s&apos;est fait first-blood.
+        {t("errors.route_title")}
       </h1>
       <p className="text-sm text-[var(--text-muted)]">
-        Une erreur inattendue est survenue pendant le rendu de cette page.
+        {t("errors.route_body")}
         {error.digest ? (
           <>
             {" "}
             <span className="block mt-2 font-mono text-[10px] text-[var(--text-disabled)]">
-              ref: {error.digest}
+              {t("errors.route_ref")}: {error.digest}
             </span>
           </>
         ) : null}
@@ -40,13 +42,13 @@ export default function RootError({
           onClick={reset}
           className="rounded-lg bg-[var(--gold)] px-4 py-2 text-sm font-semibold text-black hover:opacity-90"
         >
-          R&eacute;essayer
+          {t("errors.try_again")}
         </button>
         <Link
           href="/"
           className="rounded-lg border border-[var(--border-gold)] px-4 py-2 text-sm text-[var(--text-primary)] hover:border-[var(--gold)]"
         >
-          Retour &agrave; l&apos;accueil
+          {t("errors.back_home")}
         </Link>
       </div>
     </div>

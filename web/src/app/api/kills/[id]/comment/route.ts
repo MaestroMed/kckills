@@ -2,7 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { createServerSupabase } from "@/lib/supabase/server";
 
 const PROFILE_SELECT = "id, discord_username, discord_avatar_url, badges";
-const COMMENT_SELECT = `*, profile:profiles(${PROFILE_SELECT})`;
+// Wave 7 (Agent AF) — `upvotes` is now the running SUM(vote_value) from
+// the comment_votes recompute trigger (migration 038). It can be negative
+// when downvotes outweigh upvotes. The client uses this for both display
+// and the Wilson "Top" sort.
+const COMMENT_SELECT = `id, content, created_at, parent_id, upvotes, moderation_status, user_id, profile:profiles(${PROFILE_SELECT})`;
 
 /**
  * GET — return approved comments for a kill, plus the current user's own
@@ -13,6 +17,17 @@ const COMMENT_SELECT = `*, profile:profiles(${PROFILE_SELECT})`;
  * exposes `moderation_status='approved'`. The pending slice runs scoped to
  * `auth.uid() = user_id`, which the "Own comment update" policy already
  * permits at SELECT time once we attach the user JWT.
+ *
+ * Wave 7 (Agent AF) — also returns per-comment vote metadata :
+ *   * `upvotes`         : running score (SUM(vote_value), can be negative)
+ *   * `downvote_count`  : count of -1 votes (for Wilson sort + UI breakdown)
+ *   * `user_vote`       : the current user's vote on each comment (-1|0|1),
+ *                         null when anonymous. Renders the active state of
+ *                         the up/down arrows.
+ *
+ * The vote enrichment happens in one batched fetch keyed by the visible
+ * comment ids, so adding it doesn't change round-trip count for typical
+ * sheet renders (≤ 50 comments).
  */
 export async function GET(
   _request: NextRequest,
@@ -59,8 +74,57 @@ export async function GET(
   }));
   const merged: CommentRow[] = [...pending, ...((approvedRes.data as CommentRow[] | null) ?? [])];
 
-  const topLevel = merged.filter((c) => !c.parent_id);
-  const replies = merged.filter((c) => c.parent_id);
+  // ─── Wave 7 vote enrichment ──────────────────────────────────────
+  // Two batched queries against comment_votes for the visible ids :
+  //   1. SUM the -1 votes per comment_id → `downvote_count`
+  //   2. Pull the user's own (comment_id → vote_value) when logged in
+  // Both are O(votes-on-visible-comments) which is tiny for typical
+  // sheet renders.
+  const visibleIds = merged.map((c) => String(c.id));
+  const downvoteCountById = new Map<string, number>();
+  const userVoteById = new Map<string, -1 | 1>();
+
+  if (visibleIds.length > 0) {
+    const downvotesRes = await supabase
+      .from("comment_votes")
+      .select("comment_id")
+      .eq("vote_value", -1)
+      .in("comment_id", visibleIds);
+    for (const row of (downvotesRes.data ?? []) as { comment_id: string }[]) {
+      downvoteCountById.set(
+        row.comment_id,
+        (downvoteCountById.get(row.comment_id) ?? 0) + 1,
+      );
+    }
+
+    if (user) {
+      const userVotesRes = await supabase
+        .from("comment_votes")
+        .select("comment_id, vote_value")
+        .eq("user_id", user.id)
+        .in("comment_id", visibleIds);
+      for (const row of (userVotesRes.data ?? []) as {
+        comment_id: string;
+        vote_value: number;
+      }[]) {
+        if (row.vote_value === -1 || row.vote_value === 1) {
+          userVoteById.set(row.comment_id, row.vote_value);
+        }
+      }
+    }
+  }
+
+  const enriched: CommentRow[] = merged.map((c) => {
+    const cid = String(c.id);
+    return {
+      ...c,
+      downvote_count: downvoteCountById.get(cid) ?? 0,
+      user_vote: userVoteById.get(cid) ?? 0,
+    };
+  });
+
+  const topLevel = enriched.filter((c) => !c.parent_id);
+  const replies = enriched.filter((c) => c.parent_id);
 
   const threaded = topLevel.map((comment) => ({
     ...comment,

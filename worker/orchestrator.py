@@ -61,9 +61,11 @@ ROLE_MODULES: dict[str, list[str]] = {
     "clipper":   ["clipper", "hls_packager"],
     "analyzer":  ["analyzer", "qc_sampler", "og_generator", "event_publisher"],
     "discovery": ["sentinel", "harvester", "transitioner", "channel_discoverer",
-                  "channel_reconciler", "match_planner", "event_mapper",
-                  "vod_offset_finder"],
-    "control":   ["moderator", "job_runner", "heartbeat", "watchdog"],
+                  "channel_reconciler", "vod_fallback_finder",
+                  "match_planner", "event_mapper", "vod_offset_finder"],
+    "control":   ["moderator", "job_runner", "job_dispatcher",
+                  "kill_of_the_week", "push_notifier", "heartbeat",
+                  "watchdog"],
 }
 
 ROLES = tuple(ROLE_MODULES.keys())
@@ -82,18 +84,17 @@ TASK_RESTART_DELAY = 10
 # ──────────────────────────────────────────────────────────────────────
 # Paths
 # ──────────────────────────────────────────────────────────────────────
-def _data_root() -> Path:
-    """Worker data root — D:/kckills_worker if D:/ exists, else worker dir."""
-    if os.path.isdir("D:/"):
-        return Path("D:/kckills_worker")
-    return Path(__file__).resolve().parent
+# PR-loltok DH : path resolution flows through services.local_paths so
+# orchestrator runs on Mehdi's Windows box (D:/), inside a Docker
+# container (/cache/...), and on a fresh Linux dev VM (/var/cache/kckills).
+# Same env-var menu — KCKILLS_DATA_ROOT, KCKILLS_LOGS_DIR,
+# KCKILLS_ORCHESTRATOR_STATUS_FILE.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from services.local_paths import LocalPaths  # noqa: E402
 
-
-DATA_ROOT = _data_root()
-LOGS_DIR = DATA_ROOT / "logs"
-DEFAULT_STATUS_FILE = DATA_ROOT / "orchestrator_status.json"
-STATUS_FILE = Path(os.getenv("KCKILLS_ORCHESTRATOR_STATUS_FILE",
-                             str(DEFAULT_STATUS_FILE)))
+DATA_ROOT = Path(LocalPaths.data_root())
+LOGS_DIR = Path(LocalPaths.logs_dir())
+STATUS_FILE = Path(LocalPaths.status_file())
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -145,6 +146,11 @@ def _module_specs_for_role(role: str) -> list[tuple[str, int, str]]:
 async def run_child(role: str) -> None:
     """Run one role's modules under supervision."""
     import importlib
+
+    # Expose the role to the rest of the worker process so the
+    # observability decorator can stamp pipeline_runs.worker_id with
+    # `orchestrator-{role}-PID{pid}` instead of falling back to 'solo'.
+    os.environ["KCKILLS_WORKER_ROLE"] = role
 
     specs = _module_specs_for_role(role)
     log.info("child_start", role=role, modules=[s[0] for s in specs], pid=os.getpid())

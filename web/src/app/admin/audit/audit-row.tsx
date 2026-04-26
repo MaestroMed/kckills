@@ -9,9 +9,13 @@ interface Row {
   entity_type: string;
   entity_id: string | null;
   actor_label: string | null;
+  actor_role: string | null;
   before: unknown;
   after: unknown;
   notes: string | null;
+  ip_hash: string | null;
+  request_id: string | null;
+  user_agent_class: string | null;
   created_at: string;
 }
 
@@ -55,10 +59,36 @@ export function AuditRow({ row }: { row: Row }) {
           </button>
         )}
         <span className="text-[var(--text-muted)] text-[10px] whitespace-nowrap">
-          {row.actor_label ?? "?"} · {new Date(row.created_at).toLocaleString("fr-FR")}
+          {row.actor_label ?? "?"}
+          {row.actor_role && row.actor_role !== "unknown" ? (
+            <span className="text-[var(--text-disabled)]"> · {row.actor_role}</span>
+          ) : null}
+          {" · "}
+          {new Date(row.created_at).toLocaleString("fr-FR")}
         </span>
       </summary>
-      <div className="px-3 py-3 bg-[var(--bg-primary)]">
+      <div className="px-3 py-3 bg-[var(--bg-primary)] space-y-2">
+        {/* Forensic chips — IP/UA/request_id give post-hoc traceability */}
+        <div className="flex flex-wrap gap-2 text-[10px]">
+          {row.request_id && (
+            <span className="rounded bg-[var(--bg-elevated)] px-1.5 py-0.5 font-mono text-[var(--text-muted)]">
+              req: {row.request_id}
+            </span>
+          )}
+          {row.user_agent_class && row.user_agent_class !== "unknown" && (
+            <span className="rounded bg-[var(--bg-elevated)] px-1.5 py-0.5 text-[var(--text-muted)]">
+              ua: {row.user_agent_class}
+            </span>
+          )}
+          {row.ip_hash && (
+            <span
+              className="rounded bg-[var(--bg-elevated)] px-1.5 py-0.5 font-mono text-[var(--text-muted)]"
+              title="SHA-256 of client IP (first 32 chars)"
+            >
+              ip: {row.ip_hash.slice(0, 8)}…
+            </span>
+          )}
+        </div>
         <JsonDiffView before={row.before} after={row.after} />
         {row.notes && <p className="text-[10px] text-[var(--text-muted)] mt-2">{row.notes}</p>}
       </div>

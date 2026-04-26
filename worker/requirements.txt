@@ -14,6 +14,21 @@ boto3>=1.34.0
 google-generativeai>=0.8.0
 anthropic>=0.40.0
 
+# ── Web Push (PR16 — push_notifier daemon) ─────────────────
+# pywebpush handles VAPID signing + payload encryption (RFC 8291).
+# cryptography is a transitive dep but pinned high to avoid the
+# old urllib3-vs-Python-3.12 fiasco.
+pywebpush>=2.0.0
+cryptography>=42.0.0
+
+# ── Sentry — error tracking (Wave 11 / DB) ─────────────────
+# Async-aware integration for asyncio.create_task supervised modules ;
+# httpx integration auto-traces every outbound API call. Free tier =
+# 5K events/mo + 100K perf events/mo. init_sentry() in
+# services/observability_sentry.py is a no-op when
+# KCKILLS_SENTRY_DSN_WORKER is unset.
+sentry-sdk[asyncio,httpx]>=2.20.0
+
 # ── Dev / tests ────────────────────────────────────────────
 # pytest is optional — the tests also run directly via `python tests/test_*.py`
 # Uncomment if you want to use `pytest`:

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerSupabase } from "@/lib/supabase/server";
-import { logAdminAction, requireAdmin } from "@/lib/admin/audit";
+import { deriveActorRole, logAdminAction, requireAdmin } from "@/lib/admin/audit";
 
 const VALID_FIGHT_TYPES = [
   "solo_kill", "pick", "gank", "skirmish_2v2", "skirmish_3v3",
@@ -64,6 +64,15 @@ export async function PATCH(
   }
 
   const sb = await createServerSupabase();
+
+  // Snapshot only the columns we're about to modify so the audit diff
+  // shows the exact fields that changed (not the entire kill row).
+  const { data: before } = await sb
+    .from("kills")
+    .select("ai_description, fight_type, ai_tags, highlight_score, kill_visible")
+    .eq("id", id)
+    .maybeSingle();
+
   const { error } = await sb
     .from("kills")
     .update(patch)
@@ -77,7 +86,14 @@ export async function PATCH(
     action: "kill.edit",
     entityType: "kill",
     entityId: id,
+    before: before
+      ? Object.fromEntries(
+          Object.keys(patch).map((k) => [k, (before as Record<string, unknown>)[k]]),
+        )
+      : null,
     after: patch,
+    actorRole: deriveActorRole(admin),
+    request,
   });
 
   return NextResponse.json({ ok: true, patched: Object.keys(patch) });

@@ -55,11 +55,24 @@ export interface VideoFeedItem {
   clipHorizontal: string | null;
   /** HLS master playlist URL — null = not yet HLS-packaged. */
   hlsMasterUrl?: string | null;
+  /** Versioned kill_assets manifest (migration 026). When present, the
+   *  player pool prefers it over the legacy clip* fields. NULL on rows
+   *  clipped before the migration ran. */
+  assetsManifest?: import("./v2/FeedPlayerPool").PoolAssetsManifest | null;
   thumbnail: string | null;
   highlightScore: number | null;
   avgRating: number | null;
   ratingCount: number;
+  /** Legacy single-language field — keep populated for back-compat with
+   *  any code path that hasn't migrated to the multi-lang variants. */
   aiDescription: string | null;
+  /** PR14 multi-language descriptions, picked by <Description> via the
+   *  active LangProvider (cookie + Accept-Language fallback). When NULL
+   *  the picker falls back to aiDescription_fr → aiDescription. */
+  aiDescriptionFr: string | null;
+  aiDescriptionEn: string | null;
+  aiDescriptionKo: string | null;
+  aiDescriptionEs: string | null;
   aiTags: string[];
   multiKill: string | null;
   isFirstBlood: boolean;
@@ -89,11 +102,22 @@ export interface MomentFeedItem {
   clipHorizontal: string | null;
   /** HLS master playlist URL (Phase 4). */
   hlsMasterUrl?: string | null;
+  /** Versioned moments_assets manifest (future migration). NULL today
+   *  on every moment — kept for type symmetry with VideoFeedItem so
+   *  ScrollFeedV2 can build PoolItem from either branch. */
+  assetsManifest?: import("./v2/FeedPlayerPool").PoolAssetsManifest | null;
   thumbnail: string | null;
   momentScore: number | null;
   avgRating: number | null;
   ratingCount: number;
   aiDescription: string | null;
+  // Multi-lang variants — moments are NOT translated by the worker yet
+  // (they aggregate kill descriptions). Kept for type symmetry with
+  // VideoFeedItem so <Description> works on either branch.
+  aiDescriptionFr: string | null;
+  aiDescriptionEn: string | null;
+  aiDescriptionKo: string | null;
+  aiDescriptionEs: string | null;
   aiTags: string[];
   startTimeSeconds: number;
   endTimeSeconds: number;
@@ -340,7 +364,9 @@ export function ScrollFeed({
       className="scroll-container fixed inset-0 z-[60] bg-black"
       onPointerDown={handleFirstInteraction}
     >
-      <BgmPlayer />
+      {/* Wave 11 — legacy <BgmPlayer/> removed. The global WolfFloatingPlayer
+          (Providers.tsx → bottom-right of every page) handles /scroll's BGM
+          via the "scroll" hype playlist. One player, one source of truth. */}
       {/* Top bar — minimal, safe-area aware */}
       <div className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-4 py-3" style={{ paddingTop: "max(0.75rem, env(safe-area-inset-top, 0.75rem))" }}>
         <Link href="/" className="flex h-9 w-9 items-center justify-center rounded-full bg-black/60 backdrop-blur-sm">

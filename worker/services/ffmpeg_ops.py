@@ -70,11 +70,18 @@ def _resolve_encoder(encoder: str) -> str:
 # ─── NVENC argument builders ────────────────────────────────────────────────
 
 def _nvenc_args_hq(maxrate: str, bufsize: str, profile: str = "high",
-                   level: str = "4.1", multipass: bool = True) -> list[str]:
+                   level: str = "auto", multipass: bool = True) -> list[str]:
     """h264_nvenc args for HQ variants (horizontal / vertical 1080p).
 
     p5 + tune hq + cq 23 ≈ x264 fast crf 22 in objective metrics.
     Multipass fullres adds ~10-15% time for ~5% quality on Ada.
+
+    PR23.7 — `-level` defaults to "auto" : the previous "4.1" string
+    started rejecting on the 2026-04 NVIDIA driver with
+    "InitializeEncoder failed: invalid param (8): Invalid Level".
+    Letting the encoder pick the level itself based on resolution +
+    bitrate is more robust and produces level >= 4.0 anyway for the
+    1080p targets we ship.
     """
     args = [
         "-c:v", "h264_nvenc",
@@ -86,7 +93,6 @@ def _nvenc_args_hq(maxrate: str, bufsize: str, profile: str = "high",
         "-maxrate", maxrate,
         "-bufsize", bufsize,
         "-profile:v", profile,
-        "-level", level,
         "-bf", "3",
         "-b_ref_mode", "middle",      # Ada supports B-frames as ref
         "-g", "60",                   # 2s GOP at 30fps
@@ -95,6 +101,9 @@ def _nvenc_args_hq(maxrate: str, bufsize: str, profile: str = "high",
         "-spatial-aq", "1",
         "-temporal-aq", "1",
     ]
+    # Only pass -level if explicitly overridden (not the default "auto").
+    if level and level != "auto":
+        args += ["-level", level]
     if multipass:
         args += ["-multipass", "fullres"]
     return args
@@ -105,6 +114,10 @@ def _nvenc_args_low(maxrate: str, bufsize: str) -> list[str]:
 
     Baseline profile = no B-frames (browser compat for old Android).
     p4 instead of p5, no multipass — quality bar is lower.
+
+    PR23.7 — dropped explicit `-level 3.1` for the same reason as
+    _nvenc_args_hq (driver rejection). 540p + 1.2Mbps maxrate gives
+    level 3.1 anyway via auto.
     """
     return [
         "-c:v", "h264_nvenc",
@@ -116,7 +129,6 @@ def _nvenc_args_low(maxrate: str, bufsize: str) -> list[str]:
         "-maxrate", maxrate,
         "-bufsize", bufsize,
         "-profile:v", "baseline",
-        "-level", "3.1",
         "-bf", "0",                   # baseline = no B-frames
         "-g", "60",
         "-pix_fmt", "yuv420p",
@@ -160,12 +172,15 @@ def video_codec_args(
         mr = maxrate or "4M"
         bs = bufsize or "8M"
         prof = profile or "high"
-        lvl = level or "4.1"
+        # PR23.7 — `level or "4.1"` was forcing the explicit "4.1" string
+        # back through the NVENC pipeline, bypassing _nvenc_args_hq's
+        # default of "auto". For NVENC we now pass "auto" through, which
+        # tells _nvenc_args_hq to omit the -level flag entirely (driver
+        # picks). libx264 still keeps "4.0" for bit-identical output.
         if chosen == "h264_nvenc":
+            lvl = level or "auto"
             return _nvenc_args_hq(mr, bs, profile=prof, level=lvl, multipass=True)
-        # libx264 sticks to the original main/4.0 spec to keep output bit-
-        # identical to pre-NVENC pipeline on machines without GPU.
-        return _libx264_args_hq(mr, bs, profile="main", level="4.0")
+        return _libx264_args_hq(mr, bs, profile="main", level=(level or "4.0"))
 
     if variant == "low":
         mr = maxrate or "1200k"

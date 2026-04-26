@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerSupabase } from "@/lib/supabase/server";
-import { requireAdmin } from "@/lib/admin/audit";
+import { deriveActorRole, logAdminAction, requireAdmin } from "@/lib/admin/audit";
 
 /** PUT /api/admin/featured/[date] — set featured kill for a date.
  *  SECURITY (PR-SECURITY-A) : was missing requireAdmin. Now gated.
@@ -26,6 +26,14 @@ export async function PUT(
   }
 
   const sb = await createServerSupabase();
+
+  // Snapshot the prior featured (if any) so the audit shows what was replaced.
+  const { data: before } = await sb
+    .from("featured_clips")
+    .select("kill_id,notes,set_by_actor,set_at")
+    .eq("feature_date", date)
+    .maybeSingle();
+
   const { error } = await sb
     .from("featured_clips")
     .upsert(
@@ -43,13 +51,14 @@ export async function PUT(
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  // Audit
-  await sb.from("admin_actions").insert({
-    actor_label: "admin",
+  await logAdminAction({
     action: "featured.set",
-    entity_type: "featured",
-    entity_id: date,
+    entityType: "featured",
+    entityId: date,
+    before,
     after: { kill_id: killId, notes },
+    actorRole: deriveActorRole(admin),
+    request,
   });
 
   // Notify Discord (only for today's featured)
@@ -91,7 +100,7 @@ export async function PUT(
  *  SECURITY (PR-SECURITY-A) : was missing requireAdmin. Now gated.
  */
 export async function DELETE(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ date: string }> },
 ) {
   const admin = await requireAdmin();
@@ -100,14 +109,23 @@ export async function DELETE(
   }
   const { date } = await params;
   const sb = await createServerSupabase();
+
+  const { data: before } = await sb
+    .from("featured_clips")
+    .select("kill_id,notes,set_by_actor,set_at")
+    .eq("feature_date", date)
+    .maybeSingle();
+
   const { error } = await sb.from("featured_clips").delete().eq("feature_date", date);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  await sb.from("admin_actions").insert({
-    actor_label: "admin",
+  await logAdminAction({
     action: "featured.delete",
-    entity_type: "featured",
-    entity_id: date,
+    entityType: "featured",
+    entityId: date,
+    before,
+    actorRole: deriveActorRole(admin),
+    request,
   });
 
   return NextResponse.json({ ok: true });

@@ -5,10 +5,14 @@ import { PLAYER_PHOTOS } from "@/lib/kc-assets";
 import { PortraitCubeMorph } from "@/components/PortraitCubeMorph";
 import { ClipReel } from "@/components/ClipReel";
 import { getPlayerByIgn } from "@/lib/supabase/players";
+import { getPublicRiotStatsBySummoner } from "@/lib/supabase/riot_profile";
 import {
   getKillsByKillerChampion,
   type PublishedKillRow,
 } from "@/lib/supabase/kills";
+import { getAssetMetadata, pickAssetUrl } from "@/lib/kill-assets";
+import { JsonLd, breadcrumbLD } from "@/lib/seo/jsonld";
+import { WolfHowlOnEnter } from "@/components/player/WolfHowlOnEnter";
 import Image from "next/image";
 import Link from "next/link";
 import type { Metadata } from "next";
@@ -154,6 +158,12 @@ export default async function PlayerPage({ params }: Props) {
   const playerRow = await getPlayerByIgn(name);
   const playerId = playerRow?.id ?? null;
 
+  // Optional Riot link: when this KC player has connected their Riot
+  // account on kckills (via /settings), surface their rank + top
+  // champions in a sidebar. Lookup is best-effort + case-insensitive on
+  // riot_summoner_name — silently absent when no link exists.
+  const riotStats = await getPublicRiotStatsBySummoner(name);
+
   // Best clips = highest KDA games
   const bestClips = [...stats.matchHistory]
     .sort((a, b) => {
@@ -180,9 +190,14 @@ export default async function PlayerPage({ params }: Props) {
   //     PerformanceRole because the latter requires Wikidata-grade
   //     IDs we don't have. Photo + ItemList of clips so video
   //     carousels can attribute hits to the right athlete.
-  const playerJsonLd = {
-    "@context": "https://schema.org",
+  //
+  //     Wrapped inside a ProfilePage envelope (Phase 4 SEO) so Google
+  //     understands this URL is the canonical profile for the
+  //     embedded Person — recommended by schema.org for athlete /
+  //     creator pages.
+  const personNode = {
     "@type": "Person",
+    "@id": `https://kckills.com/player/${encodeURIComponent(name)}#person`,
     name,
     alternateName: `KC ${name}`,
     url: `https://kckills.com/player/${encodeURIComponent(name)}`,
@@ -193,6 +208,7 @@ export default async function PlayerPage({ params }: Props) {
     memberOf: {
       "@type": "SportsTeam",
       name: "Karmine Corp",
+      alternateName: ["KC", "KCorp"],
       url: "https://kckills.com",
       sport: "League of Legends",
     },
@@ -213,6 +229,21 @@ export default async function PlayerPage({ params }: Props) {
       : {}),
   };
 
+  const playerJsonLd = {
+    "@context": "https://schema.org",
+    "@type": "ProfilePage",
+    url: `https://kckills.com/player/${encodeURIComponent(name)}`,
+    name: `${name} — KCKILLS`,
+    inLanguage: "fr-FR",
+    mainEntity: personNode,
+  };
+
+  const breadcrumbJsonLd = breadcrumbLD([
+    { name: "Accueil", url: "/" },
+    { name: "Joueurs", url: "/players" },
+    { name, url: `/player/${encodeURIComponent(name)}` },
+  ]);
+
   return (
     <div
       className="-mt-6"
@@ -230,6 +261,12 @@ export default async function PlayerPage({ params }: Props) {
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(playerJsonLd) }}
       />
+      <JsonLd data={breadcrumbJsonLd} />
+      {/* Easter egg : brief distant wolf howl on first user gesture after
+          page entry. Subtle (28% volume max), 30s cooldown across player
+          pages, honors prefers-reduced-motion + the wolf player's mute
+          flag. Renders nothing visually. Karmine = wolves. 🐺 */}
+      <WolfHowlOnEnter />
       {/* ═══ HERO — full-screen cinematic with cube-portrait morph ═══ */}
       <section className="relative h-[90vh] min-h-[720px] w-full overflow-hidden bg-[var(--bg-primary)]">
         {/* Soft champion-art backdrop — heavily darkened so the dot-matrix
@@ -459,6 +496,98 @@ export default async function PlayerPage({ params }: Props) {
         </div>
       </section>
 
+      {/* ═══ RIOT STATS — surfaced when the player linked their Riot acct ═══
+          Optional. Pulled from profiles where riot_summoner_name == player IGN.
+          Renders nothing when no link exists, so the page stays unchanged for
+          players who haven't connected. */}
+      {riotStats && (riotStats.rank || riotStats.topChampions.length > 0) && (
+        <section className="relative max-w-7xl mx-auto px-6 py-12">
+          <div className="flex items-center gap-3 mb-6">
+            <span className="h-px w-12 bg-[var(--gold)]" />
+            <span className="font-data text-[10px] uppercase tracking-[0.3em] font-bold text-[var(--gold)]">
+              Riot stats &middot; profil li&eacute;
+            </span>
+          </div>
+          <div className="grid gap-4 md:grid-cols-3">
+            {/* Summoner identity */}
+            <div className="rounded-2xl border border-[var(--border-gold)] bg-[var(--bg-surface)] p-5 space-y-2">
+              <p className="text-[10px] uppercase tracking-[0.3em] text-[var(--text-muted)]">
+                Compte Riot
+              </p>
+              <p className="font-display text-2xl font-black text-[var(--gold)] leading-tight break-words">
+                {riotStats.summonerName}
+                {riotStats.tag && (
+                  <span className="font-data text-base text-[var(--text-muted)]">
+                    #{riotStats.tag}
+                  </span>
+                )}
+              </p>
+              {riotStats.linkedAt && (
+                <p className="text-[10px] text-[var(--text-muted)] opacity-70">
+                  Li&eacute; le{" "}
+                  {new Date(riotStats.linkedAt).toLocaleDateString("fr-FR", {
+                    day: "numeric",
+                    month: "short",
+                    year: "numeric",
+                  })}
+                </p>
+              )}
+            </div>
+
+            {/* Rank */}
+            <div className="rounded-2xl border border-[var(--gold)]/30 bg-[var(--gold)]/5 p-5 space-y-2">
+              <p className="text-[10px] uppercase tracking-[0.3em] text-[var(--text-muted)]">
+                Rank Solo/Duo
+              </p>
+              {riotStats.rank ? (
+                <p className="font-display text-3xl font-black text-[var(--gold)] leading-tight">
+                  {riotStats.rank}
+                </p>
+              ) : (
+                <p className="text-sm text-[var(--text-muted)]">
+                  Aucun rank Solo/Duo cette saison.
+                </p>
+              )}
+            </div>
+
+            {/* Top champions */}
+            <div className="rounded-2xl border border-[var(--border-gold)] bg-[var(--bg-surface)] p-5 space-y-3">
+              <p className="text-[10px] uppercase tracking-[0.3em] text-[var(--text-muted)]">
+                Top {riotStats.topChampions.length} champions
+              </p>
+              {riotStats.topChampions.length === 0 ? (
+                <p className="text-sm text-[var(--text-muted)]">
+                  Pas de mastery enregistr&eacute;e.
+                </p>
+              ) : (
+                <ul className="grid grid-cols-5 gap-2">
+                  {riotStats.topChampions.map((c) => (
+                    <li
+                      key={c.champ_id}
+                      className="flex flex-col items-center gap-1"
+                      title={`${c.name} \u2014 niveau ${c.level} \u00b7 ${c.points.toLocaleString("fr-FR")} pts`}
+                    >
+                      <div className="relative h-10 w-10 rounded-full overflow-hidden border border-[var(--border-gold)] bg-[var(--bg-elevated)]">
+                        <Image
+                          src={championIconUrl(c.name)}
+                          alt={c.name}
+                          fill
+                          sizes="40px"
+                          className="object-cover"
+                        />
+                      </div>
+                      <span className="text-[9px] font-data text-[var(--text-muted)]">
+                        M{c.level}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </div>
+        </section>
+      )}
+
       {/* ═══ CLIP-CENTRIC REELS — driven by killer/victim_player_id ═══ */}
       {playerId && (
         <section className="relative max-w-7xl mx-auto px-6 py-16 space-y-12">
@@ -527,6 +656,11 @@ export default async function PlayerPage({ params }: Props) {
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
             {realKills.slice(0, 6).map((k) => {
               const isKcKill = k.tracked_team_involvement === "team_killer";
+              // Manifest-aware thumbnail (migration 026). Falls back
+              // to the legacy thumbnail_url column when the manifest
+              // hasn't been built yet for this row.
+              const thumbUrl = pickAssetUrl(k, "thumbnail");
+              const thumbMeta = getAssetMetadata(k, "thumbnail");
               return (
                 <Link
                   key={k.id}
@@ -534,12 +668,21 @@ export default async function PlayerPage({ params }: Props) {
                   className="group relative overflow-hidden rounded-2xl border border-[var(--border-gold)] bg-black transition-all hover:border-[var(--gold)]/60 hover:scale-[1.02] hover:-translate-y-1 hover:shadow-2xl hover:shadow-[var(--gold)]/20"
                   style={{ aspectRatio: "16/10" }}
                 >
-                  {k.thumbnail_url ? (
+                  {thumbUrl ? (
                     <Image
-                      src={k.thumbnail_url}
+                      src={thumbUrl}
                       alt={`${k.killer_champion} vs ${k.victim_champion}`}
                       fill
-                      sizes="(max-width: 768px) 100vw, 33vw"
+                      // Sizes hint matches the responsive 1/2/3-col
+                      // grid above. When the manifest carries the real
+                      // pixel dims we widen the largest tier so the
+                      // CDN serves the highest-quality variant that
+                      // fits the column on desktop.
+                      sizes={
+                        thumbMeta?.width && thumbMeta.width >= 1280
+                          ? "(max-width: 768px) 100vw, (max-width: 1024px) 50vw, 480px"
+                          : "(max-width: 768px) 100vw, 33vw"
+                      }
                       className="object-cover group-hover:scale-110 transition-transform duration-700"
                     />
                   ) : (

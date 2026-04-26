@@ -5,11 +5,28 @@ For each completed KC match not yet in the DB:
 1. Upsert the `matches` row (by external_id)
 2. Upsert every `games` row linked to that match via match_id FK
 3. Extract & store VOD metadata from getEventDetails when available
+
+PR-loltok BB — multi-league sentinel
+====================================
+Pre-PR : `run()` made ONE getSchedule call against the LEC league_id
+hardcoded in config.LEC_LEAGUE_ID. The pilot was LEC-only by birth.
+
+Post-PR : `run()` reads `services.league_config.load_tracked_leagues()`
+and loops over EVERY tracked league. Default env
+`KCKILLS_TRACKED_LEAGUES=lec` → byte-identical behavior to today (one
+schedule scan, LEC only). Set `KCKILLS_TRACKED_LEAGUES=lec,lcs,lck`
+for 3 leagues, or `*` for every active league in the `leagues` table.
+
+The match-discovery / team-resolution / game-upsert logic INSIDE the
+per-event loop is unchanged ; only the outer driver is new.
 """
+
+from __future__ import annotations
 
 import structlog
 
-from services import lolesports_api, discord_webhook
+from services import discord_webhook, league_config, lolesports_api
+from services.observability import run_logged
 from services.supabase_client import safe_insert, safe_select, safe_upsert
 
 log = structlog.get_logger()
@@ -58,18 +75,56 @@ def _resolve_team_id(team: dict) -> str | None:
     return rows[0]["id"] if rows else None
 
 
-async def run() -> int:
-    """Scan the LEC schedule for new completed KC matches. Returns the count of newly-processed matches."""
-    log.info("sentinel_scan_start")
+async def _scan_league_schedule(league: league_config.TrackedLeague) -> int:
+    """Scan ONE league's schedule. Returns the count of new matches.
 
-    events, _next = await lolesports_api.get_schedule()
+    Extracted from `run()` so the multi-league outer loop can call it
+    once per tracked league. The body is the same per-event processing
+    that pre-PR ran inline ; only the league_id parameter is now
+    explicit instead of falling through to config.LEC_LEAGUE_ID.
+
+    Skips silently when the league has no `lolesports_league_id` (e.g.
+    a Leaguepedia-only league) — the scraping pipeline owned by Agent
+    BD handles those leagues via a different code path.
+    """
+    if not league.lolesports_league_id:
+        log.info(
+            "sentinel_skip_no_lolesports_id",
+            league=str(league),
+        )
+        return 0
+
+    log.info(
+        "sentinel_scan_league",
+        league=str(league),
+        lolesports_id=league.lolesports_league_id,
+    )
+
+    events, _next = await lolesports_api.get_schedule(
+        league_id=league.lolesports_league_id,
+    )
     new_matches = 0
 
+    # PR23.12 — pre-insert upcoming/inProgress matches AND completed.
+    # Previously the sentinel ignored any match not in state='completed'
+    # which meant every live match started its lifecycle ~1h late : the
+    # match row only landed AFTER the broadcast ended, so the harvester
+    # couldn't extract kills in real time and the clipper played catch-up.
+    #
+    # New flow per event state :
+    #   'completed'  → full processing (insert games, kick downstream)
+    #   'inProgress' → insert match + games (state='live') so harvester
+    #                  can start polling live stats feed immediately
+    #   'unstarted'  → insert match shell (state='upcoming') so the
+    #                  /matches page shows it ahead of time. Games
+    #                  (and the harvester run) wait until kickoff.
     for event in events:
         if event.get("type") != "match":
             continue
-        if event.get("state") != "completed":
+        ev_state = event.get("state", "")
+        if ev_state not in ("completed", "inProgress", "unstarted"):
             continue
+        is_completed = (ev_state == "completed")
 
         match = event.get("match", {})
         teams = match.get("teams", [])
@@ -86,10 +141,15 @@ async def run() -> int:
         existing = safe_select("matches", "id", external_id=match_ext_id)
         already_seen = bool(existing)
 
+        # For unstarted matches, getEventDetails often has no game info yet,
+        # but we DO want to insert the match shell so the /matches page
+        # shows the upcoming fixture. Fall back to a minimal details dict.
         details = await lolesports_api.get_event_details(match_ext_id)
-        if not details:
+        if not details and is_completed:
             log.warn("sentinel_no_details", match_id=match_ext_id)
             continue
+        if not details:
+            details = {}
 
         team_a, team_b = teams[0], teams[1]
         kc_team = team_a if lolesports_api.is_kc(team_a) else team_b
@@ -115,6 +175,16 @@ async def run() -> int:
         strategy = match.get("strategy", {}) or {}
         bo_count = strategy.get("count", 1)
 
+        # Map lolesports state → DB state
+        # completed   → 'completed' (final scores in)
+        # inProgress  → 'live'      (broadcast running, harvester should poll)
+        # unstarted   → 'upcoming'  (scheduled, awaiting kickoff)
+        db_state = (
+            "completed" if ev_state == "completed"
+            else "live" if ev_state == "inProgress"
+            else "upcoming"
+        )
+
         match_row = safe_upsert(
             "matches",
             {
@@ -124,7 +194,7 @@ async def run() -> int:
                 "format": f"bo{bo_count}",
                 "stage": event.get("blockName", "") or "",
                 "scheduled_at": event.get("startTime"),
-                "state": "completed",
+                "state": db_state,
             },
             on_conflict="external_id",
         )
@@ -133,9 +203,12 @@ async def run() -> int:
             match_db_id = existing[0]["id"]
 
         # Insert / upsert each game with proper match_id FK
+        # PR23.12 — also accept inProgress games so the harvester can
+        # start polling live stats DURING the broadcast, not just after.
         detail_match = details.get("match", {}) or {}
         for game in detail_match.get("games", []):
-            if game.get("state") != "completed":
+            game_state = game.get("state", "")
+            if game_state not in ("completed", "inProgress", "unstarted"):
                 continue
 
             game_ext_id = game.get("id", "")
@@ -177,13 +250,25 @@ async def run() -> int:
                         vod_offset = _parse_offset(vod.get("offset"))
                         break
 
+            # State mapping :
+            # completed + has VOD → 'vod_found' (clipper-ready)
+            # completed + no VOD  → 'pending'
+            # inProgress          → 'live' (harvester picks up via live stats)
+            # unstarted           → 'pending'
+            if game_state == "completed":
+                game_db_state = "vod_found" if vod_youtube_id else "pending"
+            elif game_state == "inProgress":
+                game_db_state = "live"
+            else:
+                game_db_state = "pending"
+
             game_payload = {
                 "external_id": game_ext_id,
                 "match_id": match_db_id,
                 "game_number": game.get("number", 1),
                 "vod_youtube_id": vod_youtube_id,
                 "vod_offset_seconds": vod_offset,
-                "state": "vod_found" if vod_youtube_id else "pending",
+                "state": game_db_state,
             }
             # Strip keys with None so we don't overwrite existing good data
             game_payload = {k: v for k, v in game_payload.items() if v is not None}
@@ -203,10 +288,52 @@ async def run() -> int:
                     blue=team_a.get("code", "?"),
                     red=team_b.get("code", "?"),
                     games=len(detail_match.get("games", []) or []),
-                    tournament=event.get("league", {}).get("name", "LEC"),
+                    tournament=event.get("league", {}).get("name", league.short_name),
                 )
             except Exception:
                 pass
 
-    log.info("sentinel_scan_done", new_matches=new_matches)
+    log.info(
+        "sentinel_scan_league_done",
+        league=str(league),
+        new_matches=new_matches,
+    )
     return new_matches
+
+
+@run_logged()
+async def run() -> int:
+    """Scan EVERY tracked league for new completed matches.
+
+    Returns the total count of newly-processed matches across all
+    leagues. Default `KCKILLS_TRACKED_LEAGUES=lec` → byte-identical to
+    the pre-PR pilot (one schedule scan, LEC only).
+    """
+    log.info("sentinel_scan_start")
+    leagues = league_config.load_tracked_leagues()
+    log.info(
+        "sentinel_tracked_leagues",
+        count=len(leagues),
+        slugs=[t.slug for t in leagues],
+    )
+
+    total_new = 0
+    for league in leagues:
+        try:
+            total_new += await _scan_league_schedule(league)
+        except Exception as e:
+            # NEVER let one league's failure abort the others. The
+            # observability decorator captures the run-level error
+            # summary ; the per-league error is logged here.
+            log.warn(
+                "sentinel_league_scan_failed",
+                league=str(league),
+                error=str(e)[:200],
+            )
+
+    log.info(
+        "sentinel_scan_done",
+        leagues_scanned=len(leagues),
+        new_matches=total_new,
+    )
+    return total_new

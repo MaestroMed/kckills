@@ -38,6 +38,7 @@ from datetime import datetime, timezone
 import httpx
 import structlog
 
+from services.observability import run_logged
 from services.supabase_client import get_db, safe_select, safe_update
 
 log = structlog.get_logger()
@@ -299,6 +300,7 @@ async def _reanalyze_backlog() -> dict:
 
 # ─── Daemon loop ────────────────────────────────────────────────────────
 
+@run_logged()
 async def run() -> int:
     """Poll worker_jobs for pending + scheduled-eligible, execute serially.
 

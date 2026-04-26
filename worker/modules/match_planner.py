@@ -34,6 +34,8 @@ import httpx
 import structlog
 
 from services import lolesports_api
+from services.league_config import get_league_by_slug
+from services.observability import run_logged
 from services.supabase_client import get_db, safe_upsert
 
 log = structlog.get_logger()
@@ -49,6 +51,7 @@ LOOKAHEAD_DAYS = 21
 BOOST_LEAD_MINUTES = 5
 
 
+@run_logged()
 async def run() -> int:
     """Refresh the next 21 days of KC matches + queue boost jobs.
 
@@ -66,6 +69,13 @@ async def run() -> int:
     # until we exhaust the window.
     now = datetime.now(timezone.utc)
     horizon = now + timedelta(days=LOOKAHEAD_DAYS)
+
+    # PR-loltok DH : pull "LEC" short_name from league_config so the
+    # default fallback used when the API doesn't include a league.name
+    # follows the same single-source-of-truth as the rest of the
+    # multi-league plumbing. Resolved once before the page loop.
+    _lec_league = get_league_by_slug("lec")
+    _league_default_name = (_lec_league.short_name if _lec_league else "LEC")
 
     upcoming: list[dict] = []
     next_token = None
@@ -107,7 +117,7 @@ async def run() -> int:
                     "state": event.get("state", "unstarted"),
                     "opponent_code": (opp or {}).get("code"),
                     "opponent_name": (opp or {}).get("name"),
-                    "league": (event.get("league") or {}).get("name", "LEC"),
+                    "league": (event.get("league") or {}).get("name", _league_default_name),
                     "block_name": event.get("blockName"),
                     "best_of": (match.get("strategy") or {}).get("count", 1),
                 }

@@ -1,4 +1,57 @@
-export const KC_TEAM_SLUG = "karmine-corp";
+// ─── Tracked-team config (PR-loltok BA — feature-flagged transition) ────
+//
+// LoLTok will eventually track every LoL pro team. The pilot tracks
+// only Karmine Corp. We expose two related constants :
+//
+//   * KC_PRIMARY_TEAM_SLUG / KC_TEAM_SLUG (legacy alias)
+//       → the "default" team the homepage hero, /kc redirect and the
+//         legacy KC-centric routes resolve to. Reads the env var so an
+//         operator can flip the pilot to track a different headline
+//         team without touching code.
+//
+//   * TRACKED_TEAM_SLUGS
+//       → the comma-separated set of tracked slugs from
+//         KCKILLS_TRACKED_TEAMS (default = ["karmine-corp"]).
+//         Used by the multi-team /scroll feed and the league filters.
+//
+// Default values keep the EtoStark demo byte-identical : with no env
+// vars set, both constants behave exactly like the pilot.
+//
+// IMPORTANT : `process.env.X` is read at BUILD time on the server.
+// The browser bundle never sees server env vars unless they're
+// `NEXT_PUBLIC_*`. These constants are imported from server components
+// (RSC) — for client-side reads use the `NEXT_PUBLIC_KCKILLS_PRIMARY_TEAM_SLUG`
+// fallback chain documented at the bottom of this file.
+
+export const KC_PRIMARY_TEAM_SLUG: string =
+  process.env.KCKILLS_PRIMARY_TEAM_SLUG ??
+  process.env.NEXT_PUBLIC_KCKILLS_PRIMARY_TEAM_SLUG ??
+  "karmine-corp";
+
+/** @deprecated Use KC_PRIMARY_TEAM_SLUG. Kept for legacy KC-centric routes. */
+export const KC_TEAM_SLUG = KC_PRIMARY_TEAM_SLUG;
+
+/** Comma-separated list of tracked team slugs, parsed from
+ *  KCKILLS_TRACKED_TEAMS. Special value "*" means "track all teams in the
+ *  worker catalog" (LoLTok mode). Default = [KC_PRIMARY_TEAM_SLUG]. */
+export const TRACKED_TEAM_SLUGS: string[] = (() => {
+  const raw =
+    process.env.KCKILLS_TRACKED_TEAMS ??
+    process.env.NEXT_PUBLIC_KCKILLS_TRACKED_TEAMS ??
+    "";
+  const trimmed = raw.trim();
+  if (!trimmed) return [KC_PRIMARY_TEAM_SLUG];
+  if (trimmed === "*") return ["*"];
+  return trimmed
+    .split(",")
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0);
+})();
+
+/** True when the worker (and therefore this site) tracks more than one
+ *  team. Used to gate the team-picker UI and the league switcher. */
+export const IS_MULTI_TEAM_MODE: boolean =
+  TRACKED_TEAM_SLUGS.length > 1 || TRACKED_TEAM_SLUGS[0] === "*";
 
 export const ROLE_ORDER: Record<string, number> = {
   top: 0,

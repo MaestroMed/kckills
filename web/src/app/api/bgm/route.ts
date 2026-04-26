@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { readFile, writeFile } from "fs/promises";
 import path from "path";
-import { requireAdmin } from "@/lib/admin/audit";
+import { deriveActorRole, logAdminAction, requireAdmin } from "@/lib/admin/audit";
 
 const PLAYLIST_PATH = path.join(process.cwd(), "src/lib/scroll/bgm-playlist.json");
 
@@ -31,6 +31,29 @@ export async function POST(request: NextRequest) {
   if (!Array.isArray(body)) {
     return NextResponse.json({ error: "Expected array of tracks" }, { status: 400 });
   }
+
+  // Snapshot the previous playlist for the audit diff. If reading fails
+  // (e.g. file doesn't exist yet), fall back to null — the audit just
+  // shows "before: null → after: <new playlist>".
+  let before: unknown = null;
+  try {
+    const raw = await readFile(PLAYLIST_PATH, "utf-8");
+    before = JSON.parse(raw);
+  } catch {
+    /* first save — no prior playlist */
+  }
+
   await writeFile(PLAYLIST_PATH, JSON.stringify(body, null, 2), "utf-8");
+
+  await logAdminAction({
+    action: "bgm.playlist.update",
+    entityType: "bgm_playlist",
+    entityId: "default",
+    before,
+    after: body,
+    actorRole: deriveActorRole(admin),
+    request,
+  });
+
   return NextResponse.json({ ok: true, count: body.length });
 }

@@ -1,8 +1,12 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { StarRating } from "@/components/star-rating";
 import Link from "next/link";
+import { ReportButton } from "@/components/community/ReportButton";
+import { CommentVote } from "@/components/community/CommentVote";
+import { CommentSortToggle } from "@/components/community/CommentSortToggle";
+import { sortComments, type CommentSortMode } from "@/lib/comments";
 
 // ─── Server-shape types ─────────────────────────────────────────────────
 // Minimal interfaces matching what /api/kills/[id]/comment returns. Keeping
@@ -24,6 +28,10 @@ interface ApiComment {
   parent_id?: string | null;
   profile?: ApiProfile | null;
   replies?: ApiComment[];
+  // Wave 7 (Agent AF) — vote enrichment populated by the GET endpoint.
+  upvotes?: number | null;
+  downvote_count?: number | null;
+  user_vote?: number | null;
 }
 
 interface ApiRateResponse {
@@ -38,11 +46,16 @@ interface Comment {
   avatar?: string;
   text: string;
   time: string;
+  createdAtMs: number;
   replies?: Comment[];
   /** Optimistic local insert flag — turns the bubble subtly translucent
    *  while we wait for the server. Replaced when the server response
    *  arrives, or rolled back on failure. */
   pending?: boolean;
+  // Wave 7 — voting state. Defaults to 0/0/0 for legacy / optimistic rows.
+  upvotes: number;
+  downvoteCount: number;
+  userVote: -1 | 0 | 1;
 }
 
 export function KillInteractions({ killId }: { killId: string }) {
@@ -56,6 +69,7 @@ export function KillInteractions({ killId }: { killId: string }) {
   const [rateStatus, setRateStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [commentStatus, setCommentStatus] = useState<"idle" | "submitting" | "error">("idle");
   const [commentError, setCommentError] = useState<string | null>(null);
+  const [sortMode, setSortMode] = useState<CommentSortMode>("latest");
   /** Guard against double-submit from spam Enter / spam click. */
   const submittingRef = useRef(false);
   /** Latest rate() request id — older responses are ignored if a newer
@@ -84,16 +98,25 @@ export function KillInteractions({ killId }: { killId: string }) {
         }
         const data: unknown = await res.json();
         if (ac.signal.aborted) return;
-        const mapComment = (c: ApiComment): Comment => ({
-          id: String(c.id ?? ""),
-          user: String(c.profile?.discord_username ?? c.profile?.username ?? "Anonyme"),
-          avatar: c.profile?.discord_avatar_url ?? undefined,
-          text: String(c.content ?? c.body ?? ""),
-          time: c.created_at
-            ? new Date(c.created_at).toLocaleDateString("fr-FR", { day: "numeric", month: "short" })
-            : "",
-          replies: Array.isArray(c.replies) ? c.replies.map(mapComment) : undefined,
-        });
+        const mapComment = (c: ApiComment): Comment => {
+          const userVoteRaw = c.user_vote;
+          const userVote: -1 | 0 | 1 =
+            userVoteRaw === -1 || userVoteRaw === 1 ? userVoteRaw : 0;
+          return {
+            id: String(c.id ?? ""),
+            user: String(c.profile?.discord_username ?? c.profile?.username ?? "Anonyme"),
+            avatar: c.profile?.discord_avatar_url ?? undefined,
+            text: String(c.content ?? c.body ?? ""),
+            time: c.created_at
+              ? new Date(c.created_at).toLocaleDateString("fr-FR", { day: "numeric", month: "short" })
+              : "",
+            createdAtMs: c.created_at ? new Date(c.created_at).getTime() : Date.now(),
+            upvotes: typeof c.upvotes === "number" ? c.upvotes : 0,
+            downvoteCount: typeof c.downvote_count === "number" ? c.downvote_count : 0,
+            userVote,
+            replies: Array.isArray(c.replies) ? c.replies.map(mapComment) : undefined,
+          };
+        };
         const mapped = Array.isArray(data) ? (data as ApiComment[]).map(mapComment) : [];
         setComments(mapped);
       } catch (err) {
@@ -164,7 +187,16 @@ export function KillInteractions({ killId }: { killId: string }) {
     if (!isUuid) {
       // Local-only for legacy kills — instant insert, no server.
       setComments((prev) => [
-        { id: `local-${Date.now()}`, user: "Toi", text: trimmed, time: "maintenant" },
+        {
+          id: `local-${Date.now()}`,
+          user: "Toi",
+          text: trimmed,
+          time: "maintenant",
+          createdAtMs: Date.now(),
+          upvotes: 0,
+          downvoteCount: 0,
+          userVote: 0,
+        },
         ...prev,
       ]);
       setCommentText("");
@@ -185,7 +217,11 @@ export function KillInteractions({ killId }: { killId: string }) {
       user: "Toi",
       text: trimmed,
       time: "maintenant",
+      createdAtMs: Date.now(),
       pending: true,
+      upvotes: 0,
+      downvoteCount: 0,
+      userVote: 0,
     };
     setComments((prev) => [optimistic, ...prev]);
     setCommentText("");
@@ -232,6 +268,10 @@ export function KillInteractions({ killId }: { killId: string }) {
                 avatar: data.profile?.discord_avatar_url ?? undefined,
                 text: String(data.content ?? data.body ?? trimmed),
                 time: "maintenant",
+                createdAtMs: data.created_at ? new Date(data.created_at).getTime() : Date.now(),
+                upvotes: typeof data.upvotes === "number" ? data.upvotes : 0,
+                downvoteCount: typeof data.downvote_count === "number" ? data.downvote_count : 0,
+                userVote: 0,
               }
             : c,
         ),
@@ -251,12 +291,46 @@ export function KillInteractions({ killId }: { killId: string }) {
     }
   }, [killId, isUuid, commentText]);
 
+  // Vote change reconciler — keeps the local list in sync after a
+  // CommentVote child fires a successful POST. Walks both top-level
+  // and reply rows since the user can vote on either.
+  const handleVoteChange = useCallback(
+    (commentId: string, state: { upvotes: number; downvotes: number; userVote: -1 | 0 | 1 }) => {
+      setComments((prev) =>
+        prev.map((c) =>
+          c.id === commentId
+            ? { ...c, upvotes: state.upvotes, downvoteCount: state.downvotes, userVote: state.userVote }
+            : c.replies
+              ? {
+                  ...c,
+                  replies: c.replies.map((r) =>
+                    r.id === commentId
+                      ? { ...r, upvotes: state.upvotes, downvoteCount: state.downvotes, userVote: state.userVote }
+                      : r,
+                  ),
+                }
+              : c,
+        ),
+      );
+    },
+    [],
+  );
+
+  const onAuthRequired = useCallback(() => setAuthError(true), []);
+
+  // Apply the chosen sort. Pending optimistic comments stay at the top
+  // regardless of mode (sortComments() handles that internally).
+  const sortedComments = useMemo(
+    () => sortComments(comments, sortMode),
+    [comments, sortMode],
+  );
+
   return (
     <div className="space-y-4">
       {/* Auth prompt */}
       {authError && (
         <div className="rounded-xl border border-[var(--gold)]/30 bg-[var(--gold)]/5 p-4 text-center">
-          <p className="text-sm text-[var(--gold)] mb-2">Connecte-toi pour noter et commenter</p>
+          <p className="text-sm text-[var(--gold)] mb-2">Connecte-toi pour noter, voter et commenter</p>
           <Link
             href="/login"
             className="inline-flex items-center gap-2 rounded-lg bg-[#5865F2] px-4 py-2 text-sm font-semibold text-white hover:bg-[#4752C4] transition-colors"
@@ -297,7 +371,10 @@ export function KillInteractions({ killId }: { killId: string }) {
 
       {/* Comments */}
       <div className="rounded-xl border border-[var(--border-gold)] bg-[var(--bg-surface)] p-5 space-y-4">
-        <h3 className="font-display font-bold">Commentaires ({comments.length})</h3>
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <h3 className="font-display font-bold">Commentaires ({comments.length})</h3>
+          <CommentSortToggle mode={sortMode} onChange={setSortMode} />
+        </div>
 
         <div className="flex gap-2">
           <input
@@ -343,17 +420,52 @@ export function KillInteractions({ killId }: { killId: string }) {
           </p>
         )}
 
-        {comments.map((c) => (
-          <CommentThread key={c.id} comment={c} depth={0} />
+        {sortedComments.map((c) => (
+          <CommentThread
+            key={c.id}
+            comment={c}
+            depth={0}
+            onAuthRequired={onAuthRequired}
+            onVoteChange={handleVoteChange}
+          />
         ))}
       </div>
+
+      {/* Footer report — same loop as the scroll feed sidebar but
+          surfaced as text so it's discoverable on the static detail
+          page. Only meaningful for real Supabase-backed kills (UUID).
+          Legacy aggregate IDs (slug-style) skip this entirely. */}
+      {isUuid && (
+        <div className="flex items-center justify-end gap-2 px-1 text-[11px] text-[var(--text-muted)]">
+          <span>Un problème avec ce clip&nbsp;?</span>
+          <ReportButton
+            targetType="kill"
+            targetId={killId}
+            size="sm"
+            ariaLabel="Signaler ce kill"
+          />
+        </div>
+      )}
     </div>
   );
 }
 
-function CommentThread({ comment: c, depth }: { comment: Comment; depth: number }) {
+interface ThreadProps {
+  comment: Comment;
+  depth: number;
+  onAuthRequired?: () => void;
+  onVoteChange: (commentId: string, state: { upvotes: number; downvotes: number; userVote: -1 | 0 | 1 }) => void;
+}
+
+function CommentThread({ comment: c, depth, onAuthRequired, onVoteChange }: ThreadProps) {
   const maxDepth = 3;
   const indent = Math.min(depth, maxDepth);
+  // Optimistic / local-only comments don't have server ids — hide the
+  // report + vote buttons until the canonical row lands.
+  const isLocalId =
+    c.pending || c.id.startsWith("opt-") || c.id.startsWith("local-");
+  const reportable = !isLocalId;
+  const votable = !isLocalId;
 
   return (
     <div style={{ marginLeft: indent > 0 ? `${indent * 16}px` : 0 }}>
@@ -374,15 +486,42 @@ function CommentThread({ comment: c, depth }: { comment: Comment; depth: number 
           {depth > 0 && (
             <span className="text-[9px] text-[var(--text-disabled)]">&middot; r&eacute;ponse</span>
           )}
+          {reportable && (
+            <span className="ml-auto">
+              <ReportButton
+                targetType="comment"
+                targetId={c.id}
+                size="sm"
+              />
+            </span>
+          )}
         </div>
         <p className="text-sm text-[var(--text-secondary)] pl-8">{c.text}</p>
+        {votable && (
+          <div className="pl-8 mt-1.5">
+            <CommentVote
+              commentId={c.id}
+              initialUpvotes={c.upvotes}
+              initialDownvotes={c.downvoteCount}
+              initialUserVote={c.userVote}
+              onAuthRequired={onAuthRequired}
+              onChange={(state) => onVoteChange(c.id, state)}
+            />
+          </div>
+        )}
       </div>
 
       {/* Nested replies */}
       {c.replies && c.replies.length > 0 && (
         <div className="mt-2 space-y-2 border-l-2 border-[var(--gold)]/10 pl-2">
           {c.replies.map((reply) => (
-            <CommentThread key={reply.id} comment={reply} depth={depth + 1} />
+            <CommentThread
+              key={reply.id}
+              comment={reply}
+              depth={depth + 1}
+              onAuthRequired={onAuthRequired}
+              onVoteChange={onVoteChange}
+            />
           ))}
         </div>
       )}

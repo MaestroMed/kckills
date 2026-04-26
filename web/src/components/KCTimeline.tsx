@@ -1,15 +1,40 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
-import { m, AnimatePresence } from "framer-motion";
+import { m, AnimatePresence } from "motion/react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { ERAS, type Era } from "@/lib/eras";
 
 /**
+ * Two interaction modes :
+ *
+ *  - `"navigate"` (default) : clicking a card pushes /era/[id]. Used on
+ *    the marketing/landing surfaces where the timeline is a portal into
+ *    the long-form era pages.
+ *
+ *  - `"filter"` : clicking a card calls `onEraSelect(eraId)` (or
+ *    `onEraSelect(null)` if the user re-clicks the active card to clear
+ *    the filter) and applies the greyscale dimming to non-selected
+ *    cards per CLAUDE.md §6.2. Used by HomeTimelineFeed to wire the
+ *    timeline to the kills feed below it.
+ */
+export type KCTimelineMode = "navigate" | "filter";
+
+export interface KCTimelineProps {
+  mode?: KCTimelineMode;
+  /** Currently selected era id. Only meaningful in `mode="filter"`. */
+  selectedEraId?: string | null;
+  /** Callback fired when the user clicks a card in `mode="filter"`. The
+   *  argument is the new selection — `null` means "clear filter". */
+  onEraSelect?: (eraId: string | null) => void;
+}
+
+/**
  * Horizontal scrolling timeline with:
  *  - Drag-to-scroll via Pointer Events
- *  - Click-to-navigate via event delegation at the container level
+ *  - Click-to-navigate (mode="navigate") OR click-to-filter
+ *    (mode="filter") via event delegation at the container level
  *    (setPointerCapture reroutes click events to the captured element,
  *    which is why individual card onClick handlers don't fire during a drag
  *    session — so we delegate to the container and resolve the card via
@@ -18,12 +43,37 @@ import { ERAS, type Era } from "@/lib/eras";
  *  - Keyboard navigation (arrow keys)
  *  - Vertical wheel remapped to horizontal scroll
  *  - Native touch swipe (touch-action: pan-x)
+ *  - prefers-reduced-motion : grayscale + scale transitions snap instantly,
+ *    no spring on the cards (the GPU-cheap opacity dim still applies).
  */
-export function KCTimeline() {
+export function KCTimeline({
+  mode = "navigate",
+  selectedEraId = null,
+  onEraSelect,
+}: KCTimelineProps = {}) {
   const router = useRouter();
   const [hovered, setHovered] = useState<string | null>(null);
   const [popupEra, setPopupEra] = useState<Era | null>(null);
+  const [reducedMotion, setReducedMotion] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+
+  // Read OS-level prefers-reduced-motion so we can skip the spring/scale
+  // transitions for users who opted out of motion. The mql.matches read
+  // is SSR-safe — useEffect only runs client-side.
+  useEffect(() => {
+    if (typeof window === "undefined" || typeof window.matchMedia !== "function") return;
+    const mql = window.matchMedia("(prefers-reduced-motion: reduce)");
+    setReducedMotion(mql.matches);
+    const onChange = (e: MediaQueryListEvent) => setReducedMotion(e.matches);
+    try {
+      mql.addEventListener("change", onChange);
+      return () => mql.removeEventListener("change", onChange);
+    } catch {
+      // Safari ≤ 13 fallback
+      mql.addListener(onChange);
+      return () => mql.removeListener(onChange);
+    }
+  }, []);
 
   // Drag state lives in a ref so we never re-render during the gesture.
   const drag = useRef({
@@ -159,6 +209,8 @@ export function KCTimeline() {
   }, []);
 
   // Click delegation: find the closest data-era-id ancestor and navigate
+  // (mode="navigate") OR fire the filter callback (mode="filter").
+  // Re-clicking the active card in filter mode clears the filter.
   const onContainerClick = useCallback(
     (e: React.MouseEvent<HTMLDivElement>) => {
       if (drag.current.justDragged || drag.current.didMove) return;
@@ -167,22 +219,56 @@ export function KCTimeline() {
       if (!card) return;
       const eraId = card.dataset.eraId;
       if (!eraId) return;
-      router.push(`/era/${eraId}`);
+      if (mode === "filter") {
+        if (!onEraSelect) return;
+        // Toggle : clicking the active card again clears the filter.
+        const next = selectedEraId === eraId ? null : eraId;
+        onEraSelect(next);
+      } else {
+        router.push(`/era/${eraId}`);
+      }
     },
-    [router]
+    [router, mode, selectedEraId, onEraSelect],
   );
 
-  const onKeyDown = useCallback((e: React.KeyboardEvent<HTMLDivElement>) => {
-    const el = containerRef.current;
-    if (!el) return;
-    if (e.key === "ArrowRight") {
-      e.preventDefault();
-      el.scrollBy({ left: 280, behavior: "smooth" });
-    } else if (e.key === "ArrowLeft") {
-      e.preventDefault();
-      el.scrollBy({ left: -280, behavior: "smooth" });
-    }
-  }, []);
+  // Keyboard navigation. ArrowLeft/Right scroll the strip horizontally
+  // (and in filter mode, also cycle the active era). Enter / Space on a
+  // focused card triggers the same action as a click. Escape clears the
+  // filter when one is active.
+  const onKeyDown = useCallback(
+    (e: React.KeyboardEvent<HTMLDivElement>) => {
+      const el = containerRef.current;
+      if (!el) return;
+      if (e.key === "ArrowRight") {
+        e.preventDefault();
+        if (mode === "filter" && onEraSelect) {
+          // Cycle to the next era. If nothing is selected yet, pick the
+          // first one. Wrap around at the end so keyboard users can scan
+          // the whole strip without losing focus.
+          const idx = selectedEraId
+            ? ERAS.findIndex((e2) => e2.id === selectedEraId)
+            : -1;
+          const nextIdx = (idx + 1) % ERAS.length;
+          onEraSelect(ERAS[nextIdx].id);
+        }
+        el.scrollBy({ left: 280, behavior: "smooth" });
+      } else if (e.key === "ArrowLeft") {
+        e.preventDefault();
+        if (mode === "filter" && onEraSelect) {
+          const idx = selectedEraId
+            ? ERAS.findIndex((e2) => e2.id === selectedEraId)
+            : ERAS.length;
+          const prevIdx = (idx - 1 + ERAS.length) % ERAS.length;
+          onEraSelect(ERAS[prevIdx].id);
+        }
+        el.scrollBy({ left: -280, behavior: "smooth" });
+      } else if (mode === "filter" && (e.key === "Escape") && selectedEraId && onEraSelect) {
+        e.preventDefault();
+        onEraSelect(null);
+      }
+    },
+    [mode, selectedEraId, onEraSelect],
+  );
 
   // Mouse wheel → horizontal scroll
   useEffect(() => {
@@ -225,10 +311,44 @@ export function KCTimeline() {
           const anyHovered = hovered !== null;
           const isDimmed = anyHovered && !isHovered;
           const isLive = era.id === "lec-2026-spring";
+          // Filter-mode selection state. A card is "active" when it IS
+          // the selectedEra ; "filter-dimmed" when the timeline is in
+          // filter mode AND a different era is active.
+          const isActiveFilter = mode === "filter" && selectedEraId === era.id;
+          const isFilterDimmed =
+            mode === "filter" && selectedEraId !== null && selectedEraId !== era.id;
 
           const baseOffset = -120;
           const rotation = (i - ERAS.length / 2) * 1.6;
-          const hoverZ = isHovered ? 50 : 10 - Math.abs(i - ERAS.length / 2);
+          // Selected era pops above all others so its halo / accents
+          // are not clipped by neighbour cards that overlap via -120 mL.
+          const hoverZ = isActiveFilter
+            ? 60
+            : isHovered
+            ? 50
+            : 10 - Math.abs(i - ERAS.length / 2);
+
+          // Per CLAUDE.md §6.2 : non-selected eras get
+          // `filter: grayscale(100%) brightness(0.4)` — legible enough
+          // to stay clickable, dimmed enough to make the active era
+          // visually dominate. Active era scales 1.05 (additive on top
+          // of the existing hover 1.08).
+          const filterCss = isFilterDimmed
+            ? "grayscale(100%) brightness(0.4)"
+            : "none";
+          // prefers-reduced-motion : cut the spring and snap the
+          // grayscale/scale instantly. The opacity dim still applies —
+          // it's essentially free and doesn't count as motion.
+          const targetScale = isActiveFilter
+            ? 1.05
+            : isHovered
+            ? 1.08
+            : anyHovered
+            ? 0.94
+            : 1;
+          const cardTransition = reducedMotion
+            ? { duration: 0 }
+            : ({ type: "spring" as const, stiffness: 220, damping: 22 });
 
           return (
             <m.div
@@ -238,33 +358,42 @@ export function KCTimeline() {
               onMouseLeave={onCardHoverEnd}
               role="button"
               tabIndex={-1}
-              aria-label={`${era.label} \u2014 ${era.period}`}
-              whileTap={{ scale: 0.97 }}
+              aria-label={
+                mode === "filter"
+                  ? `Filtrer par ${era.label}`
+                  : `${era.label} \u2014 ${era.period}`
+              }
+              aria-pressed={mode === "filter" ? isActiveFilter : undefined}
+              whileTap={reducedMotion ? undefined : { scale: 0.97 }}
               animate={{
-                scale: isHovered ? 1.08 : anyHovered ? 0.94 : 1,
-                y: isHovered ? -18 : 0,
-                rotate: isHovered ? 0 : rotation,
+                scale: targetScale,
+                y: isHovered || isActiveFilter ? -18 : 0,
+                rotate: isHovered || isActiveFilter ? 0 : rotation,
                 // NOTE: removed `filter: blur(1px)` from the dimmed state —
                 // CSS blur is GPU-expensive and with 16 cards animating in
                 // parallel on hover changes, it was causing a visible freeze
                 // even on fast PCs. Using opacity instead is virtually free.
                 opacity: isDimmed ? 0.35 : 1,
+                filter: filterCss,
                 zIndex: hoverZ,
               }}
-              transition={{ type: "spring", stiffness: 220, damping: 22 }}
+              transition={cardTransition}
               className="era-card relative overflow-hidden rounded-2xl border-2 flex-shrink-0 cursor-pointer"
               style={{
-                borderColor: isHovered ? era.color : "var(--border-gold)",
-                boxShadow: isHovered
-                  ? `0 30px 80px ${era.color}50, 0 0 60px ${era.color}30, inset 0 0 0 1px ${era.color}40`
-                  : "0 8px 20px rgba(0,0,0,0.6)",
+                borderColor: isActiveFilter || isHovered ? era.color : "var(--border-gold)",
+                boxShadow:
+                  isActiveFilter
+                    ? `0 30px 100px ${era.color}70, 0 0 80px ${era.color}50, inset 0 0 0 2px ${era.color}80`
+                    : isHovered
+                    ? `0 30px 80px ${era.color}50, 0 0 60px ${era.color}30, inset 0 0 0 1px ${era.color}40`
+                    : "0 8px 20px rgba(0,0,0,0.6)",
                 width: "320px",
                 height: "460px",
                 marginLeft: i === 0 ? 0 : `${baseOffset}px`,
                 transformOrigin: "center center",
                 // GPU hint so the browser upgrades the card to its own compositing
                 // layer — dramatically cheaper than re-painting on every frame.
-                willChange: "transform, opacity",
+                willChange: "transform, opacity, filter",
                 backfaceVisibility: "hidden",
               }}
             >

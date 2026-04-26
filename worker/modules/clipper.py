@@ -24,16 +24,25 @@ from __future__ import annotations
 
 import asyncio
 import os
+import socket
 import sys
 import structlog
 
 from config import config
 from scheduler import scheduler
-from services import r2_client
+from services import job_queue, r2_client
 from services.clip_hash import content_hash, perceptual_hash
 from services.ffmpeg_ops import video_codec_args
-from services.supabase_batch import batched_safe_update, get_writer
-from services.supabase_client import safe_select, safe_update
+from services.local_paths import LocalPaths
+from services.media_probe import probe_video
+from services.observability import run_logged
+from services.runtime_tuning import (
+    get_batch_size,
+    get_lease_seconds,
+    get_parallelism,
+)
+from services.supabase_batch import batched_safe_insert, batched_safe_update, get_writer
+from services.supabase_client import get_db, safe_select, safe_update
 
 log = structlog.get_logger()
 
@@ -83,7 +92,11 @@ def _build_overlay_filter(
     return ",".join(parts)
 
 
-VODS_DIR = os.environ.get("LOLTOK_VODS_DIR", os.path.join(os.path.dirname(__file__), "..", "vods"))
+# PR-loltok DH : VODS_DIR now flows through services.local_paths so
+# the same code lands on Mehdi's D:/ Gen5 NVMe in pilot mode and on
+# /var/cache/kckills inside a Linux container. Override via
+# KCKILLS_VODS_DIR / KCKILLS_DATA_ROOT.
+VODS_DIR = LocalPaths.vods_dir()
 
 
 async def download_full_vod(youtube_id: str) -> str | None:
@@ -111,7 +124,12 @@ async def download_full_vod(youtube_id: str) -> str | None:
     cmd = [
         sys.executable, "-m", "yt_dlp",
         *_cookies_args(),
-        "--js-runtimes", "node",
+        # YouTube post-2026-04 requires JS runtime + EJS challenge solver
+        # to resolve the n-decoder. Without these, only image formats are
+        # returned and the download fails with "Requested format not
+        # available". deno is installed via winget, on PATH via main.py.
+        "--js-runtimes", "deno",
+        "--remote-components", "ejs:github",
         "-f", "bestvideo[height<=1080]+bestaudio/best[height<=1080]",
         "--merge-output-format", "mp4",
         "-o", vod_path,
@@ -158,12 +176,20 @@ async def clip_kill(
     victim_champion: str | None = None,
     match_context: str | None = None,
     local_vod_path: str | None = None,
+    game_id: str | None = None,
 ) -> dict | None:
     """Encode and upload a single kill clip. Returns dict of R2 URLs or None.
 
     If `local_vod_path` is provided (full VOD already downloaded), extracts
     the segment with ffmpeg directly — ZERO yt-dlp calls, ZERO throttle risk.
     Falls back to per-kill yt-dlp download if no local VOD.
+
+    `game_id` is used to compute the versioned R2 key layout
+    (`clips/{game_id}/{kill_id}/v{N}/{file}`) and to write the new
+    `kill_assets` rows introduced in migration 026. When omitted, the
+    versioned uploads are skipped and only the legacy flat keys are
+    written — this preserves the path used by older callers (admin
+    re-clip CLIs) that don't carry the parent game.
     """
     os.makedirs(config.CLIPS_DIR, exist_ok=True)
     os.makedirs(config.THUMBNAILS_DIR, exist_ok=True)
@@ -334,19 +360,129 @@ async def clip_kill(
             else None
         )
 
-        # ─── 7. Upload everything to R2 in parallel ─────────────────
-        h_url, v_url, vl_url, thumb_url = await asyncio.gather(
+        # ─── 7. Determine version + archive prior assets ─────────────
+        # Version = max(version of existing kill_assets) + 1, or 1 if none.
+        # Re-clipping flips prior is_current=TRUE rows to FALSE so the
+        # frontend manifest only ever surfaces the latest set.
+        version = await asyncio.to_thread(_compute_next_version, kill_id) if game_id else 1
+        if game_id:
+            await asyncio.to_thread(_archive_prior_assets, kill_id)
+
+        # ─── 8. Upload everything to R2 in parallel ─────────────────
+        # Both layouts go up : the LEGACY flat keys keep the
+        # kills.clip_url_* columns working (back-compat), and the
+        # VERSIONED keys feed the new kill_assets rows.
+        legacy_uploads = [
             r2_client.upload_clip(kill_id, h_path, "h"),
             r2_client.upload_clip(kill_id, v_path, "v"),
             r2_client.upload_clip(kill_id, vl_path, "v_low") if os.path.exists(vl_path) else _noop(),
             r2_client.upload_clip(kill_id, thumb_path, "thumb") if os.path.exists(thumb_path) else _noop(),
+        ]
+
+        versioned_uploads: list = []
+        if game_id:
+            versioned_uploads = [
+                r2_client.upload_versioned(game_id, kill_id, version, h_path, "horizontal"),
+                r2_client.upload_versioned(game_id, kill_id, version, v_path, "vertical"),
+                (
+                    r2_client.upload_versioned(game_id, kill_id, version, vl_path, "vertical_low")
+                    if os.path.exists(vl_path) else _noop()
+                ),
+                (
+                    r2_client.upload_versioned(game_id, kill_id, version, thumb_path, "thumbnail")
+                    if os.path.exists(thumb_path) else _noop()
+                ),
+            ]
+
+        gathered = await asyncio.gather(*legacy_uploads, *versioned_uploads)
+        h_url, v_url, vl_url, thumb_url = gathered[:4]
+        h_url_v, v_url_v, vl_url_v, thumb_url_v = (
+            gathered[4:8] if game_id else (None, None, None, None)
         )
+
+        # ─── 9. Insert kill_assets rows for each artefact ────────────
+        # Probing each file is cheap (~50ms each) and runs off-thread so
+        # the gather above isn't blocked. probe_video tolerates failure
+        # and returns {} → row goes in with NULL media metadata.
+        if game_id:
+            encoder_args = {
+                "container": "mp4",
+                "v_codec": "h264",
+                "preset": "fast",
+                "vf_horizontal": "scale=1920:1080:force_original_aspect_ratio=decrease,pad",
+                "vf_vertical": v_filter,
+                "vf_vertical_low": "crop=ih*9/16:ih:iw/2-ih*9/32:0,scale=540:960",
+                "movflags": "+faststart",
+                "a_codec": "aac",
+                "a_bitrate_hq": "128k",
+                "a_bitrate_low": "80k",
+            }
+            window_json = {"start": int(clip_start), "end": int(clip_end)}
+            encoding_node = f"{socket.gethostname()}/{os.getpid()}"
+
+            assets_to_insert = [
+                ("horizontal",   h_path,     h_url_v,     h_url),
+                ("vertical",     v_path,     v_url_v,     v_url),
+                ("vertical_low", vl_path,    vl_url_v,    vl_url),
+                ("thumbnail",    thumb_path, thumb_url_v, thumb_url),
+            ]
+            for asset_type, local_path, versioned_url, _legacy_url in assets_to_insert:
+                if not versioned_url or not os.path.exists(local_path):
+                    continue
+                probe = await asyncio.to_thread(probe_video, local_path)
+                try:
+                    size = os.path.getsize(local_path)
+                except OSError:
+                    size = None
+
+                # Per-asset hashes : SHA-256 always (cheap, byte-exact);
+                # pHash only on thumbnail (DCT is the same data we need).
+                # Reuse already-computed h_path / thumb_path hashes when we can.
+                if asset_type == "horizontal":
+                    asset_content_hash = c_hash
+                    asset_phash = None
+                elif asset_type == "thumbnail":
+                    asset_content_hash = await asyncio.to_thread(content_hash, local_path)
+                    asset_phash = p_hash
+                else:
+                    asset_content_hash = await asyncio.to_thread(content_hash, local_path)
+                    asset_phash = None
+
+                row = {
+                    "kill_id": kill_id,
+                    "version": version,
+                    "type": asset_type,
+                    "url": versioned_url,
+                    "r2_key": r2_client.versioned_key(game_id, kill_id, version, asset_type),
+                    "width": probe.get("width"),
+                    "height": probe.get("height"),
+                    "duration_ms": probe.get("duration_ms"),
+                    "codec": probe.get("codec") or ("h264" if asset_type != "thumbnail" else None),
+                    "bitrate_kbps": probe.get("bitrate_kbps"),
+                    "size_bytes": size,
+                    "content_hash": asset_content_hash,
+                    "perceptual_hash": asset_phash,
+                    "source_offset_seconds": int(vod_offset_seconds or 0),
+                    "source_clip_window_seconds": window_json,
+                    "encoder_args": encoder_args,
+                    "encoding_node": encoding_node,
+                    "is_current": True,
+                }
+                # Strip Nones so PostgREST doesn't reject (some columns
+                # are NOT NULL — but width / height / duration_ms / etc
+                # are nullable, so we only drop keys whose value is None
+                # AND which aren't structurally required).
+                row = {k: v for k, v in row.items() if v is not None}
+                await batched_safe_insert("kill_assets", row)
 
         log.info(
             "clip_done",
             kill_id=kill_id,
+            game_id=(game_id[:8] if game_id else None),
+            version=version,
             h=bool(h_url), v=bool(v_url), vl=bool(vl_url), thumb=bool(thumb_url),
-            content_hash=c_hash[:12] + "..." if c_hash else None,
+            h_versioned=bool(h_url_v), v_versioned=bool(v_url_v),
+            content_hash=(c_hash[:12] + "...") if c_hash else None,
             phash=p_hash,
         )
 
@@ -565,16 +701,34 @@ def cleanup_local_clip(local_path: str | None):
 
 
 def _cookies_args() -> list[str]:
-    """Return yt-dlp cookie args if a cookies.txt exists, empty list otherwise.
+    """Return yt-dlp cookie args.
 
-    We intentionally do NOT use --cookies-from-browser because Chrome's DPAPI
-    encryption fails when running from non-interactive shells (Claude Code,
-    systemd, Task Scheduler). Instead, the user can manually export a
-    cookies.txt via a browser extension if YouTube starts throttling.
+    PR24 — delegates to services.youtube_cookies which supports two modes :
+      * KCKILLS_YT_COOKIES_FILE       — Netscape cookies.txt path
+      * KCKILLS_YT_COOKIES_CHROME_PROFILE — name/path of a Chrome profile
+        that's NOT currently active (read SQLite directly + DPAPI-decrypt)
+
+    With YouTube Premium auth :
+      * 429s drop sharply (Premium accounts get priority)
+      * Higher-quality formats unlocked
+      * Age-gates bypassed
+
+    Falls back to no cookies if neither env var is set — preserves the
+    legacy anonymous-yt-dlp behaviour. Also keeps the old
+    worker/cookies.txt convention for back-compat.
     """
-    cookies_file = os.path.join(os.path.dirname(__file__), "..", "cookies.txt")
-    if os.path.exists(cookies_file):
-        return ["--cookies", cookies_file]
+    try:
+        from services import youtube_cookies
+        args = youtube_cookies.cli_args()
+        if args:
+            return args
+    except Exception:
+        pass
+
+    # Legacy fallback : worker/cookies.txt sitting next to main.py
+    legacy = os.path.join(os.path.dirname(__file__), "..", "cookies.txt")
+    if os.path.exists(legacy):
+        return ["--cookies", legacy]
     return []
 
 
@@ -583,6 +737,12 @@ async def _run_ytdlp(url: str, output_path: str, start: float, end: float) -> bo
     cmd = [
         sys.executable, "-m", "yt_dlp",
         *_cookies_args(),
+        # YouTube post-2026-04 requires JS runtime + EJS challenge solver
+        # to resolve the n-decoder. Without these, only image formats are
+        # returned and the download fails with "Requested format not
+        # available". deno is installed via winget, on PATH via main.py.
+        "--js-runtimes", "deno",
+        "--remote-components", "ejs:github",
         "--download-sections", f"*{start}-{end}",
         "--force-keyframes-at-cuts",
         "-f", "bestvideo[height<=1080]+bestaudio/best[height<=1080]",
@@ -606,12 +766,27 @@ async def _run_ytdlp(url: str, output_path: str, start: float, end: float) -> bo
             log.error("ytdlp_timeout", url=url[:60])
             return False
         if proc.returncode != 0:
-            log.warn("ytdlp_nonzero", rc=proc.returncode, stderr=(stderr or b"")[:400].decode("utf-8", "ignore"))
+            stderr_text = (stderr or b"")[:400].decode("utf-8", "ignore")
+            # YouTube anti-bot detection : when this fires, EVERY clip
+            # request fails until cookies are provided. Don't burn the
+            # batch's retry budget on a global outage — raise a sentinel
+            # exception so the caller can drop out of the batch entirely.
+            if "Sign in to confirm" in stderr_text or "not a bot" in stderr_text:
+                log.error("ytdlp_bot_blocked",
+                          hint="add worker/cookies.txt — see clipper._cookies_args docstring")
+                raise YouTubeBotBlockedError()
+            log.warn("ytdlp_nonzero", rc=proc.returncode, stderr=stderr_text)
             return False
         return True
     except FileNotFoundError:
         log.error("ytdlp_not_installed")
         return False
+
+
+class YouTubeBotBlockedError(Exception):
+    """Raised by _run_ytdlp when YouTube returns the 'Sign in to confirm
+    you're not a bot' error. The caller should abort the batch and
+    NOT bump retry_count — the failure is external."""
 
 
 async def _ffmpeg(args: list[str]) -> bool:
@@ -649,6 +824,92 @@ def _safe_remove(path: str):
             os.remove(path)
     except Exception:
         pass
+
+
+# ─── kill_assets versioning helpers ──────────────────────────────────────
+
+# Keep these synchronous (called via asyncio.to_thread) — the underlying
+# Supabase REST calls are httpx.Client.get/post, not async. Wrapping in a
+# thread keeps the worker event loop from blocking on the round-trip.
+
+# Asset types written by the clipper. The `og_image` and `hls_master`
+# variants are produced by separate modules (og_generator, hls_packager)
+# and must NOT be archived here — only the four formats this module owns.
+_CLIPPER_OWNED_ASSET_TYPES = ("horizontal", "vertical", "vertical_low", "thumbnail")
+
+
+def _compute_next_version(kill_id: str) -> int:
+    """Return the next version number for a kill's assets.
+
+    Reads MAX(version) from kill_assets WHERE kill_id = kill_id and
+    returns max+1. Returns 1 when no rows exist or on any failure
+    (PostgREST down, table missing — pre-026 deployments).
+    """
+    db = get_db()
+    if db is None:
+        return 1
+    try:
+        import httpx
+        r = httpx.get(
+            f"{db.base}/kill_assets",
+            headers=db.headers,
+            params={
+                "select": "version",
+                "kill_id": f"eq.{kill_id}",
+                "order": "version.desc",
+                "limit": "1",
+            },
+            timeout=10.0,
+        )
+        if r.status_code != 200:
+            return 1
+        rows = r.json() or []
+        if not rows:
+            return 1
+        cur = int(rows[0].get("version") or 0)
+        return cur + 1 if cur > 0 else 1
+    except Exception as e:
+        log.warn("kill_assets_version_lookup_failed",
+                 kill_id=kill_id[:8], error=str(e)[:160])
+        return 1
+
+
+def _archive_prior_assets(kill_id: str) -> None:
+    """Flip is_current=FALSE on all current clipper-owned assets for a kill.
+
+    Required before inserting v{N+1} rows so the unique index
+    `idx_kill_assets_one_current_per_type` doesn't reject the new rows.
+    No-op if nothing matches. Errors are logged + swallowed so a re-clip
+    can still proceed (worst case the trigger leaves an inconsistent
+    manifest and the next clipper pass corrects it).
+    """
+    db = get_db()
+    if db is None:
+        return
+    try:
+        import httpx
+        from datetime import datetime, timezone
+        now_iso = datetime.now(timezone.utc).isoformat()
+        # PostgREST PATCH with `id=eq.kill` + type=in.(...) flips just the
+        # rows we're about to replace.
+        types_csv = ",".join(_CLIPPER_OWNED_ASSET_TYPES)
+        r = httpx.patch(
+            f"{db.base}/kill_assets",
+            headers={**db.headers, "Prefer": "return=minimal"},
+            params={
+                "kill_id": f"eq.{kill_id}",
+                "is_current": "eq.true",
+                "type": f"in.({types_csv})",
+            },
+            json={"is_current": False, "archived_at": now_iso},
+            timeout=10.0,
+        )
+        if r.status_code >= 400:
+            log.warn("kill_assets_archive_nonzero",
+                     kill_id=kill_id[:8], status=r.status_code, body=r.text[:160])
+    except Exception as e:
+        log.warn("kill_assets_archive_failed",
+                 kill_id=kill_id[:8], error=str(e)[:160])
 
 
 def _pick_best_thumbnail(candidates: list[str]) -> str | None:
@@ -700,77 +961,170 @@ def _pick_best_thumbnail(candidates: list[str]) -> str | None:
 
 MAX_RETRY_COUNT = 3
 
-# Cap how many kills we attempt per pass. With CONCURRENCY=6 workers
-# at ~25s/clip (now that ffmpeg_cooldown dropped 5s -> 1s), 200 clips =
-# ~14 min per pass. The 300s daemon interval keeps ticking during the
-# pass, so the next run fires immediately after if there's still a
-# backlog. On a 16-core Ryzen the bottleneck is yt-dlp throttle
-# (scheduler-managed), not ffmpeg or disk I/O.
+# Cap how many kills we attempt per pass + worker fan-out.
 #
-# Empirical max throughput at these settings : ~400 clips/hour, validated
-# without YouTube 429s on a residential IP.
-BATCH_SIZE = 200
-# CONCURRENCY raised 6 -> 8 for NVENC: GPU is the bottleneck on RTX 4070 Ti
-# Ada Lovelace can run 8 concurrent NVENC sessions per consumer card (limit
-# enforced by NVIDIA driver). Each clipper worker also spawns yt-dlp +
-# ffmpeg, but ffmpeg now offloads encode to the GPU so CPU contention drops.
-CONCURRENCY = 8
+# These two scalars are now resolved at module-import time via
+# services.runtime_tuning, which reads :
+#   KCKILLS_BATCH_CLIPPER     (default 200)
+#   KCKILLS_PARALLEL_CLIPPER  (default 8 — NVENC fan-out on RTX 4070 Ti)
+#
+# History (preserved for context):
+#   With CONCURRENCY=6 workers at ~25s/clip (now that ffmpeg_cooldown
+#   dropped 5s -> 1s), 200 clips = ~14 min per pass. The 300s daemon
+#   interval keeps ticking during the pass, so the next run fires
+#   immediately after if there's still a backlog. On a 16-core Ryzen the
+#   bottleneck is yt-dlp throttle (scheduler-managed), not ffmpeg or disk I/O.
+#   Empirical max throughput : ~400 clips/hour, validated without YouTube
+#   429s on a residential IP.
+#
+#   CONCURRENCY raised 6 -> 8 for NVENC: GPU is the bottleneck on RTX 4070 Ti.
+#   Ada Lovelace can run 8 concurrent NVENC sessions per consumer card
+#   (limit enforced by NVIDIA driver). Each clipper worker also spawns
+#   yt-dlp + ffmpeg, but ffmpeg now offloads encode to the GPU so CPU
+#   contention drops.
+BATCH_SIZE = get_batch_size("clipper")
+CONCURRENCY = get_parallelism("clipper")
+CLIP_LEASE_SECONDS = get_lease_seconds("clipper")
 
 
+@run_logged()
 async def run() -> int:
-    """Find kills in status='vod_found' OR 'clip_error' (retry_count<3) and clip them.
+    """Clipper main loop — queue-first, legacy scan as fallback.
 
-    The clip_error branch lets transient failures (YouTube throttle, network
-    blips, ffmpeg hiccups) self-heal without a human requeue. Each failed
-    attempt bumps retry_count; once it hits MAX_RETRY_COUNT the kill stops
-    being picked up and needs manual attention via /admin/clips.
+    Order :
+      1. Try claiming `clip.create` jobs from pipeline_jobs (new path).
+      2. If the queue returns empty, fall back to the legacy
+         status='vod_found' / 'clip_error' scan AND enqueue any kills
+         it finds so the next pass goes through the queue cleanly.
+         This bridges the migration window — no kill gets stuck.
+      3. Process up to BATCH_SIZE kills in parallel (CONCURRENCY=8).
+      4. On success : flip kills.status='clipped', enqueue downstream
+         `clip.analyze` job.
+      5. On failure : let job_queue.fail() handle retry/DLQ. Keep
+         legacy retry_count++ for back-compat with /admin/clips.
 
     Returns the number of kills successfully clipped this pass.
     """
     log.info("clipper_scan_start")
 
-    # Primary queue: never-tried kills
-    fresh_kills = safe_select(
-        "kills",
-        "id, game_id, game_time_seconds, status, retry_count",
-        status="vod_found",
-    ) or []
+    worker_id = f"clipper-{os.getpid()}"
 
-    # Retry queue: kills that failed but haven't exhausted their attempts
-    retry_kills = [
-        k for k in (safe_select(
-            "kills",
-            "id, game_id, game_time_seconds, status, retry_count",
-            status="clip_error",
-        ) or [])
-        if int(k.get("retry_count") or 0) < MAX_RETRY_COUNT
-    ]
-
-    # Fresh first so new arrivals don't starve behind a long retry queue.
-    all_kills = fresh_kills + retry_kills
-
-    # Batch cap — see BATCH_SIZE docstring above.
-    kills = all_kills[:BATCH_SIZE]
-
-    if not kills:
-        log.info("clipper_no_pending")
-        return 0
-
-    log.info(
-        "clipper_queue",
-        fresh=len(fresh_kills),
-        retry=len(retry_kills),
-        processing=len(kills),
-        remaining=max(0, len(all_kills) - len(kills)),
+    # ─── 1. Queue-first claim ──────────────────────────────────────
+    claimed = await asyncio.to_thread(
+        job_queue.claim,
+        worker_id,
+        ["clip.create"],
+        BATCH_SIZE,
+        CLIP_LEASE_SECONDS,  # default 600s ; tunable via KCKILLS_LEASE_CLIPPER
     )
 
-    # Parallel clip workers — bounded by CONCURRENCY semaphore.
-    # ffmpeg is multi-threaded, yt-dlp is rate-limited by scheduler,
-    # so 4 workers ≈ optimal CPU utilisation without throttle thrash.
-    sem = asyncio.Semaphore(CONCURRENCY)
-    counters = {"ok": 0, "fail": 0}
+    legacy_fallback_used = False
 
-    async def _process_one(kill: dict):
+    # Each claimed entry is a pipeline_jobs row. Build the (kill, job)
+    # pairs we'll process. job is None for legacy-fallback work.
+    work: list[tuple[dict, dict | None]] = []
+
+    for job in claimed:
+        kill_id = job.get("entity_id")
+        if not kill_id:
+            await asyncio.to_thread(
+                job_queue.fail, job["id"], "no entity_id on job",
+                60, "bad_payload",
+            )
+            continue
+        rows = safe_select(
+            "kills",
+            "id, game_id, game_time_seconds, status, retry_count",
+            id=kill_id,
+        )
+        if not rows:
+            await asyncio.to_thread(
+                job_queue.fail, job["id"], "kill row missing",
+                3600, "kill_deleted",
+            )
+            continue
+        work.append((rows[0], job))
+
+    # ─── 2. Legacy fallback if queue was empty ────────────────────
+    if not work:
+        legacy_fallback_used = True
+
+        fresh_kills = safe_select(
+            "kills",
+            "id, game_id, game_time_seconds, status, retry_count",
+            status="vod_found",
+        ) or []
+
+        # Retry queue : push the retry_count<MAX filter into SQL so we
+        # don't hit PostgREST's 1000-row default cap with all retry=3.
+        retry_kills: list[dict] = []
+        try:
+            import httpx
+            db = get_db()
+            if db is not None:
+                r = httpx.get(
+                    f"{db.base}/kills",
+                    headers=db.headers,
+                    params={
+                        "select": "id,game_id,game_time_seconds,status,retry_count",
+                        "status": "eq.clip_error",
+                        "retry_count": f"lt.{MAX_RETRY_COUNT}",
+                        "order": "retry_count.asc,updated_at.asc",
+                        "limit": "1000",
+                    },
+                    timeout=20.0,
+                )
+                if r.status_code == 200:
+                    retry_kills = r.json() or []
+        except Exception:
+            retry_kills = [
+                k for k in (safe_select(
+                    "kills",
+                    "id, game_id, game_time_seconds, status, retry_count",
+                    status="clip_error",
+                ) or [])
+                if int(k.get("retry_count") or 0) < MAX_RETRY_COUNT
+            ]
+
+        all_kills = fresh_kills + retry_kills
+        kills = all_kills[:BATCH_SIZE]
+
+        if not kills:
+            log.info("clipper_no_pending")
+            return 0
+
+        # Enqueue every legacy-found kill so subsequent passes go
+        # through the queue. enqueue() is idempotent via the unique
+        # index on (type, entity_type, entity_id) WHERE active.
+        enqueued = 0
+        for k in kills:
+            jid = await asyncio.to_thread(
+                job_queue.enqueue,
+                "clip.create", "kill", k["id"],
+                None, 50, None, MAX_RETRY_COUNT,
+            )
+            if jid:
+                enqueued += 1
+        log.info(
+            "clipper_legacy_fallback",
+            fresh=len(fresh_kills), retry=len(retry_kills),
+            processing=len(kills), enqueued_for_next_pass=enqueued,
+        )
+        # Process the kills NOW (don't wait for next pass) so the
+        # transition from legacy → queue is seamless. job=None signals
+        # legacy-mode handling in the worker below.
+        work = [(k, None) for k in kills]
+    else:
+        log.info(
+            "clipper_queue",
+            claimed=len(claimed), processing=len(work),
+        )
+
+    # ─── 3. Parallel clip workers ─────────────────────────────────
+    sem = asyncio.Semaphore(CONCURRENCY)
+    counters = {"ok": 0, "fail": 0, "yt_blocked": 0}
+
+    async def _process_one(kill: dict, job: dict | None):
         async with sem:
             # Fetch parent game to find the VOD info
             games = safe_select(
@@ -779,44 +1133,83 @@ async def run() -> int:
                 id=kill.get("game_id", ""),
             )
             if not games:
+                if job is not None:
+                    await asyncio.to_thread(
+                        job_queue.fail, job["id"],
+                        "parent game missing", 3600, "game_missing",
+                    )
                 return
             game = games[0]
             yt_id = game.get("vod_youtube_id")
             offset = int(game.get("vod_offset_seconds") or 0)
             if not yt_id:
+                # No VOD yet — surface as retry, the vod_offset_finder
+                # will fill it in. 30 min retry lets that module run.
+                if job is not None:
+                    await asyncio.to_thread(
+                        job_queue.fail, job["id"],
+                        "vod_youtube_id null on game", 1800, "no_vod",
+                    )
                 return
 
-            # PR10-A : batched_safe_update collapses the 200 status='clipping'
+            # PR10-A : batched_safe_update collapses the N status='clipping'
             # writes per cycle into ONE PATCH (id=in.(uuid1,uuid2,...)) — same
             # for the status='clipped' writes once they all flush together.
-            # Cuts ~600 HTTP RTT per cycle (~5 min of pure network) down to ~3.
             await batched_safe_update("kills", {"status": "clipping"}, "id", kill["id"])
 
-            urls = await clip_kill(
-                kill_id=kill["id"],
-                youtube_id=yt_id,
-                vod_offset_seconds=offset,
-                game_time_seconds=int(kill.get("game_time_seconds") or 0),
-            )
+            try:
+                urls = await clip_kill(
+                    kill_id=kill["id"],
+                    youtube_id=yt_id,
+                    vod_offset_seconds=offset,
+                    game_time_seconds=int(kill.get("game_time_seconds") or 0),
+                    game_id=kill.get("game_id") or None,
+                )
+            except YouTubeBotBlockedError:
+                # YouTube is anti-bot-blocking the entire process. Don't
+                # bump retry_count (it's not the kill's fault) and DON'T
+                # leave the kill in 'clipping' (would never recover).
+                # For queue jobs : 10 min retry so the queue naturally
+                # rate-limits during the outage.
+                prior = "clip_error" if kill.get("status") == "clip_error" else "vod_found"
+                await batched_safe_update("kills", {"status": prior}, "id", kill["id"])
+                if job is not None:
+                    await asyncio.to_thread(
+                        job_queue.fail, job["id"],
+                        "youtube_bot_blocked", 600, "ytdlp_bot_blocked",
+                    )
+                counters["yt_blocked"] += 1
+                # Re-raise so the gather sees it and the batch-level log fires.
+                raise
+
             if urls and urls.get("clip_url_horizontal"):
                 payload = {**urls, "status": "clipped"}
-                # Strip the in-process file path before persisting — it's only
-                # there for the analyzer that runs after clipping, never a DB
-                # column.
                 payload.pop("_local_h_path", None)
-                # Per-row payload (URLs differ across kills) — batcher falls
-                # through to the parallel httpx pool (15 concurrent), still
-                # ~10x faster than serial safe_update.
                 await batched_safe_update("kills", payload, "id", kill["id"])
-                # PR6-C : tick the canonical event's "clip produced" QC gate.
-                # No-op if event_mapper hasn't created the row yet — next
-                # event_mapper cycle will pick it up with qc_clip_produced
-                # already TRUE thanks to the proxy logic in _kill_to_event_row.
                 try:
                     from services.event_qc import tick_qc_clip_produced
                     tick_qc_clip_produced(kill["id"])
                 except Exception as _e:
                     log.warn("event_qc_tick_failed", kill_id=kill["id"][:8], stage="clip_produced", error=str(_e)[:120])
+
+                # Mark queue success + enqueue downstream analyze.
+                # Inherit priority bracket from the parent job so editorial /
+                # live work keeps its lane through the pipeline.
+                priority = 50
+                if job is not None:
+                    try:
+                        priority = 70 if int(job.get("priority") or 50) >= 70 else 50
+                    except Exception:
+                        priority = 50
+                    await asyncio.to_thread(
+                        job_queue.succeed, job["id"],
+                        {"clip_url_horizontal": urls.get("clip_url_horizontal")},
+                    )
+                await asyncio.to_thread(
+                    job_queue.enqueue,
+                    "clip.analyze", "kill", kill["id"],
+                    None, priority, None, 3,
+                )
                 counters["ok"] += 1
             else:
                 await batched_safe_update(
@@ -825,15 +1218,42 @@ async def run() -> int:
                     "id",
                     kill["id"],
                 )
+                if job is not None:
+                    await asyncio.to_thread(
+                        job_queue.fail, job["id"],
+                        "clip_kill returned no urls", 300, "clip_failed",
+                    )
                 counters["fail"] += 1
 
     # Start the background flusher BEFORE the worker fan-out so writes
     # batch as they happen, not all at the end.
     await get_writer().start_background_flusher()
-    await asyncio.gather(*(_process_one(k) for k in kills), return_exceptions=False)
+    # return_exceptions=True lets one bot-blocked kill abort that worker
+    # without bringing the gather to a halt. The other workers in flight
+    # also see YouTubeBotBlockedError on their next download attempt and
+    # exit cleanly, restoring their kill's prior status.
+    results = await asyncio.gather(
+        *(_process_one(k, j) for (k, j) in work),
+        return_exceptions=True,
+    )
     # Drain the tail of the buffer so the next module sees a consistent
     # DB state immediately.
     await get_writer().flush_now()
 
-    log.info("clipper_scan_done", processed=counters["ok"], failed=counters["fail"])
+    yt_blocked = sum(
+        1 for r in results if isinstance(r, YouTubeBotBlockedError)
+    )
+    if yt_blocked > 0:
+        log.error(
+            "clipper_yt_blocked_batch_aborted",
+            yt_blocked=yt_blocked, batch_size=len(work),
+            hint="put a cookies.txt in worker/ exported from a logged-in browser",
+        )
+
+    log.info(
+        "clipper_scan_done",
+        processed=counters["ok"], failed=counters["fail"],
+        yt_blocked=counters["yt_blocked"],
+        legacy_fallback=legacy_fallback_used,
+    )
     return counters["ok"]

@@ -31,6 +31,12 @@ import Link from "next/link";
 import Image from "next/image";
 import { championIconUrl } from "@/lib/constants";
 import { Description } from "@/components/i18n/Description";
+import {
+  getAssetMetadata,
+  pickAssetUrl,
+  pickBestForViewport,
+  type KillAssetsManifest,
+} from "@/lib/kill-assets";
 
 interface CinematicKillProps {
   kill: {
@@ -41,7 +47,12 @@ interface CinematicKillProps {
     victim_name?: string | null;
     clip_url_horizontal?: string | null;
     clip_url_vertical?: string | null;
+    clip_url_vertical_low?: string | null;
     thumbnail_url?: string | null;
+    /** Versioned kill_assets manifest (migration 026). When present,
+     *  takes priority over the flat clip_url_* / thumbnail_url
+     *  columns. NULL on rows clipped before the migration ran. */
+    assets_manifest?: KillAssetsManifest | null;
     ai_description?: string | null;
     ai_description_fr?: string | null;
     ai_description_en?: string | null;
@@ -114,7 +125,28 @@ export function KillCinematicView({
   const matchScheduled = kill.games?.matches?.scheduled_at ?? kill.created_at;
   const stage = kill.games?.matches?.stage ?? "LEC";
   const gameNumber = kill.games?.game_number ?? 1;
-  const clipSrc = kill.clip_url_horizontal ?? kill.clip_url_vertical ?? undefined;
+
+  // Manifest-aware source pick (migration 026).
+  //   - Cinematic page is a 16:9 letterboxed desktop layout, so we ask
+  //     for the desktop-quality URL (horizontal first, vertical fallback).
+  //   - lowQuality stays false : the page is a single-clip detail view,
+  //     bandwidth pressure isn't the same concern as the /scroll feed.
+  //   - bestPick.type drives the aspect-ratio CSS below — horizontal
+  //     stays 16:9, vertical fallback collapses to the manifest's real
+  //     dimensions or 9:16 when metadata is absent.
+  const bestPick = pickBestForViewport(kill, { isDesktop: true, lowQuality: false });
+  const clipSrc = bestPick?.url ?? undefined;
+  const posterUrl = pickAssetUrl(kill, "thumbnail") ?? undefined;
+  const playedTypeMeta = bestPick ? getAssetMetadata(kill, bestPick.type) : null;
+  // CSS aspect-ratio for the <video> frame. Prefer the manifest's
+  // exact width × height (no layout shift even on weird splits) and
+  // fall back to the well-known 16:9 / 9:16 defaults per asset type.
+  const videoAspectRatio: string =
+    playedTypeMeta?.width != null && playedTypeMeta.height != null
+      ? `${playedTypeMeta.width} / ${playedTypeMeta.height}`
+      : bestPick?.type === "vertical" || bestPick?.type === "vertical_low"
+        ? "9 / 16"
+        : "16 / 9";
 
   const killerChamp = kill.killer_champion ?? "Aatrox";
   const victimChamp = kill.victim_champion ?? "Aatrox";
@@ -367,9 +399,10 @@ export function KillCinematicView({
             >
               <video
                 ref={videoRef}
-                className="aspect-video w-full"
+                className="w-full"
+                style={{ aspectRatio: videoAspectRatio }}
                 src={clipSrc}
-                poster={kill.thumbnail_url ?? undefined}
+                poster={posterUrl}
                 playsInline
                 preload="metadata"
                 onClick={togglePlay}

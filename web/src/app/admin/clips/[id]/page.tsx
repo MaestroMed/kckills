@@ -35,5 +35,8 @@ export default async function ClipDetailPage({
 
   if (!clip) notFound();
 
-  return <ClipDetailEditor clip={clip} />;
+  // Supabase's typed query gives a broader shape than the editor's strict
+  // Props (joins are typed as arrays|object). Cast through unknown to keep
+  // the editor's prop type narrow and authoritative.
+  return <ClipDetailEditor clip={clip as unknown as Parameters<typeof ClipDetailEditor>[0]["clip"]} />;
 }

@@ -21,14 +21,19 @@
  * translate3d offsets.
  */
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import type { VideoFeedItem, MomentFeedItem } from "@/components/scroll/ScrollFeed";
 import { isDescriptionClean } from "@/lib/scroll/sanitize-description";
 import { useImpressionTracker } from "./hooks/useImpressionTracker";
+import { useFeedItemError } from "./hooks/useFeedItemError";
+import { useSwipeShare } from "./hooks/useSwipeShare";
+import { Description } from "@/components/i18n/Description";
 import { FeedSidebarV2 } from "@/components/community/FeedSidebarV2";
 import { DoubleTapHeart } from "@/components/community/DoubleTapHeart";
+import { FeedItemError } from "./FeedItemError";
+import { track } from "@/lib/analytics/track";
 
 interface SharedFeedItemProps {
   index: number;
@@ -45,7 +50,77 @@ interface SharedFeedItemProps {
 const BLUR_PLACEHOLDER =
   "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQH/2wBDAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQH/wAARCAACAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAr/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/8QAFAEBAAAAAAAAAAAAAAAAAAAAAP/EABQRAQAAAAAAAAAAAAAAAAAAAAD/2gAMAwEAAhEDEQA/AKpgD//Z";
 
+/**
+ * Per-item analytics hook.
+ *
+ * Fires :
+ *   - `clip.viewed`    when the item becomes active (one event per
+ *                      isActive transition, deduped per item id).
+ *   - `clip.started`   when the pool's video for this item dispatches
+ *                      `kc:clip-played`.
+ *   - `clip.completed` when the pool dispatches `kc:clip-ended` AND the
+ *                      reported duration is above THRESHOLD seconds.
+ *                      We only count "real" completes — a 0.5s loop on
+ *                      a broken source shouldn't count as engagement.
+ *
+ * Per-mount dedup so swipe-back-and-forth doesn't multi-count.
+ */
+const COMPLETE_DURATION_THRESHOLD_S = 3;
+
+function useFeedItemAnalytics({
+  itemId,
+  isActive,
+}: {
+  itemId: string;
+  isActive: boolean;
+}) {
+  const viewedRef = useRef(false);
+
+  useEffect(() => {
+    if (!isActive) return;
+    if (!viewedRef.current) {
+      viewedRef.current = true;
+      track("clip.viewed", { entityType: "kill", entityId: itemId });
+    }
+  }, [itemId, isActive]);
+
+  useEffect(() => {
+    if (!isActive) return;
+    const onPlay = (ev: Event) => {
+      const detail = (ev as CustomEvent<{ itemId?: string }>).detail;
+      if (detail?.itemId !== itemId) return;
+      track("clip.started", { entityType: "kill", entityId: itemId });
+    };
+    const onEnded = (ev: Event) => {
+      const detail = (ev as CustomEvent<{ itemId?: string; duration?: number }>).detail;
+      if (detail?.itemId !== itemId) return;
+      const duration = detail?.duration ?? 0;
+      if (duration < COMPLETE_DURATION_THRESHOLD_S) return;
+      track("clip.completed", {
+        entityType: "kill",
+        entityId: itemId,
+        metadata: { duration_s: duration },
+      });
+    };
+    window.addEventListener("kc:clip-played", onPlay as EventListener);
+    window.addEventListener("kc:clip-ended", onEnded as EventListener);
+    return () => {
+      window.removeEventListener("kc:clip-played", onPlay as EventListener);
+      window.removeEventListener("kc:clip-ended", onEnded as EventListener);
+    };
+  }, [itemId, isActive]);
+}
+
 // ─── Video item (single-kill clip from kills table) ────────────────────
+
+interface FeedItemVideoProps extends SharedFeedItemProps {
+  item: VideoFeedItem;
+  /** Wave 6 — fired by FeedItemError's auto-skip + the swipe-left
+   *  share gesture's "no neighbour to advance" fallback. Parent should
+   *  call `jumpTo(activeIndex + 1)`. Optional: when omitted the auto-skip
+   *  path silently no-ops. */
+  onAutoSkipNext?: () => void;
+}
 
 export function FeedItemVideo({
   item,
@@ -53,11 +128,123 @@ export function FeedItemVideo({
   total,
   itemHeight,
   isActive,
-}: SharedFeedItemProps & { item: VideoFeedItem }) {
+  onAutoSkipNext,
+}: FeedItemVideoProps) {
   const isKcKill = item.kcInvolvement === "team_killer";
   // Fire impression beacon after 1.5s of dwell (real engagement signal,
   // filters out flick-pasts).
   useImpressionTracker({ killId: item.id, isActive });
+  useFeedItemAnalytics({ itemId: item.id, isActive });
+  const errState = useFeedItemError(item.id);
+  const [shareToast, setShareToast] = useState<string | null>(null);
+
+  const triggerShare = useCallback(async () => {
+    if (typeof window === "undefined") return;
+    const url = `${window.location.origin}/scroll?kill=${item.id}`;
+    const shareTitle = `${item.killerChampion} → ${item.victimChampion}`;
+    const shareText = item.aiDescription ?? undefined;
+    try {
+      if (typeof navigator !== "undefined" && typeof navigator.share === "function") {
+        await navigator.share({ title: shareTitle, url, ...(shareText ? { text: shareText } : {}) });
+        track("clip.shared", {
+          entityType: "kill",
+          entityId: item.id,
+          metadata: { channel: "native", source: "swipe_left" },
+        });
+        return;
+      }
+    } catch (err) {
+      const name = (err as { name?: string })?.name;
+      if (name === "AbortError") {
+        track("clip.shared", {
+          entityType: "kill",
+          entityId: item.id,
+          metadata: { channel: "cancelled", source: "swipe_left" },
+        });
+        return;
+      }
+      // Real failure — fall through to clipboard
+    }
+    try {
+      await navigator.clipboard.writeText(url);
+      setShareToast("Lien copié !");
+      window.setTimeout(() => setShareToast(null), 2000);
+      track("clip.shared", {
+        entityType: "kill",
+        entityId: item.id,
+        metadata: { channel: "clipboard", source: "swipe_left" },
+      });
+    } catch {
+      setShareToast("Copie impossible");
+      window.setTimeout(() => setShareToast(null), 2000);
+    }
+  }, [item.id, item.killerChampion, item.victimChampion, item.aiDescription]);
+
+  // Wave 6 — left-swipe to share. Only enabled on the active item so
+  // pool slot neighbours can't accidentally fire. The bind() spreader
+  // attaches to the central video area below the badges/sidebar.
+  const swipeBind = useSwipeShare({
+    enabled: isActive,
+    onSwipeLeft: () => void triggerShare(),
+  });
+
+  // Wave 6 — Enter on focused FeedItem = like, Cmd/Ctrl+Shift+S = share.
+  // Mounted only on the active item so the keystrokes resolve to the
+  // visible kill (not whatever is in the pool's pre-roll).
+  useEffect(() => {
+    if (!isActive || typeof window === "undefined") return;
+    const onKey = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      const tag = target?.tagName ?? "";
+      // Don't hijack input typing.
+      if (tag === "INPUT" || tag === "TEXTAREA" || target?.isContentEditable) return;
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === "s") {
+        e.preventDefault();
+        void triggerShare();
+        return;
+      }
+      // Enter to like — only fires when the FeedItem itself (or a
+      // child without its own Enter handler) is focused. Buttons that
+      // already have native Enter→click semantics (LikeButton, etc.)
+      // get the event before us via stopPropagation in their handlers.
+      if (e.key === "Enter") {
+        const isInteractiveTarget =
+          target?.closest("button, a, input, textarea, [role='button']");
+        if (isInteractiveTarget) return;
+        e.preventDefault();
+        try {
+          window.dispatchEvent(
+            new CustomEvent("kc:double-tap-like", { detail: { killId: item.id } }),
+          );
+          track("clip.liked", {
+            entityType: "kill",
+            entityId: item.id,
+            metadata: { source: "keyboard_enter" },
+          });
+        } catch {
+          /* ignore */
+        }
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [isActive, item.id, triggerShare]);
+
+  // ─── Error state — replace the entire card with FeedItemError ─────
+  if (errState.errorCode) {
+    return (
+      <FeedItemError
+        key={`err-${item.id}-${errState.retryKey}`}
+        killId={item.id}
+        itemHeight={itemHeight}
+        errorCode={errState.errorCode}
+        isActive={isActive}
+        onRetry={errState.retry}
+        onAutoSkip={onAutoSkipNext}
+      />
+    );
+  }
+
   return (
     <div
       data-feed-item
@@ -107,10 +294,25 @@ export function FeedItemVideo({
         #{index + 1} / {total}
       </Link>
 
+      {/* Wave 6 — left-swipe-to-share gesture surface. Sits BEHIND the
+          DoubleTapHeart layer (z-[4] vs z-[5]) so single/double-taps
+          still reach the heart logic. The drag detector fires only on
+          horizontal release past 80px in <300ms — vertical scroll
+          bubbles to the parent's useFeedGesture. */}
+      {isActive && (
+        <div
+          {...swipeBind()}
+          aria-hidden
+          className="absolute inset-0 z-[4]"
+          style={{ touchAction: "pan-y" }}
+        />
+      )}
+
       {/* DoubleTapHeart — TikTok signature gesture. Double-tap on the
           video → fire a like via the LikeButton's mechanism (custom
           event consumed by LikeButton). Single-tap is forwarded to the
-          existing tap-to-pause if any. */}
+          existing tap-to-pause if any.
+          Wave 6 — also fires the clip.liked analytic with source.  */}
       {isActive && (
         <DoubleTapHeart
           onDoubleTap={() => {
@@ -120,6 +322,11 @@ export function FeedItemVideo({
                   detail: { killId: item.id },
                 }),
               );
+              track("clip.liked", {
+                entityType: "kill",
+                entityId: item.id,
+                metadata: { source: "double_tap" },
+              });
             } catch {
               /* CustomEvent unsupported in some sandboxes */
             }
@@ -137,6 +344,17 @@ export function FeedItemVideo({
         initialCommentCount={0}
         visible={isActive}
       />
+
+      {/* Wave 6 — share toast (fired from swipe-left + Cmd+Shift+S
+          keyboard fallback when navigator.share is missing). */}
+      {shareToast && (
+        <div
+          role="status"
+          className="pointer-events-none fixed top-20 left-1/2 -translate-x-1/2 z-[200] rounded-full bg-black/85 backdrop-blur-sm px-4 py-2 text-xs font-bold text-[var(--gold)] shadow-lg"
+        >
+          {shareToast}
+        </div>
+      )}
 
       {/* Bottom overlay — STATE OF THE ART revamp.
           - Reserves right-side gutter for the FeedSidebarV2 (mobile 64px, desktop 96px)
@@ -218,11 +436,26 @@ export function FeedItemVideo({
             </span>
           </p>
 
-          {/* AI description */}
+          {/* AI description — language-aware via <Description>.
+              The picker chooses ai_description_<lang> from the active
+              LangProvider, falling back to FR → legacy field. We still
+              gate visibility through isDescriptionClean(item.aiDescription)
+              because the moderation/cleanliness pass runs on the legacy
+              field — if that one was rejected, the localized variants
+              shouldn't show either. */}
           {isDescriptionClean(item.aiDescription) && (
-            <p className="text-[13px] md:text-[15px] lg:text-base text-white/90 italic leading-relaxed line-clamp-3 md:line-clamp-4 drop-shadow-md">
-              « {item.aiDescription} »
-            </p>
+            <Description
+              kill={{
+                ai_description: item.aiDescription,
+                ai_description_fr: item.aiDescriptionFr,
+                ai_description_en: item.aiDescriptionEn,
+                ai_description_ko: item.aiDescriptionKo,
+                ai_description_es: item.aiDescriptionEs,
+              }}
+              as="p"
+              quoted
+              className="text-[13px] md:text-[15px] lg:text-base text-white/90 italic leading-relaxed line-clamp-3 md:line-clamp-4 drop-shadow-md"
+            />
           )}
 
           {/* Match meta — small line at the bottom */}
@@ -252,16 +485,124 @@ const MOMENT_LABEL: Record<string, string> = {
   objective_fight: "OBJECTIF",
 };
 
+interface FeedItemMomentProps extends SharedFeedItemProps {
+  item: MomentFeedItem;
+  /** Wave 6 — see FeedItemVideoProps.onAutoSkipNext. */
+  onAutoSkipNext?: () => void;
+}
+
 export function FeedItemMoment({
   item,
   index,
   total,
   itemHeight,
   isActive,
-}: SharedFeedItemProps & { item: MomentFeedItem }) {
+  onAutoSkipNext,
+}: FeedItemMomentProps) {
   const isKc = item.kcInvolvement === "kc_aggressor" || item.kcInvolvement === "kc_both";
   const label = MOMENT_LABEL[item.classification] ?? item.classification;
   useImpressionTracker({ killId: item.id, isActive });
+  useFeedItemAnalytics({ itemId: item.id, isActive });
+  const errState = useFeedItemError(item.id);
+  const [shareToast, setShareToast] = useState<string | null>(null);
+
+  const triggerShare = useCallback(async () => {
+    if (typeof window === "undefined") return;
+    const url = `${window.location.origin}/scroll?kill=${item.id}`;
+    const shareTitle = `${label} · ${item.killCount} kills`;
+    const shareText = item.aiDescription ?? undefined;
+    try {
+      if (typeof navigator !== "undefined" && typeof navigator.share === "function") {
+        await navigator.share({ title: shareTitle, url, ...(shareText ? { text: shareText } : {}) });
+        track("clip.shared", {
+          entityType: "kill",
+          entityId: item.id,
+          metadata: { channel: "native", source: "swipe_left" },
+        });
+        return;
+      }
+    } catch (err) {
+      const name = (err as { name?: string })?.name;
+      if (name === "AbortError") {
+        track("clip.shared", {
+          entityType: "kill",
+          entityId: item.id,
+          metadata: { channel: "cancelled", source: "swipe_left" },
+        });
+        return;
+      }
+    }
+    try {
+      await navigator.clipboard.writeText(url);
+      setShareToast("Lien copié !");
+      window.setTimeout(() => setShareToast(null), 2000);
+      track("clip.shared", {
+        entityType: "kill",
+        entityId: item.id,
+        metadata: { channel: "clipboard", source: "swipe_left" },
+      });
+    } catch {
+      setShareToast("Copie impossible");
+      window.setTimeout(() => setShareToast(null), 2000);
+    }
+  }, [item.id, label, item.killCount, item.aiDescription]);
+
+  const swipeBind = useSwipeShare({
+    enabled: isActive,
+    onSwipeLeft: () => void triggerShare(),
+  });
+
+  // Keyboard equivalents (Enter = like, Cmd/Ctrl+Shift+S = share). Mirrors
+  // the FeedItemVideo handler — we duplicate rather than hoist because
+  // the trigger logic uses item-specific share text.
+  useEffect(() => {
+    if (!isActive || typeof window === "undefined") return;
+    const onKey = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      const tag = target?.tagName ?? "";
+      if (tag === "INPUT" || tag === "TEXTAREA" || target?.isContentEditable) return;
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === "s") {
+        e.preventDefault();
+        void triggerShare();
+        return;
+      }
+      if (e.key === "Enter") {
+        const isInteractiveTarget =
+          target?.closest("button, a, input, textarea, [role='button']");
+        if (isInteractiveTarget) return;
+        e.preventDefault();
+        try {
+          window.dispatchEvent(
+            new CustomEvent("kc:double-tap-like", { detail: { killId: item.id } }),
+          );
+          track("clip.liked", {
+            entityType: "kill",
+            entityId: item.id,
+            metadata: { source: "keyboard_enter" },
+          });
+        } catch {
+          /* ignore */
+        }
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [isActive, item.id, triggerShare]);
+
+  if (errState.errorCode) {
+    return (
+      <FeedItemError
+        key={`err-${item.id}-${errState.retryKey}`}
+        killId={item.id}
+        itemHeight={itemHeight}
+        errorCode={errState.errorCode}
+        isActive={isActive}
+        onRetry={errState.retry}
+        onAutoSkip={onAutoSkipNext}
+      />
+    );
+  }
+
   return (
     <div
       data-feed-item
@@ -298,6 +639,16 @@ export function FeedItemMoment({
         #{index + 1} / {total}
       </Link>
 
+      {/* Wave 6 — left-swipe-to-share gesture surface (see FeedItemVideo). */}
+      {isActive && (
+        <div
+          {...swipeBind()}
+          aria-hidden
+          className="absolute inset-0 z-[4]"
+          style={{ touchAction: "pan-y" }}
+        />
+      )}
+
       {isActive && (
         <DoubleTapHeart
           onDoubleTap={() => {
@@ -307,6 +658,11 @@ export function FeedItemMoment({
                   detail: { killId: item.id },
                 }),
               );
+              track("clip.liked", {
+                entityType: "kill",
+                entityId: item.id,
+                metadata: { source: "double_tap" },
+              });
             } catch {
               /* ignore */
             }
@@ -323,6 +679,16 @@ export function FeedItemMoment({
         initialCommentCount={0}
         visible={isActive}
       />
+
+      {/* Wave 6 — share toast */}
+      {shareToast && (
+        <div
+          role="status"
+          className="pointer-events-none fixed top-20 left-1/2 -translate-x-1/2 z-[200] rounded-full bg-black/85 backdrop-blur-sm px-4 py-2 text-xs font-bold text-[var(--gold)] shadow-lg"
+        >
+          {shareToast}
+        </div>
+      )}
 
       <div
         className={`absolute inset-x-0 bottom-0 z-10 pl-4 md:pl-7 lg:pl-10 pointer-events-none transition-all duration-500 ${
@@ -359,9 +725,18 @@ export function FeedItemMoment({
             {item.redKills}
           </p>
           {isDescriptionClean(item.aiDescription) && (
-            <p className="text-[13px] md:text-[15px] lg:text-base text-white/90 italic leading-relaxed line-clamp-3 md:line-clamp-4 drop-shadow-md">
-              « {item.aiDescription} »
-            </p>
+            <Description
+              kill={{
+                ai_description: item.aiDescription,
+                ai_description_fr: item.aiDescriptionFr,
+                ai_description_en: item.aiDescriptionEn,
+                ai_description_ko: item.aiDescriptionKo,
+                ai_description_es: item.aiDescriptionEs,
+              }}
+              as="p"
+              quoted
+              className="text-[13px] md:text-[15px] lg:text-base text-white/90 italic leading-relaxed line-clamp-3 md:line-clamp-4 drop-shadow-md"
+            />
           )}
           <p className="font-data text-[10px] md:text-[11px] uppercase tracking-[0.2em] text-white/55">
             {item.kcInvolvement === "kc_aggressor"

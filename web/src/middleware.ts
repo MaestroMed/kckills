@@ -1,9 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
+import {
+  LANG_COOKIE,
+  LANG_COOKIE_MAX_AGE,
+  parseAcceptLanguage,
+} from "./lib/i18n/lang";
 
 /**
- * Middleware — protects /admin/* and /api/admin/*.
+ * Middleware — protects /admin/* and /api/admin/*, and SOFT-detects the
+ * preferred language for first-time visitors (sets the `kc_lang` cookie
+ * from Accept-Language so the first server render matches the user's
+ * preference instead of always serving FR).
  *
- * Two acceptance paths:
+ * Two acceptance paths for admin:
  *   1. Cookie `kc_admin` matches `KCKILLS_ADMIN_TOKEN` env var
  *   2. (Server-side checked via requireAdmin() in route handlers)
  *      Discord OAuth user in KCKILLS_ADMIN_DISCORD_IDS allowlist
@@ -16,10 +24,29 @@ import { NextRequest, NextResponse } from "next/server";
  * Local dev : NODE_ENV=development with no env vars = open access (the
  * historical behaviour that lets `pnpm dev` work without setup).
  *
+ * Lang detection : ONLY soft (cookie-set), no URL-based locale routing.
+ * URL-based routing (/en/scroll, /ko/scroll, ...) would require a much
+ * bigger refactor — out of scope for this scaffold wave.
+ *
  * To get an admin cookie:
  *   - Visit /admin/login?token=<KCKILLS_ADMIN_TOKEN>
  *   - The login route sets the kc_admin cookie (httpOnly, secure)
  */
+
+/** Set kc_lang cookie from Accept-Language if missing. Pure side-effect
+ *  on the response. Never overrides an existing user choice. */
+function softDetectLang(request: NextRequest, response: NextResponse): NextResponse {
+  // User already chose — never override.
+  if (request.cookies.get(LANG_COOKIE)) return response;
+  const detected = parseAcceptLanguage(request.headers.get("accept-language"));
+  response.cookies.set(LANG_COOKIE, detected, {
+    path: "/",
+    maxAge: LANG_COOKIE_MAX_AGE,
+    sameSite: "lax",
+  });
+  return response;
+}
+
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
@@ -35,7 +62,8 @@ export function middleware(request: NextRequest) {
   passthroughHeaders.set("x-pathname", pathname);
 
   if (!needsAuth) {
-    return NextResponse.next({ request: { headers: passthroughHeaders } });
+    const resp = NextResponse.next({ request: { headers: passthroughHeaders } });
+    return softDetectLang(request, resp);
   }
 
   // Cache-Control: no-store on admin responses prevents the CDN from
@@ -104,13 +132,21 @@ export function middleware(request: NextRequest) {
 }
 
 export const config = {
-  // PR-SECURITY-A : matcher now also covers /api/kills/edit + /api/bgm
+  // PR-SECURITY-A : matcher covers /admin + /api/admin + /api/kills/edit + /api/bgm
   // — these were intentionally outside /api/admin/* but mutate sensitive
   // data and need the same gate.
+  //
+  // PR-loltok BE : matcher also covers public landing routes for SOFT
+  // language detection (set kc_lang cookie from Accept-Language). The
+  // negative-lookahead pattern excludes static assets, API routes (lang
+  // doesn't matter for JSON), and Next.js internals.
   matcher: [
     "/admin/:path*",
     "/api/admin/:path*",
     "/api/kills/:id/edit",
     "/api/bgm",
+    // Public pages for lang detection : everything except _next, api,
+    // static files (images, fonts, etc), and the favicon.
+    "/((?!_next/|api/|favicon|.*\\.(?:png|jpg|jpeg|svg|gif|ico|webp|avif|woff|woff2|ttf|otf|js|css|map)$).*)",
   ],
 };

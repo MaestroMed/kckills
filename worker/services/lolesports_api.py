@@ -1,8 +1,16 @@
 """Client for esports-api.lolesports.com — schedule, matches, teams, events."""
 
+from __future__ import annotations
+
+import time
+
 import httpx
+import structlog
+
 from config import config
 from scheduler import scheduler
+
+log = structlog.get_logger()
 
 HEADERS = {"x-api-key": config.LOLESPORTS_API_KEY}
 
@@ -20,9 +28,19 @@ async def api_get(endpoint: str, params: dict) -> dict | None:
         return None
 
 
-async def get_schedule(league_id: str = config.LEC_LEAGUE_ID, page_token: str | None = None) -> tuple[list, str | None]:
-    """Fetch one page of the schedule."""
-    params: dict = {"leagueId": league_id}
+async def get_schedule(
+    league_id: str | None = None,
+    page_token: str | None = None,
+) -> tuple[list, str | None]:
+    """Fetch one page of the schedule for a single league.
+
+    `league_id` is the numeric `leagueId` lolesports param. When not
+    provided we default to LEC for backwards compatibility with the KC
+    pilot — the new multi-league sentinel ALWAYS passes an explicit id
+    via league_config.load_tracked_leagues().
+    """
+    effective_id = (league_id or config.LEC_LEAGUE_ID).strip()
+    params: dict = {"leagueId": effective_id}
     if page_token:
         params["pageToken"] = page_token
     data = await api_get("getSchedule", params)
@@ -48,6 +66,46 @@ async def get_live() -> dict | None:
     if not data:
         return None
     return data.get("data", {})
+
+
+# ─── getLeagues — full catalog (cached) ───────────────────────────
+#
+# Used by worker/scripts/seed_leagues.py to discover the canonical
+# numeric league_id for every Riot pro circuit. The endpoint returns
+# ~80 entries (regional ERLs + worlds + msi + first stand) ; we cache
+# for 6 hours because Riot does not add a new league more than once
+# a year.
+_LEAGUES_CACHE: dict[str, object] = {"data": None, "fetched_at": 0.0}
+_LEAGUES_TTL_SECONDS = 6 * 3600
+
+
+async def get_leagues_index(force_refresh: bool = False) -> list[dict]:
+    """Fetch the full leagues catalog from getLeagues.
+
+    Returns the list of league dicts as returned by the API
+    (each has { id, slug, name, region, image, priority, displayPriority }).
+    Cached for _LEAGUES_TTL_SECONDS to avoid pounding the endpoint
+    when seed_leagues.py is rerun on demand.
+    """
+    now = time.time()
+    cached = _LEAGUES_CACHE.get("data")
+    fetched_at = float(_LEAGUES_CACHE.get("fetched_at") or 0)
+    if (
+        not force_refresh
+        and cached is not None
+        and (now - fetched_at) < _LEAGUES_TTL_SECONDS
+    ):
+        return list(cached)  # defensive copy
+
+    data = await api_get("getLeagues", {})
+    if not data:
+        log.warn("lolesports_get_leagues_empty")
+        return list(cached) if cached else []
+    leagues = (data.get("data") or {}).get("leagues") or []
+    _LEAGUES_CACHE["data"] = leagues
+    _LEAGUES_CACHE["fetched_at"] = now
+    log.info("lolesports_get_leagues_loaded", count=len(leagues))
+    return list(leagues)
 
 
 def is_kc(team: dict) -> bool:

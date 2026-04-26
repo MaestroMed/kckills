@@ -1,0 +1,49 @@
+name: Weekly pipeline report
+
+# Runs every Monday at 09:00 UTC. Pulls 7 days of pipeline metrics from
+# Supabase REST and opens (or updates) a GitHub issue summarising the
+# state of the system. The issue carries the `weekly-report` label so
+# the team can filter for it in the issue tracker.
+#
+# Required secrets :
+#   SUPABASE_URL          — full https://<project>.supabase.co URL
+#   SUPABASE_SERVICE_KEY  — service role key (server-side only)
+#   (GITHUB_TOKEN is auto-provided by Actions, no setup required)
+
+on:
+  schedule:
+    # Monday 09:00 UTC = 11:00 Paris (winter) / 10:00 Paris (BST)
+    - cron: "0 9 * * 1"
+  workflow_dispatch:
+    # Manual trigger from the Actions tab — useful for ad-hoc reports.
+
+permissions:
+  issues: write
+  contents: read
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install requests
+
+      - name: Generate + post weekly report
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: python .github/scripts/weekly_report.py

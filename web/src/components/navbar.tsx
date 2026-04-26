@@ -4,17 +4,32 @@ import Link from "next/link";
 import { useState, useEffect } from "react";
 import { CommandPaletteButton } from "./CommandPalette";
 import { LangSwitcher } from "./i18n/LangSwitcher";
+import { SearchBar } from "./search/SearchBar";
+import { LeagueNav } from "./league/LeagueNav";
+import { useT } from "@/lib/i18n/use-lang";
+
+// PR-loltok BC : env-gated multi-league chip strip.
+// `NEXT_PUBLIC_LOLTOK_PUBLIC` is exposed to the client bundle via the
+// NEXT_PUBLIC_ prefix, so the same value is read on server (RSC parent)
+// and client (this component) — there's no hydration mismatch.
+//
+// Default `false` → the chip strip is hidden, the navbar looks
+// byte-identical to today's KC pilot. Set to `true` in Vercel env to
+// flip on the LoLTok multi-team navigation.
+const LOLTOK_PUBLIC = process.env.NEXT_PUBLIC_LOLTOK_PUBLIC === "true";
 
 // Clip-centric nav — only what matters. Logo links to home, no "Accueil" item.
 // /best and /recent merged into /clips (filterable + chronological by default).
-const NAV_LINKS = [
-  { href: "/scroll", label: "Scroll" },
-  { href: "/clips", label: "Clips" },
-  { href: "/players", label: "Joueurs" },
-  { href: "/matches", label: "Matchs" },
+// Labels are i18n keys (resolved via t() inside the component).
+const NAV_LINKS: { href: string; tKey: string }[] = [
+  { href: "/scroll", tKey: "nav.scroll" },
+  { href: "/clips", tKey: "nav.clips" },
+  { href: "/players", tKey: "nav.players" },
+  { href: "/matches", tKey: "nav.matches" },
 ];
 
 export function Navbar() {
+  const t = useT();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [user, setUser] = useState<{ name: string; avatar: string } | null>(null);
 
@@ -81,13 +96,20 @@ export function Navbar() {
               href={link.href}
               className="text-sm text-[var(--text-muted)] transition-colors hover:text-[var(--gold)] relative after:absolute after:bottom-[-14px] after:left-0 after:right-0 after:h-[2px] after:bg-[var(--gold)] after:scale-x-0 after:transition-transform hover:after:scale-x-100"
             >
-              {link.label}
+              {t(link.tKey)}
             </Link>
           ))}
         </div>
 
         {/* Right side — Search + Lang + CTA + Auth */}
         <div className="hidden items-center gap-3 md:flex">
+          {/* Wave 6 — inline search bar wired to /search FTS (CLAUDE.md §6.5).
+              Width-capped so it doesn't crowd the right cluster on tablet.
+              The Cmd-K palette stays for power users who prefer the modal
+              (faster intra-page nav, deeper static index). */}
+          <div className="hidden lg:block w-[220px]">
+            <SearchBar showRecent={false} />
+          </div>
           <CommandPaletteButton />
           <LangSwitcher />
           {user ? (
@@ -108,23 +130,34 @@ export function Navbar() {
             <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 24 24">
               <path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028c.462-.63.874-1.295 1.226-1.994a.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03z" />
             </svg>
-            Connexion
+            {t("nav.cta_login")}
           </Link>
           )}
           <Link
             href="/scroll"
             className="rounded-lg bg-[var(--gold)] px-4 py-2 text-sm font-bold text-[var(--bg-primary)] transition-all hover:bg-[var(--gold-bright)] hover:shadow-lg hover:shadow-[var(--gold)]/20"
           >
-            Scroll les kills
+            {t("nav.cta_scroll_kills")}
           </Link>
         </div>
+
+        {/* Mobile : search icon + menu button */}
+        <Link
+          href="/search"
+          className="md:hidden flex h-11 w-11 items-center justify-center rounded-lg text-[var(--text-secondary)] hover:text-[var(--gold)] hover:bg-[var(--bg-elevated)] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--gold)]"
+          aria-label={t("nav.search")}
+        >
+          <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 1 1-14 0 7 7 0 0 1 14 0z" />
+          </svg>
+        </Link>
 
         {/* Mobile menu button — meets WCAG 4.4 (target ≥ 44px on touch) */}
         <button
           type="button"
           className="md:hidden flex h-11 w-11 items-center justify-center rounded-lg text-[var(--text-secondary)] hover:text-[var(--gold)] hover:bg-[var(--bg-elevated)] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--gold)]"
           onClick={() => setMobileOpen((v) => !v)}
-          aria-label={mobileOpen ? "Fermer le menu" : "Ouvrir le menu"}
+          aria-label={mobileOpen ? t("nav.menu_close") : t("nav.menu_open")}
           aria-expanded={mobileOpen}
           aria-controls="mobile-nav"
         >
@@ -138,9 +171,22 @@ export function Navbar() {
         </button>
       </div>
 
+      {/* PR-loltok BC : LeagueNav chip strip — only mounts when
+          NEXT_PUBLIC_LOLTOK_PUBLIC=true. In KC pilot mode (default)
+          the component returns null so the navbar is identical to
+          today's homepage. The chip strip sits BELOW the main nav row
+          so it scrolls horizontally on mobile without disrupting the
+          burger / search button. */}
+      <LeagueNav enabled={LOLTOK_PUBLIC} />
+
       {/* Mobile menu */}
       {mobileOpen && (
         <div id="mobile-nav" className="border-t border-[var(--border-gold)] px-4 py-3 md:hidden space-y-1">
+          {/* Wave 6 — inline search bar in the mobile drawer. Tapping a
+              recent search closes the drawer naturally via navigation. */}
+          <div className="pb-2">
+            <SearchBar />
+          </div>
           {NAV_LINKS.map((link) => (
             <Link
               key={link.href}
@@ -148,7 +194,7 @@ export function Navbar() {
               className="block rounded-lg py-2.5 px-3 text-sm text-[var(--text-secondary)] hover:bg-[var(--bg-elevated)] transition-colors"
               onClick={() => setMobileOpen(false)}
             >
-              {link.label}
+              {t(link.tKey)}
             </Link>
           ))}
           {/* Lang switcher (full width on mobile) */}
@@ -171,7 +217,7 @@ export function Navbar() {
               className="flex-1 rounded-lg bg-[var(--gold)] py-2.5 text-center text-sm font-bold text-[var(--bg-primary)]"
               onClick={() => setMobileOpen(false)}
             >
-              Scroll
+              {t("nav.scroll")}
             </Link>
           </div>
         </div>

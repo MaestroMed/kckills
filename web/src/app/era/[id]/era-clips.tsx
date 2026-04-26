@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { m, AnimatePresence } from "framer-motion";
+import { m, AnimatePresence } from "motion/react";
 import type { Era, EraLink } from "@/lib/eras";
 
 const LINK_ICONS: Record<string, string> = {

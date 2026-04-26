@@ -11,9 +11,16 @@
  *
  * Inline styles only — Tailwind / globals.css aren't loaded at this
  * level. Keep the markup minimal so it survives even a bundler regression.
+ *
+ * i18n note : the LangProvider (which powers useT()) lives inside the
+ * root layout that just crashed — we cannot rely on it here. We use the
+ * client-side useT() hook anyway because it falls back gracefully to
+ * DEFAULT_LANG (FR) when no provider is mounted, which is the expected
+ * behaviour for a last-resort error page.
  */
 
 import { useEffect } from "react";
+import { useT } from "@/lib/i18n/use-lang";
 
 export default function GlobalError({
   error,
@@ -22,6 +29,7 @@ export default function GlobalError({
   error: Error & { digest?: string };
   reset: () => void;
 }) {
+  const t = useT();
   useEffect(() => {
     console.error("[kckills] global error:", error);
   }, [error]);
@@ -60,10 +68,10 @@ export default function GlobalError({
             ace.
           </p>
           <h1 style={{ fontSize: 22, fontWeight: 700, margin: "16px 0 8px" }}>
-            Le site s&apos;est fait wipe complet.
+            {t("errors.global_title")}
           </h1>
           <p style={{ color: "#A09B8C", fontSize: 14, lineHeight: 1.5, margin: 0 }}>
-            Une erreur fatale a empêché le chargement de la page.
+            {t("errors.global_body")}
             {error.digest ? (
               <span
                 style={{
@@ -74,7 +82,7 @@ export default function GlobalError({
                   color: "#5B6A8A",
                 }}
               >
-                ref: {error.digest}
+                {t("errors.route_ref")}: {error.digest}
               </span>
             ) : null}
           </p>
@@ -101,7 +109,7 @@ export default function GlobalError({
                 cursor: "pointer",
               }}
             >
-              Réessayer
+              {t("errors.try_again")}
             </button>
             <a
               href="/"
@@ -114,7 +122,7 @@ export default function GlobalError({
                 fontSize: 14,
               }}
             >
-              Accueil
+              {t("nav.home")}
             </a>
           </div>
         </main>

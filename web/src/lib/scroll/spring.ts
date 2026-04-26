@@ -14,7 +14,7 @@
  * misleading results because the touch event timing is different.
  */
 
-import type { ValueAnimationTransition } from "framer-motion";
+import type { ValueAnimationTransition } from "motion/react";
 
 /** The default snap. Used when releasing a normal swipe. */
 export const SPRING_SNAP: ValueAnimationTransition = {

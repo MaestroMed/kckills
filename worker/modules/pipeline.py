@@ -26,6 +26,7 @@ import asyncio
 import structlog
 
 from services import lolesports_api
+from services.schema_cache import table_exists
 from services.supabase_client import safe_select, safe_upsert, safe_update, safe_insert
 from modules import harvester, clipper, analyzer, og_generator, qc
 from modules import sentinel  # noqa: F401 — keeps symbol for tests
@@ -464,6 +465,15 @@ async def run_moments_for_match(match_external_id: str) -> dict:
         "moments_published": 0,
         "errors": [],
     }
+
+    # ─── 0. Bail out if `moments` table isn't deployed ───────────────
+    # The moments schema (migration 002) was planned but the live DB may
+    # not have it yet — every safe_insert/safe_update below would 400 and
+    # spam supabase_*_failed warnings. Probe once + skip cleanly.
+    if not table_exists("moments"):
+        log.info("moments_pipeline_skipped", reason="moments_table_missing", match=match_external_id)
+        report["errors"].append("moments table not deployed; skipping pipeline")
+        return report
 
     # ─── 1-3. Reuse match/game/VOD resolution from run_for_match ─────
     # (identical logic: resolve match, upsert games, compute offsets, download VODs)

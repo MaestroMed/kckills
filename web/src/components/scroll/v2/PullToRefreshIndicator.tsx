@@ -20,7 +20,7 @@
  */
 
 import { useEffect, useState } from "react";
-import { motion, useMotionValueEvent, type MotionValue } from "framer-motion";
+import { motion, useMotionValueEvent, type MotionValue } from "motion/react";
 
 const PTR_THRESHOLD = 80;
 

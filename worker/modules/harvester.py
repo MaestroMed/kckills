@@ -27,6 +27,7 @@ from datetime import datetime, timedelta
 
 from models.kill_event import KillEvent
 from services import livestats_api
+from services.observability import run_logged
 from services.supabase_client import safe_insert, safe_select, safe_update
 
 log = structlog.get_logger()
@@ -532,6 +533,7 @@ def _detect_multi_kill(delta_kills: int) -> str | None:
 
 # ─── Daemon loop ────────────────────────────────────────────────────────────
 
+@run_logged()
 async def run() -> int:
     """Scan games whose kills haven't been extracted yet and fill them in."""
     log.info("harvester_scan_start")
@@ -560,7 +562,19 @@ async def run() -> int:
             safe_insert("kills", k.to_db_dict())
             total_kills += 1
 
-        safe_update("games", {"kills_extracted": True}, "id", game["id"])
+        # CRITICAL : only mark as extracted when we ACTUALLY got kills.
+        # Marking unconditionally was the cause of the "108 games extracted
+        # but 103 empty" bug — those games then got skipped on every
+        # subsequent scan even though the data could be recovered later
+        # via gol.gg or a re-attempt of the live feed.
+        if kills:
+            safe_update("games", {"kills_extracted": True}, "id", game["id"])
+        else:
+            log.warn(
+                "harvester_zero_kills",
+                game_id=game["id"][:8],
+                external=game["external_id"],
+            )
 
     log.info("harvester_scan_done", games_processed=len(games), kills_inserted=total_kills)
     return total_kills

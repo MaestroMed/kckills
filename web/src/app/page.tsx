@@ -4,12 +4,19 @@ import { loadRealData, getCurrentRoster, getTeamStats, getMatchesSorted, display
 import { championIconUrl, championSplashUrl } from "@/lib/constants";
 import { PLAYER_PHOTOS, TEAM_LOGOS, KC_LOGO } from "@/lib/kc-assets";
 import { getPublishedKills } from "@/lib/supabase/kills";
-import { AudioPlayer } from "@/components/AudioPlayer";
+import { loadHeroVideos } from "@/lib/hero-videos/storage";
+// Wave 11 — AudioPlayer (legacy BCC vibes FAB) replaced by the global
+// WolfFloatingPlayer mounted in Providers.tsx. Same UX (auto-fire on
+// first user gesture once opted in) but persistent across pages + with
+// the new wolf-shaped UI + dual playlist (homepage / scroll).
+// import { AudioPlayer } from "@/components/AudioPlayer";
 // HomeFilteredContent removed — was a duplicate of /matches page
 import { HomeRareCards } from "@/components/HomeRareCards";
 import { HomeYouTubeShowcase } from "@/components/HomeYouTubeShowcase";
 import { KillOfTheWeek } from "@/components/KillOfTheWeek";
 import { HomeRecentClips } from "@/components/HomeRecentClips";
+import { HomeWeekendBestClips } from "@/components/HomeWeekendBestClips";
+import { HomeTimelineFeed } from "@/components/timeline/HomeTimelineFeed";
 import { QuoteCard } from "@/components/QuoteCard";
 import { QUOTES } from "@/lib/quotes";
 import { HomeQuoteRotator } from "@/components/HomeQuoteRotator";
@@ -18,6 +25,7 @@ import { AnimatedNumber } from "@/components/AnimatedNumber";
 import { MacronEasterEgg } from "@/components/MacronEasterEgg";
 import { HeroClipBackground } from "@/components/HeroClipBackground";
 import { NextMatchOverlay } from "@/components/NextMatchOverlay";
+import { PageViewTracker } from "@/components/analytics/PageViewTracker";
 // ScrollVivantSection deleted (2026-04-20) — was a dead grid prototype that
 // never made it to production. The /scroll v2 player handles the live feed
 // and /clips handles the cards-grid use case it was meant to fill.
@@ -43,6 +51,22 @@ import { NextMatchOverlay } from "@/components/NextMatchOverlay";
  * we can query Supabase.
  */
 async function buildHeroClips() {
+  // Tier 1 \u2014 operator-curated MP4 montages (Wave 12 EF). Mehdi's own
+  // edits / intros / backstage clips uploaded via /admin/hero-videos to
+  // R2. They take priority because they're hand-picked, and their audio
+  // plays when the user has opted-in via the wolf player.
+  const operatorVideos = await loadHeroVideos();
+  const operatorClips = operatorVideos.map((v) => ({
+    mp4Url: v.videoUrl,
+    posterUrl: v.posterUrl,
+    title: v.title,
+    context: v.context ?? "Hero curate",
+    durationMs: v.durationMs,
+    audioVolume: v.audioVolume,
+  }));
+
+  // Tier 2 \u2014 auto-pulled top published kills from R2 (best-of from the
+  // pipeline). Muted (no caster audio worth playing on raw clips).
   const topKills = await getPublishedKills(5);
   const r2Clips = topKills
     .filter((k) => k.clip_url_horizontal)
@@ -52,13 +76,15 @@ async function buildHeroClips() {
       title: k.ai_description ?? `${k.killer_champion} \u2192 ${k.victim_champion}`,
       context: `Game ${k.games?.game_number ?? "?"} \u00b7 ${k.games?.matches?.stage ?? "LEC"}`,
       durationMs: 15000,
+      audioVolume: 0,
     }));
 
+  // Tier 3 — YouTube fallback reels for variety / when operator hasn't
+  // uploaded anything yet (fresh deploy).
   const youtubeClips = YOUTUBE_HERO_CLIPS;
 
-  // R2 clips rank first — they're instant, no CAPTCHA, CDN-cached.
-  // If pipeline hasn't run yet (0 R2 clips), we fall back to YouTube only.
-  return [...r2Clips, ...youtubeClips];
+  // Operator clips first (curated), then R2 auto-best-of, then YouTube.
+  return [...operatorClips, ...r2Clips, ...youtubeClips];
 }
 
 const YOUTUBE_HERO_CLIPS = [
@@ -149,11 +175,13 @@ export default async function HomePage() {
         marginRight: "-50vw",
       }}
     >
-      {/* BCC Vibes ambient player — auto-arms on first visit, fires on
-          first user gesture (click/touch/keydown anywhere), floating
-          FAB bottom-right with quick-dismiss ×. Hint bubble shows for
-          6s on first visit to tell user what's about to happen. */}
-      <AudioPlayer />
+      {/* Wave 11 — legacy AudioPlayer FAB replaced by the global
+          WolfFloatingPlayer mounted in Providers.tsx. Same auto-fire-on-
+          first-gesture UX, but persistent across navigations + animated
+          wolf head + dual playlist (homepage ambient / scroll hype). */}
+
+      {/* Analytics — fire-and-forget page.viewed event on mount. */}
+      <PageViewTracker pageId="home" />
 
       {/* ═══ HERO — 2-col layout with clip rotator (full-bleed via parent) ═══ */}
       <section className="relative min-h-[100vh] md:min-h-[92vh] overflow-hidden">
@@ -431,11 +459,28 @@ export default async function HomePage() {
         </p>
       </section>
 
+      {/* ═══ MEILLEURS CLIPS DU WEEK-END ═══════════════════════════════
+          Section bien haut sous le hero, avant le Kill of the Week.
+          Surface les clips publiés sur la fenêtre vendredi-dimanche
+          en cours (ou le dernier week-end joué si on est en milieu
+          de semaine). Re-ranke par score IA + boost multi-kill +
+          boost communauté. Ne s'affiche pas si zéro clip dans le
+          système (fresh deploy / worker pas encore tourné). */}
+      <HomeWeekendBestClips />
+
       {/* ═══ KILL OF THE WEEK — surface the featured clip first ═════════ */}
       <KillOfTheWeek />
 
-      {/* ═══ DERNIERS CLIPS — strip horizontal des 8 plus récents ═══════ */}
-      <HomeRecentClips />
+      {/* ═══ KC TIMELINE + DEFAULT FEED ════════════════════════════════
+          Per CLAUDE.md §6.2 : the timeline is a horizontal era strip
+          that filters the kills feed below it. When NO era is selected
+          (default), HomeRecentClips is shown. When the user picks an
+          era card, the strip renders that era's clips instead. The
+          state lives client-side so the heavy homepage RSC never
+          re-renders on selection. */}
+      <HomeTimelineFeed>
+        <HomeRecentClips />
+      </HomeTimelineFeed>
 
       {/* ═══ DISCOVERY STRIP — 3 curated entry points to go deeper ═════ */}
       <section className="max-w-7xl mx-auto px-4 md:px-6 py-6">

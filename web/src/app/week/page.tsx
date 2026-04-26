@@ -8,6 +8,7 @@ import { TEAM_LOGOS } from "@/lib/kc-assets";
 import { loadRealData } from "@/lib/real-data";
 import { Breadcrumb } from "@/components/Breadcrumb";
 import { JsonLd, breadcrumbLD, weekCollectionLD } from "@/lib/seo/jsonld";
+import { Description } from "@/components/i18n/Description";
 
 /**
  * /week — "Cette semaine" recap page.
@@ -391,9 +392,12 @@ function PodiumCard({
           />
         </div>
         {isDescriptionClean(kill.ai_description) && (
-          <p className="text-xs text-white/85 italic line-clamp-2 leading-tight">
-            &laquo; {kill.ai_description} &raquo;
-          </p>
+          <Description
+            kill={kill}
+            as="p"
+            quoted
+            className="text-xs text-white/85 italic line-clamp-2 leading-tight"
+          />
         )}
       </div>
 
