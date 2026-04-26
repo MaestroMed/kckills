@@ -1,22 +1,23 @@
 /**
- * /admin/push — push broadcast composer + recent history.
+ * /admin/push — push broadcast composer + recent history
+ * (PR-loltok ED).
  *
- * Lets the editor send a push notification to all subscribers in two
- * modes :
- *
- *   * "enqueue"  — INSERT into push_notifications, the worker daemon
- *                  picks it up within ~5 minutes. Default. Scales.
- *   * "send_now" — Bounded synchronous send via Node web-push. For
- *                  urgent broadcasts to small audiences (< 200 subs).
- *
- * The right column shows the v_recent_push_notifications view —
- * what was sent, when, to how many, with success/failure breakdown.
+ * Migrated to Agent EA's primitives. The composer is a client component
+ * (PushBroadcastForm) that consumes the new <PushPreview /> mockup. The
+ * recent broadcasts list lives below the form as an AdminTable-style
+ * block (kind / title / sent_at / delivered / failed).
  *
  * Inherits requireAdmin() from the parent admin layout.
  */
 
+import Link from "next/link";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { PushBroadcastForm } from "./push-broadcast-form";
+import { AdminBadge } from "@/components/admin/ui/AdminBadge";
+import { AdminBreadcrumbs } from "@/components/admin/ui/AdminBreadcrumbs";
+import { AdminCard } from "@/components/admin/ui/AdminCard";
+import { AdminEmptyState } from "@/components/admin/ui/AdminEmptyState";
+import { AdminSection } from "@/components/admin/ui/AdminSection";
 
 export const dynamic = "force-dynamic";
 export const fetchCache = "force-no-store";
@@ -46,7 +47,6 @@ interface RecentRow {
 
 async function getRecent(): Promise<RecentRow[]> {
   const sb = await createServerSupabase();
-  // The view filters to the latest 50 ; we just SELECT * here.
   const { data } = await sb
     .from("v_recent_push_notifications")
     .select("*")
@@ -80,72 +80,103 @@ export default async function PushBroadcastPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-baseline justify-between">
-        <h1 className="font-display text-2xl font-bold text-[var(--text-primary)]">
-          Push Broadcast
-        </h1>
-        <span className="text-xs text-[var(--text-muted)]">
+      <AdminBreadcrumbs items={[{ label: "Admin", href: "/admin" }, { label: "Push Broadcast" }]} />
+
+      <header className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h1 className="font-display text-2xl font-black text-[var(--gold)]">
+            Push Broadcast
+          </h1>
+          <p className="text-xs text-[var(--text-muted)] mt-0.5">
+            Compose une notif et envoie à tous les abonnés Web Push.
+          </p>
+        </div>
+        <AdminBadge variant="info" size="md">
           {subscriberCount.toLocaleString("fr-FR")} abonnés
-        </span>
-      </div>
+        </AdminBadge>
+      </header>
 
-      <div className="grid gap-6 lg:grid-cols-[1fr_360px]">
-        {/* Composer */}
-        <PushBroadcastForm subscriberCount={subscriberCount} />
+      <PushBroadcastForm subscriberCount={subscriberCount} />
 
-        {/* Recent broadcasts */}
-        <aside>
-          <h2 className="mb-3 font-display text-xs font-bold uppercase tracking-widest text-[var(--text-muted)]">
-            Récents
-          </h2>
+      <AdminSection
+        title="Broadcasts récents"
+        subtitle={`${recent.length} entrée(s)`}
+      >
+        <AdminCard variant="dense">
           {recent.length === 0 ? (
-            <p className="text-xs text-[var(--text-muted)]">Aucun broadcast envoyé.</p>
+            <AdminEmptyState
+              icon="📣"
+              title="Aucun broadcast envoyé"
+              body="Les notifs récentes apparaîtront ici dès qu'une sera envoyée."
+              compact
+            />
           ) : (
-            <ol className="space-y-2">
-              {recent.map((r) => (
-                <li
-                  key={r.id}
-                  className="rounded border border-[var(--border-gold)] bg-[var(--bg-surface)] p-3 text-xs"
-                >
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="font-mono text-[var(--gold)] truncate">{r.kind}</span>
-                    <span className="text-[var(--text-muted)] whitespace-nowrap">
-                      {formatTime(r.created_at)}
-                    </span>
-                  </div>
-                  <div className="mt-1 truncate font-medium text-[var(--text-primary)]">
-                    {r.title}
-                  </div>
-                  <div className="mt-0.5 line-clamp-2 text-[var(--text-secondary)]">
-                    {r.body}
-                  </div>
-                  <div className="mt-2 flex items-center gap-2 text-[10px]">
-                    {r.sent_at ? (
-                      <>
-                        <span className="text-[var(--green)]">
-                          ✓ {r.sent_count}
-                        </span>
-                        {r.failed_count > 0 && (
-                          <span className="text-[var(--red)]">
-                            ✗ {r.failed_count}
-                          </span>
-                        )}
-                        {r.expired_count > 0 && (
-                          <span className="text-[var(--text-muted)]">
-                            ⏚ {r.expired_count}
-                          </span>
-                        )}
-                      </>
-                    ) : (
-                      <span className="text-[var(--orange)]">en attente…</span>
-                    )}
-                  </div>
-                </li>
-              ))}
-            </ol>
+            <table className="w-full text-xs">
+              <thead className="bg-[var(--bg-elevated)] border-b border-[var(--border-gold)] text-left">
+                <tr>
+                  <th className="px-3 py-2 w-24">Type</th>
+                  <th className="px-3 py-2">Titre</th>
+                  <th className="px-3 py-2 w-36">Envoyé</th>
+                  <th className="px-3 py-2 w-16 text-right">Cible</th>
+                  <th className="px-3 py-2 w-16 text-right">OK</th>
+                  <th className="px-3 py-2 w-16 text-right">Fail</th>
+                  <th className="px-3 py-2 w-20"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {recent.map((r) => (
+                  <tr
+                    key={r.id}
+                    className="border-b border-[var(--border-gold)]/20 hover:bg-[var(--bg-elevated)]/40"
+                  >
+                    <td className="px-3 py-2">
+                      <AdminBadge variant="info" size="sm">
+                        {r.kind}
+                      </AdminBadge>
+                    </td>
+                    <td className="px-3 py-2">
+                      <div className="font-medium text-[var(--text-primary)] truncate max-w-md">
+                        {r.title}
+                      </div>
+                      <div className="text-[10px] text-[var(--text-muted)] line-clamp-1">
+                        {r.body}
+                      </div>
+                    </td>
+                    <td className="px-3 py-2 font-mono text-[10px] text-[var(--text-muted)]">
+                      {r.sent_at ? (
+                        formatTime(r.sent_at)
+                      ) : (
+                        <AdminBadge variant="warn" size="sm">
+                          en attente
+                        </AdminBadge>
+                      )}
+                    </td>
+                    <td className="px-3 py-2 text-right font-mono">
+                      {r.target_count.toLocaleString("fr-FR")}
+                    </td>
+                    <td className="px-3 py-2 text-right font-mono text-[var(--green)]">
+                      {r.sent_count.toLocaleString("fr-FR")}
+                    </td>
+                    <td className="px-3 py-2 text-right font-mono text-[var(--red)]">
+                      {r.failed_count.toLocaleString("fr-FR")}
+                    </td>
+                    <td className="px-3 py-2">
+                      {r.kill_id && (
+                        <Link
+                          href={`/admin/clips/${r.kill_id}`}
+                          className="text-[10px] text-[var(--gold)]/80 hover:text-[var(--gold)] underline"
+                        >
+                          → clip
+                        </Link>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           )}
-        </aside>
-      </div>
+        </AdminCard>
+      </AdminSection>
     </div>
   );
 }
