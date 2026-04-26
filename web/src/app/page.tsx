@@ -67,7 +67,7 @@ async function buildHeroClips() {
 
   // Tier 2 \u2014 auto-pulled top published kills from R2 (best-of from the
   // pipeline). Muted (no caster audio worth playing on raw clips).
-  const topKills = await getPublishedKills(5);
+  const topKills = await getPublishedKills(5, { buildTime: true });
   const r2Clips = topKills
     .filter((k) => k.clip_url_horizontal)
     .slice(0, 3)
@@ -150,8 +150,12 @@ export default async function HomePage() {
   const isEmpty = data.total_matches === 0;
   const HERO_CLIPS = await buildHeroClips();
 
-  // Live clip count from Supabase (KC team_killer + visible only)
-  const allKills = await getPublishedKills(500);
+  // Live clip count from Supabase (KC team_killer + visible only).
+  // buildTime: true uses the cookie-less anon Supabase client — `cookies()`
+  // calls inside the server client opt the page into dynamic rendering,
+  // which kills our `revalidate = 300` ISR setting. Anon read is fine
+  // because the count is filtered through the published RLS policy.
+  const allKills = await getPublishedKills(500, { buildTime: true });
   const clipCount = allKills.filter(
     (k) => k.tracked_team_involvement === "team_killer" && k.kill_visible !== false,
   ).length;

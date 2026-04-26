@@ -25,7 +25,7 @@ async function fetchFeaturedToday() {
       .eq("feature_date", today)
       .maybeSingle();
     if (!data?.kill_id) return null;
-    return await getKillById(data.kill_id);
+    return await getKillById(data.kill_id, { buildTime: true });
   } catch {
     return null;
   }
@@ -38,7 +38,8 @@ export async function KillOfTheWeek() {
 
   // Fallback: top highlight score
   if (!kill) {
-    const kills = await getPublishedKills(1);
+    // buildTime: true keeps the host page cacheable (cookies-free anon client).
+    const kills = await getPublishedKills(1, { buildTime: true });
     if (kills.length === 0) return null;
     kill = kills[0];
     isFeatured = false;

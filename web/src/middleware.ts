@@ -56,15 +56,38 @@ export function middleware(request: NextRequest) {
     pathname !== "/admin/login" &&
     pathname !== "/api/admin/login";
 
-  // Always pass the pathname downstream so layouts can detect it
-  // (used by the admin layout to skip the auth redirect on /admin/login).
-  const passthroughHeaders = new Headers(request.headers);
-  passthroughHeaders.set("x-pathname", pathname);
-
+  // ⚠️ CACHE-SAFE PUBLIC PATH (2026-04-26 fix) :
+  // For public pages (NOT /admin/*), we MUST NOT call
+  // `NextResponse.next({ request: { headers: ... } })` — even passing
+  // the same headers untouched, the request-rewrite call makes Next.js
+  // mark the response as dynamic (Cache-Control: private, no-store,
+  // X-Vercel-Cache: MISS forever). That negated all our `export const
+  // revalidate = 300` settings — the homepage was running SSR for
+  // every single visitor, killing Vercel function-invocation budget.
+  //
+  // Also : we ONLY set the lang cookie on the FIRST visit (when the
+  // cookie is missing). The Set-Cookie header makes that one response
+  // uncacheable, but every subsequent visit gets a cached response
+  // because we return `NextResponse.next()` cleanly (no request
+  // rewrite, no Set-Cookie).
   if (!needsAuth) {
-    const resp = NextResponse.next({ request: { headers: passthroughHeaders } });
+    if (request.cookies.get(LANG_COOKIE)) {
+      // Returning visitor — middleware does literally nothing so the
+      // response stays cacheable per the page's `revalidate` setting.
+      return NextResponse.next();
+    }
+    // First-time visitor — soft-detect lang and set the cookie. This
+    // single response is uncacheable (Set-Cookie), but the next page
+    // load sees the cookie and skips the middleware mutation.
+    const resp = NextResponse.next();
     return softDetectLang(request, resp);
   }
+
+  // Admin paths NEED the x-pathname header so layout.tsx can detect
+  // /admin/login and skip rendering the sidebar/topbar. Cache is moot
+  // anyway — admin responses are explicitly no-store below.
+  const passthroughHeaders = new Headers(request.headers);
+  passthroughHeaders.set("x-pathname", pathname);
 
   // Cache-Control: no-store on admin responses prevents the CDN from
   // ever serving an admin page from cache to an unauthenticated visitor.

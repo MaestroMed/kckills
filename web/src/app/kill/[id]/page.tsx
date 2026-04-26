@@ -136,7 +136,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { id } = await params;
 
   if (isUuid(id)) {
-    const kill = await getKillById(id);
+    const kill = await getKillById(id, { buildTime: true });
     if (kill) {
       const title = `${kill.killer_champion ?? "?"} \u2192 ${kill.victim_champion ?? "?"} \u2014 KCKILLS`;
       const description = kill.ai_description ?? `Highlight score ${kill.highlight_score?.toFixed(1) ?? "?"}/10`;
@@ -202,7 +202,7 @@ export default async function KillDetailPage({ params }: Props) {
   const { id } = await params;
 
   if (isUuid(id)) {
-    const kill = await getKillById(id);
+    const kill = await getKillById(id, { buildTime: true });
     if (kill) {
       const data = loadRealData();
       const opponent = opponentFromMatchExternalId(
@@ -293,7 +293,7 @@ export default async function KillDetailPage({ params }: Props) {
         is_first_blood: boolean | null;
       }> = [];
       if (matchExtIdForRelated) {
-        const all = await getKillsByMatchExternalId(matchExtIdForRelated).catch(() => []);
+        const all = await getKillsByMatchExternalId(matchExtIdForRelated, { buildTime: true }).catch(() => []);
         relatedKills = all
           // Manifest-aware filter — keep any kill that has a thumbnail
           // either in the new manifest OR the legacy column. Prevents

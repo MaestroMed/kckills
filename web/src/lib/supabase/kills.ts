@@ -702,9 +702,17 @@ export function isDataOnlyKill(k: PublishedKillRow): boolean {
 }
 
 /** Get a single published kill by id. */
-export async function getKillById(id: string): Promise<PublishedKillRow | null> {
+export async function getKillById(
+  id: string,
+  opts: { buildTime?: boolean } = {},
+): Promise<PublishedKillRow | null> {
   try {
-    const supabase = await createServerSupabase();
+    // 2026-04-26 cache fix : opt-in cookie-less anon client. Without
+    // this, callers (KillOfTheWeek, /kill/[id]) opt the page into
+    // dynamic rendering via cookies(), killing ISR.
+    const supabase = opts.buildTime
+      ? createAnonSupabase()
+      : await createServerSupabase();
     const { data, error } = await supabase
       .from("kills")
       .select(KILL_SELECT)
@@ -739,10 +747,17 @@ export async function getKillById(id: string): Promise<PublishedKillRow | null> 
  *   * OR data_source='gol_gg' (post-game verified, no QC needed)
  */
 export async function getKillsByMatchExternalId(
-  matchExternalId: string
+  matchExternalId: string,
+  opts: { buildTime?: boolean } = {},
 ): Promise<PublishedKillRow[]> {
   try {
-    const supabase = await createServerSupabase();
+    // 2026-04-26 cache fix : opt-in cookie-less anon client. Without
+    // this, /match/[slug] runs SSR for every visitor (cookies() in the
+    // server client opts the page into dynamic rendering, killing the
+    // `revalidate = 600` ISR setting).
+    const supabase = opts.buildTime
+      ? createAnonSupabase()
+      : await createServerSupabase();
 
     const [publishedRes, golggRes, livestatsRes] = await Promise.all([
       supabase

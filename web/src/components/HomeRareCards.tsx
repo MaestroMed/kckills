@@ -17,7 +17,8 @@ import { getPublishedKills } from "@/lib/supabase/kills";
  * homepage never crashes on a Supabase blip.
  */
 export async function HomeRareCards() {
-  const all = await getPublishedKills(50);
+  // buildTime: true keeps the host page cacheable (cookies-free anon client).
+  const all = await getPublishedKills(50, { buildTime: true });
   if (all.length === 0) return null;
 
   const ranked = all

@@ -84,7 +84,9 @@ export default async function MatchPage({ params }: Props) {
 
   const [data, realKills] = await Promise.all([
     Promise.resolve(loadRealData()),
-    getKillsByMatchExternalId(slug),
+    // buildTime: true uses the cookie-less anon Supabase client so the
+    // page stays cacheable per its `revalidate = 600` ISR setting.
+    getKillsByMatchExternalId(slug, { buildTime: true }),
   ]);
   const match = getMatchById(data, slug);
   if (!match) notFound();

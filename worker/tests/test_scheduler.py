@@ -16,7 +16,10 @@ def test_delays():
     assert "gemini" in s.DELAYS
     assert s.DELAYS["gemini"] == 4.0
     assert s.DELAYS["haiku"] == 1.5
-    assert s.DELAYS["ytdlp"] == 10.0
+    # 2026-04-26 : ytdlp delay tuned from 10s to 4s after observing
+    # zero 429s on the production stream over a multi-month window.
+    # Sync with scheduler.py DELAYS["ytdlp"].
+    assert s.DELAYS["ytdlp"] == 4.0
     print("  [OK] Delays configured correctly")
 
 

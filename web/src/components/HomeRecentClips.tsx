@@ -12,7 +12,9 @@ import { championIconUrl } from "@/lib/constants";
  * Click → /scroll?kill=<id> to open in TikTok feed.
  */
 export async function HomeRecentClips() {
-  const allKills = await getPublishedKills(100);
+  // buildTime: true uses the cookie-less anon Supabase client to keep the
+  // host page cacheable (cookies() opts into dynamic rendering otherwise).
+  const allKills = await getPublishedKills(100, { buildTime: true });
   const cards = allKills
     .filter((k) =>
       k.tracked_team_involvement === "team_killer" &&

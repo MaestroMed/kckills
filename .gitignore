@@ -44,3 +44,12 @@ worker/golgg_backfill_state.json
 worker/.youtube_cookies.txt
 worker/youtube_cookies.txt
 worker/cookies.txt
+
+# Runtime artifacts (2026-04-26)
+worker/worker_startup.log
+worker/logs/daemon-*.log
+worker/.scheduler_state.json
+.claude/scheduled_tasks.lock
+.claude/worktrees/*/web/tsconfig.tsbuildinfo
+.quarantine-pre-*
+
