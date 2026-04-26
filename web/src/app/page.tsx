@@ -4,7 +4,11 @@ import { loadRealData, getCurrentRoster, getTeamStats, getMatchesSorted, display
 import { championIconUrl, championSplashUrl } from "@/lib/constants";
 import { PLAYER_PHOTOS, TEAM_LOGOS, KC_LOGO } from "@/lib/kc-assets";
 import { getPublishedKills } from "@/lib/supabase/kills";
-import { AudioPlayer } from "@/components/AudioPlayer";
+// Wave 11 — AudioPlayer (legacy BCC vibes FAB) replaced by the global
+// WolfFloatingPlayer mounted in Providers.tsx. Same UX (auto-fire on
+// first user gesture once opted in) but persistent across pages + with
+// the new wolf-shaped UI + dual playlist (homepage / scroll).
+// import { AudioPlayer } from "@/components/AudioPlayer";
 // HomeFilteredContent removed — was a duplicate of /matches page
 import { HomeRareCards } from "@/components/HomeRareCards";
 import { HomeYouTubeShowcase } from "@/components/HomeYouTubeShowcase";
@@ -152,11 +156,10 @@ export default async function HomePage() {
         marginRight: "-50vw",
       }}
     >
-      {/* BCC Vibes ambient player — auto-arms on first visit, fires on
-          first user gesture (click/touch/keydown anywhere), floating
-          FAB bottom-right with quick-dismiss ×. Hint bubble shows for
-          6s on first visit to tell user what's about to happen. */}
-      <AudioPlayer />
+      {/* Wave 11 — legacy AudioPlayer FAB replaced by the global
+          WolfFloatingPlayer mounted in Providers.tsx. Same auto-fire-on-
+          first-gesture UX, but persistent across navigations + animated
+          wolf head + dual playlist (homepage ambient / scroll hype). */}
 
       {/* Analytics — fire-and-forget page.viewed event on mount. */}
       <PageViewTracker pageId="home" />

@@ -12,6 +12,7 @@ import {
 } from "@/lib/supabase/kills";
 import { getAssetMetadata, pickAssetUrl } from "@/lib/kill-assets";
 import { JsonLd, breadcrumbLD } from "@/lib/seo/jsonld";
+import { WolfHowlOnEnter } from "@/components/player/WolfHowlOnEnter";
 import Image from "next/image";
 import Link from "next/link";
 import type { Metadata } from "next";
@@ -261,6 +262,11 @@ export default async function PlayerPage({ params }: Props) {
         dangerouslySetInnerHTML={{ __html: JSON.stringify(playerJsonLd) }}
       />
       <JsonLd data={breadcrumbJsonLd} />
+      {/* Easter egg : brief distant wolf howl on first user gesture after
+          page entry. Subtle (28% volume max), 30s cooldown across player
+          pages, honors prefers-reduced-motion + the wolf player's mute
+          flag. Renders nothing visually. Karmine = wolves. 🐺 */}
+      <WolfHowlOnEnter />
       {/* ═══ HERO — full-screen cinematic with cube-portrait morph ═══ */}
       <section className="relative h-[90vh] min-h-[720px] w-full overflow-hidden bg-[var(--bg-primary)]">
         {/* Soft champion-art backdrop — heavily darkened so the dot-matrix

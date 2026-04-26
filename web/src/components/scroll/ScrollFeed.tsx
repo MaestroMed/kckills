@@ -364,7 +364,9 @@ export function ScrollFeed({
       className="scroll-container fixed inset-0 z-[60] bg-black"
       onPointerDown={handleFirstInteraction}
     >
-      <BgmPlayer />
+      {/* Wave 11 — legacy <BgmPlayer/> removed. The global WolfFloatingPlayer
+          (Providers.tsx → bottom-right of every page) handles /scroll's BGM
+          via the "scroll" hype playlist. One player, one source of truth. */}
       {/* Top bar — minimal, safe-area aware */}
       <div className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-4 py-3" style={{ paddingTop: "max(0.75rem, env(safe-area-inset-top, 0.75rem))" }}>
         <Link href="/" className="flex h-9 w-9 items-center justify-center rounded-full bg-black/60 backdrop-blur-sm">
