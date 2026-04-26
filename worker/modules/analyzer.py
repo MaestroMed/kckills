@@ -111,7 +111,8 @@ Reponds UNIQUEMENT en JSON valide.</task>
     "description_en": "<max 130 chars, EN, same energy as FR>",
     "description_ko": "<max 80 chars, KR Korean>",
     "description_es": "<max 130 chars, ES Spanish>",
-    "kill_visible_on_screen": true,
+    "kill_visible_on_screen": <true|false — see rules below>,
+    "clip_context": <"live_gameplay"|"replay"|"draft"|"lobby"|"loading"|"plateau"|"transition"|"other">,
     "caster_hype_level": <int 1-5>,
     "best_thumbnail_timestamp_in_clip_sec": <int 0-40, second IN the clip
                                               that best captures the kill
@@ -190,6 +191,37 @@ Verifie que le champion correspond au pool ci-dessus avant d'attribuer.
    Ne PAS affirmer le kill avec certitude. Utilise "KC force le fight",
    "le setup mene a un pick", "l'engage retourne le tempo" — JAMAIS
    "X termine Y" / "X acheve Y".
+
+8. KILL_VISIBLE_ON_SCREEN — DEFINITION STRICTE (anti-pollution 2026-04-26) :
+   Tu ne dois retourner TRUE que si TOUTES ces conditions sont reunies :
+   * On VOIT le kill se jouer en LIVE GAMEPLAY (HUD ingame visible : barre
+     d'XP en bas, minimap en bas a droite, scoreboard top, gold counter).
+   * Le killfeed top-droit affiche l'icone du killer + skull + victim
+     PENDANT le clip OU le champion victim s'effondre/explode visiblement.
+   * La camera est sur le combat — PAS sur un caster cam, un panel
+     studio, un sponsor break, une replay LEC/LFL avec watermark replay.
+   FALSE obligatoire si :
+   * Champion select / draft phase / pick & ban screen.
+   * Loading screen / "GAME 1 STARTING SOON" / countdown.
+   * Plateau studio (Drakos, Trobi, Doigby a l'antenne, sponsors visibles).
+   * Lobby end-of-game (Victory/Defeat screen, post-game stats).
+   * Transition / split screen entre 2 games d'un BO multi-games.
+   * Replay de kill deja vu (LEC officiel rejoue souvent les highlights —
+     watermark "REPLAY" en haut a gauche typique).
+   * Le clip coupe AVANT que le kill se produise (premieres 5s du combat
+     mais kill arrive a la 35e seconde — clip mal decoupe par le pipeline).
+
+9. CLIP_CONTEXT — categorie pour le QC dashboard :
+   * "live_gameplay" — le seul cas ou le clip va etre publie (avec
+     kill_visible_on_screen=true OU explicitement non visible mais
+     l'action est legitime, e.g. teamfight off-screen).
+   * "replay" — replay de kill deja vu, surimpression "REPLAY" visible.
+   * "draft" — champion select / pick & ban.
+   * "lobby" — Victory/Defeat screen, end-of-game scoreboard.
+   * "loading" — loading screen, countdown.
+   * "plateau" — studio, casters in frame, sponsor break.
+   * "transition" — split screen / generique entre 2 games.
+   * "other" — rien de tout ca, le clip est trop ambigu.
 
 </rules_dures_priorite_absolue>
 
@@ -887,6 +919,30 @@ def _build_analysis_patch(result: dict, kill: dict) -> dict:
     thumb_ts = _safe_int(result.get("best_thumbnail_timestamp_in_clip_sec"))
     kill_visible_flag = bool(result.get("kill_visible_on_screen", True))
 
+    # 2026-04-26 — clip_context anti-pollution gate. Gemini classifies the
+    # clip into one of 8 categories ; only "live_gameplay" is allowed
+    # through to the publish gate. Anything else (replay, draft, plateau,
+    # lobby, loading, transition, other) keeps the row at status='analyzed'
+    # and flips kill_visible=false so it's hidden from the scroll feed
+    # even if a future migration relaxes the gate.
+    clip_context_raw = (result.get("clip_context") or "").strip().lower()
+    VALID_CONTEXTS = {
+        "live_gameplay", "replay", "draft", "lobby",
+        "loading", "plateau", "transition", "other",
+    }
+    clip_context = clip_context_raw if clip_context_raw in VALID_CONTEXTS else "other"
+    if clip_context != "live_gameplay":
+        # Force kill_visible=false on non-gameplay clips so the existing
+        # frontend filter (kill_visible !== false) hides them out of the
+        # box without requiring a column-aware change to the feed query.
+        kill_visible_flag = False
+        log.info(
+            "analyzer_clip_context_filter",
+            kill_id=str(kill.get("id"))[:8],
+            context=clip_context,
+            reason="kill_visible forced false (non-live_gameplay)",
+        )
+
     # Parse in-game timer from "MM:SS" format → compute drift vs expected
     qc_timer_sec: int | None = None
     qc_drift_sec: int | None = None
@@ -914,6 +970,7 @@ def _build_analysis_patch(result: dict, kill: dict) -> dict:
         "ai_qc_drift_sec": qc_drift_sec,
         "ai_pipeline_version": ANALYZER_PIPELINE_VERSION,
         "kill_visible": kill_visible_flag,
+        "ai_clip_context": clip_context,                  # Wave 12 anti-pollution
         "caster_hype_level": _safe_int(result.get("caster_hype_level")),
         "status": "analyzed",
     }
