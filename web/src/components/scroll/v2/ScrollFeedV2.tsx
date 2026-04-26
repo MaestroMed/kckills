@@ -568,8 +568,7 @@ export function ScrollFeedV2({
     <div
       ref={containerRef}
       className="fixed inset-0 z-[60] bg-black overflow-hidden"
-      // Touch-action: pan-y so the browser doesn't fight the drag.
-      style={{ touchAction: "pan-y", overscrollBehavior: "contain" }}
+      style={{ overscrollBehavior: "contain" }}
     >
       <BgmPlayer />
       {/* Live mode banner — portaled to <body> so it escapes overflow:hidden.
@@ -653,7 +652,11 @@ export function ScrollFeedV2({
       {/* Items container — gesture-driven, items absolutely positioned. */}
       <motion.div
         className="absolute inset-0"
-        style={{ y, willChange: "transform" }}
+        // touch-action: none on the gesture target so the browser
+        // doesn't claim the vertical touchmove. With pan-y / auto here,
+        // iOS Safari intercepts the swipe natively and use-gesture's
+        // onDrag never fires — the feed appears frozen on mobile.
+        style={{ y, willChange: "transform", touchAction: "none" }}
         {...bind()}
       >
         {visibleItems.map((item, i) => {
