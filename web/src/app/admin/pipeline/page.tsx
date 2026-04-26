@@ -10,9 +10,15 @@
  * We deliberately keep this an RSC : no client-side state, no
  * realtime subscription. Auto-refresh via `revalidate=30` keeps the
  * page fresh enough for an ops view while costing zero browser JS.
+ *
+ * Wave 12 EC : breadcrumbs, sparkline of runs/min last hour, click-to-
+ * filter per-module rows that link to /admin/pipeline/jobs?kind=...,
+ * AdminCard + AdminBadge consumed from EA primitives.
  */
 import Link from "next/link";
 import { createServerSupabase } from "@/lib/supabase/server";
+import { AdminCard } from "@/components/admin/ui/AdminCard";
+import { AdminBadge } from "@/components/admin/ui/AdminBadge";
 
 export const dynamic = "force-dynamic";
 // 30s revalidation — the page is dynamic, but the layout hint here gives
@@ -61,7 +67,7 @@ export default async function PipelineDashboardPage() {
   const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
   const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
 
-  const [healthRes, jobsByStatusRes, dlqDepthRes, recentFailsRes, dlqRecentRes] =
+  const [healthRes, jobsByStatusRes, dlqDepthRes, recentFailsRes, dlqRecentRes, runsLastHourRes] =
     await Promise.all([
       sb.from("v_pipeline_health").select("*"),
       // pipeline_jobs counts per status — three small queries are simpler
@@ -93,6 +99,15 @@ export default async function PipelineDashboardPage() {
         .eq("resolution_status", "pending")
         .order("failed_at", { ascending: false })
         .limit(5),
+      // Sparkline source: pipeline_runs.started_at within the last hour
+      // bucketed per minute (60 buckets). We pull just `started_at` and
+      // bucketize in JS — keeps the SQL trivial and the egress tiny.
+      sb
+        .from("pipeline_runs")
+        .select("started_at")
+        .gte("started_at", oneHourAgo)
+        .order("started_at", { ascending: true })
+        .limit(2000),
     ]);
 
   const health: HealthRow[] = (healthRes.data ?? []) as HealthRow[];
@@ -102,6 +117,7 @@ export default async function PipelineDashboardPage() {
   const dlqDepth = dlqDepthRes.count ?? 0;
   const recentFails: FailureRow[] = (recentFailsRes.data ?? []) as FailureRow[];
   const dlqRecent: DlqRow[] = (dlqRecentRes.data ?? []) as DlqRow[];
+  const runsLastHour = (runsLastHourRes.data ?? []) as { started_at: string }[];
 
   // ─── KPI aggregates ──────────────────────────────────────────────
   const totalRuns1h = health.reduce((s, r) => s + (r.runs_1h ?? 0), 0);
@@ -131,24 +147,38 @@ export default async function PipelineDashboardPage() {
     }
   }
 
+  // Sparkline buckets: 60 minutes ending now.
+  const buckets = new Array<number>(60).fill(0);
+  const cutoffMs = Date.now() - 60 * 60 * 1000;
+  for (const r of runsLastHour) {
+    const t = new Date(r.started_at).getTime();
+    const idx = Math.floor((t - cutoffMs) / 60_000);
+    if (idx >= 0 && idx < 60) buckets[idx]++;
+  }
+
   return (
     <div className="space-y-6">
-      <header className="flex items-center justify-between">
+      <header className="flex items-center justify-between flex-wrap gap-2">
         <div>
+          <nav aria-label="Fil d'Ariane" className="text-[10px] text-[var(--text-muted)] mb-1 flex items-center gap-1.5">
+            <Link href="/admin" className="hover:text-[var(--gold)]">Backoffice</Link>
+            <span aria-hidden>›</span>
+            <span className="text-[var(--text-secondary)]">Pipeline</span>
+          </nav>
           <h1 className="font-display text-2xl font-black text-[var(--gold)]">
             Pipeline Health
           </h1>
           <p className="text-xs text-[var(--text-muted)] mt-0.5">
-            Auto-refreshes every 30s. Last load:{" "}
+            Auto-refresh toutes les 30s. Dernière maj :{" "}
             {new Date().toLocaleTimeString("fr-FR")}
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
           <Link
             href="/admin/pipeline/run"
             className="rounded-md border border-[var(--gold)]/60 bg-[var(--gold)]/10 px-3 py-1.5 text-xs font-bold text-[var(--gold)] hover:bg-[var(--gold)]/20"
           >
-            Run backfills
+            Backfills
           </Link>
           <Link
             href="/admin/pipeline/jobs"
@@ -201,6 +231,13 @@ export default async function PipelineDashboardPage() {
         />
       </section>
 
+      {/* ─── Sparkline (runs/min last 1h) ────────────────────────── */}
+      <AdminCard
+        title={`Runs / minute — dernière heure (total ${runsLastHour.length})`}
+      >
+        <Sparkline data={buckets} />
+      </AdminCard>
+
       {/* ─── Job queue snapshot ─────────────────────────────────── */}
       <section>
         <h2 className="font-display text-[10px] uppercase tracking-widest text-[var(--text-muted)] mb-3">
@@ -218,7 +255,7 @@ export default async function PipelineDashboardPage() {
       {/* ─── Per-module grid ────────────────────────────────────── */}
       <section>
         <h2 className="font-display text-[10px] uppercase tracking-widest text-[var(--text-muted)] mb-3">
-          Per-module (last hour)
+          Per-module (last hour) — clique pour filtrer la queue
         </h2>
         {sortedHealth.length === 0 ? (
           <p className="rounded-xl border border-[var(--border-gold)] bg-[var(--bg-surface)] p-6 text-center text-sm text-[var(--text-muted)]">
@@ -382,8 +419,9 @@ function ModuleCard({
   };
 
   return (
-    <div
-      className={`rounded-xl border ${borderColor[tone]} bg-[var(--bg-surface)] p-4`}
+    <Link
+      href={`/admin/pipeline/jobs?kind=${encodeURIComponent(row.module_name)}`}
+      className={`block rounded-xl border ${borderColor[tone]} bg-[var(--bg-surface)] p-4 hover:bg-[var(--bg-elevated)]/60 transition-colors`}
     >
       <header className="flex items-center justify-between mb-2">
         <div className="flex items-center gap-2 min-w-0">
@@ -391,6 +429,9 @@ function ModuleCard({
           <h3 className="font-mono text-sm font-bold text-[var(--text-primary)] truncate">
             {row.module_name}
           </h3>
+          {failed > 0 && (
+            <AdminBadge variant="danger" size="sm">{failed} fail</AdminBadge>
+          )}
         </div>
         <span className="text-[10px] text-[var(--text-muted)] whitespace-nowrap">
           {row.last_run_at ? relativeTime(row.last_run_at) : "—"}
@@ -415,7 +456,6 @@ function ModuleCard({
           </p>
           <p className="text-[10px] text-[var(--text-muted)]">
             {succeeded}/{runs}
-            {failed > 0 ? ` · ${failed} fail` : ""}
           </p>
         </div>
         <div>
@@ -451,6 +491,29 @@ function ModuleCard({
           </p>
         </div>
       )}
+    </Link>
+  );
+}
+
+/**
+ * Tiny inline sparkline — pure CSS / SVG, no chart lib. Bars are
+ * normalised against the max bucket height so even quiet hours read.
+ */
+function Sparkline({ data }: { data: number[] }) {
+  const max = Math.max(...data, 1);
+  return (
+    <div className="flex items-end h-16 gap-[1px]">
+      {data.map((v, i) => {
+        const pct = Math.round((v / max) * 100);
+        return (
+          <div
+            key={i}
+            className="flex-1 bg-[var(--cyan)]/60 rounded-t"
+            style={{ height: `${Math.max(pct, v > 0 ? 4 : 1)}%` }}
+            title={`${v} run${v > 1 ? "s" : ""} il y a ${60 - i}min`}
+          />
+        );
+      })}
     </div>
   );
 }

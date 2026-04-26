@@ -1,27 +1,34 @@
 "use client";
 
 /**
- * Per-row actions on /admin/pipeline/jobs.
+ * Per-row + per-detail-page actions for pipeline_jobs.
  *
- * Three buttons :
- *   - View    → navigate to /admin/pipeline/jobs/[id]
- *   - Cancel  → POST /api/admin/pipeline/jobs/[id]/cancel
- *               (only enabled when status in {pending, claimed})
- *   - Retry   → POST /api/admin/pipeline/jobs/[id]/retry
- *               (only enabled when status === 'failed')
+ * Renders View / Cancel / Retry buttons. Each button enforces its own
+ * eligibility rule (cancellable when pending|claimed, retryable when
+ * failed). Wraps the unified AdminButton primitive so styling matches
+ * the rest of the admin shell.
  *
- * UX :
- *   - Optimistic disable + spinner during request
- *   - alert() on failure (no toast lib in the project yet)
- *   - router.refresh() on success — the server component re-renders
- *     and the row reflects the new state (or disappears, depending on
- *     active filters)
+ * Action feedback is shown as a small floating toast at the top-right
+ * of the viewport — same look as the queue page so the operator sees
+ * "Job re-enqueued at priority 70" etc. without an alert() popup.
+ *
+ * On success we call router.refresh() so the parent (server component)
+ * re-renders with the new job state.
  */
-import { useState, useTransition } from "react";
+import { useState, useTransition, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { AdminButton } from "@/components/admin/ui/AdminButton";
 
 type Action = "cancel" | "retry";
+
+interface Toast {
+  id: number;
+  tone: "success" | "error";
+  text: string;
+}
+
+let toastSeq = 0;
 
 export function JobRowActions({
   id,
@@ -34,7 +41,22 @@ export function JobRowActions({
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState<Action | null>(null);
-  const [isPending, startTransition] = useTransition();
+  const [, startTransition] = useTransition();
+  const [toasts, setToasts] = useState<Toast[]>([]);
+
+  const pushToast = (tone: Toast["tone"], text: string) => {
+    const id = ++toastSeq;
+    setToasts((prev) => [...prev, { id, tone, text }]);
+  };
+
+  // Auto-dismiss after 4s.
+  useEffect(() => {
+    if (toasts.length === 0) return;
+    const t = window.setTimeout(() => {
+      setToasts((prev) => prev.slice(1));
+    }, 4000);
+    return () => window.clearTimeout(t);
+  }, [toasts]);
 
   async function act(action: Action) {
     if (busy) return;
@@ -45,53 +67,95 @@ export function JobRowActions({
       });
       if (!r.ok) {
         const body = (await r.json().catch(() => ({}))) as { error?: string };
-        alert(`${action} failed: ${body.error ?? `HTTP ${r.status}`}`);
+        pushToast(
+          "error",
+          `${labelFor(action)} échoué : ${body.error ?? `HTTP ${r.status}`}`,
+        );
         setBusy(null);
         return;
       }
-      // Trigger a server re-render so the row reflects the new status.
-      // Use startTransition so React holds the spinner until the new
-      // server payload is in.
+      pushToast(
+        "success",
+        action === "cancel"
+          ? "Job annulé."
+          : "Job remis en file (status pending, attempts=0).",
+      );
       startTransition(() => {
         router.refresh();
       });
-      // Clear busy on the next tick — the server-rendered row will
-      // reset the local state by remounting under React keys.
       setTimeout(() => setBusy(null), 600);
     } catch (e) {
-      alert(`${action} failed: ${e instanceof Error ? e.message : "request failed"}`);
+      pushToast(
+        "error",
+        `${labelFor(action)} échoué : ${e instanceof Error ? e.message : "request failed"}`,
+      );
       setBusy(null);
     }
   }
 
-  const disabled = busy !== null || isPending;
-
   return (
-    <div className="flex items-center gap-1 justify-end">
-      <Link
-        href={`/admin/pipeline/jobs/${id}`}
-        className="rounded-md border border-[var(--border-gold)] px-2 py-1 text-[10px] text-[var(--text-muted)] hover:text-[var(--gold)] hover:border-[var(--gold)]/60 whitespace-nowrap"
+    <>
+      <div className="flex items-center gap-1 justify-end">
+        <Link
+          href={`/admin/pipeline/jobs/${id}`}
+          className="rounded-md border border-[var(--border-gold)] px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-[var(--text-muted)] hover:text-[var(--gold)] hover:border-[var(--gold)]/60 whitespace-nowrap"
+        >
+          Voir
+        </Link>
+        <AdminButton
+          type="button"
+          variant="secondary"
+          size="sm"
+          loading={busy === "cancel"}
+          disabled={!canCancel || busy !== null}
+          onClick={() => act("cancel")}
+          title={
+            canCancel
+              ? "Annuler ce job"
+              : "Seuls les jobs pending/claimed sont annulables"
+          }
+        >
+          Annuler
+        </AdminButton>
+        <AdminButton
+          type="button"
+          variant="primary"
+          size="sm"
+          loading={busy === "retry"}
+          disabled={!canRetry || busy !== null}
+          onClick={() => act("retry")}
+          title={
+            canRetry
+              ? "Reset à pending et relance"
+              : "Seuls les jobs failed sont retryables"
+          }
+        >
+          Retry
+        </AdminButton>
+      </div>
+
+      <div
+        className="fixed top-20 right-4 z-50 space-y-2 pointer-events-none"
+        role="status"
+        aria-live="polite"
       >
-        View
-      </Link>
-      <button
-        type="button"
-        onClick={() => act("cancel")}
-        disabled={!canCancel || disabled}
-        className="rounded-md border border-[var(--red)]/40 text-[var(--red)] text-[10px] px-2 py-1 disabled:opacity-30 disabled:cursor-not-allowed enabled:hover:bg-[var(--red)]/10 whitespace-nowrap"
-        title={canCancel ? "Cancel this job" : "Only pending/claimed jobs can be cancelled"}
-      >
-        {busy === "cancel" ? "..." : "Cancel"}
-      </button>
-      <button
-        type="button"
-        onClick={() => act("retry")}
-        disabled={!canRetry || disabled}
-        className="rounded-md bg-[var(--gold)]/15 border border-[var(--gold)]/40 text-[var(--gold)] text-[10px] px-2 py-1 disabled:opacity-30 disabled:cursor-not-allowed enabled:hover:bg-[var(--gold)]/25 whitespace-nowrap"
-        title={canRetry ? "Reset to pending and re-run" : "Only failed jobs can be retried"}
-      >
-        {busy === "retry" ? "..." : "Retry"}
-      </button>
-    </div>
+        {toasts.map((t) => (
+          <div
+            key={t.id}
+            className={`pointer-events-auto rounded-lg border px-3 py-2 text-xs font-medium shadow-2xl shadow-black/40 max-w-sm ${
+              t.tone === "success"
+                ? "border-[var(--green)]/60 bg-[var(--green)]/15 text-[var(--green)]"
+                : "border-[var(--red)]/60 bg-[var(--red)]/15 text-[var(--red)]"
+            }`}
+          >
+            {t.text}
+          </div>
+        ))}
+      </div>
+    </>
   );
+}
+
+function labelFor(action: Action): string {
+  return action === "cancel" ? "Annulation" : "Retry";
 }

@@ -13,6 +13,9 @@
  * Wave 9 P2 also adds bulk drain buttons that schedule the
  * scripts/dlq_drain.py script via /api/admin/pipeline/dlq/bulk —
  * useful when 800+ rows are pending and per-row clicks aren't realistic.
+ *
+ * Wave 12 EC adds : breadcrumbs, three mini-stat tiles (unresolved /
+ * requeued today / cancelled today), and a celebratory empty state.
  */
 import Link from "next/link";
 import { createServerSupabase } from "@/lib/supabase/server";
@@ -43,16 +46,39 @@ interface DlqRow {
 export default async function DlqPage() {
   const sb = await createServerSupabase();
 
-  const { data, error } = await sb
-    .from("dead_letter_jobs")
-    .select(
-      "id, original_job_id, type, entity_type, entity_id, payload, error_code, error_message, attempts, failed_at"
-    )
-    .eq("resolution_status", "pending")
-    .order("failed_at", { ascending: false })
-    .limit(200);
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+  const todayStartIso = todayStart.toISOString();
 
-  const rows: DlqRow[] = (data ?? []) as DlqRow[];
+  const [
+    listRes,
+    requeuedTodayRes,
+    cancelledTodayRes,
+  ] = await Promise.all([
+    sb
+      .from("dead_letter_jobs")
+      .select(
+        "id, original_job_id, type, entity_type, entity_id, payload, error_code, error_message, attempts, failed_at",
+      )
+      .eq("resolution_status", "pending")
+      .order("failed_at", { ascending: false })
+      .limit(200),
+    sb
+      .from("dead_letter_jobs")
+      .select("id", { count: "exact", head: true })
+      .eq("resolution_status", "requeued")
+      .gte("resolved_at", todayStartIso),
+    sb
+      .from("dead_letter_jobs")
+      .select("id", { count: "exact", head: true })
+      .eq("resolution_status", "cancelled")
+      .gte("resolved_at", todayStartIso),
+  ]);
+
+  const error = listRes.error;
+  const rows: DlqRow[] = (listRes.data ?? []) as DlqRow[];
+  const requeuedToday = requeuedTodayRes.count ?? 0;
+  const cancelledToday = cancelledTodayRes.count ?? 0;
 
   // Group counts by error_code for the summary strip
   const byErrorCode = new Map<string, number>();
@@ -77,8 +103,15 @@ export default async function DlqPage() {
 
   return (
     <div className="space-y-6">
-      <header className="flex items-center justify-between">
+      <header className="flex items-center justify-between flex-wrap gap-2">
         <div>
+          <nav aria-label="Fil d'Ariane" className="text-[10px] text-[var(--text-muted)] mb-1 flex items-center gap-1.5">
+            <Link href="/admin/pipeline" className="hover:text-[var(--gold)]">
+              Pipeline
+            </Link>
+            <span aria-hidden>›</span>
+            <span className="text-[var(--text-secondary)]">Dead Letter Queue</span>
+          </nav>
           <h1 className="font-display text-2xl font-black text-[var(--gold)]">
             Dead Letter Queue
           </h1>
@@ -92,22 +125,48 @@ export default async function DlqPage() {
             href="/admin/pipeline"
             className="rounded-md border border-[var(--border-gold)] px-3 py-1.5 text-xs text-[var(--text-muted)] hover:text-[var(--gold)]"
           >
-            ← Pipeline overview
+            ← Pipeline
           </Link>
         </div>
       </header>
 
+      {/* Mini-tiles : 3 numbers operators want at a glance */}
+      <section className="grid grid-cols-3 gap-3">
+        <MiniTile
+          label="Non résolus"
+          value={totalPending}
+          tone={totalPending === 0 ? "good" : totalPending < 50 ? "warn" : "bad"}
+          sub={totalPending === 0 ? "inbox zero ✨" : "à trier"}
+        />
+        <MiniTile
+          label="Requeued today"
+          value={requeuedToday}
+          tone="info"
+          sub="rééxécutés"
+        />
+        <MiniTile
+          label="Cancelled today"
+          value={cancelledToday}
+          tone="muted"
+          sub="abandonnés"
+        />
+      </section>
+
       {error ? (
         <div className="rounded-xl border border-[var(--red)]/40 bg-[var(--red)]/5 p-6 text-sm text-[var(--red)]">
-          Failed to load DLQ : {error.message}
+          Échec du chargement DLQ : {error.message}
         </div>
       ) : rows.length === 0 ? (
-        <div className="rounded-xl border border-[var(--green)]/40 bg-[var(--green)]/5 p-8 text-center">
-          <p className="font-display text-lg text-[var(--green)]">
-            Inbox zero — la DLQ est vide.
+        <div className="rounded-xl border border-[var(--green)]/40 bg-[var(--green)]/5 p-10 text-center">
+          <p className="font-display text-2xl text-[var(--green)] font-black">
+            🎉 DLQ vide !
           </p>
-          <p className="text-xs text-[var(--text-muted)] mt-1">
-            Tous les jobs ont passé ou sont en cours de retry.
+          <p className="text-sm text-[var(--text-secondary)] mt-2">
+            Le pipeline tourne propre. Tous les jobs sont passés ou en cours
+            de retry.
+          </p>
+          <p className="text-[10px] text-[var(--text-muted)] mt-3">
+            Reviens ici si Discord te ping pour un nouveau backlog.
           </p>
         </div>
       ) : (
@@ -176,24 +235,67 @@ export default async function DlqPage() {
   );
 }
 
+function MiniTile({
+  label,
+  value,
+  tone,
+  sub,
+}: {
+  label: string;
+  value: number;
+  tone: "good" | "warn" | "bad" | "info" | "muted";
+  sub?: string;
+}) {
+  const accents: Record<string, string> = {
+    good: "border-[var(--green)]/40 bg-[var(--green)]/5 text-[var(--green)]",
+    warn: "border-[var(--orange)]/40 bg-[var(--orange)]/5 text-[var(--orange)]",
+    bad: "border-[var(--red)]/40 bg-[var(--red)]/5 text-[var(--red)]",
+    info: "border-[var(--cyan)]/40 bg-[var(--cyan)]/5 text-[var(--cyan)]",
+    muted: "border-[var(--border-gold)] bg-[var(--bg-surface)] text-[var(--text-muted)]",
+  };
+  return (
+    <div className={`rounded-xl border p-3 ${accents[tone]}`}>
+      <p className="text-[9px] uppercase tracking-widest text-[var(--text-muted)]">
+        {label}
+      </p>
+      <p className="font-display text-2xl font-black mt-1">
+        {value.toLocaleString("fr-FR")}
+      </p>
+      {sub && <p className="text-[10px] text-[var(--text-muted)] mt-0.5">{sub}</p>}
+    </div>
+  );
+}
+
 function DlqEntry({ row }: { row: DlqRow }) {
   return (
     <article className="px-4 py-3">
-      <div className="flex items-center justify-between gap-3">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-3 min-w-0 flex-1">
           <span className="rounded-full bg-[var(--orange)]/15 text-[var(--orange)] text-[10px] font-bold px-2 py-0.5 uppercase tracking-widest whitespace-nowrap">
             {row.type}
           </span>
           {row.entity_id && (
-            <span className="font-mono text-[10px] text-[var(--text-muted)] truncate">
+            <Link
+              href={
+                row.entity_type === "kill"
+                  ? `/kill/${row.entity_id}`
+                  : `/admin/pipeline/jobs?search=${encodeURIComponent(row.entity_id)}`
+              }
+              className="font-mono text-[10px] text-[var(--text-muted)] truncate hover:text-[var(--gold)]"
+              title={`${row.entity_type ?? "?"}:${row.entity_id}`}
+            >
               {row.entity_type ?? "?"}:{row.entity_id.slice(0, 8)}
-            </span>
+            </Link>
           )}
           <span className="text-[10px] text-[var(--text-muted)] whitespace-nowrap">
             ×{row.attempts} attempts · {relativeTime(row.failed_at)}
           </span>
         </div>
-        <DlqRowActions id={row.id} />
+        <DlqRowActions
+          id={row.id}
+          entityType={row.entity_type}
+          entityId={row.entity_id}
+        />
       </div>
       <div className="mt-2 grid grid-cols-1 md:grid-cols-3 gap-2 text-xs">
         <div>

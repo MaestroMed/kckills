@@ -16,6 +16,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { JobRowActions } from "../job-row-actions";
+import { AdminBadge, type AdminBadgeVariant } from "@/components/admin/ui/AdminBadge";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 15;
@@ -169,25 +170,49 @@ export default async function JobDetailPage({
 
   return (
     <div className="space-y-6">
-      <header className="flex items-start justify-between gap-3">
+      <header className="flex items-start justify-between gap-3 flex-wrap">
         <div className="min-w-0 flex-1">
-          <Link
-            href="/admin/pipeline/jobs"
-            className="text-xs text-[var(--text-muted)] hover:text-[var(--gold)]"
+          <nav
+            aria-label="Fil d'Ariane"
+            className="text-[10px] text-[var(--text-muted)] mb-1 flex items-center gap-1.5 flex-wrap"
           >
-            ← Job Queue
-          </Link>
+            <Link href="/admin/pipeline" className="hover:text-[var(--gold)]">
+              Pipeline
+            </Link>
+            <span aria-hidden>›</span>
+            <Link href="/admin/pipeline/jobs" className="hover:text-[var(--gold)]">
+              Jobs
+            </Link>
+            <span aria-hidden>›</span>
+            <span className="text-[var(--text-secondary)] font-mono">
+              {job.type} {job.id.slice(0, 8)}
+            </span>
+          </nav>
           <div className="mt-1 flex flex-wrap items-baseline gap-3">
             <h1 className="font-display text-2xl font-black text-[var(--gold)]">
               {job.type}
             </h1>
-            <StatusPillLarge status={job.status} />
+            <AdminBadge
+              variant={statusBadgeVariant(job.status)}
+              size="md"
+              pulse={job.status === "claimed"}
+            >
+              {job.status}
+            </AdminBadge>
           </div>
           <p className="text-xs text-[var(--text-muted)] mt-1 font-mono">
             {job.id}
           </p>
         </div>
-        <div className="shrink-0">
+        <div className="shrink-0 flex flex-wrap items-center gap-2">
+          {killPreview && (
+            <Link
+              href={`/kill/${killPreview.id}`}
+              className="rounded-md border border-[var(--border-gold)] px-3 py-1.5 text-[11px] text-[var(--text-muted)] hover:text-[var(--gold)] hover:border-[var(--gold)]/60"
+            >
+              Voir le clip ↗
+            </Link>
+          )}
           <JobRowActions
             id={job.id}
             canCancel={isCancellable}
@@ -604,6 +629,23 @@ function JsonBlock({
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────
+
+function statusBadgeVariant(status: string): AdminBadgeVariant {
+  switch (status) {
+    case "succeeded":
+      return "success";
+    case "failed":
+      return "danger";
+    case "claimed":
+      return "pending";
+    case "pending":
+      return "info";
+    case "cancelled":
+      return "neutral";
+    default:
+      return "neutral";
+  }
+}
 
 function formatDuration(ms: number): string {
   if (!Number.isFinite(ms) || ms < 0) return "—";
