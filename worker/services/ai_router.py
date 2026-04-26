@@ -79,6 +79,17 @@ class AITask:
     urgency: str = "normal"
     max_cost_usd: float | None = None
     quality_minimum: str = "standard"
+    # Wave 11 additions — text-only / non-PII routing
+    has_pii: bool = False
+    """If True, the router excludes providers with is_pii_safe=False
+    (DeepSeek, Grok). User-comment moderation = True ; AI-generated
+    description translation = False (the FR text was AI-written, no PII)."""
+    system: str | None = None
+    """Optional system prompt for chat-style providers (DeepSeek, Grok,
+    OpenAI, Anthropic). Vision providers (Gemini) ignore this."""
+    # Wave 11 additions — daemon-friendly priority alias for `urgency`
+    # kept for backwards compat with the translator daemon's call sites.
+    priority: str | None = None
 
 
 @dataclass
@@ -100,6 +111,18 @@ class AnalysisResult:
     description: str | None = None
     confidence: float | None = None
     raw_response: dict = field(default_factory=dict)
+    # Wave 11 addition — raw text output for text-only providers
+    # (DeepSeek, Grok, OpenAI). Vision providers leave this None and
+    # populate description/tags/highlight_score instead. The translator
+    # daemon reads `text` first, falls back to `description`.
+    text: str | None = None
+    # Wave 11 addition — observability for the router's fallback chain.
+    # `attempts` lists every provider name the router tried in order,
+    # ending with the one that succeeded. `fallback_used` is True iff
+    # at least one provider failed before the winning one. The dashboard
+    # surfaces these to operators investigating cost / latency patterns.
+    attempts: list[str] = field(default_factory=list)
+    fallback_used: bool = False
 
     # Provenance (populated by the router, not the provider)
     provider_name: str = ""
@@ -231,12 +254,14 @@ class AIRouter:
             raise RuntimeError("ai_router: no eligible provider")
 
         attempt_errors: list[str] = []
+        attempted_names: list[str] = []
         for provider in candidates:
             log.info("ai_router_pick",
                      provider=provider.name,
                      model=provider.model_name,
                      urgency=task.urgency,
                      vision=task.requires_vision)
+            attempted_names.append(provider.name)
             started_at = time.monotonic()
             try:
                 result = await provider.analyze_clip(task)
@@ -261,6 +286,8 @@ class AIRouter:
             result.provider_name = provider.name
             result.model_name = provider.model_name
             result.latency_ms = elapsed_ms
+            result.attempts = attempted_names[:]
+            result.fallback_used = len(attempted_names) > 1
             if result.cost_usd is None:
                 result.cost_usd = estimate_cost_usd(
                     provider, result.input_tokens, result.output_tokens,
@@ -292,6 +319,15 @@ class AIRouter:
         """Total cost we've billed to this provider today (router-tracked)."""
         return self._spent_usd_today.get(provider_name, 0.0)
 
+    def total_spent_usd_today(self) -> float:
+        """Sum of cost billed across ALL providers today.
+
+        Used by daemons that want a single number for their summary log
+        (e.g. translator's `translator_scan_done` event). Cheap : O(N)
+        in the number of providers (typically <10).
+        """
+        return float(sum(self._spent_usd_today.values()))
+
     # ── Selection logic ───────────────────────────────────────────
 
     async def _select_candidates(self, task: AITask) -> list[AIProvider]:
@@ -316,9 +352,20 @@ class AIRouter:
         """
         now_mono = time.monotonic()
 
+        # Wave 11 — `priority` is the daemon-friendly alias for `urgency`.
+        # Translator + future text daemons set `priority`; legacy analyzer
+        # call sites keep using `urgency`. Either is canonical.
+        effective_urgency = task.priority or task.urgency
+
         eligible: list[AIProvider] = []
         for p in self.providers:
             if task.requires_vision and not p.supports_vision:
+                continue
+            # Wave 11 — refuse to ship PII to non-PII-safe providers
+            # (DeepSeek = Chinese jurisdiction, Grok = xAI consumer tier).
+            # Existing providers without the attribute default to True
+            # (they predate the wave and are all on US/EU enterprise tiers).
+            if task.has_pii and not getattr(p, "is_pii_safe", True):
                 continue
             if self._cooldowns.get(p.name, 0.0) > now_mono:
                 continue
@@ -336,9 +383,9 @@ class AIRouter:
                     continue
             eligible.append(p)
 
-        if task.urgency == "backfill":
+        if effective_urgency == "backfill":
             eligible.sort(key=lambda p: p.cost_per_m_input)
-        elif task.urgency == "live":
+        elif effective_urgency == "live":
             # Keep operator's stated order — they've put fastest first.
             pass
         else:  # normal
@@ -351,3 +398,96 @@ class AIRouter:
     def _mark_cooldown(self, provider_name: str) -> None:
         """Park a provider for COOLDOWN_SECONDS after a failure."""
         self._cooldowns[provider_name] = time.monotonic() + self.COOLDOWN_SECONDS
+
+
+# ─── Factory : build_default_router ───────────────────────────────────
+
+
+def build_default_router() -> "AIRouter":
+    """Build an AIRouter wired with whichever providers have an API key.
+
+    Wave 11 helper used by the translator daemon and any future text-only
+    daemon that wants the canonical operator preference order :
+
+      1. DeepSeek V4 Flash   — cheapest non-PII text, default for backfill.
+      2. Grok 4.1 Fast       — second-cheapest non-PII text, DeepSeek fallback.
+      3. Gemini 2.5 Flash    — cheapest vision-capable, drops in for vision.
+      4. Anthropic Haiku 4.5 — PII-safe, drops in for moderation + sensitive text.
+      5. OpenAI gpt-4o-mini  — additional vision fallback.
+      6. Cerebras Llama      — text-only fallback if everyone else is down.
+
+    Each provider is instantiated only if its API key env var is set.
+    Returns an AIRouter pre-loaded with whatever's available.
+
+    Raises
+    ------
+    RuntimeError
+        If NO provider has a configured key. Caller daemons (translator)
+        catch this and downgrade to a no-op cycle so the worker keeps
+        running without crashing.
+
+    Daily budgets
+    -------------
+    Read from KCKILLS_AI_DAILY_BUDGET_USD_<PROVIDER> env vars (e.g.
+    KCKILLS_AI_DAILY_BUDGET_USD_DEEPSEEK=2.00). Unset = no per-provider
+    cap (router still tracks spend for the dashboard).
+    """
+    import os
+    providers: list[AIProvider] = []
+
+    def _has_key(env_name: str) -> bool:
+        return bool(os.environ.get(env_name, "").strip())
+
+    # Lazy imports — avoid a circular import at module load time and let
+    # provider files raise their own deps errors only when actually picked.
+    if _has_key("KCKILLS_DEEPSEEK_API_KEY"):
+        from services.ai_providers.deepseek import DeepSeekProvider
+        providers.append(DeepSeekProvider())
+    if _has_key("KCKILLS_GROK_API_KEY") or _has_key("KCKILLS_XAI_API_KEY"):
+        from services.ai_providers.grok import GrokProvider
+        providers.append(GrokProvider())
+    if _has_key("KCKILLS_GEMINI_API_KEY") or _has_key("GEMINI_API_KEY"):
+        from services.ai_providers.gemini import GeminiProvider
+        providers.append(GeminiProvider())
+    if _has_key("KCKILLS_ANTHROPIC_API_KEY") or _has_key("ANTHROPIC_API_KEY"):
+        from services.ai_providers.anthropic import AnthropicProvider
+        providers.append(AnthropicProvider())
+    if _has_key("KCKILLS_OPENAI_API_KEY") or _has_key("OPENAI_API_KEY"):
+        from services.ai_providers.openai import OpenAIProvider
+        providers.append(OpenAIProvider())
+    if _has_key("KCKILLS_CEREBRAS_API_KEY"):
+        from services.ai_providers.cerebras import CerebrasProvider
+        providers.append(CerebrasProvider())
+
+    if not providers:
+        raise RuntimeError(
+            "build_default_router: no provider keys configured. Set at "
+            "least one of KCKILLS_DEEPSEEK_API_KEY, KCKILLS_GROK_API_KEY, "
+            "KCKILLS_GEMINI_API_KEY, KCKILLS_ANTHROPIC_API_KEY, "
+            "KCKILLS_OPENAI_API_KEY, or KCKILLS_CEREBRAS_API_KEY."
+        )
+
+    # Daily budget — single env var KCKILLS_AI_DAILY_BUDGET_USD split
+    # evenly across instantiated providers. Per-provider override via
+    # KCKILLS_AI_DAILY_BUDGET_USD_<NAME> wins when set. Empty = no cap.
+    budgets: dict[str, float] = {}
+    raw_total = os.environ.get("KCKILLS_AI_DAILY_BUDGET_USD", "").strip()
+    if raw_total:
+        try:
+            total = float(raw_total)
+            even_split = total / len(providers)
+            for p in providers:
+                budgets[p.name] = even_split
+        except ValueError:
+            log.warn("ai_router_bad_total_budget", value=raw_total[:40])
+    # Per-provider override
+    for p in providers:
+        env_var = f"KCKILLS_AI_DAILY_BUDGET_USD_{p.name.upper()}"
+        raw = os.environ.get(env_var, "").strip()
+        if raw:
+            try:
+                budgets[p.name] = float(raw)
+            except ValueError:
+                log.warn("ai_router_bad_budget_env", env=env_var, value=raw[:40])
+
+    return AIRouter(providers=providers, daily_budget_usd=budgets)

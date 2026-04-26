@@ -381,22 +381,22 @@ def test_cerebras_provider_no_vision():
 
 
 @pytest.mark.asyncio
-async def test_real_provider_stubs_raise_until_phase_2():
-    """All four shipped providers must raise ProviderUnavailable from
-    analyze_clip() until phase 2 wires real calls.
+async def test_phase2_remaining_stub_providers_still_raise():
+    """Wave 11 status update : Anthropic + OpenAI are now real impls
+    (see test_ai_providers_real.py). Only Gemini and Cerebras remain
+    as phase-2 stubs ; their analyze_clip MUST still raise
+    ProviderUnavailable so the router cleanly falls back to a real
+    provider in production.
 
-    This test pins the contract so a future operator can't accidentally
-    ship a half-wired provider that returns None or empty results.
+    This test pins the contract for the unfinished stubs so the next
+    wave doesn't accidentally claim "wired" without shipping the SDK
+    integration. Drop the cls from this loop when its phase-2 wiring
+    is committed.
     """
-    for cls in (GeminiProvider, AnthropicProvider, CerebrasProvider):
+    for cls in (GeminiProvider, CerebrasProvider):
         p = cls(api_key="fake")
         with pytest.raises(ProviderUnavailable, match="phase 2"):
             await p.analyze_clip(AITask(prompt="x", requires_vision=False))
-    # OpenAI requires an extra zero_data_retention=True flag to even
-    # attempt the call ; with it set, we still get the phase-2 stub.
-    p = OpenAIProvider(api_key="fake", zero_data_retention=True)
-    with pytest.raises(ProviderUnavailable, match="phase 2"):
-        await p.analyze_clip(AITask(prompt="x"))
 
 
 @pytest.mark.asyncio
@@ -422,11 +422,16 @@ async def test_provider_no_api_key_returns_zero_quota(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_openai_refuses_without_zero_data_retention():
-    """OpenAI stub refuses calls until ZDR is explicitly affirmed —
-    the EU-content privacy guard documented in the multi-provider doc."""
+    """OpenAI refuses calls until ZDR is explicitly affirmed — the
+    EU-content privacy guard documented in the multi-provider doc.
+
+    Wave 11 update : analyze_clip now refuses vision FIRST (delegates
+    to analyze_text for non-vision), so we exercise the ZDR guard
+    via analyze_text directly to avoid the vision-refusal short-circuit.
+    """
     p = OpenAIProvider(api_key="fake", zero_data_retention=False)
     with pytest.raises(ProviderUnavailable, match="zero_data_retention"):
-        await p.analyze_clip(AITask(prompt="x"))
+        await p.analyze_text("x")
 
 
 @pytest.mark.asyncio
