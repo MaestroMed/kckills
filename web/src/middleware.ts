@@ -1,15 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import {
-  LANG_COOKIE,
-  LANG_COOKIE_MAX_AGE,
-  parseAcceptLanguage,
-} from "./lib/i18n/lang";
 
 /**
- * Middleware — protects /admin/* and /api/admin/*, and SOFT-detects the
- * preferred language for first-time visitors (sets the `kc_lang` cookie
- * from Accept-Language so the first server render matches the user's
- * preference instead of always serving FR).
+ * Middleware — protects /admin/* and /api/admin/* (admin auth gate).
  *
  * Two acceptance paths for admin:
  *   1. Cookie `kc_admin` matches `KCKILLS_ADMIN_TOKEN` env var
@@ -24,63 +16,39 @@ import {
  * Local dev : NODE_ENV=development with no env vars = open access (the
  * historical behaviour that lets `pnpm dev` work without setup).
  *
- * Lang detection : ONLY soft (cookie-set), no URL-based locale routing.
- * URL-based routing (/en/scroll, /ko/scroll, ...) would require a much
- * bigger refactor — out of scope for this scaffold wave.
+ * Lang detection moved out of middleware (2026-04-27 cache fix) :
+ *   * Used to live here as Accept-Language → kc_lang cookie soft detect.
+ *   * Reading request.cookies / request.headers in middleware opted
+ *     EVERY matched response into dynamic rendering, killing CDN cache.
+ *   * Lang detection now happens client-side in `LangProvider`
+ *     (reads cookie + localStorage on mount). Acceptable trade-off for
+ *     the ~5x Vercel cost reduction.
  *
  * To get an admin cookie:
  *   - Visit /admin/login?token=<KCKILLS_ADMIN_TOKEN>
  *   - The login route sets the kc_admin cookie (httpOnly, secure)
  */
 
-/** Set kc_lang cookie from Accept-Language if missing. Pure side-effect
- *  on the response. Never overrides an existing user choice. */
-function softDetectLang(request: NextRequest, response: NextResponse): NextResponse {
-  // User already chose — never override.
-  if (request.cookies.get(LANG_COOKIE)) return response;
-  const detected = parseAcceptLanguage(request.headers.get("accept-language"));
-  response.cookies.set(LANG_COOKIE, detected, {
-    path: "/",
-    maxAge: LANG_COOKIE_MAX_AGE,
-    sameSite: "lax",
-  });
-  return response;
-}
-
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // Only gate /admin/* and /api/admin/*
+  // The matcher (see config below) ONLY routes /admin/*, /api/admin/*,
+  // /api/kills/:id/edit and /api/bgm to this middleware as of the
+  // 2026-04-27 cache fix. Public pages skip middleware entirely so they
+  // can stay statically cached on the Vercel CDN. The `needsAuth` check
+  // here is belt-and-braces : if the matcher ever expands again, the
+  // body still does the right thing for /admin/login (no auth) vs the
+  // rest (auth gated).
   const needsAuth =
     (pathname.startsWith("/admin") || pathname.startsWith("/api/admin")) &&
     pathname !== "/admin/login" &&
     pathname !== "/api/admin/login";
 
-  // ⚠️ CACHE-SAFE PUBLIC PATH (2026-04-26 fix) :
-  // For public pages (NOT /admin/*), we MUST NOT call
-  // `NextResponse.next({ request: { headers: ... } })` — even passing
-  // the same headers untouched, the request-rewrite call makes Next.js
-  // mark the response as dynamic (Cache-Control: private, no-store,
-  // X-Vercel-Cache: MISS forever). That negated all our `export const
-  // revalidate = 300` settings — the homepage was running SSR for
-  // every single visitor, killing Vercel function-invocation budget.
-  //
-  // Also : we ONLY set the lang cookie on the FIRST visit (when the
-  // cookie is missing). The Set-Cookie header makes that one response
-  // uncacheable, but every subsequent visit gets a cached response
-  // because we return `NextResponse.next()` cleanly (no request
-  // rewrite, no Set-Cookie).
+  // /admin/login slips through the matcher but doesn't need auth — let it
+  // render its login form free. Same for any future public path that
+  // accidentally matches.
   if (!needsAuth) {
-    if (request.cookies.get(LANG_COOKIE)) {
-      // Returning visitor — middleware does literally nothing so the
-      // response stays cacheable per the page's `revalidate` setting.
-      return NextResponse.next();
-    }
-    // First-time visitor — soft-detect lang and set the cookie. This
-    // single response is uncacheable (Set-Cookie), but the next page
-    // load sees the cookie and skips the middleware mutation.
-    const resp = NextResponse.next();
-    return softDetectLang(request, resp);
+    return NextResponse.next();
   }
 
   // Admin paths NEED the x-pathname header so layout.tsx can detect
@@ -159,17 +127,23 @@ export const config = {
   // — these were intentionally outside /api/admin/* but mutate sensitive
   // data and need the same gate.
   //
-  // PR-loltok BE : matcher also covers public landing routes for SOFT
-  // language detection (set kc_lang cookie from Accept-Language). The
-  // negative-lookahead pattern excludes static assets, API routes (lang
-  // doesn't matter for JSON), and Next.js internals.
+  // 2026-04-27 cache fix : the previous matcher ALSO included public
+  // pages for soft language detection (set kc_lang cookie from
+  // Accept-Language). But ANY middleware execution that reads
+  // request.cookies / request.headers opts the matched response into
+  // dynamic rendering — even when the middleware does nothing else.
+  // Result : every public page was running SSR for every visitor
+  // regardless of `revalidate = 300` (X-Vercel-Cache: MISS forever).
+  //
+  // The new matcher covers ONLY paths that genuinely need middleware
+  // (admin auth + sensitive mutation routes). Public-page lang
+  // detection now lives entirely in `LangProvider` client-side
+  // (reads cookie + localStorage on mount) — no middleware needed,
+  // pages stay cacheable per their `revalidate` settings.
   matcher: [
     "/admin/:path*",
     "/api/admin/:path*",
     "/api/kills/:id/edit",
     "/api/bgm",
-    // Public pages for lang detection : everything except _next, api,
-    // static files (images, fonts, etc), and the favicon.
-    "/((?!_next/|api/|favicon|.*\\.(?:png|jpg|jpeg|svg|gif|ico|webp|avif|woff|woff2|ttf|otf|js|css|map)$).*)",
   ],
 };
