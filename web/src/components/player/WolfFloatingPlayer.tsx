@@ -208,11 +208,43 @@ function WaveformBars({
 }
 
 // ─── YouTube IFrame loader (audio-only, hidden) ──────────────────
-declare global {
-  interface Window {
-    onYouTubeIframeAPIReady?: () => void;
-    YT?: typeof YT;
-  }
+//
+// We intentionally DO NOT `declare global { interface Window { YT?: ... } }`
+// here — the legacy `web/src/components/scroll/BgmPlayer.tsx` already
+// declares `Window.YT?` with its own inline shape, and TypeScript refuses
+// two different `Window.YT?` declarations across files.
+// We rely on BgmPlayer's declaration (it's loaded first because it's a
+// child of /scroll which is the most likely first hit), and read window.YT
+// through a cast to a local minimal shape below.
+
+interface WindowYTLike {
+  Player: new (
+    el: HTMLElement | string,
+    config: {
+      videoId: string;
+      playerVars?: Record<string, number | string>;
+      events?: {
+        onReady?: (e: { target: YTPlayerLocal }) => void;
+        onStateChange?: (e: { data: number; target: YTPlayerLocal }) => void;
+      };
+    },
+  ) => YTPlayerLocal;
+  PlayerState?: { ENDED: number; PLAYING: number; PAUSED: number };
+}
+
+interface YTPlayerLocal {
+  playVideo: () => void;
+  pauseVideo: () => void;
+  setVolume: (v: number) => void;
+  getCurrentTime?: () => number;
+  loadVideoById: (
+    args: { videoId: string; startSeconds?: number } | string,
+  ) => void;
+}
+
+function getWindowYT(): WindowYTLike | undefined {
+  if (typeof window === "undefined") return undefined;
+  return (window as unknown as { YT?: WindowYTLike }).YT;
 }
 
 function HiddenAudioIframe() {
@@ -225,7 +257,7 @@ function HiddenAudioIframe() {
     _onPlayerStateChange,
   } = useFloatingPlayerInternal();
   const containerRef = useRef<HTMLDivElement | null>(null);
-  const playerRef = useRef<YT.Player | null>(null);
+  const playerRef = useRef<YTPlayerLocal | null>(null);
   const initRef = useRef(false);
   const trackIdRef = useRef<string | null>(null);
 
@@ -233,7 +265,7 @@ function HiddenAudioIframe() {
   useEffect(() => {
     if (initRef.current) return;
     initRef.current = true;
-    if (window.YT?.Player) {
+    if (getWindowYT()?.Player) {
       // Already loaded
       return;
     }
@@ -249,7 +281,8 @@ function HiddenAudioIframe() {
     trackIdRef.current = currentTrack.youtubeId;
 
     const tryInit = () => {
-      if (!window.YT?.Player) {
+      const yt = getWindowYT();
+      if (!yt?.Player) {
         // API not ready yet — retry shortly
         setTimeout(tryInit, 200);
         return;
@@ -278,7 +311,7 @@ function HiddenAudioIframe() {
       // First-time init
       const el = containerRef.current?.querySelector(`#${iframeId}`);
       if (!el) return;
-      playerRef.current = new window.YT!.Player(iframeId, {
+      playerRef.current = new yt.Player(iframeId, {
         videoId: currentTrack.youtubeId,
         playerVars: {
           autoplay: 0,

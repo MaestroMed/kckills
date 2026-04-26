@@ -46,6 +46,25 @@ import {
   type PlaylistId,
 } from "./playlists";
 
+/**
+ * Local-only YouTube IFrame Player surface — purposely a structural type,
+ * NOT a `declare global namespace YT { ... }`. The legacy
+ * `web/src/components/scroll/BgmPlayer.tsx` already declares
+ * `Window.YT?` with its own inline shape, and TypeScript refuses two
+ * different `Window.YT?` declarations in the same compilation unit.
+ * Using a local interface keeps both files compile-clean and gives
+ * the wolf player exactly the surface it needs (play/pause/seek/volume).
+ */
+interface YTPlayerLike {
+  playVideo: () => void;
+  pauseVideo: () => void;
+  setVolume: (v: number) => void;
+  getCurrentTime?: () => number;
+  loadVideoById: (
+    args: { videoId: string; startSeconds?: number } | string,
+  ) => void;
+}
+
 interface FloatingPlayerState {
   /** Currently active playlist key. */
   playlistId: PlaylistId;
@@ -160,7 +179,7 @@ export function FloatingPlayerProvider({ children }: { children: ReactNode }) {
   const [position, setPosition] = useState(0);
   const [isExpanded, setIsExpanded] = useState(false);
 
-  const playerRef = useRef<YT.Player | null>(null);
+  const playerRef = useRef<YTPlayerLike | null>(null);
   const positionTimerRef = useRef<number | null>(null);
 
   const currentTrack = queue[index] ?? null;
@@ -340,7 +359,7 @@ export function FloatingPlayerProvider({ children }: { children: ReactNode }) {
   // ─── Expose iframe attachment via ref ────────────────────────────
   // The actual <iframe> + YT IFrame API setup lives in the visual
   // wolf-player component. It registers its YT.Player via this method.
-  const _attachPlayer = useCallback((p: YT.Player | null) => {
+  const _attachPlayer = useCallback((p: YTPlayerLike | null) => {
     playerRef.current = p;
   }, []);
 
@@ -422,7 +441,7 @@ export function useFloatingPlayer() {
 export function useFloatingPlayerInternal() {
   const ctx = useContext(Ctx) as
     | (FloatingPlayerCtx & {
-        _attachPlayer: (p: YT.Player | null) => void;
+        _attachPlayer: (p: YTPlayerLike | null) => void;
         _onPlayerStateChange: (state: number) => void;
       })
     | null;
