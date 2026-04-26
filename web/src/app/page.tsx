@@ -4,7 +4,16 @@ import { loadRealData, getCurrentRoster, getTeamStats, getMatchesSorted, display
 import { championIconUrl, championSplashUrl } from "@/lib/constants";
 import { PLAYER_PHOTOS, TEAM_LOGOS, KC_LOGO } from "@/lib/kc-assets";
 import { getPublishedKills } from "@/lib/supabase/kills";
+import {
+  getHeroLastMatch,
+  getHeroCareerStats,
+  getHeroTopScorer,
+} from "@/lib/supabase/hero-stats";
 import { loadHeroVideos } from "@/lib/hero-videos/storage";
+import {
+  HomeTopScorerCarousel,
+  type RosterPlayerStat,
+} from "@/components/HomeTopScorerCarousel";
 // Wave 11 — AudioPlayer (legacy BCC vibes FAB) replaced by the global
 // WolfFloatingPlayer mounted in Providers.tsx. Same UX (auto-fire on
 // first user gesture once opted in) but persistent across pages + with
@@ -150,19 +159,111 @@ export default async function HomePage() {
   const isEmpty = data.total_matches === 0;
   const HERO_CLIPS = await buildHeroClips();
 
-  // Live clip count from Supabase (KC team_killer + visible only).
-  // buildTime: true uses the cookie-less anon Supabase client — `cookies()`
-  // calls inside the server client opt the page into dynamic rendering,
-  // which kills our `revalidate = 300` ISR setting. Anon read is fine
-  // because the count is filtered through the published RLS policy.
-  const allKills = await getPublishedKills(500, { buildTime: true });
+  // Live data fetches in parallel — all opt into the cookie-less anon
+  // Supabase client (`buildTime: true`) so the page stays cacheable per
+  // its `revalidate = 300` ISR setting. Each loader rethrows DynamicError
+  // and falls back to `null` on Supabase failure → the hero degrades to
+  // the static real-data.ts snapshot below if the DB is unreachable.
+  const [allKills, liveLastMatch, liveCareer, liveTopScorer] =
+    await Promise.all([
+      getPublishedKills(500, { buildTime: true }),
+      getHeroLastMatch(true),
+      getHeroCareerStats(true),
+      getHeroTopScorer(true),
+    ]);
   const clipCount = allKills.filter(
     (k) => k.tracked_team_involvement === "team_killer" && k.kill_visible !== false,
   ).length;
 
-  // Champion splash for the #1 player (most kills)
+  // Champion splash for the #1 player (most kills) — keeps using real-data
+  // for the splash because that's the only place we curate the per-player
+  // signature champion list.
   const topPlayer = [...roster].sort((a, b) => b.totalKills - a.totalKills)[0];
   const heroChamp = topPlayer?.champions[0] ?? "Jhin";
+
+  // Build the rotating-carousel data : 5 starters with their signature
+  // achievement headline. Achievement label rules — first match wins :
+  //   1. The live top scorer (live DB read)         → "Top kills"
+  //   2. Highest in-roster KDA ≥ 4                  → "KDA Champion"
+  //   3. Most kills in roster (after live top)      → "Sniper"
+  //   4. Otherwise role-based fallback              → "Titulaire"
+  // Falls back gracefully when the live top scorer can't be matched
+  // against the static roster (different IGNs across data sources).
+  // Note : RosterPlayer doesn't carry per-player winRate / pentas (those
+  // would need a separate per-player stat join), so we lean on KDA +
+  // total kills which are present.
+  const computeKda = (p: typeof roster[number]) =>
+    p.totalDeaths > 0
+      ? (p.totalKills + p.totalAssists) / p.totalDeaths
+      : p.totalKills + p.totalAssists; // "perfect" KDA — sky's the limit
+  const liveTopIgn = liveTopScorer?.ign?.toLowerCase() ?? "";
+  const sortedByKills = [...roster].sort((a, b) => b.totalKills - a.totalKills);
+  const top5 = sortedByKills.slice(0, 5);
+  // ─── Hero card display variables (live → fallback chain) ──────────
+  // Each card renders from a unified shape so the JSX below stays the
+  // same regardless of which data source provided the values. Live wins,
+  // static is the safety net for cold-start / DB-down cases.
+  const heroLastMatch = liveLastMatch
+    ? {
+        id: liveLastMatch.externalId ?? liveLastMatch.matchId,
+        date: liveLastMatch.scheduledAt,
+        opponent: liveLastMatch.opponent,
+        kc_score: liveLastMatch.kcScore,
+        opp_score: liveLastMatch.oppScore,
+        kc_won: liveLastMatch.kcWon,
+        stage: liveLastMatch.stage ?? "Saison",
+        best_of: liveLastMatch.bestOf,
+      }
+    : allMatches.length > 0
+      ? allMatches[0]
+      : null;
+  const heroCareerKills = liveCareer?.totalKills ?? stats.totalKills;
+  const heroCareerWins = liveCareer?.wins ?? stats.wins;
+  const heroCareerLosses = liveCareer?.losses ?? stats.losses;
+  const heroCareerGames = liveCareer?.totalGames ?? stats.totalGames;
+  const heroCareerWrPct =
+    liveCareer && liveCareer.wins + liveCareer.losses > 0
+      ? liveCareer.winRate * 100
+      : stats.wins + stats.losses > 0
+        ? (stats.wins / (stats.wins + stats.losses)) * 100
+        : 0;
+  const heroCareerClips = liveCareer?.publishedClips ?? clipCount;
+  const heroCareerYearStart = liveCareer?.yearStart ?? 2024;
+  const heroCareerYearEnd =
+    liveCareer?.yearEnd ?? new Date().getUTCFullYear();
+
+  const carouselPlayers: RosterPlayerStat[] = top5.map((p, i) => {
+    const isLiveTop = !!liveTopIgn && p.name.toLowerCase().includes(liveTopIgn);
+    const kda = computeKda(p);
+    let achievementLabel = "Titulaire";
+    let achievement = `${displayRole(p.role)} · ${p.gamesPlayed} games`;
+    if (isLiveTop && liveTopScorer) {
+      achievementLabel = "Top kills";
+      achievement = `${liveTopScorer.totalKills} kills sur ${
+        liveTopScorer.gamesPlayed || p.gamesPlayed
+      } games — la machine offensive`;
+    } else if (kda >= 4) {
+      achievementLabel = "KDA Champion";
+      achievement = `KDA ${kda.toFixed(2)} — le métronome`;
+    } else if (i === 0) {
+      // Roster top scorer (when live didn't match anyone)
+      achievementLabel = "Sniper";
+      achievement = `${p.totalKills} kills sur ${p.gamesPlayed} games — la machine offensive`;
+    }
+    return {
+      ign: p.name,
+      role: displayRole(p.role),
+      imageUrl: PLAYER_PHOTOS[p.name] ?? null,
+      totalKills: p.totalKills,
+      gamesPlayed: p.gamesPlayed,
+      winRate: 0,
+      pentas: undefined,
+      bestKda: kda,
+      publishedClips: undefined,
+      achievement,
+      achievementLabel,
+    };
+  });
 
   return (
     <div
@@ -290,9 +391,10 @@ export default async function HomePage() {
 
           {/* ─── RIGHT : vertical stack of info cards ─── */}
           <div className="md:col-span-5 lg:col-span-6 flex flex-col gap-3 md:max-w-sm md:ml-auto">
-            {/* Next / last match card */}
-            {allMatches.length > 0 && (() => {
-              const lastMatch = allMatches[0];
+            {/* Next / last match card — live from Supabase if available,
+                falls back to the static real-data.ts snapshot otherwise. */}
+            {heroLastMatch && (() => {
+              const lastMatch = heroLastMatch;
               const oppLogo = TEAM_LOGOS[lastMatch.opponent.code];
               const date = new Date(lastMatch.date);
               return (
@@ -349,11 +451,11 @@ export default async function HomePage() {
             {!isEmpty && (
               <div className="rounded-xl bg-black/55 backdrop-blur-md border border-[var(--gold)]/20 px-5 py-4">
                 <p className="font-data text-[9px] uppercase tracking-[0.25em] text-[var(--gold)]/60 mb-2">
-                  Carri&egrave;re LEC &middot; 2024 &rarr; 2026
+                  Carri&egrave;re LEC &middot; {heroCareerYearStart} &rarr; {heroCareerYearEnd}
                 </p>
                 <div className="flex items-baseline gap-2 mb-2">
                   <AnimatedNumber
-                    value={stats.totalKills}
+                    value={heroCareerKills}
                     duration={2}
                     className="font-data text-5xl lg:text-6xl font-black text-[var(--gold)] tabular-nums leading-none"
                   />
@@ -361,41 +463,34 @@ export default async function HomePage() {
                 </div>
                 <div className="flex items-center gap-3 text-xs font-data">
                   <span className="flex items-baseline gap-1">
-                    <AnimatedNumber value={stats.wins} duration={1.6} className="text-[var(--green)] font-bold text-lg" />
+                    <AnimatedNumber value={heroCareerWins} duration={1.6} className="text-[var(--green)] font-bold text-lg" />
                     <span className="text-[9px] uppercase tracking-wider text-white/40">W</span>
                   </span>
                   <span className="text-white/15">&bull;</span>
                   <span className="flex items-baseline gap-1">
-                    <AnimatedNumber value={stats.losses} duration={1.6} className="text-[var(--red)] font-bold text-lg" />
+                    <AnimatedNumber value={heroCareerLosses} duration={1.6} className="text-[var(--red)] font-bold text-lg" />
                     <span className="text-[9px] uppercase tracking-wider text-white/40">L</span>
                   </span>
                   <span className="text-white/15">&bull;</span>
                   <span className="flex items-baseline gap-1">
-                    <AnimatedNumber value={stats.totalGames} duration={1.6} className="font-bold text-lg text-white" />
+                    <AnimatedNumber value={heroCareerGames} duration={1.6} className="font-bold text-lg text-white" />
                     <span className="text-[9px] uppercase tracking-wider text-white/40">G</span>
                   </span>
                   <span className="text-white/15">&bull;</span>
                   <span className="flex items-baseline gap-1">
                     <AnimatedNumber
-                      // Guard against an empty roster (no matches) — division
-                      // would yield NaN and render "NaN%". Showing 0% reads
-                      // cleaner on the cold-start case.
-                      value={
-                        stats.wins + stats.losses > 0
-                          ? (stats.wins / (stats.wins + stats.losses)) * 100
-                          : 0
-                      }
+                      value={heroCareerWrPct}
                       duration={1.8}
                       format="percent1"
                       className="text-[var(--gold)] font-bold text-lg"
                     />
                     <span className="text-[9px] uppercase tracking-wider text-white/40">WR</span>
                   </span>
-                  {clipCount > 0 && (
+                  {heroCareerClips > 0 && (
                     <>
                       <span className="text-white/15">&bull;</span>
                       <span className="flex items-baseline gap-1">
-                        <AnimatedNumber value={clipCount} duration={1.8} className="text-[var(--cyan)] font-bold text-lg" />
+                        <AnimatedNumber value={heroCareerClips} duration={1.8} className="text-[var(--cyan)] font-bold text-lg" />
                         <span className="text-[9px] uppercase tracking-wider text-white/40">CLIPS</span>
                       </span>
                     </>
@@ -404,45 +499,13 @@ export default async function HomePage() {
               </div>
             )}
 
-            {/* Top scorer of current split */}
-            {topPlayer && (
-              <Link
-                href={`/player/${encodeURIComponent(topPlayer.name)}`}
-                className="group rounded-xl bg-black/55 backdrop-blur-md border border-[var(--gold)]/20 px-5 py-4 transition-all hover:border-[var(--gold)]/50 hover:bg-black/70"
-              >
-                <p className="font-data text-[9px] uppercase tracking-[0.25em] text-[var(--gold)]/60 mb-2">
-                  Top scorer carri&egrave;re
-                </p>
-                <div className="flex items-center gap-3">
-                  {PLAYER_PHOTOS[topPlayer.name] ? (
-                    <Image
-                      src={PLAYER_PHOTOS[topPlayer.name]}
-                      alt={topPlayer.name}
-                      width={44}
-                      height={44}
-                      className="rounded-full border border-[var(--gold)]/40 object-cover object-top"
-                    />
-                  ) : (
-                    <div className="h-11 w-11 rounded-full bg-[var(--gold)]/20 flex items-center justify-center font-display font-black text-[var(--gold)]">
-                      {topPlayer.name[0]}
-                    </div>
-                  )}
-                  <div className="flex-1 min-w-0">
-                    <p className="font-display text-lg font-black text-white truncate group-hover:text-[var(--gold)] transition-colors">
-                      {topPlayer.name}
-                    </p>
-                    <p className="text-[10px] text-white/50 font-data uppercase tracking-wider">
-                      {displayRole(topPlayer.role)} &middot; {topPlayer.gamesPlayed} games
-                    </p>
-                  </div>
-                  <div className="text-right">
-                    <p className="font-data text-2xl font-black text-[var(--gold)] tabular-nums leading-none">
-                      {topPlayer.totalKills}
-                    </p>
-                    <p className="text-[9px] text-white/40 uppercase tracking-wider mt-1">kills</p>
-                  </div>
-                </div>
-              </Link>
+            {/* Rotating spotlight on the 5 starters — replaces the static
+                single-player top scorer card. Each card cycles every 4.5s
+                with the player's signature achievement headline (Top kills /
+                KDA Champion / Sniper / Titulaire). Pause-on-hover, dot
+                indicators, animated progress bar. Respects reduced-motion. */}
+            {carouselPlayers.length > 0 && (
+              <HomeTopScorerCarousel players={carouselPlayers} />
             )}
           </div>
         </div>
