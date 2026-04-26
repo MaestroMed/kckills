@@ -14,6 +14,8 @@ import {
   HomeTopScorerCarousel,
   type RosterPlayerStat,
 } from "@/components/HomeTopScorerCarousel";
+import { HomeRosterEraCarousel } from "@/components/HomeRosterEraCarousel";
+import { getEraRosters } from "@/lib/era-rosters";
 // Wave 11 — AudioPlayer (legacy BCC vibes FAB) replaced by the global
 // WolfFloatingPlayer mounted in Providers.tsx. Same UX (auto-fire on
 // first user gesture once opted in) but persistent across pages + with
@@ -606,83 +608,16 @@ export default async function HomePage() {
         </div>
       </section>
 
-      {/* ═══ ROSTER — Full width, tall bands ════════════════════════════ */}
-      {roster.length > 0 && (
-        <section className="relative overflow-hidden py-2">
-          <div className="flex flex-col md:flex-row md:h-[70vh] md:min-h-[500px]">
-            {roster.map((player, i) => {
-              const photo = PLAYER_PHOTOS[player.name];
-              const champ = player.champions[0] ?? "Jhin";
-              return (
-                <Link
-                  key={player.name}
-                  href={`/player/${encodeURIComponent(player.name)}`}
-                  className="roster-band group relative flex-1 h-48 md:h-auto overflow-hidden border-b md:border-b-0 md:border-r border-[var(--border-gold)] last:border-r-0 last:border-b-0 transition-all duration-700 md:hover:flex-[2] md:hover:z-10"
-                >
-                  {/* Background — player photo or champion splash */}
-                  {photo ? (
-                    <Image src={photo} alt={player.name} fill sizes="(max-width: 768px) 100vw, 20vw" className="object-cover object-top transition-all duration-700 group-hover:scale-105 group-hover:brightness-110" />
-                  ) : (
-                    <Image
-                      src={championSplashUrl(champ)}
-                      alt=""
-                      fill
-                      sizes="(max-width: 768px) 100vw, 20vw"
-                      className="object-cover opacity-40 transition-all duration-700 group-hover:scale-110 group-hover:opacity-60"
-                    />
-                  )}
-
-                  {/* Gradient */}
-                  <div className="absolute inset-0 bg-gradient-to-t from-black via-black/30 to-transparent transition-all duration-500 group-hover:from-black/95 group-hover:via-black/20" />
-
-                  {/* Greyscale effect — all bands greyscale when any is hovered */}
-                  <div className="absolute inset-0 transition-all duration-500" />
-
-                  {/* Content — bottom */}
-                  <div className="absolute bottom-0 left-0 right-0 p-4 md:p-6 z-10">
-                    {/* Champions */}
-                    <div className="flex gap-1.5 mb-3 opacity-60 group-hover:opacity-100 transition-opacity">
-                      {player.champions.slice(0, 4).map((c) => (
-                        <Image key={c} src={championIconUrl(c)} alt={c} width={24} height={24} className="rounded-full border border-black/50" data-tooltip={c} />
-                      ))}
-                    </div>
-
-                    {/* Name + role */}
-                    <p className="font-display text-xl md:text-3xl font-black text-white group-hover:text-[var(--gold)] transition-colors duration-300">
-                      {player.name}
-                    </p>
-                    <p className="text-xs uppercase tracking-[0.2em] text-white/50 mt-1">{displayRole(player.role)}</p>
-
-                    {/* Stats — always visible on mobile (no hover), hidden by default on desktop and revealed on hover */}
-                    <div className="mt-3 overflow-hidden max-h-40 md:max-h-0 md:group-hover:max-h-40 transition-all duration-500">
-                      <div className="flex gap-4 text-sm font-data">
-                        <div>
-                          <span className="text-[var(--green)] font-bold">{player.totalKills}</span>
-                          <span className="text-white/30 text-xs ml-0.5">K</span>
-                        </div>
-                        <div>
-                          <span className="text-[var(--red)] font-bold">{player.totalDeaths}</span>
-                          <span className="text-white/30 text-xs ml-0.5">D</span>
-                        </div>
-                        <div>
-                          <span className="text-white/80 font-bold">{player.totalAssists}</span>
-                          <span className="text-white/30 text-xs ml-0.5">A</span>
-                        </div>
-                      </div>
-                      <p className="font-data text-[10px] text-white/30 mt-1">{player.gamesPlayed} games</p>
-                    </div>
-                  </div>
-
-                  {/* Role badge top-right */}
-                  <div className="absolute top-3 right-3 z-10 rounded-md bg-black/60 backdrop-blur-sm px-2 py-1 text-[9px] font-bold uppercase tracking-wider text-[var(--gold)] opacity-0 group-hover:opacity-100 transition-opacity">
-                    {displayRole(player.role)}
-                  </div>
-                </Link>
-              );
-            })}
-          </div>
-        </section>
-      )}
+      {/* ═══ ROSTER ERA CAROUSEL — Iconic lineup per year ═══════════════
+          Replaces the static current-roster band with a year-by-year
+          carousel : Genèse 2021 → Rekkles 2022 → Renaissance 2023 →
+          Pari Coréen 2024 → LE SACRE 2025 → Renouveau 2026. Each era
+          drives its own breathing radial gradient in the era's
+          signature color (from eras.ts), the player bands keep the
+          same visual layout fans already know, and the user can pin
+          a specific year via the tab row above. Auto-rotates every
+          7 s ; respects prefers-reduced-motion. */}
+      <HomeRosterEraCarousel rosters={getEraRosters()} />
 
       {/* ═══ ROTATING CITATIONS — slow rotation, particle dissolve ═════ */}
       {/* Replaces the daily QuoteCard. Real verified quotes from KC players,
