@@ -207,13 +207,21 @@ export const getHeroCareerStats = cache(async function getHeroCareerStats(
       totalGames = gamesCount ?? 0;
 
       // KC offensive kills count via the tracked_team_involvement filter.
-      // Only counts published kills with kill_visible=true so the count
-      // matches what users see on the scroll feed (avoids inflated number
-      // from unpublished raw rows).
+      // Only counts PUBLISHED kills with kill_visible=true so the displayed
+      // total matches what users see on the scroll feed and avoids inflated
+      // numbers from unpublished raw rows (pipeline in-flight, Gemini
+      // failures, manual_review queue, etc.).
+      //
+      // ⚠️ Bug history (2026-04-26) : without these two filters the counter
+      // returned 124+ "career" kills which the user flagged as suspicious
+      // after only NAVI (yesterday) + SHIFTERS (today) had been processed —
+      // that was raw harvested rows, not the actual visible-on-feed count.
       const { count: killsCount } = await sb
         .from("kills")
         .select("id", { count: "exact", head: true })
-        .eq("tracked_team_involvement", "team_killer");
+        .eq("tracked_team_involvement", "team_killer")
+        .eq("status", "published")
+        .eq("kill_visible", true);
       totalKills = killsCount ?? 0;
     }
 
