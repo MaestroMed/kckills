@@ -4,6 +4,7 @@ import { loadRealData, getCurrentRoster, getTeamStats, getMatchesSorted, display
 import { championIconUrl, championSplashUrl } from "@/lib/constants";
 import { PLAYER_PHOTOS, TEAM_LOGOS, KC_LOGO } from "@/lib/kc-assets";
 import { getPublishedKills } from "@/lib/supabase/kills";
+import { loadHeroVideos } from "@/lib/hero-videos/storage";
 // Wave 11 — AudioPlayer (legacy BCC vibes FAB) replaced by the global
 // WolfFloatingPlayer mounted in Providers.tsx. Same UX (auto-fire on
 // first user gesture once opted in) but persistent across pages + with
@@ -50,6 +51,22 @@ import { PageViewTracker } from "@/components/analytics/PageViewTracker";
  * we can query Supabase.
  */
 async function buildHeroClips() {
+  // Tier 1 \u2014 operator-curated MP4 montages (Wave 12 EF). Mehdi's own
+  // edits / intros / backstage clips uploaded via /admin/hero-videos to
+  // R2. They take priority because they're hand-picked, and their audio
+  // plays when the user has opted-in via the wolf player.
+  const operatorVideos = await loadHeroVideos();
+  const operatorClips = operatorVideos.map((v) => ({
+    mp4Url: v.videoUrl,
+    posterUrl: v.posterUrl,
+    title: v.title,
+    context: v.context ?? "Hero curate",
+    durationMs: v.durationMs,
+    audioVolume: v.audioVolume,
+  }));
+
+  // Tier 2 \u2014 auto-pulled top published kills from R2 (best-of from the
+  // pipeline). Muted (no caster audio worth playing on raw clips).
   const topKills = await getPublishedKills(5);
   const r2Clips = topKills
     .filter((k) => k.clip_url_horizontal)
@@ -59,13 +76,15 @@ async function buildHeroClips() {
       title: k.ai_description ?? `${k.killer_champion} \u2192 ${k.victim_champion}`,
       context: `Game ${k.games?.game_number ?? "?"} \u00b7 ${k.games?.matches?.stage ?? "LEC"}`,
       durationMs: 15000,
+      audioVolume: 0,
     }));
 
+  // Tier 3 — YouTube fallback reels for variety / when operator hasn't
+  // uploaded anything yet (fresh deploy).
   const youtubeClips = YOUTUBE_HERO_CLIPS;
 
-  // R2 clips rank first — they're instant, no CAPTCHA, CDN-cached.
-  // If pipeline hasn't run yet (0 R2 clips), we fall back to YouTube only.
-  return [...r2Clips, ...youtubeClips];
+  // Operator clips first (curated), then R2 auto-best-of, then YouTube.
+  return [...operatorClips, ...r2Clips, ...youtubeClips];
 }
 
 const YOUTUBE_HERO_CLIPS = [
