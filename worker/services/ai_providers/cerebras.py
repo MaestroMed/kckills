@@ -39,6 +39,10 @@ class CerebrasProvider:
     cost_per_m_input: float = 0.60
     cost_per_m_output: float = 0.60
     supports_vision: bool = False  # critical — router uses this to skip us
+    # Wave 11 — Cerebras is on US enterprise tier with explicit no-train
+    # commitment. PII-safe by default. Router will route sensitive text
+    # tasks here as a fallback when Anthropic is in cooldown.
+    is_pii_safe: bool = True
 
     def __init__(self, api_key: str | None = None):
         self.api_key = api_key or os.environ.get("CEREBRAS_API_KEY") or ""

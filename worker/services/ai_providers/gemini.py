@@ -35,6 +35,11 @@ class GeminiProvider:
     cost_per_m_input: float = 0.10
     cost_per_m_output: float = 0.40
     supports_vision: bool = True
+    # Wave 11 — Google Cloud paid tier is PII-friendly. Free tier has
+    # the "may be used for training" clause so callers should NOT route
+    # has_pii=True tasks here when on free tier ; the production deploy
+    # uses paid keys exclusively, so this stays True.
+    is_pii_safe: bool = True
 
     # Daily ceiling on free tier ; phase 2 reads the actual remaining
     # count from `scheduler.get_remaining("gemini")` so the router knows
