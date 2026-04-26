@@ -10,6 +10,7 @@ import { HomeRareCards } from "@/components/HomeRareCards";
 import { HomeYouTubeShowcase } from "@/components/HomeYouTubeShowcase";
 import { KillOfTheWeek } from "@/components/KillOfTheWeek";
 import { HomeRecentClips } from "@/components/HomeRecentClips";
+import { HomeWeekendBestClips } from "@/components/HomeWeekendBestClips";
 import { HomeTimelineFeed } from "@/components/timeline/HomeTimelineFeed";
 import { QuoteCard } from "@/components/QuoteCard";
 import { QUOTES } from "@/lib/quotes";
@@ -435,6 +436,15 @@ export default async function HomePage() {
           Not endorsed by Riot Games. League of Legends &copy; Riot Games.
         </p>
       </section>
+
+      {/* ═══ MEILLEURS CLIPS DU WEEK-END ═══════════════════════════════
+          Section bien haut sous le hero, avant le Kill of the Week.
+          Surface les clips publiés sur la fenêtre vendredi-dimanche
+          en cours (ou le dernier week-end joué si on est en milieu
+          de semaine). Re-ranke par score IA + boost multi-kill +
+          boost communauté. Ne s'affiche pas si zéro clip dans le
+          système (fresh deploy / worker pas encore tourné). */}
+      <HomeWeekendBestClips />
 
       {/* ═══ KILL OF THE WEEK — surface the featured clip first ═════════ */}
       <KillOfTheWeek />

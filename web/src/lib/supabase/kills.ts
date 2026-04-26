@@ -433,6 +433,121 @@ export const getPublishedKills = cache(async function getPublishedKills(
 });
 
 /**
+ * getWeekendBestClips — top published clips during a date window.
+ *
+ * Used by `<HomeWeekendBestClips />` to surface the freshest, best-rated
+ * clips of the current weekend (or last completed weekend if mid-week).
+ *
+ * Selection logic :
+ *   1. Try the explicit weekend window first (created_at BETWEEN from AND to).
+ *      Sort by combined-score : highlight_score + community_boost + multi_kill_bonus.
+ *      Cap at `limit`.
+ *   2. If the weekend window has FEWER than `limit/2` clips (typical mid-week
+ *      drought OR worker hasn't processed weekend yet), fall back to the
+ *      most recent published clips regardless of date — better to show
+ *      *something* than an empty section. The component flags this fallback
+ *      visually via the `isEmptyWindow` derived state.
+ *
+ * The community boost = `avg_rating * log2(rating_count + 1)` — caps the
+ * influence of low-vote-count outliers (a 5-star average from 2 votes
+ * shouldn't dethrone a 4.6-star with 200 votes). Same shape Hacker News
+ * uses on submissions.
+ *
+ * The multi-kill bonus is multiplicative on top of `highlight_score` :
+ *   * penta = ×1.6
+ *   * quadra = ×1.4
+ *   * triple = ×1.2
+ *   * double / first_blood = ×1.05
+ *   * none = ×1.0
+ * This makes a 7.0-score quadra leapfrog an 8.5-score solo kill in
+ * curation — exactly the editorial intent for a "best of weekend" rail.
+ */
+export const getWeekendBestClips = cache(async function getWeekendBestClips(
+  opts: {
+    fromIso: string;
+    toIso: string;
+    limit?: number;
+    buildTime?: boolean;
+  },
+): Promise<PublishedKillRow[]> {
+  const limit = opts.limit ?? 12;
+  try {
+    const supabase = opts.buildTime
+      ? createAnonSupabase()
+      : await createServerSupabase();
+
+    // --- 1. Try the weekend window ---
+    const { data: windowed, error } = await supabase
+      .from("kills")
+      .select(KILL_SELECT)
+      .or(
+        "publication_status.eq.published," +
+          "and(publication_status.is.null,status.eq.published)",
+      )
+      .eq("kill_visible", true)
+      .not("clip_url_vertical", "is", null)
+      .not("thumbnail_url", "is", null)
+      .gte("created_at", opts.fromIso)
+      .lt("created_at", opts.toIso)
+      .order("highlight_score", { ascending: false, nullsFirst: false })
+      .order("avg_rating", { ascending: false, nullsFirst: false })
+      .order("created_at", { ascending: false })
+      .limit(limit * 2); // grab extra so we can re-rank with the multi-kill bonus client-side
+
+    if (error) {
+      console.warn("[supabase/kills] getWeekendBestClips window error:", error.message);
+    }
+
+    let candidates = (windowed ?? []).map((row) =>
+      normalize(row as unknown as RawKillSelect),
+    );
+
+    // --- 2. Fallback to recent if the window is sparse ---
+    // Half-empty section looks broken — fall back to the freshest available
+    // clips so the rail always renders. The header text in the component
+    // signals the fallback to the user via the era-empty derived state.
+    if (candidates.length < Math.ceil(limit / 2)) {
+      const fallback = await getPublishedKills(limit, { buildTime: opts.buildTime });
+      // Merge — windowed first (date-prioritized), then fill with recent dedup
+      const seen = new Set(candidates.map((k) => k.id));
+      for (const k of fallback) {
+        if (!seen.has(k.id)) {
+          candidates.push(k);
+          seen.add(k.id);
+        }
+        if (candidates.length >= limit * 2) break;
+      }
+    }
+
+    // --- 3. Re-rank with multi-kill + community boost ---
+    const scored = candidates.map((k) => {
+      const base = k.highlight_score ?? 0;
+      const community =
+        (k.avg_rating ?? 0) * Math.log2((k.rating_count ?? 0) + 1);
+      const multiBonus =
+        k.multi_kill === "penta"
+          ? 1.6
+          : k.multi_kill === "quadra"
+            ? 1.4
+            : k.multi_kill === "triple"
+              ? 1.2
+              : k.multi_kill === "double" || k.is_first_blood
+                ? 1.05
+                : 1.0;
+      const composite = (base + community * 0.5) * multiBonus;
+      return { kill: k, composite };
+    });
+
+    scored.sort((a, b) => b.composite - a.composite);
+    return scored.slice(0, limit).map((s) => s.kill);
+  } catch (err) {
+    rethrowIfDynamic(err);
+    console.warn("[supabase/kills] getWeekendBestClips threw:", err);
+    return [];
+  }
+});
+
+/**
  * Like getPublishedKills() but expanded to ANY kill that has enough
  * metadata to render a card — published with a clip OR data-only.
  * Use for /clips, /players, /matches grids. Returns up to 6 years of
