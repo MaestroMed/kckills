@@ -46,7 +46,7 @@ Multi-game channels
 ═══════════════════
 @KarmineCorpVOD has Valorant + Rocket League + League content. The
 reconciler's title parser already filters non-LoL titles (no team
-match → status=`skipped_irrelevant`). The deep scan inserts
+match -> status=`skipped_irrelevant`). The deep scan inserts
 EVERYTHING ; the reconciler does the per-video classification
 afterwards. That's intended : the operator can later decide to
 re-classify a "skipped_irrelevant" if the parser missed something.
@@ -221,17 +221,30 @@ def _bulk_insert(uc_id: str, videos: list[dict], dry_run: bool) -> int:
         "Prefer": "resolution=ignore-duplicates",
     }
     now = datetime.now(timezone.utc).isoformat()
+    # Schema-correct field set (channel_videos has no discovered_at,
+    # but it does have created_at + updated_at which auto-populate
+    # via DEFAULT now()). Just provide the writable fields.
+    def _to_int(x):
+        if x is None:
+            return None
+        try:
+            return int(round(float(x)))
+        except (ValueError, TypeError):
+            return None
+
     rows = [
         {
             "id": v["id"],
             "channel_id": uc_id,
             "title": v["title"],
-            "duration_seconds": v.get("duration_seconds"),
+            # yt-dlp returns duration as a float seconds value ; the column
+            # is INTEGER so we round before insert.
+            "duration_seconds": _to_int(v.get("duration_seconds")),
             "status": "discovered",
-            "discovered_at": now,
         }
         for v in videos
     ]
+    _ = now  # keep for forward-compat if the schema gains a discovered_at later
     if dry_run:
         return len(rows)
     # batch in 500s to stay under PostgREST limits
@@ -262,7 +275,7 @@ def main() -> int:
     args = p.parse_args()
 
     uc_id, label = _resolve_channel_id(args.channel)
-    print(f"Channel  : {args.channel} → UC = {uc_id}  ({label or 'unnamed'})")
+    print(f"Channel  : {args.channel} -> UC = {uc_id}  ({label or 'unnamed'})")
     print(f"Mode     : {'DRY-RUN' if args.dry_run else 'LIVE'}")
     print(f"Limit    : {args.limit or 'no cap (full history)'}")
     print()
