@@ -110,7 +110,7 @@ export default async function AnalyticsPage() {
   // Sections 3 + 4 : per-format perf + funnel — derived from raw user_events.
   const sinceIso24h = new Date(now - 24 * 3600 * 1000).toISOString();
 
-  const [engagement24hRes, trending1hRes, completedByFormatRes, funnelRes] = await Promise.all([
+  const [engagement24hRes, trending1hRes, completedByFormatRes, funnelRes, contextRes] = await Promise.all([
     sb.from("v_clip_engagement_24h").select("*"),
     sb.from("v_trending_kills_1h").select("*").limit(10),
     // completed events per client_kind, last 24h
@@ -131,10 +131,52 @@ export default async function AnalyticsPage() {
         "clip.completed",
       ])
       .gte("created_at", sinceIso24h),
+    // Wave 12 anti-pollution dashboard — distribution of clip_context
+    // across published kills + the not-yet-reanalyzed (NULL) bucket.
+    sb
+      .from("kills")
+      .select("ai_clip_context, status")
+      .eq("status", "published"),
   ]);
 
   const engagementRows: ClipEngagement24h[] = (engagement24hRes.data ?? []) as ClipEngagement24h[];
   const trendingRows: TrendingKill1h[] = (trending1hRes.data ?? []) as TrendingKill1h[];
+
+  // Wave 12 anti-pollution breakdown — counts per ai_clip_context value
+  // for all published kills. NULL = not yet re-classified (pre-Wave-12
+  // backlog). Anything other than `live_gameplay` is forced kill_visible
+  // =false at write time so it's hidden from the scroll feed regardless.
+  const contextRows = (contextRes.data ?? []) as Array<{
+    ai_clip_context: string | null;
+    status: string | null;
+  }>;
+  const contextCounts: Record<string, number> = {
+    live_gameplay: 0,
+    replay: 0,
+    draft: 0,
+    lobby: 0,
+    loading: 0,
+    plateau: 0,
+    transition: 0,
+    other: 0,
+    null: 0,
+  };
+  for (const row of contextRows) {
+    const k = row.ai_clip_context ?? "null";
+    contextCounts[k] = (contextCounts[k] ?? 0) + 1;
+  }
+  const contextTotal = contextRows.length;
+  const contextLiveGameplay = contextCounts.live_gameplay;
+  const contextNotYetClassified = contextCounts.null;
+  const contextPollutionTotal =
+    contextTotal - contextLiveGameplay - contextNotYetClassified;
+  const contextPollutionPct =
+    contextTotal - contextNotYetClassified > 0
+      ? Math.round(
+          (100 * contextPollutionTotal) /
+            (contextTotal - contextNotYetClassified),
+        )
+      : 0;
 
   // Section 1 : KPI aggregation
   let totalViews = 0;
@@ -204,6 +246,83 @@ export default async function AnalyticsPage() {
           </span>
         </p>
       </header>
+
+      {/* ─── Section 0 : Anti-pollution QC dashboard (Wave 12) ──── */}
+      <section>
+        <h2 className="font-display text-[10px] uppercase tracking-widest text-[var(--text-muted)] mb-3">
+          QC anti-pollution — répartition des clips publiés
+        </h2>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
+          <KpiCard
+            label="Live gameplay"
+            value={contextLiveGameplay.toLocaleString("fr-FR")}
+            accent="green"
+          />
+          <KpiCard
+            label="Pollution filtrée"
+            value={contextPollutionTotal.toLocaleString("fr-FR")}
+            accent="orange"
+          />
+          <KpiCard
+            label="% pollution"
+            value={`${contextPollutionPct}%`}
+            accent={contextPollutionPct > 10 ? "orange" : "green"}
+          />
+          <KpiCard
+            label="Pas encore re-QC'd"
+            value={contextNotYetClassified.toLocaleString("fr-FR")}
+            accent={contextNotYetClassified > 100 ? "orange" : "default"}
+          />
+        </div>
+        <div className="rounded-lg border border-[var(--border-gold)]/30 bg-[var(--bg-elevated)]/40 p-3">
+          <div className="text-[10px] uppercase tracking-widest text-[var(--text-muted)] mb-2">
+            Détail par catégorie clip_context
+          </div>
+          <div className="space-y-1.5">
+            {[
+              { k: "live_gameplay", color: "var(--green)", label: "Live gameplay (gardés)" },
+              { k: "replay", color: "var(--orange)", label: "Replay LEC" },
+              { k: "draft", color: "var(--orange)", label: "Champion select / draft" },
+              { k: "plateau", color: "var(--orange)", label: "Plateau / studio" },
+              { k: "lobby", color: "var(--orange)", label: "Lobby end-of-game" },
+              { k: "loading", color: "var(--orange)", label: "Loading screen" },
+              { k: "transition", color: "var(--orange)", label: "Transition entre games" },
+              { k: "other", color: "var(--text-muted)", label: "Autre / ambigu" },
+              { k: "null", color: "var(--text-muted)", label: "Pas encore re-QC'd (pré-Wave 12)" },
+            ].map(({ k, color, label }) => {
+              const count = contextCounts[k] ?? 0;
+              const pct = contextTotal > 0 ? (100 * count) / contextTotal : 0;
+              return (
+                <div key={k} className="flex items-center gap-3 text-xs font-data">
+                  <div className="w-44 text-[var(--text-muted)] truncate">{label}</div>
+                  <div className="flex-1 h-1.5 bg-[var(--bg-primary)] rounded-full overflow-hidden">
+                    <div
+                      className="h-full rounded-full transition-all"
+                      style={{ width: `${pct}%`, backgroundColor: color }}
+                    />
+                  </div>
+                  <div className="w-14 text-right tabular-nums text-white">
+                    {count.toLocaleString("fr-FR")}
+                  </div>
+                  <div className="w-12 text-right tabular-nums text-[var(--text-muted)] text-[10px]">
+                    {pct.toFixed(1)}%
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          {contextNotYetClassified > 0 && (
+            <p className="text-[10px] text-[var(--text-muted)] mt-3 italic">
+              💡 {contextNotYetClassified} clips pré-Wave-12 attendent une re-QC.
+              Lance{" "}
+              <code className="bg-[var(--bg-primary)] px-1 rounded">
+                python worker/scripts/reanalyze_pollution_qc.py --skip-tagged
+              </code>{" "}
+              pour les re-classifier.
+            </p>
+          )}
+        </div>
+      </section>
 
       {/* ─── Section 1 : Engagement KPIs (24h) ─────────────────── */}
       <section>
