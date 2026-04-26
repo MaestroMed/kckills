@@ -9,6 +9,8 @@ import { LangProvider } from "@/lib/i18n/use-lang";
 import type { Lang } from "@/lib/i18n/lang";
 import { AuthEventTracker } from "./analytics/AuthEventTracker";
 import { WebVitalsReporter } from "./analytics/WebVitalsReporter";
+import { FloatingPlayerProvider } from "@/lib/audio/use-floating-player";
+import { WolfFloatingPlayer } from "./player/WolfFloatingPlayer";
 
 /**
  * App-wide providers.
@@ -38,12 +40,15 @@ export function Providers({
     <LangProvider initialLang={initialLang}>
       <LazyMotion features={domAnimation} strict>
         <ToastProvider>
-          {children}
-          <CommandPalette />
-          <KonamiBlueWall />
-          <PwaInstallPrompt />
-          <AuthEventTracker />
-          <WebVitalsReporter />
+          <FloatingPlayerProvider>
+            {children}
+            <CommandPalette />
+            <KonamiBlueWall />
+            <PwaInstallPrompt />
+            <AuthEventTracker />
+            <WebVitalsReporter />
+            <WolfFloatingPlayer />
+          </FloatingPlayerProvider>
         </ToastProvider>
       </LazyMotion>
     </LangProvider>
