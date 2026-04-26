@@ -462,20 +462,34 @@ def process_tournament(
         try:
             summary, kills = client.fetch_game_full(stub.golgg_game_id)
         except Exception as e:
-            report.errors.append(f"game_{stub.golgg_game_id}: {e}")
+            report.errors.append(f"game_{stub.golgg_game_id}: fetch_threw={e}")
+            log.warn("game_fetch_threw", game=stub.golgg_game_id, err=str(e)[:120])
             continue
         if summary is None:
             report.errors.append(f"game_{stub.golgg_game_id}: summary_404")
+            log.warn("game_summary_404", game=stub.golgg_game_id)
             continue
 
         # Resolve match + game in DB (creating if necessary)
-        match_uuid = _resolve_or_create_match(tournament_uuid, summary, stub, db)
+        try:
+            match_uuid = _resolve_or_create_match(tournament_uuid, summary, stub, db)
+        except Exception as e:
+            report.errors.append(f"game_{stub.golgg_game_id}: match_resolve_threw={e}")
+            log.warn("game_match_resolve_threw", game=stub.golgg_game_id, err=str(e)[:120])
+            continue
         if not match_uuid:
             report.errors.append(f"game_{stub.golgg_game_id}: no_match_uuid")
+            log.warn("game_no_match_uuid", game=stub.golgg_game_id, blue=summary.blue_team_name, red=summary.red_team_name)
             continue
-        game_uuid = _ensure_game(match_uuid, summary, stub)
+        try:
+            game_uuid = _ensure_game(match_uuid, summary, stub)
+        except Exception as e:
+            report.errors.append(f"game_{stub.golgg_game_id}: ensure_game_threw={e}")
+            log.warn("game_ensure_threw", game=stub.golgg_game_id, err=str(e)[:120])
+            continue
         if not game_uuid:
             report.errors.append(f"game_{stub.golgg_game_id}: no_game_uuid")
+            log.warn("game_no_game_uuid", game=stub.golgg_game_id, match_uuid=match_uuid)
             continue
 
         # Skip if this game already has the right number of kills covered.
@@ -549,6 +563,13 @@ def main():
         print(f"  games already in db: {report.games_already_in_db}")
         print(f"  games inserted: {report.games_inserted}")
         print(f"  kills inserted: {report.kills_inserted}")
+        if report.errors:
+            print(f"  errors ({len(report.errors)}):")
+            # Print first 10 errors so the operator sees what's bouncing
+            for e in report.errors[:10]:
+                print(f"    - {e}")
+            if len(report.errors) > 10:
+                print(f"    ... + {len(report.errors) - 10} more")
         if report.errors:
             print(f"  errors: {len(report.errors)}")
             for e in report.errors[:5]:
