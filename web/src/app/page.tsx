@@ -10,13 +10,38 @@ import {
   getHeroTopScorer,
 } from "@/lib/supabase/hero-stats";
 import { loadHeroVideos } from "@/lib/hero-videos/storage";
-import {
-  HomeTopScorerCarousel,
-  type RosterPlayerStat,
-} from "@/components/HomeTopScorerCarousel";
-import { HomeRosterEraCarousel } from "@/components/HomeRosterEraCarousel";
+import dynamic from "next/dynamic";
+import { type RosterPlayerStat } from "@/components/HomeTopScorerCarousel";
 import { getEraRosters } from "@/lib/era-rosters";
 import { DesktopOnly } from "@/components/DesktopOnly";
+
+// 🔴 2026-04-28 mobile bundle optimization :
+// Convert heavy CLIENT-only components to next/dynamic with ssr:false
+// so their JS doesn't even ship to mobile (when they're wrapped in
+// <DesktopOnly>, mobile never mounts them — but without dynamic, the
+// JS still ends up in the page bundle). Dynamic imports + ssr:false
+// = zero cost on mobile + zero hydration mismatch.
+//
+// HomeTopScorerCarousel stays in the hero card column (visible
+// everywhere) but the auto-rotate intervals + framer-motion are
+// significant on mobile, so it's still wrapped in DesktopOnly below
+// with a static fallback for mobile.
+const HomeRosterEraCarousel = dynamic(
+  () => import("@/components/HomeRosterEraCarousel").then((m) => m.HomeRosterEraCarousel),
+  { ssr: false, loading: () => null },
+);
+const HomeTopScorerCarousel = dynamic(
+  () => import("@/components/HomeTopScorerCarousel").then((m) => m.HomeTopScorerCarousel),
+  { ssr: false, loading: () => null },
+);
+const HomeQuoteRotator = dynamic(
+  () => import("@/components/HomeQuoteRotator").then((m) => m.HomeQuoteRotator),
+  { ssr: false, loading: () => null },
+);
+const EraComparisonChart = dynamic(
+  () => import("@/components/EraComparison").then((m) => m.EraComparisonChart),
+  { ssr: false, loading: () => null },
+);
 // Wave 11 — AudioPlayer (legacy BCC vibes FAB) replaced by the global
 // WolfFloatingPlayer mounted in Providers.tsx. Same UX (auto-fire on
 // first user gesture once opted in) but persistent across pages + with
@@ -29,10 +54,9 @@ import { KillOfTheWeek } from "@/components/KillOfTheWeek";
 import { HomeRecentClips } from "@/components/HomeRecentClips";
 import { HomeWeekendBestClips } from "@/components/HomeWeekendBestClips";
 import { HomeTimelineFeed } from "@/components/timeline/HomeTimelineFeed";
-import { QuoteCard } from "@/components/QuoteCard";
+// QuoteCard import removed — was unused since the QuoteRotator replaced it.
 import { QUOTES } from "@/lib/quotes";
-import { HomeQuoteRotator } from "@/components/HomeQuoteRotator";
-import { EraComparisonChart } from "@/components/EraComparison";
+// HomeQuoteRotator + EraComparisonChart now lazy-loaded via next/dynamic above
 import { AnimatedNumber } from "@/components/AnimatedNumber";
 import { MacronEasterEgg } from "@/components/MacronEasterEgg";
 import { HeroClipBackground } from "@/components/HeroClipBackground";
@@ -502,13 +526,49 @@ export default async function HomePage() {
               </div>
             )}
 
-            {/* Rotating spotlight on the 5 starters — replaces the static
-                single-player top scorer card. Each card cycles every 4.5s
-                with the player's signature achievement headline (Top kills /
-                KDA Champion / Sniper / Titulaire). Pause-on-hover, dot
-                indicators, animated progress bar. Respects reduced-motion. */}
+            {/* Rotating spotlight on the 5 starters. DesktopOnly +
+                lazy-loaded via next/dynamic so the JS doesn't ship to
+                mobile (where it isn't rendered). On mobile we show a
+                static lightweight top-scorer card instead so the right
+                column doesn't look amputated. */}
             {carouselPlayers.length > 0 && (
-              <HomeTopScorerCarousel players={carouselPlayers} />
+              <DesktopOnly fallback={
+                <Link
+                  href={`/player/${encodeURIComponent(carouselPlayers[0].ign)}`}
+                  className="rounded-xl bg-black/55 backdrop-blur-md border border-[var(--gold)]/20 px-5 py-4"
+                >
+                  <p className="font-data text-[9px] uppercase tracking-[0.25em] text-[var(--gold)]/60 mb-2">
+                    {carouselPlayers[0].achievementLabel}
+                  </p>
+                  <div className="flex items-center gap-3">
+                    {carouselPlayers[0].imageUrl ? (
+                      <Image
+                        src={carouselPlayers[0].imageUrl}
+                        alt={carouselPlayers[0].ign}
+                        width={44}
+                        height={44}
+                        className="rounded-full border border-[var(--gold)]/40 object-cover object-top"
+                      />
+                    ) : null}
+                    <div className="flex-1 min-w-0">
+                      <p className="font-display text-lg font-black text-white truncate">
+                        {carouselPlayers[0].ign}
+                      </p>
+                      <p className="text-[10px] text-white/50 font-data uppercase tracking-wider">
+                        {carouselPlayers[0].role} · {carouselPlayers[0].gamesPlayed} games
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <p className="font-data text-2xl font-black text-[var(--gold)] tabular-nums leading-none">
+                        {carouselPlayers[0].totalKills}
+                      </p>
+                      <p className="text-[9px] text-white/40 uppercase tracking-wider mt-1">kills</p>
+                    </div>
+                  </div>
+                </Link>
+              }>
+                <HomeTopScorerCarousel players={carouselPlayers} />
+              </DesktopOnly>
             )}
           </div>
         </div>
