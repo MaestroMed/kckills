@@ -16,6 +16,7 @@ import {
 } from "@/components/HomeTopScorerCarousel";
 import { HomeRosterEraCarousel } from "@/components/HomeRosterEraCarousel";
 import { getEraRosters } from "@/lib/era-rosters";
+import { DesktopOnly } from "@/components/DesktopOnly";
 // Wave 11 — AudioPlayer (legacy BCC vibes FAB) replaced by the global
 // WolfFloatingPlayer mounted in Providers.tsx. Same UX (auto-fire on
 // first user gesture once opted in) but persistent across pages + with
@@ -609,37 +610,39 @@ export default async function HomePage() {
       </section>
 
       {/* ═══ ROSTER ERA CAROUSEL — Iconic lineup per year ═══════════════
-          Replaces the static current-roster band with a year-by-year
-          carousel : Genèse 2021 → Rekkles 2022 → Renaissance 2023 →
-          Pari Coréen 2024 → LE SACRE 2025 → Renouveau 2026. Each era
-          drives its own breathing radial gradient in the era's
-          signature color (from eras.ts), the player bands keep the
-          same visual layout fans already know, and the user can pin
-          a specific year via the tab row above. Auto-rotates every
-          7 s ; respects prefers-reduced-motion. */}
-      <HomeRosterEraCarousel rosters={getEraRosters()} />
+          🔴 Wrapped in <DesktopOnly> as part of Tier 3 mobile crash
+          mitigation : the carousel runs auto-rotates + breathing
+          gradients + framer-motion AnimatePresence which compound on
+          iOS Safari. Mobile users skip this entire section. */}
+      <DesktopOnly>
+        <HomeRosterEraCarousel rosters={getEraRosters()} />
+      </DesktopOnly>
 
-      {/* ═══ ROTATING CITATIONS — slow rotation, particle dissolve ═════ */}
-      {/* Replaces the daily QuoteCard. Real verified quotes from KC players,
-          casters and staff. Each quote types in (≈40ms/char), holds for
-          ~10s, then dissolves into a particle drift before the next one
-          appears. prefers-reduced-motion is respected — text shows up
-          instantly without animation for users who opted out. */}
-      <section
-        className="-mx-6 md:-mx-8 lg:-mx-12 my-8"
-        style={{
-          background:
-            "linear-gradient(180deg, transparent, rgba(15,29,54,0.4) 30%, rgba(15,29,54,0.4) 70%, transparent)",
-        }}
-      >
-        <HomeQuoteRotator quotes={QUOTES} />
-      </section>
+      {/* ═══ ROTATING CITATIONS — slow rotation, particle dissolve ═════
+          🔴 DesktopOnly : the typing animation + particle dissolve are
+          continuous rAF loops that bled mobile memory. */}
+      <DesktopOnly>
+        <section
+          className="-mx-6 md:-mx-8 lg:-mx-12 my-8"
+          style={{
+            background:
+              "linear-gradient(180deg, transparent, rgba(15,29,54,0.4) 30%, rgba(15,29,54,0.4) 70%, transparent)",
+          }}
+        >
+          <HomeQuoteRotator quotes={QUOTES} />
+        </section>
+      </DesktopOnly>
 
       {/* ═══ CARTES LEGENDAIRES — TCG visual layer en showcase home ═════ */}
       <HomeRareCards />
 
-      {/* ═══ YOUTUBE PARALLAX SHOWCASE (RSS-driven 3D carousel) ═══════════ */}
-      <HomeYouTubeShowcase />
+      {/* ═══ YOUTUBE PARALLAX SHOWCASE (RSS-driven 3D carousel) ═══════════
+          🔴 DesktopOnly : the parallax 3D transforms + drag handlers +
+          all the curated YouTube thumbnails were the heaviest single
+          mobile-hostile section. Skipped entirely on mobile. */}
+      <DesktopOnly>
+        <HomeYouTubeShowcase />
+      </DesktopOnly>
 
       {/* ═══ ERA COMPARISON CHARTS ═══════════════════════════════════════ */}
       {(() => {
@@ -677,16 +680,21 @@ export default async function HomePage() {
 
         if (eraData.length < 2) return null;
         return (
-          <section>
-            <div className="flex items-center gap-3 mb-6">
-              <span className="h-px flex-1 bg-[var(--border-gold)]" />
-              <span className="font-data text-[10px] uppercase tracking-[0.3em] font-bold text-[var(--gold)]">
-                Evolution KC par ere
-              </span>
-              <span className="h-px flex-1 bg-[var(--border-gold)]" />
-            </div>
-            <EraComparisonChart data={eraData} />
-          </section>
+          // 🔴 DesktopOnly Tier 3 mobile fix : the EraComparisonChart
+          // ships SVG/canvas charts that compound with the other heavy
+          // sections on iOS Safari memory pressure.
+          <DesktopOnly>
+            <section>
+              <div className="flex items-center gap-3 mb-6">
+                <span className="h-px flex-1 bg-[var(--border-gold)]" />
+                <span className="font-data text-[10px] uppercase tracking-[0.3em] font-bold text-[var(--gold)]">
+                  Evolution KC par ere
+                </span>
+                <span className="h-px flex-1 bg-[var(--border-gold)]" />
+              </div>
+              <EraComparisonChart data={eraData} />
+            </section>
+          </DesktopOnly>
         );
       })()}
 
