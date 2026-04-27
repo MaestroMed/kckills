@@ -172,9 +172,12 @@ async function fetchFromSupabase(slug: string): Promise<RealMatch | undefined> {
 
   if (!row) return undefined;
 
-  // Parallel fetch teams + games + game_participants
+  // Parallel fetch teams + games + game_participants + kills (kills used
+  // as the participant fallback when game_participants is empty — the
+  // KC vs FNC match today has 81 kills detected on game 1 but ZERO
+  // game_participants rows because that pipeline stage hasn't run).
   const teamIds = [row.team_blue_id, row.team_red_id].filter(Boolean) as string[];
-  const [teamsRes, gamesRes, participantsRes] = await Promise.all([
+  const [teamsRes, gamesRes, participantsRes, killsRes] = await Promise.all([
     teamIds.length > 0
       ? sb.from("teams").select("id, code, name, is_tracked").in("id", teamIds)
       : Promise.resolve({ data: [] as TeamRow[] }),
@@ -190,6 +193,12 @@ async function fetchFromSupabase(slug: string): Promise<RealMatch | undefined> {
           "player:players(ign)",
       )
       .eq("game_id", row.id),
+    // Lightweight kills join — only the columns we need to derive a
+    // KC-side champion roster when game_participants is empty.
+    sb
+      .from("kills")
+      .select("killer_champion, victim_champion, killer_player_id, victim_player_id, tracked_team_involvement, game_id")
+      .in("game_id", [row.id]),
   ]);
 
   const teams = (teamsRes.data ?? []) as TeamRow[];
@@ -198,6 +207,33 @@ async function fetchFromSupabase(slug: string): Promise<RealMatch | undefined> {
   // SELECT string contains a relation alias — cast through `unknown` so
   // TypeScript accepts our explicit ParticipantRow shape.
   const participants = ((participantsRes.data ?? []) as unknown) as ParticipantRow[];
+  // killsRes filtered by game_id IN [row.id] — but row.id is the MATCH
+  // uuid, not a game_id. Fix : we need to refetch by the actual game IDs
+  // discovered above.
+  const killsByGame = new Map<string, Array<{
+    killer_champion: string | null;
+    victim_champion: string | null;
+    tracked_team_involvement: string | null;
+  }>>();
+  if (games.length > 0) {
+    const gameIds = games.map((g) => g.id);
+    const { data: realKills } = await sb
+      .from("kills")
+      .select("killer_champion, victim_champion, tracked_team_involvement, game_id")
+      .in("game_id", gameIds);
+    for (const k of (realKills ?? []) as Array<{
+      killer_champion: string | null;
+      victim_champion: string | null;
+      tracked_team_involvement: string | null;
+      game_id: string;
+    }>) {
+      const arr = killsByGame.get(k.game_id) ?? [];
+      arr.push(k);
+      killsByGame.set(k.game_id, arr);
+    }
+  }
+  // Discard the stub killsRes since we re-fetched correctly above.
+  void killsRes;
 
   const kcTeam = teams.find((t) => t.is_tracked);
   const oppTeam = teams.find((t) => !t.is_tracked);
@@ -226,26 +262,100 @@ async function fetchFromSupabase(slug: string): Promise<RealMatch | undefined> {
   const bofMatch = (row.format ?? "bo1").match(/bo?(\d)/i);
   const bestOf = bofMatch ? parseInt(bofMatch[1], 10) : 1;
 
-  // Per-game players + kill counts
+  // Per-game players + kill counts. Two-source strategy :
+  //   * If game_participants has rows for this team — use them (full
+  //     player.ign + role + KDA).
+  //   * Otherwise fall back to deriving champions from the kills table
+  //     (KC vs FNC today : 0 game_participants but 81+68 kills with
+  //     killer_champion + victim_champion + tracked_team_involvement).
+  //     The fallback gives champion + side but not player names ;
+  //     better than rendering an empty roster card.
+  function deriveFromKills(gameId: string): {
+    kcChamps: Set<string>;
+    oppChamps: Set<string>;
+    kcKills: number;
+    oppKills: number;
+  } {
+    const out = {
+      kcChamps: new Set<string>(),
+      oppChamps: new Set<string>(),
+      kcKills: 0,
+      oppKills: 0,
+    };
+    const kills = killsByGame.get(gameId) ?? [];
+    for (const k of kills) {
+      const inv = k.tracked_team_involvement ?? "";
+      if (inv === "team_killer") {
+        if (k.killer_champion) out.kcChamps.add(k.killer_champion);
+        if (k.victim_champion) out.oppChamps.add(k.victim_champion);
+        out.kcKills++;
+      } else if (inv === "team_victim") {
+        if (k.killer_champion) out.oppChamps.add(k.killer_champion);
+        if (k.victim_champion) out.kcChamps.add(k.victim_champion);
+        out.oppKills++;
+      }
+    }
+    return out;
+  }
+
   const realGames: RealGame[] = games.map((g) => {
-    // The participants table is per-game in some schemas, per-match in
-    // others — we filter by team_id here as a best-effort. If there are
-    // duplicates from a multi-game participant row, dedupe by player_id.
     const kcParts = participants
       .filter((p) => p.team_id === kcTeam?.id)
       .filter((p, idx, arr) => arr.findIndex((q) => q.player_id === p.player_id) === idx);
     const oppParts = participants
       .filter((p) => p.team_id === oppTeam?.id)
       .filter((p, idx, arr) => arr.findIndex((q) => q.player_id === p.player_id) === idx);
-    const kcKills = kcParts.reduce((s, p) => s + (p.kills ?? 0), 0);
-    const oppKills = oppParts.reduce((s, p) => s + (p.kills ?? 0), 0);
+
+    if (kcParts.length > 0 || oppParts.length > 0) {
+      // Happy path : game_participants populated.
+      const kcKills = kcParts.reduce((s, p) => s + (p.kills ?? 0), 0);
+      const oppKills = oppParts.reduce((s, p) => s + (p.kills ?? 0), 0);
+      return {
+        id: g.id,
+        number: g.game_number,
+        kc_players: kcParts.map(buildRealPlayer),
+        opp_players: oppParts.map(buildRealPlayer),
+        kc_kills: kcKills,
+        opp_kills: oppKills,
+        kc_gold: 0,
+        kc_towers: 0,
+        kc_dragons: 0,
+        kc_barons: 0,
+        vods: [],
+      } as RealGame;
+    }
+
+    // Fallback : derive from kills.
+    const derived = deriveFromKills(g.id);
+    const kcDerivedPlayers: RealPlayer[] = [...derived.kcChamps].map((c) => ({
+      name: `?${c.slice(0, 4)}`, // unknown player, prefix with ? + champion stub
+      role: "",
+      champion: c,
+      kills: 0, // per-player KDA breakdown unknown without participants
+      deaths: 0,
+      assists: 0,
+      gold: 0,
+      cs: 0,
+      level: 0,
+    }));
+    const oppDerivedPlayers: RealPlayer[] = [...derived.oppChamps].map((c) => ({
+      name: `?${c.slice(0, 4)}`,
+      role: "",
+      champion: c,
+      kills: 0,
+      deaths: 0,
+      assists: 0,
+      gold: 0,
+      cs: 0,
+      level: 0,
+    }));
     return {
       id: g.id,
       number: g.game_number,
-      kc_players: kcParts.map(buildRealPlayer),
-      opp_players: oppParts.map(buildRealPlayer),
-      kc_kills: kcKills,
-      opp_kills: oppKills,
+      kc_players: kcDerivedPlayers,
+      opp_players: oppDerivedPlayers,
+      kc_kills: derived.kcKills,
+      opp_kills: derived.oppKills,
       kc_gold: 0,
       kc_towers: 0,
       kc_dragons: 0,
