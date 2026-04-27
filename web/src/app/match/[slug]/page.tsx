@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
-import { loadRealData, getMatchById, displayRole } from "@/lib/real-data";
+import { loadRealData, displayRole } from "@/lib/real-data";
+import { getMatchByIdHybrid } from "@/lib/supabase/match-loader";
 import { championIconUrl } from "@/lib/constants";
 import { KC_LOGO, TEAM_LOGOS } from "@/lib/kc-assets";
 import { getKillsByMatchExternalId, type PublishedKillRow } from "@/lib/supabase/kills";
@@ -20,8 +21,11 @@ interface Props {
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params;
-  const data = loadRealData();
-  const match = getMatchById(data, slug);
+  // 2026-04-27 \u2014 hybrid loader checks the static real-data.ts snapshot
+  // first, then falls back to Supabase. Without this, recent matches
+  // (FNC 2026-04-26, NAVI, SHIFTERS, etc.) 404 because they're only in
+  // the live DB, not in the curated JSON snapshot.
+  const match = await getMatchByIdHybrid(slug);
   if (!match) return { title: "Match introuvable \u2014 KCKILLS" };
   const title = `KC vs ${match.opponent.code} \u2014 ${match.stage}`;
   const description = `Karmine Corp ${match.kc_score}-${match.opp_score} ${match.opponent.name} (${match.stage}, Bo${match.best_of}) — clips, stats par game, timeline des kills.`;
@@ -82,13 +86,17 @@ function groupKillsByGame(kills: PublishedKillRow[]): Map<number, PublishedKillR
 export default async function MatchPage({ params }: Props) {
   const { slug } = await params;
 
-  const [data, realKills] = await Promise.all([
+  // 2026-04-27 — fetch the match via the hybrid loader (static snapshot
+  // first, Supabase fallback for recent matches not yet in real-data.ts).
+  // This makes the FNC 2026-04-26 / NAVI / SHIFTERS / future matches all
+  // load instead of 404'ing.
+  const [match, data, realKills] = await Promise.all([
+    getMatchByIdHybrid(slug),
     Promise.resolve(loadRealData()),
     // buildTime: true uses the cookie-less anon Supabase client so the
     // page stays cacheable per its `revalidate = 600` ISR setting.
     getKillsByMatchExternalId(slug, { buildTime: true }),
   ]);
-  const match = getMatchById(data, slug);
   if (!match) notFound();
 
   const killsByGame = groupKillsByGame(realKills);
