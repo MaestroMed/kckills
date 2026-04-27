@@ -63,6 +63,7 @@ export function HeroClipBackground({ clips, posterSrc = "/images/hero-bg.jpg" }:
   const [reducedMotion, setReducedMotion] = useState(false);
   const [audioEnabled, setAudioEnabled] = useState(false);
   const [showAudioPrompt, setShowAudioPrompt] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
   const timeoutRef = useRef<number | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const fadeRafRef = useRef<number | null>(null);
@@ -72,6 +73,22 @@ export function HeroClipBackground({ clips, posterSrc = "/images/hero-bg.jpg" }:
     const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
     setReducedMotion(mq.matches);
     const handler = (e: MediaQueryListEvent) => setReducedMotion(e.matches);
+    mq.addEventListener("change", handler);
+    return () => mq.removeEventListener("change", handler);
+  }, []);
+
+  // 🔴 2026-04-27 mobile crash mitigation Tier 2 :
+  // The rotating <video> + iframe combo + AnimatePresence sync overlap
+  // hammers iOS Safari memory limits ("Un problème récurrent est
+  // survenu" error after ~2 s). On viewports < 768 px we skip the
+  // rotation + video element ENTIRELY and render a static poster
+  // image. The "wow" cinematic stays for desktop ; mobile users get
+  // the same striking poster image but no GPU/memory pressure.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const mq = window.matchMedia("(max-width: 767px)");
+    setIsMobile(mq.matches);
+    const handler = (e: MediaQueryListEvent) => setIsMobile(e.matches);
     mq.addEventListener("change", handler);
     return () => mq.removeEventListener("change", handler);
   }, []);
@@ -105,9 +122,10 @@ export function HeroClipBackground({ clips, posterSrc = "/images/hero-bg.jpg" }:
     };
   }, []);
 
-  // Rotation timer
+  // Rotation timer — also gated on isMobile per the Tier 2 fix below
+  // (no point rotating when the video layer isn't rendered anyway).
   useEffect(() => {
-    if (clips.length <= 1 || reducedMotion) return;
+    if (clips.length <= 1 || reducedMotion || isMobile) return;
     const dur = clips[index]?.durationMs ?? 15000;
     timeoutRef.current = window.setTimeout(() => {
       setIndex((prev) => (prev + 1) % clips.length);
@@ -115,7 +133,7 @@ export function HeroClipBackground({ clips, posterSrc = "/images/hero-bg.jpg" }:
     return () => {
       if (timeoutRef.current !== null) window.clearTimeout(timeoutRef.current);
     };
-  }, [index, clips, reducedMotion]);
+  }, [index, clips, reducedMotion, isMobile]);
 
   // ── Audio fade-in / fade-out across rotations ─────────────────────
   // We don't try to fade between two simultaneous video elements — only
@@ -232,49 +250,57 @@ export function HeroClipBackground({ clips, posterSrc = "/images/hero-bg.jpg" }:
         className="hero-poster-breathe absolute inset-0 w-full h-full object-cover"
       />
 
-      {/* Stacked layers crossfading */}
-      <AnimatePresence mode="sync">
-        <m.div
-          key={`${current.mp4Url ?? current.videoId}-${index}`}
-          className="absolute inset-0 overflow-hidden pointer-events-none"
-          initial={{ opacity: 0, scale: 1.02 }}
-          animate={{ opacity: 0.85, scale: 1 }}
-          exit={{ opacity: 0, scale: 1.02 }}
-          transition={{ duration: 1.4, ease: [0.16, 1, 0.3, 1] }}
-        >
-          {current.mp4Url ? (
-            /* Direct MP4 from R2 — no CAPTCHA, instant CDN-cached playback.
-               Audio honoured if the user has opted in. */
-            <video
-              ref={videoRef}
-              key={current.mp4Url}
-              className="absolute inset-0 w-full h-full object-cover pointer-events-none"
-              src={current.mp4Url}
-              poster={current.posterUrl}
-              autoPlay
-              muted={!wantsAudio}
-              loop
-              playsInline
-              preload="auto"
-            />
-          ) : current.videoId ? (
-            /* YouTube iframe fallback (may trigger CAPTCHA on low-traffic domains) */
-            <iframe
-              title={current.title}
-              className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none"
-              style={{
-                width: "max(100vw, 177.77vh)",
-                height: "max(56.25vw, 100vh)",
-                border: 0,
-              }}
-              src={`https://www.youtube-nocookie.com/embed/${current.videoId}?autoplay=1&mute=1&loop=1&playlist=${current.videoId}&controls=0&showinfo=0&rel=0&modestbranding=1&playsinline=1&iv_load_policy=3&disablekb=1&fs=0&start=${current.start ?? 0}`}
-              allow="autoplay; encrypted-media; picture-in-picture"
-              allowFullScreen={false}
-              loading="lazy"
-            />
-          ) : null}
-        </m.div>
-      </AnimatePresence>
+      {/* 🔴 2026-04-27 mobile crash mitigation Tier 2 :
+          Skip the rotating <video> + iframe entirely below 768 px. The
+          static `posterSrc` <img> above stays visible at full opacity,
+          which gives mobile users the same striking cinematic image
+          without the GPU/memory pressure that was killing iOS Safari.
+          The desktop "wow" feature (full-bleed clip rotation) is
+          preserved for viewports ≥ 768 px. */}
+      {!isMobile && (
+        <AnimatePresence mode="sync">
+          <m.div
+            key={`${current.mp4Url ?? current.videoId}-${index}`}
+            className="absolute inset-0 overflow-hidden pointer-events-none"
+            initial={{ opacity: 0, scale: 1.02 }}
+            animate={{ opacity: 0.85, scale: 1 }}
+            exit={{ opacity: 0, scale: 1.02 }}
+            transition={{ duration: 1.4, ease: [0.16, 1, 0.3, 1] }}
+          >
+            {current.mp4Url ? (
+              /* Direct MP4 from R2 — no CAPTCHA, instant CDN-cached playback.
+                 Audio honoured if the user has opted in. */
+              <video
+                ref={videoRef}
+                key={current.mp4Url}
+                className="absolute inset-0 w-full h-full object-cover pointer-events-none"
+                src={current.mp4Url}
+                poster={current.posterUrl}
+                autoPlay
+                muted={!wantsAudio}
+                loop
+                playsInline
+                preload="auto"
+              />
+            ) : current.videoId ? (
+              /* YouTube iframe fallback (may trigger CAPTCHA on low-traffic domains) */
+              <iframe
+                title={current.title}
+                className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none"
+                style={{
+                  width: "max(100vw, 177.77vh)",
+                  height: "max(56.25vw, 100vh)",
+                  border: 0,
+                }}
+                src={`https://www.youtube-nocookie.com/embed/${current.videoId}?autoplay=1&mute=1&loop=1&playlist=${current.videoId}&controls=0&showinfo=0&rel=0&modestbranding=1&playsinline=1&iv_load_policy=3&disablekb=1&fs=0&start=${current.start ?? 0}`}
+                allow="autoplay; encrypted-media; picture-in-picture"
+                allowFullScreen={false}
+                loading="lazy"
+              />
+            ) : null}
+          </m.div>
+        </AnimatePresence>
+      )}
 
       {/* Bottom-left caption for the currently-playing clip */}
       <AnimatePresence mode="wait">
