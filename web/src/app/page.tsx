@@ -10,38 +10,20 @@ import {
   getHeroTopScorer,
 } from "@/lib/supabase/hero-stats";
 import { loadHeroVideos } from "@/lib/hero-videos/storage";
-import dynamic from "next/dynamic";
 import { type RosterPlayerStat } from "@/components/HomeTopScorerCarousel";
 import { getEraRosters } from "@/lib/era-rosters";
 import { DesktopOnly } from "@/components/DesktopOnly";
-
-// 🔴 2026-04-28 mobile bundle optimization :
-// Convert heavy CLIENT-only components to next/dynamic with ssr:false
-// so their JS doesn't even ship to mobile (when they're wrapped in
-// <DesktopOnly>, mobile never mounts them — but without dynamic, the
-// JS still ends up in the page bundle). Dynamic imports + ssr:false
-// = zero cost on mobile + zero hydration mismatch.
-//
-// HomeTopScorerCarousel stays in the hero card column (visible
-// everywhere) but the auto-rotate intervals + framer-motion are
-// significant on mobile, so it's still wrapped in DesktopOnly below
-// with a static fallback for mobile.
-const HomeRosterEraCarousel = dynamic(
-  () => import("@/components/HomeRosterEraCarousel").then((m) => m.HomeRosterEraCarousel),
-  { ssr: false, loading: () => null },
-);
-const HomeTopScorerCarousel = dynamic(
-  () => import("@/components/HomeTopScorerCarousel").then((m) => m.HomeTopScorerCarousel),
-  { ssr: false, loading: () => null },
-);
-const HomeQuoteRotator = dynamic(
-  () => import("@/components/HomeQuoteRotator").then((m) => m.HomeQuoteRotator),
-  { ssr: false, loading: () => null },
-);
-const EraComparisonChart = dynamic(
-  () => import("@/components/EraComparison").then((m) => m.EraComparisonChart),
-  { ssr: false, loading: () => null },
-);
+// 🔴 2026-04-28 — heavy desktop-only sections live in a client wrapper
+// file (`homepage-desktop-sections.tsx`) because Next.js 15 forbids
+// `next/dynamic({ssr:false})` directly inside server components. The
+// wrappers handle the dynamic import + the DesktopOnly gate themselves
+// so this server page just renders them like any other component.
+import {
+  HomeRosterEraCarouselSection,
+  HomeTopScorerCarouselSection,
+  HomeQuoteRotatorSection,
+  EraComparisonChartSection,
+} from "@/components/homepage-desktop-sections";
 // Wave 11 — AudioPlayer (legacy BCC vibes FAB) replaced by the global
 // WolfFloatingPlayer mounted in Providers.tsx. Same UX (auto-fire on
 // first user gesture once opted in) but persistent across pages + with
@@ -526,49 +508,47 @@ export default async function HomePage() {
               </div>
             )}
 
-            {/* Rotating spotlight on the 5 starters. DesktopOnly +
-                lazy-loaded via next/dynamic so the JS doesn't ship to
-                mobile (where it isn't rendered). On mobile we show a
-                static lightweight top-scorer card instead so the right
-                column doesn't look amputated. */}
+            {/* Rotating spotlight on the 5 starters — desktop ; static
+                lightweight top-scorer card fallback on mobile. */}
             {carouselPlayers.length > 0 && (
-              <DesktopOnly fallback={
-                <Link
-                  href={`/player/${encodeURIComponent(carouselPlayers[0].ign)}`}
-                  className="rounded-xl bg-black/55 backdrop-blur-md border border-[var(--gold)]/20 px-5 py-4"
-                >
-                  <p className="font-data text-[9px] uppercase tracking-[0.25em] text-[var(--gold)]/60 mb-2">
-                    {carouselPlayers[0].achievementLabel}
-                  </p>
-                  <div className="flex items-center gap-3">
-                    {carouselPlayers[0].imageUrl ? (
-                      <Image
-                        src={carouselPlayers[0].imageUrl}
-                        alt={carouselPlayers[0].ign}
-                        width={44}
-                        height={44}
-                        className="rounded-full border border-[var(--gold)]/40 object-cover object-top"
-                      />
-                    ) : null}
-                    <div className="flex-1 min-w-0">
-                      <p className="font-display text-lg font-black text-white truncate">
-                        {carouselPlayers[0].ign}
-                      </p>
-                      <p className="text-[10px] text-white/50 font-data uppercase tracking-wider">
-                        {carouselPlayers[0].role} · {carouselPlayers[0].gamesPlayed} games
-                      </p>
+              <HomeTopScorerCarouselSection
+                players={carouselPlayers}
+                fallback={
+                  <Link
+                    href={`/player/${encodeURIComponent(carouselPlayers[0].ign)}`}
+                    className="rounded-xl bg-black/55 backdrop-blur-md border border-[var(--gold)]/20 px-5 py-4"
+                  >
+                    <p className="font-data text-[9px] uppercase tracking-[0.25em] text-[var(--gold)]/60 mb-2">
+                      {carouselPlayers[0].achievementLabel}
+                    </p>
+                    <div className="flex items-center gap-3">
+                      {carouselPlayers[0].imageUrl ? (
+                        <Image
+                          src={carouselPlayers[0].imageUrl}
+                          alt={carouselPlayers[0].ign}
+                          width={44}
+                          height={44}
+                          className="rounded-full border border-[var(--gold)]/40 object-cover object-top"
+                        />
+                      ) : null}
+                      <div className="flex-1 min-w-0">
+                        <p className="font-display text-lg font-black text-white truncate">
+                          {carouselPlayers[0].ign}
+                        </p>
+                        <p className="text-[10px] text-white/50 font-data uppercase tracking-wider">
+                          {carouselPlayers[0].role} · {carouselPlayers[0].gamesPlayed} games
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <p className="font-data text-2xl font-black text-[var(--gold)] tabular-nums leading-none">
+                          {carouselPlayers[0].totalKills}
+                        </p>
+                        <p className="text-[9px] text-white/40 uppercase tracking-wider mt-1">kills</p>
+                      </div>
                     </div>
-                    <div className="text-right">
-                      <p className="font-data text-2xl font-black text-[var(--gold)] tabular-nums leading-none">
-                        {carouselPlayers[0].totalKills}
-                      </p>
-                      <p className="text-[9px] text-white/40 uppercase tracking-wider mt-1">kills</p>
-                    </div>
-                  </div>
-                </Link>
-              }>
-                <HomeTopScorerCarousel players={carouselPlayers} />
-              </DesktopOnly>
+                  </Link>
+                }
+              />
             )}
           </div>
         </div>
@@ -670,28 +650,13 @@ export default async function HomePage() {
       </section>
 
       {/* ═══ ROSTER ERA CAROUSEL — Iconic lineup per year ═══════════════
-          🔴 Wrapped in <DesktopOnly> as part of Tier 3 mobile crash
-          mitigation : the carousel runs auto-rotates + breathing
-          gradients + framer-motion AnimatePresence which compound on
-          iOS Safari. Mobile users skip this entire section. */}
-      <DesktopOnly>
-        <HomeRosterEraCarousel rosters={getEraRosters()} />
-      </DesktopOnly>
+          Wrapped in HomeRosterEraCarouselSection which gates on desktop
+          AND lazy-loads via next/dynamic with ssr:false. */}
+      <HomeRosterEraCarouselSection rosters={getEraRosters()} />
 
       {/* ═══ ROTATING CITATIONS — slow rotation, particle dissolve ═════
-          🔴 DesktopOnly : the typing animation + particle dissolve are
-          continuous rAF loops that bled mobile memory. */}
-      <DesktopOnly>
-        <section
-          className="-mx-6 md:-mx-8 lg:-mx-12 my-8"
-          style={{
-            background:
-              "linear-gradient(180deg, transparent, rgba(15,29,54,0.4) 30%, rgba(15,29,54,0.4) 70%, transparent)",
-          }}
-        >
-          <HomeQuoteRotator quotes={QUOTES} />
-        </section>
-      </DesktopOnly>
+          Same lazy + DesktopOnly pattern. */}
+      <HomeQuoteRotatorSection quotes={QUOTES} />
 
       {/* ═══ CARTES LEGENDAIRES — TCG visual layer en showcase home ═════ */}
       <HomeRareCards />
@@ -739,23 +704,7 @@ export default async function HomePage() {
           .filter(Boolean) as { era: string; period: string; matches: number; wins: number; losses: number; winRate: number; avgKcKills: number; avgOppKills: number }[];
 
         if (eraData.length < 2) return null;
-        return (
-          // 🔴 DesktopOnly Tier 3 mobile fix : the EraComparisonChart
-          // ships SVG/canvas charts that compound with the other heavy
-          // sections on iOS Safari memory pressure.
-          <DesktopOnly>
-            <section>
-              <div className="flex items-center gap-3 mb-6">
-                <span className="h-px flex-1 bg-[var(--border-gold)]" />
-                <span className="font-data text-[10px] uppercase tracking-[0.3em] font-bold text-[var(--gold)]">
-                  Evolution KC par ere
-                </span>
-                <span className="h-px flex-1 bg-[var(--border-gold)]" />
-              </div>
-              <EraComparisonChart data={eraData} />
-            </section>
-          </DesktopOnly>
-        );
+        return <EraComparisonChartSection data={eraData} />;
       })()}
 
       {/* HomeFilteredContent removed — duplicate of /matches page */}
