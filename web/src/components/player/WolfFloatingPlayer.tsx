@@ -687,6 +687,22 @@ function ExpandedPanel({ onCollapse }: { onCollapse: () => void }) {
 export function WolfFloatingPlayer() {
   const { isExpanded, setExpanded } = useFloatingPlayerInternal();
 
+  // 🔴 2026-04-27 mobile crash mitigation : the wolf player loads the
+  // YouTube IFrame API + creates a hidden Player on mount. Combined
+  // with the HeroClipBackground's ALSO-loaded YouTube iframe AND the
+  // multiple breathing-gradient animations on the homepage, this
+  // overwhelmed mobile Safari (the user reported "ça s'affiche
+  // 2 secondes puis ça crash"). The audio feature is non-essential
+  // on mobile (smaller screens, often on-the-go, headphones rare),
+  // so we skip the entire player on viewport < md (768 px).
+  //
+  // useIsMobile is a tiny SSR-safe matchMedia hook that returns false
+  // during SSR (renders the player), then re-evaluates on mount and
+  // hides the player if matchMedia matches. This avoids hydration
+  // mismatch.
+  const isMobile = useIsMobileViewport();
+  if (isMobile) return null;
+
   return (
     <>
       <HiddenAudioIframe />
@@ -702,4 +718,21 @@ export function WolfFloatingPlayer() {
       </AnimatePresence>
     </>
   );
+}
+
+/** SSR-safe matchMedia hook — returns false during SSR + first render
+ *  to avoid hydration mismatch, then evaluates the breakpoint on mount
+ *  and updates on viewport change. Mobile breakpoint = Tailwind's `md`
+ *  (768 px) so anything narrower hides the player. */
+function useIsMobileViewport(): boolean {
+  const [isMobile, setIsMobile] = useState(false);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const mq = window.matchMedia("(max-width: 767px)");
+    setIsMobile(mq.matches);
+    const handler = (e: MediaQueryListEvent) => setIsMobile(e.matches);
+    mq.addEventListener("change", handler);
+    return () => mq.removeEventListener("change", handler);
+  }, []);
+  return isMobile;
 }

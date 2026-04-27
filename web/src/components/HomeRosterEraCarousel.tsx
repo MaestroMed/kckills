@@ -74,7 +74,7 @@ function BreathingGradient({
   return (
     <div
       aria-hidden
-      className="absolute inset-0 pointer-events-none"
+      className="absolute inset-0 pointer-events-none breathing-gradient-anim"
       style={{
         background: `radial-gradient(ellipse at center, rgba(${rgb}, 0.28) 0%, rgba(${rgb}, 0.12) 35%, rgba(0,0,0,0) 70%)`,
         animation: reducedMotion
@@ -319,6 +319,17 @@ export function HomeRosterEraCarousel({
         }
         .animate-roster-era-fade {
           animation: roster-era-fade ${FADE_MS}ms ease-out;
+        }
+        /* 🔴 2026-04-27 mobile crash mitigation : the breathing scale
+           transform forces a layout repaint every frame, which on iOS
+           Safari combines with the wolf-player iframe + carousel auto-
+           rotates to OOM the page (~2 s before crash). Disable the
+           breathing entirely below 768 px — the gradient is still
+           visible, just not pulsing. */
+        @media (max-width: 767px) {
+          .breathing-gradient-anim {
+            animation: none !important;
+          }
         }
       `}</style>
     </section>
