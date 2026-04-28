@@ -125,7 +125,7 @@ STALE_CLAIM_LEASE_MULTIPLIER: int = 4
 # Set KCKILLS_RELEASE_STALE_AGE_MIN to override per-deploy if a real
 # worker takes longer than 10 min between renew calls.
 RELEASE_STALE_MAX_AGE_MINUTES: int = int(
-    __import__("os").environ.get("KCKILLS_RELEASE_STALE_AGE_MIN", "10")
+    __import__("os").environ.get("KCKILLS_RELEASE_STALE_AGE_MIN", "5")
 )
 
 
