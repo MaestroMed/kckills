@@ -135,6 +135,21 @@ export const getHeroLastMatch = cache(async function getHeroLastMatch(
     const bestOfMatch = (m.format ?? "bo1").match(/(\d)/);
     const bestOf = bestOfMatch ? parseInt(bestOfMatch[1], 10) : 1;
 
+    // 🐛 2026-04-28 fix : `matches.winner_team_id` is occasionally null
+    // for recently-completed matches when the worker hasn't backfilled
+    // that column yet (the games rows always have it, the matches row
+    // is set in a separate write that can race or fail). Derive kcWon
+    // from the per-game tally instead so the hero never flashes "L"
+    // while KC actually won.
+    let kcWon: boolean;
+    if (m.winner_team_id) {
+      kcWon = m.winner_team_id === teamId;
+    } else if (kcScore !== oppScore) {
+      kcWon = kcScore > oppScore;
+    } else {
+      kcWon = false;
+    }
+
     return {
       matchId: m.id,
       externalId: m.external_id,
@@ -145,7 +160,7 @@ export const getHeroLastMatch = cache(async function getHeroLastMatch(
       },
       kcScore,
       oppScore,
-      kcWon: m.winner_team_id === teamId,
+      kcWon,
       stage: m.stage,
       bestOf,
     };
@@ -186,12 +201,19 @@ export const getHeroCareerStats = cache(async function getHeroCareerStats(
     for (const m of (matches ?? []) as Array<{
       id: string;
       winner_team_id: string | null;
-      scheduled_at: string;
+      scheduled_at: string | null;
     }>) {
       matchIds.push(m.id);
       if (m.winner_team_id === teamId) wins++;
       else losses++;
+      // 🐛 2026-04-28 fix : `new Date(null).getUTCFullYear()` returns
+      // 1970 (epoch), which used to pull yearMin all the way down and
+      // make the hero card show "Carrière LEC · 1970 → 2026". Guard
+      // against null/invalid scheduled_at AND clamp to the LoL esports
+      // era so a single mis-dated row can't poison the whole window.
+      if (!m.scheduled_at) continue;
       const yr = new Date(m.scheduled_at).getUTCFullYear();
+      if (!Number.isFinite(yr) || yr < 2011 || yr > 2030) continue;
       if (yr < yearMin) yearMin = yr;
       if (yr > yearMax) yearMax = yr;
     }

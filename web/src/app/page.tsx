@@ -470,23 +470,29 @@ export default async function HomePage() {
                   />
                   <span className="text-xs text-white/50 uppercase tracking-widest font-semibold">kills</span>
                 </div>
-                <div className="flex items-center gap-3 text-xs font-data">
-                  <span className="flex items-baseline gap-1">
+                {/* 🐛 2026-04-28 fix : `flex-wrap` + tighter gaps so the
+                    five W/L/G/WR/CLIPS pills can fold to a second line on
+                    the narrow right-rail (md:max-w-sm = 384 px) instead
+                    of overflowing the card. The bullet separators were
+                    moved into a flex-shrink-0 wrapper so the wrap point
+                    falls between pills, not in the middle of one. */}
+                <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-xs font-data">
+                  <span className="flex items-baseline gap-1 flex-shrink-0">
                     <AnimatedNumber value={heroCareerWins} duration={1.6} className="text-[var(--green)] font-bold text-lg" />
                     <span className="text-[9px] uppercase tracking-wider text-white/40">W</span>
                   </span>
-                  <span className="text-white/15">&bull;</span>
-                  <span className="flex items-baseline gap-1">
+                  <span className="text-white/15 flex-shrink-0">&bull;</span>
+                  <span className="flex items-baseline gap-1 flex-shrink-0">
                     <AnimatedNumber value={heroCareerLosses} duration={1.6} className="text-[var(--red)] font-bold text-lg" />
                     <span className="text-[9px] uppercase tracking-wider text-white/40">L</span>
                   </span>
-                  <span className="text-white/15">&bull;</span>
-                  <span className="flex items-baseline gap-1">
+                  <span className="text-white/15 flex-shrink-0">&bull;</span>
+                  <span className="flex items-baseline gap-1 flex-shrink-0">
                     <AnimatedNumber value={heroCareerGames} duration={1.6} className="font-bold text-lg text-white" />
                     <span className="text-[9px] uppercase tracking-wider text-white/40">G</span>
                   </span>
-                  <span className="text-white/15">&bull;</span>
-                  <span className="flex items-baseline gap-1">
+                  <span className="text-white/15 flex-shrink-0">&bull;</span>
+                  <span className="flex items-baseline gap-1 flex-shrink-0">
                     <AnimatedNumber
                       value={heroCareerWrPct}
                       duration={1.8}
@@ -497,8 +503,8 @@ export default async function HomePage() {
                   </span>
                   {heroCareerClips > 0 && (
                     <>
-                      <span className="text-white/15">&bull;</span>
-                      <span className="flex items-baseline gap-1">
+                      <span className="text-white/15 flex-shrink-0">&bull;</span>
+                      <span className="flex items-baseline gap-1 flex-shrink-0">
                         <AnimatedNumber value={heroCareerClips} duration={1.8} className="text-[var(--cyan)] font-bold text-lg" />
                         <span className="text-[9px] uppercase tracking-wider text-white/40">CLIPS</span>
                       </span>

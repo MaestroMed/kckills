@@ -302,28 +302,36 @@ export function HeroClipBackground({ clips, posterSrc = "/images/hero-bg.jpg" }:
         </AnimatePresence>
       )}
 
-      {/* Bottom-left caption for the currently-playing clip */}
+      {/* Bottom-left caption for the currently-playing clip.
+          🐛 2026-04-28 fix : only render the caption when we control the
+          rendered video (mp4Url R2 source). YouTube iframes routinely
+          override the loop= parameter to surface related-video end
+          screens or interstitials, so the caption was lying about what
+          the user actually saw on screen. Hiding it for YouTube clips
+          is more honest than mismatching captions. */}
       <AnimatePresence mode="wait">
-        <m.div
-          key={`caption-${index}`}
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: 10 }}
-          transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
-          className="absolute bottom-4 left-4 md:bottom-8 md:left-8 z-20 pointer-events-none max-w-[90vw] md:max-w-md"
-        >
-          <div className="rounded-xl bg-black/50 backdrop-blur-md border border-[var(--gold)]/25 px-4 py-3">
-            <div className="flex items-center gap-2 mb-1">
-              <span className="h-1.5 w-1.5 rounded-full bg-red-500 animate-pulse" />
-              <p className="font-data text-[9px] uppercase tracking-[0.25em] text-white/50">
-                En lecture &middot; {current.context}
+        {!isMobile && current.mp4Url && (
+          <m.div
+            key={`caption-${index}`}
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 10 }}
+            transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
+            className="absolute bottom-4 left-4 md:bottom-8 md:left-8 z-20 pointer-events-none max-w-[90vw] md:max-w-md"
+          >
+            <div className="rounded-xl bg-black/50 backdrop-blur-md border border-[var(--gold)]/25 px-4 py-3">
+              <div className="flex items-center gap-2 mb-1">
+                <span className="h-1.5 w-1.5 rounded-full bg-red-500 animate-pulse" />
+                <p className="font-data text-[9px] uppercase tracking-[0.25em] text-white/50">
+                  En lecture &middot; {current.context}
+                </p>
+              </div>
+              <p className="font-display text-sm md:text-base font-bold text-white leading-tight line-clamp-2">
+                {current.title}
               </p>
             </div>
-            <p className="font-display text-sm md:text-base font-bold text-white leading-tight line-clamp-2">
-              {current.title}
-            </p>
-          </div>
-        </m.div>
+          </m.div>
+        )}
       </AnimatePresence>
 
       {/* "Activer le son" prompt — bottom-right, only when relevant */}

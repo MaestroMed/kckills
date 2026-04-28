@@ -1,41 +1,24 @@
 "use client";
 
 /**
- * PlayerChartsLazy — code-split wrapper around PlayerCharts.tsx.
+ * PlayerChartsLazy — historical lazy-loading shim for the player charts.
  *
- * Recharts pulls in ~100 kB of D3 + chart code that the player page used
- * to ship in its initial bundle (240 kB First Load — biggest route in
- * the app). The actual charts sit BELOW the fold on /player/[slug],
- * after the cube morph hero, the stat tiles, and the match history list.
+ * The original implementation wrapped each chart in next/dynamic({ ssr: false })
+ * to defer loading the recharts dependency (~100 KB of D3 + chart code) until
+ * the chart actually rendered.
  *
- * Wrapping each export in next/dynamic({ ssr: false }) defers the
- * recharts chunk until the chart actually renders. The page paints fast
- * with placeholder boxes; the chart content drops in when ready.
+ * The 2026-04-28 revamp replaced recharts with hand-rolled SVG components
+ * (~5 KB total, zero dependencies, GPU-composited CSS animations). Lazy
+ * loading is no longer worthwhile — the charts now pay for themselves
+ * within a few KB and SSR-safe markup means they're visible immediately.
  *
- * Skeleton dimensions match the rendered chart aspect ratios so there's
- * no CLS when the real chart mounts.
+ * This file is kept as a pass-through re-export so existing call sites
+ * (`/player/[slug]/page.tsx`) don't need to be touched. New code should
+ * import directly from `@/components/PlayerCharts`.
  */
 
-import dynamic from "next/dynamic";
-
-const Skeleton = ({ height = 240 }: { height?: number }) => (
-  <div
-    className="w-full rounded-xl bg-[var(--bg-elevated)]/40 animate-pulse"
-    style={{ height }}
-  />
-);
-
-export const PlayerRadar = dynamic(
-  () => import("./PlayerCharts").then((m) => m.PlayerRadar),
-  { ssr: false, loading: () => <Skeleton height={280} /> },
-);
-
-export const ChampionPerformanceChart = dynamic(
-  () => import("./PlayerCharts").then((m) => m.ChampionPerformanceChart),
-  { ssr: false, loading: () => <Skeleton height={240} /> },
-);
-
-export const RecentFormChart = dynamic(
-  () => import("./PlayerCharts").then((m) => m.RecentFormChart),
-  { ssr: false, loading: () => <Skeleton height={180} /> },
-);
+export {
+  PlayerRadar,
+  ChampionPerformanceChart,
+  RecentFormChart,
+} from "./PlayerCharts";

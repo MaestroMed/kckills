@@ -33,6 +33,32 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
+  // ─── 2026-04-28 SOTA stack (Next.js 16) ──────────────────────────
+  //
+  // React Compiler : auto-memoization (useMemo / useCallback are now
+  // implicit, applied by the compiler at build time). Significant
+  // CPU reduction across the entire React tree, especially on mobile.
+  // Free perf win — also eliminates entire classes of "missing
+  // dependency" performance bugs.
+  reactCompiler: true,
+
+  // PPR (renamed `cacheComponents` in Next 16) — DISABLED for now.
+  // Incompatible with `export const dynamic = "force-dynamic"` used on
+  // 109 routes (admin pages, API routes, dynamic pages). Migrating those
+  // to Suspense-based streaming is a separate large refactor. Will
+  // re-enable after the dynamic-export audit. See docs/ppr-migration.md.
+  // cacheComponents: true,
+
+  experimental: {
+    // View Transitions API — native browser route transitions.
+    // Replaces framer-motion AnimatePresence on page nav. Zero JS
+    // cost, GPU-composited. App-like feel on mobile.
+    viewTransition: true,
+    // Inline critical CSS into the SSR HTML so first paint doesn't
+    // wait on the stylesheet HTTP request. Big mobile latency win.
+    inlineCss: true,
+  },
+
   images: {
     remotePatterns: [
       { protocol: "https", hostname: "ddragon.leagueoflegends.com" },
@@ -47,6 +73,8 @@ const nextConfig: NextConfig = {
       // passent par https:// maintenant.
       { protocol: "https", hostname: "static.lolesports.com" },
     ],
+    // Modern formats — Next.js 16 default but explicit for clarity.
+    formats: ["image/avif", "image/webp"],
   },
   async headers() {
     return [{ source: "/(.*)", headers: securityHeaders }];

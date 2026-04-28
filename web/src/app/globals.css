@@ -746,3 +746,65 @@ button:focus-visible {
   pointer-events: none;
   z-index: 1;
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   PlayerCharts — bespoke SVG analytics on /player/[slug]
+   Replaces recharts (~100 KB) with custom components.
+   GPU-composited, honour prefers-reduced-motion.
+   ═══════════════════════════════════════════════════════════════ */
+
+/* Radar — polygon scales in from the centre, apex dots pop after */
+@keyframes pc-radar-poly-in {
+  from { transform: scale(0.6); opacity: 0; }
+  to   { transform: scale(1);   opacity: 1; }
+}
+@keyframes pc-radar-apex-in {
+  from { transform: scale(0); opacity: 0; }
+  to   { transform: scale(1); opacity: 1; }
+}
+.pc-radar { animation: pc-radar-poly-in 0.7s cubic-bezier(0.16, 1, 0.3, 1) both; }
+.pc-radar-poly { transform-origin: 150px 150px; }
+.pc-radar-apex {
+  transform-origin: center;
+  transform-box: fill-box;
+  animation: pc-radar-apex-in 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+/* Champion bars — grow from the baseline */
+@keyframes pc-bar-grow {
+  from { transform: scaleY(0); }
+  to   { transform: scaleY(1); }
+}
+.pc-bar {
+  animation: pc-bar-grow 0.55s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* Form tiles — staggered fade-in */
+@keyframes pc-form-tile-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.pc-form > .grid > a {
+  animation: pc-form-tile-in 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.pc-form > .grid > a:nth-child(1)  { animation-delay: 0.02s; }
+.pc-form > .grid > a:nth-child(2)  { animation-delay: 0.06s; }
+.pc-form > .grid > a:nth-child(3)  { animation-delay: 0.10s; }
+.pc-form > .grid > a:nth-child(4)  { animation-delay: 0.14s; }
+.pc-form > .grid > a:nth-child(5)  { animation-delay: 0.18s; }
+.pc-form > .grid > a:nth-child(6)  { animation-delay: 0.22s; }
+.pc-form > .grid > a:nth-child(7)  { animation-delay: 0.26s; }
+.pc-form > .grid > a:nth-child(8)  { animation-delay: 0.30s; }
+.pc-form > .grid > a:nth-child(9)  { animation-delay: 0.34s; }
+.pc-form > .grid > a:nth-child(10) { animation-delay: 0.38s; }
+.pc-form > .grid > a:nth-child(11) { animation-delay: 0.42s; }
+.pc-form > .grid > a:nth-child(12) { animation-delay: 0.46s; }
+
+@media (prefers-reduced-motion: reduce) {
+  .pc-radar,
+  .pc-radar-apex,
+  .pc-bar,
+  .pc-form > .grid > a {
+    animation: none !important;
+  }
+}
