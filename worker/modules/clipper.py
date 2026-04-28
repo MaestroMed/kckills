@@ -747,6 +747,18 @@ async def _run_ytdlp(url: str, output_path: str, start: float, end: float) -> bo
         "--force-keyframes-at-cuts",
         "-f", "bestvideo[height<=1080]+bestaudio/best[height<=1080]",
         "--merge-output-format", "mp4",
+        # Wave 13e (2026-04-29) — perf bumps from worker SOTA audit :
+        # * --concurrent-fragments 8 : parallel fragment download for
+        #   HLS / DASH segments. Default is 1, which serialises every
+        #   .ts chunk. 8 gives 2-3× download speedup on long VODs
+        #   without overwhelming YouTube's per-IP rate limit.
+        # * --throttled-rate 100K : if YouTube starts throttling our
+        #   download (which it does intermittently), yt-dlp auto-
+        #   restarts the segment instead of stalling at 5 KB/s for
+        #   minutes. The "throttled" threshold is generous enough
+        #   that legit slow links don't trigger it.
+        "--concurrent-fragments", "8",
+        "--throttled-rate", "100K",
         "-o", output_path,
         "--no-playlist",
         "--quiet", "--no-warnings",

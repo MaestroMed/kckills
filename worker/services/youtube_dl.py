@@ -42,6 +42,9 @@ async def download_segment(
                 "--force-keyframes-at-cuts",
                 "-f", f"bestvideo[height<={max_height}]+bestaudio/best[height<={max_height}]",
                 "--merge-output-format", "mp4",
+                # Wave 13e — see worker/modules/clipper.py for the rationale.
+                "--concurrent-fragments", "8",
+                "--throttled-rate", "100K",
                 "-o", output_path,
                 "--no-playlist",
                 url,

@@ -394,6 +394,59 @@ function normalize(row: RawKillSelect): PublishedKillRow {
  * Different limit values still hit the network independently — that's
  * intentional, callers ask for tighter slices for a reason.
  */
+/**
+ * getPublishedKcKillCount — HEAD-only count of KC offensive published kills.
+ *
+ * Wave 13e (2026-04-29) : the homepage used to call `getPublishedKills(500)`
+ * just to compute `clipCount = filter(team_killer && visible).length` —
+ * shipping ~1.25 MB of full kill rows per cache miss to count them. The
+ * 2026-04-29 audit identified this as the single biggest egress driver.
+ *
+ * This helper hits the Supabase REST endpoint with `Prefer: count=exact`
+ * and HEAD method — the response contains the count in the
+ * `Content-Range` header without ever shipping rows. ~150 bytes vs 1.25 MB
+ * = 8000× egress reduction on the hot path.
+ *
+ * Per-render `cache()` so React dedupes if the page calls it twice.
+ */
+export const getPublishedKcKillCount = cache(
+  async function getPublishedKcKillCount(
+    opts: { buildTime?: boolean } = {},
+  ): Promise<number> {
+    try {
+      const supabase = opts.buildTime
+        ? createAnonSupabase()
+        : await createServerSupabase();
+      const { count, error } = await supabase
+        .from("kills")
+        .select("id", { count: "exact", head: true })
+        .or(
+          "publication_status.eq.published," +
+            "and(publication_status.is.null,status.eq.published)",
+        )
+        .eq("kill_visible", true)
+        .eq("tracked_team_involvement", "team_killer")
+        .not("clip_url_vertical", "is", null)
+        .not("thumbnail_url", "is", null);
+      if (error) {
+        console.warn(
+          "[supabase/kills] getPublishedKcKillCount error:",
+          error.message,
+        );
+        return 0;
+      }
+      return count ?? 0;
+    } catch (err) {
+      rethrowIfDynamic(err);
+      console.warn(
+        "[supabase/kills] getPublishedKcKillCount threw:",
+        err,
+      );
+      return 0;
+    }
+  },
+);
+
 export const getPublishedKills = cache(async function getPublishedKills(
   limit = 50,
   opts: { buildTime?: boolean } = {},

@@ -3,7 +3,10 @@ import Image from "next/image";
 import { loadRealData, getCurrentRoster, getTeamStats, getMatchesSorted, displayRole } from "@/lib/real-data";
 import { championIconUrl, championSplashUrl } from "@/lib/constants";
 import { PLAYER_PHOTOS, TEAM_LOGOS, KC_LOGO } from "@/lib/kc-assets";
-import { getPublishedKills } from "@/lib/supabase/kills";
+import {
+  getPublishedKills,
+  getPublishedKcKillCount,
+} from "@/lib/supabase/kills";
 import {
   getHeroLastMatch,
   getHeroCareerStats,
@@ -175,16 +178,19 @@ export default async function HomePage() {
   // its `revalidate = 300` ISR setting. Each loader rethrows DynamicError
   // and falls back to `null` on Supabase failure → the hero degrades to
   // the static real-data.ts snapshot below if the DB is unreachable.
-  const [allKills, liveLastMatch, liveCareer, liveTopScorer] =
+  // Wave 13e (2026-04-29) — was `getPublishedKills(500)` then
+  // `.filter(...).length`. Shipped 1.25 MB of full kill rows per cache
+  // miss to compute a single integer. The 2026-04-29 audit identified
+  // this as the single biggest egress driver. Replaced with a HEAD
+  // count-only query (~150 bytes vs 1.25 MB = 8000× smaller). Egress
+  // savings on the homepage alone : ~3 GB/mo at current traffic.
+  const [clipCount, liveLastMatch, liveCareer, liveTopScorer] =
     await Promise.all([
-      getPublishedKills(500, { buildTime: true }),
+      getPublishedKcKillCount({ buildTime: true }),
       getHeroLastMatch(true),
       getHeroCareerStats(true),
       getHeroTopScorer(true),
     ]);
-  const clipCount = allKills.filter(
-    (k) => k.tracked_team_involvement === "team_killer" && k.kill_visible !== false,
-  ).length;
 
   // Champion splash for the #1 player (most kills) — keeps using real-data
   // for the splash because that's the only place we curate the per-player
