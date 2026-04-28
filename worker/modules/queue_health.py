@@ -105,12 +105,21 @@ THRESHOLD_PENDING_WARN_SEC: int = 30 * 60
 # a belt-and-braces signal that something escaped the auto-release.
 STALE_CLAIM_LEASE_MULTIPLIER: int = 4
 
-# Conservative window for fn_release_stale_pipeline_locks. The function
-# only releases rows whose locked_until is older than now() - this many
-# minutes. Set well above the longest legitimate lease (clipper renews
-# every ~5 min for ~30 min big VODs ; 60 min is safely past anything
-# real).
-RELEASE_STALE_MAX_AGE_MINUTES: int = 60
+# Window for fn_release_stale_pipeline_locks. The function only releases
+# rows whose locked_until is older than now() - this many minutes.
+#
+# 🐛 2026-04-28 fix : was 60 min, found 326 stale claims stuck in the
+# 30-60 min band that the conservative cutoff never caught (workers
+# died mid-clip, lease expired at the 10-min mark, but the 60-min cutoff
+# meant we waited 70 min total to release — which created a self-
+# perpetuating backlog because new claims kept dying just below the
+# cutoff). Lowered to 20 min : safely past the 10-min lease + ~5 min
+# clipper renew window + 5 min buffer.
+#
+# Set the env var KCKILLS_RELEASE_STALE_AGE_MIN to override per-deploy.
+RELEASE_STALE_MAX_AGE_MINUTES: int = int(
+    __import__("os").environ.get("KCKILLS_RELEASE_STALE_AGE_MIN", "20")
+)
 
 
 # ─── Low-level PostgREST helpers ──────────────────────────────────────

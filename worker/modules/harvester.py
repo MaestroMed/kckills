@@ -558,7 +558,26 @@ async def run() -> int:
             db_game_id=game["id"],
         )
 
-        for k in kills:
+        # 🐛 2026-04-28 fix : KC-only filter at insertion time.
+        #
+        # Pre-fix the harvester inserted EVERY kill of a game KC played
+        # (typically 30-50 kills) including N-vs-N teamfights between
+        # the OTHER team's members. Those rows had
+        # `tracked_team_involvement = NULL` (no KC killer / victim /
+        # assistant) and just polluted the pipeline — clipping cycles,
+        # Gemini analysis tokens, R2 storage, all wasted on content the
+        # site doesn't show. A snapshot on 2026-04-28 found 4899
+        # polluted rows out of 12 326 (40 % of the raw backlog).
+        #
+        # We're a KC fan site : if KC isn't involved, it doesn't ship.
+        # Skip these rows at the insertion gate so the pipeline only
+        # processes things users will actually see on /scroll.
+        kc_kills = [
+            k for k in kills if k.tracked_team_involvement is not None
+        ]
+        skipped = len(kills) - len(kc_kills)
+
+        for k in kc_kills:
             safe_insert("kills", k.to_db_dict())
             total_kills += 1
 
@@ -567,13 +586,21 @@ async def run() -> int:
         # but 103 empty" bug — those games then got skipped on every
         # subsequent scan even though the data could be recovered later
         # via gol.gg or a re-attempt of the live feed.
-        if kills:
+        if kc_kills:
             safe_update("games", {"kills_extracted": True}, "id", game["id"])
+            if skipped:
+                log.info(
+                    "harvester_filtered_non_kc",
+                    game_id=game["id"][:8],
+                    inserted=len(kc_kills),
+                    skipped=skipped,
+                )
         else:
             log.warn(
                 "harvester_zero_kills",
                 game_id=game["id"][:8],
                 external=game["external_id"],
+                skipped_non_kc=skipped,
             )
 
     log.info("harvester_scan_done", games_processed=len(games), kills_inserted=total_kills)
