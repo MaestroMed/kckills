@@ -248,7 +248,12 @@ export default async function PlayerPage({ params }: Props) {
     <div
       className="-mt-6"
       style={{
-        // Full-bleed to escape the parent <main max-w-7xl> container
+        // Full-bleed to escape the parent <main max-w-7xl> container.
+        // The parent `body` carries `overflow-x: clip` (globals.css)
+        // which absorbs the 100vw vs scrollbar-width discrepancy on
+        // Windows desktop (overlay-scrollbar OSes are unaffected).
+        // Keeping the `100vw + -50vw` hack is fine ; if it ever leaks
+        // again, swap to a parent wrapper with `overflow-x: clip`.
         width: "100vw",
         position: "relative",
         left: "50%",
@@ -378,9 +383,11 @@ export default async function PlayerPage({ params }: Props) {
             )}
           </div>
 
-          {/* Massive name */}
+          {/* Massive name — `break-words` prevents future 9+ char IGNs
+              (e.g. roster change) from horizontally clipping the
+              `lg:text-[11rem]` ≈ 176 px font. */}
           <h1
-            className="font-display font-black leading-[0.85] text-7xl md:text-9xl lg:text-[11rem] text-white"
+            className="font-display font-black leading-[0.85] text-7xl md:text-9xl lg:text-[11rem] text-white break-words max-w-full"
             style={{
               textShadow:
                 "0 0 60px rgba(200,170,110,0.25), 0 6px 40px rgba(0,0,0,0.8)",

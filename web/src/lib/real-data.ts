@@ -171,11 +171,23 @@ export function getPlayerStats(data: RealData, playerName: string) {
   const champions: Record<string, { games: number; kills: number; deaths: number; assists: number }> = {};
   const matchHistory: { matchId: string; date: string; opponent: string; champion: string; kills: number; deaths: number; assists: number; won: boolean }[] = [];
 
+  // 🐛 2026-04-28 fix : the source data is inconsistent on player-name
+  // case (e.g. "kyeahoo" lowercase vs "Canna"/"Busio"/"Yike"/"Caliste"
+  // capitalised). When a user navigates to /player/Kyeahoo (the
+  // capitalisation a Google search result or a manually-typed URL would
+  // yield), the strict-equality match returned 0 games and the page
+  // 404'd. Compare case-insensitively so canonical capitalisation works
+  // regardless of how the slug was entered.
+  const targetLower = playerName.toLowerCase();
+
   for (const match of data.matches) {
     for (const game of match.games) {
-      const p = game.kc_players.find(
-        (x) => cleanName(x.name) === playerName || x.name === playerName
-      );
+      const p = game.kc_players.find((x) => {
+        const cleaned = cleanName(x.name).toLowerCase();
+        return (
+          cleaned === targetLower || x.name.toLowerCase() === targetLower
+        );
+      });
       if (!p) continue;
 
       gamesPlayed++;

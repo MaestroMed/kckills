@@ -2,13 +2,44 @@
 
 export const KC_LOGO = "https://static.lolesports.com/teams/1704714951336_KC.png";
 
-export const PLAYER_PHOTOS: Record<string, string> = {
-  "Canna": "https://static.lolesports.com/players/1774651372836_canna.png",
-  "kyeahoo": "https://static.lolesports.com/players/1774652002153_kyeahoo.png",
-  "Busio": "https://static.lolesports.com/players/1774651329556_busio.png",
-  "Yike": "https://static.lolesports.com/players/1768550195190_Yike-01.png",
-  "Caliste": "https://static.lolesports.com/players/1774651348279_caliste.png",
+// 🐛 2026-04-28 fix : keys are intentionally `Capitalised` for consistency
+// (the underlying data is mixed-case — kyeahoo lowercase vs Canna/Busio/Yike/
+// Caliste capitalised). Always look up via `getPlayerPhoto()` below for a
+// case-insensitive read so /player/Kyeahoo (typed with capital K) gets the
+// same hero portrait as /player/kyeahoo (followed from a roster pill).
+const PLAYER_PHOTOS_INTERNAL: Record<string, string> = {
+  Canna: "https://static.lolesports.com/players/1774651372836_canna.png",
+  Kyeahoo: "https://static.lolesports.com/players/1774652002153_kyeahoo.png",
+  Busio: "https://static.lolesports.com/players/1774651329556_busio.png",
+  Yike: "https://static.lolesports.com/players/1768550195190_Yike-01.png",
+  Caliste: "https://static.lolesports.com/players/1774651348279_caliste.png",
 };
+
+/**
+ * Case-insensitive PLAYER_PHOTOS proxy — keeps backwards-compatible
+ * `PLAYER_PHOTOS["name"]` syntax across ~30 call sites while making
+ * the lookup tolerant of any capitalisation variant ("Kyeahoo",
+ * "kyeahoo", "KYEAHOO" all return the same URL).
+ */
+export const PLAYER_PHOTOS: Record<string, string> = new Proxy(
+  PLAYER_PHOTOS_INTERNAL,
+  {
+    get(target, prop: string) {
+      if (typeof prop !== "string") return undefined;
+      // Direct hit — preserves the canonical capitalisation perf path.
+      if (Object.prototype.hasOwnProperty.call(target, prop)) {
+        return target[prop];
+      }
+      // Case-insensitive fallback — O(n) over the small roster only
+      // when the direct hit missed.
+      const lower = prop.toLowerCase();
+      for (const k of Object.keys(target)) {
+        if (k.toLowerCase() === lower) return target[k];
+      }
+      return undefined;
+    },
+  },
+);
 
 export const TEAM_LOGOS: Record<string, string> = {
   "KC": "https://static.lolesports.com/teams/1704714951336_KC.png",
