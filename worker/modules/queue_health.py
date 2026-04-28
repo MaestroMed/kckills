@@ -108,17 +108,24 @@ STALE_CLAIM_LEASE_MULTIPLIER: int = 4
 # Window for fn_release_stale_pipeline_locks. The function only releases
 # rows whose locked_until is older than now() - this many minutes.
 #
-# 🐛 2026-04-28 fix : was 60 min, found 326 stale claims stuck in the
-# 30-60 min band that the conservative cutoff never caught (workers
-# died mid-clip, lease expired at the 10-min mark, but the 60-min cutoff
-# meant we waited 70 min total to release — which created a self-
-# perpetuating backlog because new claims kept dying just below the
-# cutoff). Lowered to 20 min : safely past the 10-min lease + ~5 min
-# clipper renew window + 5 min buffer.
+# 🐛 2026-04-28 fix v2 : was 60 → 20 → now 10. The 20-min cutoff still
+# missed the analyzer's stale claims because the analyzer lease is only
+# 5 min (vs clipper's 10 min). Snapshot found 64 clip.analyze claims
+# stale by exactly 7.2 min — under the 20-min cutoff but over a 5-min.
+# 10 min covers both lease ranges + a small buffer.
 #
-# Set the env var KCKILLS_RELEASE_STALE_AGE_MIN to override per-deploy.
+# Risks of going too low :
+#   * Stealing a claim from a legitimate slow worker that hasn't renewed
+#     its lease yet → the work gets done twice (wasteful, but harmless
+#     since the kill table writes are idempotent on (kill_id, status)).
+#   * A clipper download of a 30-min VOD segment can legitimately take
+#     >10 min ; those workers MUST call renew_lease() periodically.
+#     If they don't, they look stuck and we re-claim.
+#
+# Set KCKILLS_RELEASE_STALE_AGE_MIN to override per-deploy if a real
+# worker takes longer than 10 min between renew calls.
 RELEASE_STALE_MAX_AGE_MINUTES: int = int(
-    __import__("os").environ.get("KCKILLS_RELEASE_STALE_AGE_MIN", "20")
+    __import__("os").environ.get("KCKILLS_RELEASE_STALE_AGE_MIN", "10")
 )
 
 
