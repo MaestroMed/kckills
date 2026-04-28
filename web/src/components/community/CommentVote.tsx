@@ -26,6 +26,7 @@
 
 import { useCallback, useRef, useState } from "react";
 import { track } from "@/lib/analytics/track";
+import { voteOnComment } from "./actions";
 
 interface Props {
   commentId: string;
@@ -50,12 +51,11 @@ interface Props {
   className?: string;
 }
 
-interface VoteResponse {
-  upvotes?: number;
-  downvotes?: number;
-  userVote?: -1 | 0 | 1;
-  error?: string;
-}
+// 🎯 Wave 13b — migrated from `fetch('/api/comments/[id]/vote')` to a
+// Server Action (`voteOnComment` in ./actions). The legacy VoteResponse
+// shape was kept until the rollout was verified ; the action returns a
+// proper discriminated union instead so the optimistic-revert path is
+// type-safe.
 
 export function CommentVote({
   commentId,
@@ -107,50 +107,29 @@ export function CommentVote({
       const reqId = ++requestIdRef.current;
 
       try {
-        const res = await fetch(`/api/comments/${commentId}/vote`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ vote: nextVote }),
-        });
+        const result = await voteOnComment(commentId, nextVote);
 
         // Stale response — a newer click already landed.
         if (reqId !== requestIdRef.current) return;
 
-        if (res.status === 401) {
+        if (!result.ok) {
           setUpvotes(prevUpvotes);
           setDownvotes(prevDownvotes);
           setUserVote(prevUserVote);
-          onAuthRequired?.();
+          if (result.authRequired) onAuthRequired?.();
           return;
         }
-
-        if (!res.ok) {
-          setUpvotes(prevUpvotes);
-          setDownvotes(prevDownvotes);
-          setUserVote(prevUserVote);
-          return;
-        }
-
-        const data = (await res.json()) as VoteResponse;
-        if (reqId !== requestIdRef.current) return;
 
         // Reconcile against the server's canonical numbers — protects
         // against optimistic-vs-server drift on rapid re-votes.
-        const finalUpvotes = typeof data.upvotes === "number" ? data.upvotes : prevUpvotes + scoreDelta;
-        const finalDownvotes = typeof data.downvotes === "number" ? data.downvotes : prevDownvotes + downvoteDelta;
-        const finalUserVote =
-          data.userVote === -1 || data.userVote === 0 || data.userVote === 1
-            ? data.userVote
-            : nextVote;
-
-        setUpvotes(finalUpvotes);
-        setDownvotes(finalDownvotes);
-        setUserVote(finalUserVote);
+        setUpvotes(result.upvotes);
+        setDownvotes(result.downvotes);
+        setUserVote(result.userVote);
 
         onChange?.({
-          upvotes: finalUpvotes,
-          downvotes: finalDownvotes,
-          userVote: finalUserVote,
+          upvotes: result.upvotes,
+          downvotes: result.downvotes,
+          userVote: result.userVote,
         });
 
         // Best-effort analytics ping. Whitelisted in migration 038 +
@@ -158,7 +137,7 @@ export function CommentVote({
         track("comment.voted", {
           entityType: "comment",
           entityId: commentId,
-          metadata: { vote: finalUserVote, prev: prevUserVote },
+          metadata: { vote: result.userVote, prev: prevUserVote },
         });
       } catch {
         if (reqId !== requestIdRef.current) return;

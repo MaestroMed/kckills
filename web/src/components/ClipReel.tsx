@@ -129,11 +129,21 @@ function ClipReelHeader({
 // ─── Compact grid variant ───────────────────────────────────────────────
 
 function CompactGrid({ clips }: { clips: FilteredClip[] }) {
+  // 🎯 SOTA 2026-04-28 : Tailwind v4 native container queries.
+  // ClipReel renders inside containers of wildly different widths
+  // (player-page sidebar, match-detail full-bleed, era-detail card,
+  // homepage rare-cards rail). Switching from viewport-based
+  // breakpoints (`sm:` / `lg:`) to container-based (`@sm:` / `@lg:`)
+  // means the grid reflows based on the parent's actual width
+  // instead of the viewport — no more "1 column on a 1280 px viewport
+  // because the parent is 320 px wide" mismatch.
   return (
-    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-      {clips.map((c) => (
-        <ClipCard key={c.id} clip={c} />
-      ))}
+    <div className="@container">
+      <div className="grid gap-4 @sm:grid-cols-2 @4xl:grid-cols-3">
+        {clips.map((c) => (
+          <ClipCard key={c.id} clip={c} />
+        ))}
+      </div>
     </div>
   );
 }
