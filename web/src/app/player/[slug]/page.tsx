@@ -25,7 +25,9 @@ import {
 import { getQuotesByPlayer } from "@/lib/quotes";
 import { QuoteRow } from "@/components/QuoteCard";
 
-export const revalidate = 300;
+// Wave 13d (2026-04-28) : 300 → 1800. Player stats are essentially
+// static between matches (one new game every 1-3 days for KC).
+export const revalidate = 1800;
 
 interface Props {
   params: Promise<{ slug: string }>;

@@ -327,9 +327,42 @@ function normaliseEvent(raw: RawEvent): NormalisedEvent | null {
   };
 }
 
+// ─── Bot filter (Wave 13d, 2026-04-28) ─────────────────────────────────
+//
+// 2026-04-28 Cloudflare audit found 1.21k unique visitors over 30 days
+// but only 18 sessions in user_events for the same week. The 6 % capture
+// ratio is mostly explained by adblockers, but a measurable chunk is
+// crawler/scraper traffic that DOES execute our JS (headless Chrome,
+// Discord OG fetcher, Twitter card preview, AI training crawlers like
+// PerplexityBot / GPTBot / ClaudeBot) and pollutes the analytics with
+// fake "page.viewed" events.
+//
+// Filter at the API gate via user-agent regex. Conservative list — only
+// matches the obvious patterns ("bot", "crawler", "spider", named
+// crawlers). Returns 204 silently (don't 4xx — would make the crawlers
+// retry and waste edge minutes).
+//
+// Real bot mitigation belongs in Cloudflare WAF / bot management ; this
+// is a cheap defense-in-depth that keeps the analytics signal clean.
+const BOT_UA_RE =
+  /\b(bot|crawler|spider|scraper|headlesschrome|puppeteer|playwright|phantomjs|selenium|chrome-lighthouse|gptbot|claudebot|perplexitybot|claude-web|anthropic-ai|chatgpt|googleother|bytespider|amazonbot|applebot|baiduspider|bingbot|cohere-ai|duckduckbot|facebookexternalhit|google-extended|googlebot|linkedinbot|meta-externalagent|petalbot|pinterestbot|semrushbot|slackbot|telegrambot|twitterbot|whatsapp|yandexbot)\b/i;
+
+function looksLikeBot(userAgent: string | null): boolean {
+  if (!userAgent || userAgent.length < 10) return true; // empty / too-short UA = bot
+  return BOT_UA_RE.test(userAgent);
+}
+
 // ─── Handler ───────────────────────────────────────────────────────────
 
 export async function POST(request: NextRequest) {
+  // 🤖 Bot filter — return 204 immediately so we don't even parse the
+  // body. Saves CPU and keeps the analytics table clean of crawler
+  // traffic that would otherwise poison "real visitor" counts.
+  const userAgent = request.headers.get("user-agent");
+  if (looksLikeBot(userAgent)) {
+    return new NextResponse(null, { status: 204 });
+  }
+
   // Parse JSON body. sendBeacon sends as type "application/json" too.
   let body: unknown;
   try {

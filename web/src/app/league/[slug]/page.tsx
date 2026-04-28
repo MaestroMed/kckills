@@ -27,7 +27,7 @@ import {
 } from "@/lib/teams-loader";
 import { JsonLd, breadcrumbLD } from "@/lib/seo/jsonld";
 
-export const revalidate = 300;
+export const revalidate = 1800; // Wave 13d : league overview is stable
 
 interface Props {
   params: Promise<{ slug: string }>;

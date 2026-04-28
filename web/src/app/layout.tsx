@@ -1,5 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import Script from "next/script";
+import { Analytics } from "@vercel/analytics/next";
+import { SpeedInsights } from "@vercel/speed-insights/next";
 import "./globals.css";
 import { Providers } from "@/components/Providers";
 import { LayoutChrome } from "@/components/LayoutChrome";
@@ -274,6 +276,27 @@ export default async function RootLayout({
             defer
           />
         ) : null}
+        {/* 📊 Vercel Analytics + Speed Insights (Wave 13d, 2026-04-28).
+            Free, edge-level tracking that captures EVERY page load
+            without depending on the JS tracker (which adblockers
+            kill ~94 % of the time per the 2026-04-28 Cloudflare audit).
+            Privacy-first by default — no cookies, no PII, GDPR-clean. */}
+        <Analytics />
+        <SpeedInsights />
+        {/* 🖼 Server-side noscript pixel fallback. Fires for visitors
+            who block our /api/track POST (uBlock + privacy lists) but
+            still load IMG tags. Inserts a single page.viewed event
+            per visitor-bucket per day, deduplicated server-side. */}
+        <noscript>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/api/track/pixel?p=fallback"
+            alt=""
+            width={1}
+            height={1}
+            style={{ position: "absolute", left: -9999, top: -9999 }}
+          />
+        </noscript>
         <script dangerouslySetInnerHTML={{ __html: `if('serviceWorker' in navigator){navigator.serviceWorker.register('/sw.js')}` }} />
       </body>
     </html>

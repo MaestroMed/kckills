@@ -7,7 +7,8 @@ import { ClipsGrid, type ClipCard, type InitialFilters } from "./clips-grid";
 
 // 300s cache — /clips pulls 500 kills and filters client-side. The
 // catalog doesn't churn per-minute; 5-min ISR is plenty.
-export const revalidate = 300;
+// Wave 13d : 300 → 1800 (catalog page, lower freshness need).
+export const revalidate = 1800;
 
 export const metadata: Metadata = {
   title: "Clips — KCKILLS",

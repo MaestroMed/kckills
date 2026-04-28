@@ -7,7 +7,7 @@ import { PLAYER_PHOTOS } from "@/lib/kc-assets";
 import { ALUMNI } from "@/lib/alumni";
 import { Breadcrumb } from "@/components/Breadcrumb";
 
-export const revalidate = 300;
+export const revalidate = 1800; // Wave 13d : DB pressure (roster stable)
 export const metadata: Metadata = {
   title: "Joueurs KC — KCKILLS",
   description:

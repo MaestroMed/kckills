@@ -5,7 +5,7 @@ import { getPublishedKills } from "@/lib/supabase/kills";
 import { createAnonSupabase } from "@/lib/supabase/server";
 import { MatchesAccordion } from "./matches-accordion";
 
-export const revalidate = 300;
+export const revalidate = 600; // Wave 13d : new match every 1-3 days
 
 export const metadata: Metadata = {
   title: "Matchs KC — KCKILLS",

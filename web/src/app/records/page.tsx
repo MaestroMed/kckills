@@ -29,7 +29,7 @@ import { Description } from "@/components/i18n/Description";
  *   🎪 Snipes longue distance   (ai_tags contains "snipe" / "flash_predict")
  */
 
-export const revalidate = 300;
+export const revalidate = 3600; // Wave 13d : records change rarely
 
 export const metadata: Metadata = {
   title: "Records Absolus — KCKILLS",

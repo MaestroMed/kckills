@@ -153,12 +153,14 @@ const YOUTUBE_HERO_CLIPS = [
   },
 ];
 
-// Bumped from 60s to 300s for scale — the homepage doesn't change by the
-// second (kill-of-the-week, stats, roster all stable for minutes). 5-min
-// cache reduces Vercel function invokes + Supabase egress by 5x under
-// traffic. The Live Banner + NextMatchOverlay still poll separately for
-// sub-minute freshness.
-export const revalidate = 300;
+// Bumped 60s → 300s → 1800s (Wave 13d, 2026-04-28). Supabase free tier
+// audit found 80k DB requests/24h driven mostly by SSR refetches on
+// every cache miss. Homepage data (kill-of-the-week, stats, roster)
+// doesn't change by the minute — 30 min ISR cuts DB pressure by 6x
+// vs the previous 5 min. Live Banner + NextMatchOverlay still poll
+// separately for sub-minute freshness, so the user-perceived
+// "liveness" is unchanged.
+export const revalidate = 1800;
 
 export default async function HomePage() {
   const data = loadRealData();

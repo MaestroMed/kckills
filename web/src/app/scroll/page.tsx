@@ -42,7 +42,13 @@ const FILTERABLE_AXES: ReadonlySet<string> = new Set<GridAxisId>([
 // ~250 KB and would be a stampede risk at 60s if 10k users arrive in
 // the same minute after a cache miss. ISR SWR keeps the old page live
 // while the rebuild happens so no visitor ever waits.
-export const revalidate = 300;
+//
+// Wave 13d (2026-04-28) : 300 → 600. Scroll feed needs to refresh
+// faster than other pages because new clips publish 1-2× per hour
+// during active match days, but 5 min was overkill (8 visitors / 5 min
+// peak ≠ data churn). 10 min keeps the feed feeling fresh while
+// halving SSR DB pressure.
+export const revalidate = 600;
 export const metadata = {
   title: "Scroll — KCKILLS",
   description:
