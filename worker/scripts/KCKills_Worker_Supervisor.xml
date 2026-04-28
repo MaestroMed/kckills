@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="UTF-16"?>
+<Task version="1.4" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
+  <RegistrationInfo>
+    <Author>Mehdi (Numelite) — KCKills</Author>
+    <Description>Auto-start + supervise the KCKills worker daemon. Restarts on crash with exponential backoff. See worker/scripts/supervise_worker.py.</Description>
+    <URI>\KCKills Worker Supervisor</URI>
+  </RegistrationInfo>
+  <Triggers>
+    <!-- Trigger 1 : at user logon (most common — laptop wakes up, you log in) -->
+    <LogonTrigger>
+      <Enabled>true</Enabled>
+      <UserId>Matter1</UserId>
+      <Delay>PT15S</Delay>
+    </LogonTrigger>
+    <!-- Trigger 2 : every 5 min — belt and braces, in case the supervisor itself dies -->
+    <CalendarTrigger>
+      <StartBoundary>2026-04-29T00:00:00</StartBoundary>
+      <Enabled>true</Enabled>
+      <ScheduleByDay>
+        <DaysInterval>1</DaysInterval>
+      </ScheduleByDay>
+      <Repetition>
+        <Interval>PT5M</Interval>
+        <Duration>P1D</Duration>
+        <StopAtDurationEnd>false</StopAtDurationEnd>
+      </Repetition>
+    </CalendarTrigger>
+  </Triggers>
+  <Principals>
+    <Principal id="Author">
+      <UserId>Matter1</UserId>
+      <LogonType>InteractiveToken</LogonType>
+      <RunLevel>LeastPrivilege</RunLevel>
+    </Principal>
+  </Principals>
+  <Settings>
+    <!-- IMPORTANT : MultipleInstancesPolicy=IgnoreNew so the 5-min trigger
+         doesn't spawn a 2nd supervisor while the 1st is still healthy. -->
+    <MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>
+    <DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>
+    <StopIfGoingOnBatteries>false</StopIfGoingOnBatteries>
+    <AllowHardTerminate>true</AllowHardTerminate>
+    <StartWhenAvailable>true</StartWhenAvailable>
+    <RunOnlyIfNetworkAvailable>false</RunOnlyIfNetworkAvailable>
+    <IdleSettings>
+      <StopOnIdleEnd>false</StopOnIdleEnd>
+      <RestartOnIdle>false</RestartOnIdle>
+    </IdleSettings>
+    <AllowStartOnDemand>true</AllowStartOnDemand>
+    <Enabled>true</Enabled>
+    <Hidden>false</Hidden>
+    <RunOnlyIfIdle>false</RunOnlyIfIdle>
+    <WakeToRun>false</WakeToRun>
+    <ExecutionTimeLimit>PT0S</ExecutionTimeLimit>
+    <Priority>7</Priority>
+    <RestartOnFailure>
+      <Interval>PT1M</Interval>
+      <Count>10</Count>
+    </RestartOnFailure>
+  </Settings>
+  <Actions Context="Author">
+    <Exec>
+      <Command>C:\Users\Matter1\Karmine_Stats\worker\scripts\start_worker_supervisor.bat</Command>
+      <WorkingDirectory>C:\Users\Matter1\Karmine_Stats\worker</WorkingDirectory>
+    </Exec>
+  </Actions>
+</Task>
