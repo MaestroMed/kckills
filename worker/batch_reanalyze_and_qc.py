@@ -113,13 +113,19 @@ async def analyze_and_qc(kill: dict, kill_type: str, cluster_size: int,
         return {"error": "gemini_quota"}
 
     try:
-        import google.generativeai as genai
-        genai.configure(api_key=config.GEMINI_API_KEY)
-        model = genai.GenerativeModel("gemini-2.5-flash-lite")
+        # Wave 13f migration — moved off `google.generativeai`
+        # (deprecated) onto `google.genai`.
+        from services.gemini_client import get_client, _wait_for_file_active
+        from google.genai import types
+        client = get_client()
+        if client is None:
+            return {"error": "gemini_sdk_missing"}
 
-        video_file = genai.upload_file(local_path)
-        from services.gemini_client import _wait_for_file_active
-        _wait_for_file_active(genai, video_file, timeout=60)
+        video_file = client.files.upload(
+            file=local_path,
+            config=types.UploadFileConfig(mime_type="video/mp4"),
+        )
+        _wait_for_file_active(client, video_file, timeout=60)
 
         killer = kill.get("killer_champion", "?")
         victim = kill.get("victim_champion", "?")
@@ -174,7 +180,10 @@ REGLES CRITIQUES:
 - JSON VALIDE uniquement
 """
 
-        response = model.generate_content([prompt, video_file])
+        response = client.models.generate_content(
+            model="gemini-2.5-flash-lite",
+            contents=[prompt, video_file],
+        )
         text = (response.text or "").strip()
 
         if text.startswith("```"):

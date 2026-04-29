@@ -235,22 +235,31 @@ class BatchedSupabaseWriter:
         if not updates and not inserts:
             return
 
-        tasks: list[asyncio.Task] = []
-
         ins_by_table: dict[str, list[dict]] = defaultdict(list)
         for p in inserts:
             ins_by_table[p.table].append(p.data)
-        for table, rows in ins_by_table.items():
-            tasks.append(asyncio.create_task(self._flush_inserts(table, rows)))
 
         upd_by_bucket: dict[tuple[str, frozenset], list[_PendingUpdate]] = defaultdict(list)
         for p in updates:
             upd_by_bucket[(p.table, p.shape)].append(p)
-        for (table, _shape), rows in upd_by_bucket.items():
-            tasks.append(asyncio.create_task(self._flush_updates(table, rows)))
 
-        if tasks:
-            await asyncio.gather(*tasks, return_exceptions=True)
+        # Wave 13f: TaskGroup with best-effort semantics — a flush failure
+        # for table A must not cancel the in-flight flush for table B (each
+        # table is an independent unit of work and the per-flush methods
+        # already swallow exceptions internally + spill to local cache). We
+        # catch the ExceptionGroup and log so any unexpected propagation is
+        # at least visible without breaking the writer's drain semantics.
+        if ins_by_table or upd_by_bucket:
+            try:
+                async with asyncio.TaskGroup() as tg:
+                    for table, rows in ins_by_table.items():
+                        tg.create_task(self._flush_inserts(table, rows))
+                    for (table, _shape), rows in upd_by_bucket.items():
+                        tg.create_task(self._flush_updates(table, rows))
+            except* Exception as eg:
+                for err in eg.exceptions:
+                    log.warn("batch_flush_task_unexpected_error",
+                             error=str(err)[:200])
         self._stats["flushes"] += 1
 
     # ─── Insert flush ─────────────────────────────────────────────────
@@ -318,6 +327,9 @@ class BatchedSupabaseWriter:
                 return False
 
         await asyncio.sleep(BATCH_RETRY_BACKOFF_SEC)
+        # Wave 13f: NOT migrated to TaskGroup — _one() catches all exceptions
+        # internally and returns bool, so gather/TaskGroup behave identically.
+        # Migrating would add EG-handling boilerplate for an unreachable branch.
         results = await asyncio.gather(*[_one(r) for r in rows], return_exceptions=False)
         for r in results:
             if r:
@@ -435,6 +447,9 @@ class BatchedSupabaseWriter:
                 return False
 
         await asyncio.sleep(BATCH_RETRY_BACKOFF_SEC)
+        # Wave 13f: NOT migrated to TaskGroup — _one() catches all exceptions
+        # internally and returns bool, so gather/TaskGroup behave identically.
+        # Migrating would add EG-handling boilerplate for an unreachable branch.
         results = await asyncio.gather(*[_one(p) for p in group], return_exceptions=False)
         ok = sum(1 for r in results if r)
         fail = len(results) - ok

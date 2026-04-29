@@ -9,20 +9,29 @@
  *   - Live count below
  *   - Disabled (greyed) while in-flight to prevent spam-click double-fire
  *
- * Behaviour:
- *   - Optimistic toggle: visual flips IMMEDIATELY on tap, server call fires
- *     in background. If server returns 401 we rollback + emit auth-needed
- *     event so the parent can show InlineAuthPrompt.
- *   - On 5xx / network error we rollback + show inline toast.
- *   - GET on mount paints the correct initial state without a flash.
+ * Behaviour (React 19 useOptimistic):
+ *   - Optimistic toggle: visual flips IMMEDIATELY on tap, Server Action
+ *     fires inside startTransition. On error / 401 useOptimistic
+ *     auto-reverts to the last server-confirmed state — no manual
+ *     rollback / no captured pre-flip snapshot.
+ *   - Initial state hydrated via the `getKillLikeState` Server Action so
+ *     the heart paints correctly without a flash of wrong state.
  *
- * Backed by /api/kills/[id]/like which writes to the existing `ratings`
- * table (score=5). The 5-star precision UI remains available via the
- * RatingSheet (secondary action).
+ * Backed by the `toggleKillLike` Server Action (`./actions`) which writes
+ * to the existing `ratings` table (score=5). The 5-star precision UI
+ * remains available via the RatingSheet (secondary action).
  */
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useOptimistic,
+  useRef,
+  useState,
+  useTransition,
+} from "react";
 import { motion, AnimatePresence } from "motion/react";
+import { toggleKillLike, getKillLikeState } from "./actions";
 
 interface Props {
   killId: string;
@@ -36,96 +45,96 @@ interface Props {
   onAuthRequired?: () => void;
 }
 
+interface LikeState {
+  liked: boolean;
+  count: number;
+}
+
 export function LikeButton({
   killId,
   initialCount = 0,
   variant = "compact",
   onAuthRequired,
 }: Props) {
-  const [liked, setLiked] = useState(false);
-  const [count, setCount] = useState(initialCount);
-  const [pending, setPending] = useState(false);
+  const [serverState, setServerState] = useState<LikeState>({
+    liked: false,
+    count: initialCount,
+  });
+  const [optimisticState, addOptimistic] = useOptimistic(
+    serverState,
+    (current, nextLiked: boolean) => ({
+      liked: nextLiked,
+      count: Math.max(0, current.count + (nextLiked ? 1 : -1)),
+    }),
+  );
+  const [isPending, startTransition] = useTransition();
   const [burstKey, setBurstKey] = useState(0); // re-trigger animation on each like
   const lastClickRef = useRef(0);
 
   // ─── Hydrate initial state ──────────────────────────────────────
   useEffect(() => {
     if (!isUuid(killId)) return;
-    const ac = new AbortController();
-    fetch(`/api/kills/${killId}/like`, { signal: ac.signal })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((data: { liked?: boolean; rating_count?: number } | null) => {
-        if (ac.signal.aborted || !data) return;
-        setLiked(Boolean(data.liked));
-        if (typeof data.rating_count === "number") setCount(data.rating_count);
-      })
-      .catch(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const data = await getKillLikeState(killId);
+        if (cancelled) return;
+        setServerState({ liked: data.liked, count: data.ratingCount });
+      } catch {
         // Silent — server-rendered initialCount is the fallback
-      });
-    return () => ac.abort();
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [killId]);
-
-  // (DoubleTapHeart listener is wired AFTER `toggle` is declared — see below)
 
   /** Toggle the like. Wrapped in useCallback so the DoubleTapHeart
    *  listener below can use it without TDZ + without re-binding the
    *  listener on every render. */
-  const toggle = useCallback(async (
-    e: React.MouseEvent | React.TouchEvent | { stopPropagation: () => void },
-    options?: { forceLike?: boolean },
-  ) => {
-    e.stopPropagation();
-    // Throttle: ignore taps within 250ms of each other (debounce
-    // double-tap that would otherwise like-then-immediately-unlike).
-    const now = Date.now();
-    if (now - lastClickRef.current < 250) return;
-    lastClickRef.current = now;
-    if (pending) return;
+  const toggle = useCallback(
+    (
+      e: React.MouseEvent | React.TouchEvent | { stopPropagation: () => void },
+      options?: { forceLike?: boolean },
+    ) => {
+      e.stopPropagation();
+      // Throttle: ignore taps within 250ms of each other (debounce
+      // double-tap that would otherwise like-then-immediately-unlike).
+      const now = Date.now();
+      if (now - lastClickRef.current < 250) return;
+      lastClickRef.current = now;
+      if (isPending) return;
 
-    const wasLiked = liked;
-    // forceLike (used by DoubleTapHeart) never unlikes — TikTok behavior:
-    // double-tap on already-liked re-fires the burst but stays liked.
-    if (options?.forceLike && wasLiked) {
-      setBurstKey((k) => k + 1);
-      return;
-    }
-    const newLiked = options?.forceLike ? true : !wasLiked;
+      const wasLiked = serverState.liked;
+      // forceLike (used by DoubleTapHeart) never unlikes — TikTok behavior:
+      // double-tap on already-liked re-fires the burst but stays liked.
+      if (options?.forceLike && wasLiked) {
+        setBurstKey((k) => k + 1);
+        return;
+      }
+      const newLiked = options?.forceLike ? true : !wasLiked;
 
-    // Optimistic flip
-    setLiked(newLiked);
-    setCount((c) => Math.max(0, c + (newLiked ? 1 : -1)));
-    if (newLiked) setBurstKey((k) => k + 1);
-    setPending(true);
+      if (newLiked) setBurstKey((k) => k + 1);
 
-    try {
-      const res = await fetch(`/api/kills/${killId}/like`, {
-        method: newLiked ? "POST" : "DELETE",
+      startTransition(async () => {
+        addOptimistic(newLiked);
+        try {
+          const result = await toggleKillLike(killId, newLiked);
+          if (!result.ok) {
+            // useOptimistic auto-reverts to serverState — no manual rollback.
+            if (result.authRequired) onAuthRequired?.();
+            return;
+          }
+          // Trust server's count (might differ from optimistic if other
+          // users liked concurrently between request + response).
+          setServerState({ liked: result.liked, count: result.ratingCount });
+        } catch {
+          // Network error — useOptimistic auto-reverts.
+        }
       });
-      if (res.status === 401) {
-        // Rollback + ask the parent to handle auth
-        setLiked(wasLiked);
-        setCount((c) => Math.max(0, c + (newLiked ? -1 : 1)));
-        onAuthRequired?.();
-        return;
-      }
-      if (!res.ok) {
-        setLiked(wasLiked);
-        setCount((c) => Math.max(0, c + (newLiked ? -1 : 1)));
-        return;
-      }
-      // Trust server's count (might differ from optimistic if other
-      // users liked concurrently between request + response).
-      const data: { liked: boolean; rating_count: number } = await res.json();
-      if (typeof data.rating_count === "number") setCount(data.rating_count);
-      setLiked(Boolean(data.liked));
-    } catch {
-      // Network error — rollback
-      setLiked(wasLiked);
-      setCount((c) => Math.max(0, c + (newLiked ? -1 : 1)));
-    } finally {
-      setPending(false);
-    }
-  }, [killId, liked, pending, onAuthRequired]);
+    },
+    [killId, isPending, serverState.liked, onAuthRequired, addOptimistic],
+  );
 
   // ─── Listen for DoubleTapHeart (kc:double-tap-like) ────────────
   useEffect(() => {
@@ -133,13 +142,14 @@ export function LikeButton({
     const onDoubleTap = (e: Event) => {
       const detail = (e as CustomEvent<{ killId?: string }>).detail;
       if (!detail || detail.killId !== killId) return;
-      void toggle({ stopPropagation: () => {} }, { forceLike: true });
+      toggle({ stopPropagation: () => {} }, { forceLike: true });
     };
     window.addEventListener("kc:double-tap-like", onDoubleTap);
     return () =>
       window.removeEventListener("kc:double-tap-like", onDoubleTap);
   }, [killId, toggle]);
 
+  const { liked, count } = optimisticState;
   const sizes = variant === "wide"
     ? { btn: "h-14 w-14", icon: "h-7 w-7", label: "text-sm" }
     : { btn: "h-12 w-12", icon: "h-6 w-6", label: "text-[10px]" };

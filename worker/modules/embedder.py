@@ -42,9 +42,11 @@ LEASE_SECONDS = 60
 # Note : text-embedding-004 was deprecated 2026-04 and the API now returns
 # 404 for it. gemini-embedding-001 is the current Google-recommended
 # replacement, same 768-dim output by default (output_dimensionality=768),
-# same RETRIEVAL_DOCUMENT task_type semantics. If we ever switch to the
-# new google.genai SDK (the FutureWarning at module-import time), the
-# call shape changes — see embedder_v2.py when it lands.
+# same RETRIEVAL_DOCUMENT task_type semantics.
+# Wave 13f migration : the call shape moved from
+# `google.generativeai.embed_content` (deprecated) to
+# `google.genai.Client.models.embed_content` (typed config + typed
+# response). See embed_one() for the new pattern.
 
 
 # Field set fetched per kill — kept narrow for egress.
@@ -71,27 +73,42 @@ async def embed_one(kill: dict) -> list[float] | None:
 
     text = _build_embed_text(kill)
 
+    # Wave 13f migration — moved from `google.generativeai.embed_content`
+    # to `google.genai.Client.models.embed_content`. The new shape
+    # passes the task_type / output_dimensionality via a typed
+    # `EmbedContentConfig`, and the response is a typed object with
+    # `.embeddings: list[ContentEmbedding]` instead of a plain dict.
+    from services.gemini_client import get_client
+    client = get_client()
+    if client is None:
+        log.warn("embedder_sdk_missing")
+        return None
+
     try:
-        import google.generativeai as genai  # type: ignore
+        from google.genai import types  # type: ignore
     except ImportError:
         log.warn("embedder_sdk_missing")
         return None
 
     try:
-        genai.configure(api_key=config.GEMINI_API_KEY)
         result = await asyncio.to_thread(
-            genai.embed_content,
-            model=EMBEDDING_MODEL,
-            content=text,
-            task_type=TASK_TYPE,
-            # gemini-embedding-001 defaults to 3072 dims — force 768
-            # to match the kills.embedding column dimension. The Google
-            # API accepts any value in {768, 1536, 3072} for this model.
-            output_dimensionality=EMBEDDING_DIM,
+            lambda: client.models.embed_content(
+                model=EMBEDDING_MODEL,
+                contents=text,
+                config=types.EmbedContentConfig(
+                    task_type=TASK_TYPE,
+                    # gemini-embedding-001 defaults to 3072 dims — force
+                    # 768 to match the kills.embedding column dimension.
+                    # The Google API accepts {768, 1536, 3072} here.
+                    output_dimensionality=EMBEDDING_DIM,
+                ),
+            )
         )
-        emb = result.get("embedding") if isinstance(result, dict) else None
-        if emb and isinstance(emb[0], list):
-            emb = emb[0]
+        # New SDK : response is EmbedContentResponse with .embeddings
+        # being a list of ContentEmbedding (each .values: list[float]).
+        # We feed a single string in `contents`, so we expect one entry.
+        embeddings = getattr(result, "embeddings", None) or []
+        emb = embeddings[0].values if embeddings else None
         if not emb or len(emb) != EMBEDDING_DIM:
             log.warn(
                 "embedder_bad_shape",
@@ -100,7 +117,7 @@ async def embed_one(kill: dict) -> list[float] | None:
                 expected=EMBEDDING_DIM,
             )
             return None
-        return emb
+        return list(emb)
     except Exception as e:
         log.error(
             "embedder_error",

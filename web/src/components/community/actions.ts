@@ -125,3 +125,104 @@ export async function voteOnComment(
     userVote: vote,
   };
 }
+
+// ─── Kill like (TikTok-grade heart toggle) ────────────────────────────
+
+export interface KillLikeResult {
+  ok: true;
+  liked: boolean;
+  ratingCount: number;
+}
+
+export interface KillLikeError {
+  ok: false;
+  error: string;
+  authRequired?: boolean;
+}
+
+/**
+ * Toggle the user's "like" on a kill — implemented as a rating with
+ * score=5 (matches the legacy /api/kills/[id]/like behaviour). The
+ * 5-star precision UI remains available via the RatingSheet.
+ *
+ * `desired = true`  → upsert(score=5)
+ * `desired = false` → delete the row
+ */
+export async function toggleKillLike(
+  killId: string,
+  desired: boolean,
+): Promise<KillLikeResult | KillLikeError> {
+  if (!UUID_RE.test(killId)) {
+    return { ok: false, error: "Identifiant invalide" };
+  }
+
+  const supabase = await createServerSupabase();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { ok: false, error: "Connecte-toi pour liker", authRequired: true };
+  }
+
+  if (desired) {
+    const { error } = await supabase.from("ratings").upsert(
+      { kill_id: killId, user_id: user.id, score: 5 },
+      { onConflict: "kill_id,user_id" },
+    );
+    if (error) return { ok: false, error: error.message };
+  } else {
+    const { error } = await supabase
+      .from("ratings")
+      .delete()
+      .eq("kill_id", killId)
+      .eq("user_id", user.id);
+    if (error) return { ok: false, error: error.message };
+  }
+
+  // Read back canonical count — the trigger fn_update_kill_rating has
+  // already fired synchronously on the write above.
+  const { data } = await supabase
+    .from("kills")
+    .select("rating_count")
+    .eq("id", killId)
+    .maybeSingle();
+
+  return {
+    ok: true,
+    liked: desired,
+    ratingCount: (data?.rating_count as number | null) ?? 0,
+  };
+}
+
+/** Hydrate the heart on mount (was GET /api/kills/[id]/like). */
+export async function getKillLikeState(
+  killId: string,
+): Promise<{ liked: boolean; ratingCount: number }> {
+  if (!UUID_RE.test(killId)) return { liked: false, ratingCount: 0 };
+
+  const supabase = await createServerSupabase();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  const { data: kill } = await supabase
+    .from("kills")
+    .select("rating_count")
+    .eq("id", killId)
+    .maybeSingle();
+  const ratingCount = (kill?.rating_count as number | null) ?? 0;
+
+  if (!user) return { liked: false, ratingCount };
+
+  const { data } = await supabase
+    .from("ratings")
+    .select("score")
+    .eq("kill_id", killId)
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  // Treat ANY existing rating as "liked" for the heart UI — same rule
+  // as the legacy GET /api/kills/[id]/like handler.
+  return { liked: data != null, ratingCount };
+}

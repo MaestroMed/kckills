@@ -132,6 +132,9 @@ async def download_full_vod(youtube_id: str) -> str | None:
         "--remote-components", "ejs:github",
         "-f", "bestvideo[height<=1080]+bestaudio/best[height<=1080]",
         "--merge-output-format", "mp4",
+        # Wave 13e (2026-04-29) yt-dlp perf bumps — see _run_ytdlp() below.
+        "--concurrent-fragments", "8",
+        "--throttled-rate", "100K",
         "-o", vod_path,
         "--no-playlist",
         "--quiet", "--no-warnings",
@@ -394,11 +397,23 @@ async def clip_kill(
                 ),
             ]
 
-        gathered = await asyncio.gather(*legacy_uploads, *versioned_uploads)
-        h_url, v_url, vl_url, thumb_url = gathered[:4]
-        h_url_v, v_url_v, vl_url_v, thumb_url_v = (
-            gathered[4:8] if game_id else (None, None, None, None)
-        )
+        # Wave 13f: TaskGroup for atomic clip upload — if any of the 4
+        # (or 8) uploads fail, the clip is broken anyway, so fail-fast and
+        # let sibling uploads cancel cleanly instead of finishing wasted work.
+        legacy_tasks: list[asyncio.Task] = []
+        versioned_tasks: list[asyncio.Task] = []
+        async with asyncio.TaskGroup() as tg:
+            for coro in legacy_uploads:
+                legacy_tasks.append(tg.create_task(coro))
+            for coro in versioned_uploads:
+                versioned_tasks.append(tg.create_task(coro))
+        h_url, v_url, vl_url, thumb_url = [t.result() for t in legacy_tasks]
+        if game_id:
+            h_url_v, v_url_v, vl_url_v, thumb_url_v = [
+                t.result() for t in versioned_tasks
+            ]
+        else:
+            h_url_v, v_url_v, vl_url_v, thumb_url_v = (None, None, None, None)
 
         # ─── 9. Insert kill_assets rows for each artefact ────────────
         # Probing each file is cheap (~50ms each) and runs off-thread so
@@ -620,11 +635,22 @@ async def clip_moment(
         ])
 
         # ─── 6. Upload to R2 under moments/ prefix ─────────────────
-        h_url, v_url, vl_url, thumb_url = await asyncio.gather(
-            r2_client.upload_moment(moment_id, h_path, "h"),
-            r2_client.upload_moment(moment_id, v_path, "v"),
-            r2_client.upload_moment(moment_id, vl_path, "v_low") if os.path.exists(vl_path) else _noop(),
-            r2_client.upload_moment(moment_id, thumb_path, "thumb") if os.path.exists(thumb_path) else _noop(),
+        # Wave 13f: TaskGroup for atomic moment upload — outer try/except
+        # catches the ExceptionGroup if any upload fails (returns None, sets
+        # status=clip_error). Sibling uploads cancel cleanly.
+        async with asyncio.TaskGroup() as tg:
+            t_h = tg.create_task(r2_client.upload_moment(moment_id, h_path, "h"))
+            t_v = tg.create_task(r2_client.upload_moment(moment_id, v_path, "v"))
+            t_vl = tg.create_task(
+                r2_client.upload_moment(moment_id, vl_path, "v_low")
+                if os.path.exists(vl_path) else _noop()
+            )
+            t_thumb = tg.create_task(
+                r2_client.upload_moment(moment_id, thumb_path, "thumb")
+                if os.path.exists(thumb_path) else _noop()
+            )
+        h_url, v_url, vl_url, thumb_url = (
+            t_h.result(), t_v.result(), t_vl.result(), t_thumb.result(),
         )
 
         log.info(
@@ -747,16 +773,11 @@ async def _run_ytdlp(url: str, output_path: str, start: float, end: float) -> bo
         "--force-keyframes-at-cuts",
         "-f", "bestvideo[height<=1080]+bestaudio/best[height<=1080]",
         "--merge-output-format", "mp4",
-        # Wave 13e (2026-04-29) — perf bumps from worker SOTA audit :
-        # * --concurrent-fragments 8 : parallel fragment download for
-        #   HLS / DASH segments. Default is 1, which serialises every
-        #   .ts chunk. 8 gives 2-3× download speedup on long VODs
-        #   without overwhelming YouTube's per-IP rate limit.
-        # * --throttled-rate 100K : if YouTube starts throttling our
-        #   download (which it does intermittently), yt-dlp auto-
-        #   restarts the segment instead of stalling at 5 KB/s for
-        #   minutes. The "throttled" threshold is generous enough
-        #   that legit slow links don't trigger it.
+        # Wave 13e (2026-04-29) yt-dlp perf bumps :
+        # * --concurrent-fragments 8 : parallel HLS/DASH fragment download
+        #   (default=1 serialises every .ts chunk, this gives 2-3× speedup)
+        # * --throttled-rate 100K : auto-restart segment if YouTube starts
+        #   throttling instead of stalling at 5 KB/s for minutes
         "--concurrent-fragments", "8",
         "--throttled-rate", "100K",
         "-o", output_path,
@@ -1240,10 +1261,13 @@ async def run() -> int:
     # Start the background flusher BEFORE the worker fan-out so writes
     # batch as they happen, not all at the end.
     await get_writer().start_background_flusher()
-    # return_exceptions=True lets one bot-blocked kill abort that worker
-    # without bringing the gather to a halt. The other workers in flight
-    # also see YouTubeBotBlockedError on their next download attempt and
-    # exit cleanly, restoring their kill's prior status.
+    # Wave 13f: NOT migrated to TaskGroup — kills are independent units of
+    # work and we explicitly want best-effort isolation. A bot-blocked kill
+    # in one worker shouldn't cancel the other in-flight kills mid-encode.
+    # return_exceptions=True keeps the per-kill failures visible to the
+    # post-gather loop that counts YouTubeBotBlockedError for the batch
+    # summary log. TaskGroup's "cancel all siblings on first error" semantic
+    # would lose work and break that audit log. Keep gather().
     results = await asyncio.gather(
         *(_process_one(k, j) for (k, j) in work),
         return_exceptions=True,

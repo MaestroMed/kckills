@@ -3,11 +3,11 @@
 /**
  * CommentVote — Reddit-style up/down arrow + score display.
  *
- * Optimistic update :
- *   * Click → set local state immediately, fire POST in the background.
- *   * On 401 → revert local state + call onAuthRequired (parent shows
- *     the InlineAuthPrompt or the login link).
- *   * On any other failure → revert local state + flash a short error.
+ * Optimistic update (React 19 useOptimistic) :
+ *   * Click → `addOptimistic({ vote })` flips the UI in the same tick.
+ *   * The Server Action (`voteOnComment`) runs inside startTransition.
+ *   * On error / 401, useOptimistic auto-reverts to the last server
+ *     state we committed via setServerState — no manual snapshot dance.
  *
  * Anonymous mode : when `isAuthenticated === false` the buttons render
  * disabled with a tooltip "Connecte-toi pour voter". Clicking still
@@ -16,17 +16,17 @@
  * Mobile : tap targets are 32px minimum (the SVG arrow + a 6px halo).
  * Score collapses to icon-only on screens narrower than 360px (the
  * "small screen" breakpoint per the task spec).
- *
- * Server contract :
- *   POST /api/comments/[id]/vote { vote: -1 | 0 | 1 }
- *   → { upvotes, downvotes, userVote }
- *
- *   "vote = 0" = remove the user's existing vote (DELETE the row).
  */
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useOptimistic, useState, useTransition } from "react";
 import { track } from "@/lib/analytics/track";
 import { voteOnComment } from "./actions";
+
+interface VoteState {
+  upvotes: number;
+  downvotes: number;
+  userVote: -1 | 0 | 1;
+}
 
 interface Props {
   commentId: string;
@@ -43,19 +43,9 @@ interface Props {
   /** Notify the parent so it can keep its own derived state (e.g. the
    *  Wilson-sorted list) in sync without a refetch. Called with the
    *  new (upvotes, downvotes, userVote) tuple after a successful POST. */
-  onChange?: (state: {
-    upvotes: number;
-    downvotes: number;
-    userVote: -1 | 0 | 1;
-  }) => void;
+  onChange?: (state: VoteState) => void;
   className?: string;
 }
-
-// 🎯 Wave 13b — migrated from `fetch('/api/comments/[id]/vote')` to a
-// Server Action (`voteOnComment` in ./actions). The legacy VoteResponse
-// shape was kept until the rollout was verified ; the action returns a
-// proper discriminated union instead so the optimistic-revert path is
-// type-safe.
 
 export function CommentVote({
   commentId,
@@ -67,16 +57,37 @@ export function CommentVote({
   onChange,
   className,
 }: Props) {
-  const [upvotes, setUpvotes] = useState(initialUpvotes);
-  const [downvotes, setDownvotes] = useState(initialDownvotes);
-  const [userVote, setUserVote] = useState<-1 | 0 | 1>(initialUserVote);
-  const [busy, setBusy] = useState(false);
-  /** Latest request id — older responses are ignored if a newer click landed. */
-  const requestIdRef = useRef(0);
+  // The "truth" we commit after each successful Server Action — useOptimistic
+  // automatically falls back to this whenever a transition finishes (success
+  // or error). React 19 handles the snapshot/revert under the hood.
+  const [serverState, setServerState] = useState<VoteState>({
+    upvotes: initialUpvotes,
+    downvotes: initialDownvotes,
+    userVote: initialUserVote,
+  });
+
+  const [optimisticState, addOptimistic] = useOptimistic(
+    serverState,
+    (current, nextVote: -1 | 0 | 1) => {
+      // Compute the optimistic delta on the score columns.
+      //   userVote=0  → upvotes ± 1
+      //   userVote=±1 → upvotes ± 2 (the flip cancels old vote AND adds new)
+      const scoreDelta = nextVote - current.userVote;
+      const downvoteDelta =
+        (nextVote === -1 ? 1 : 0) - (current.userVote === -1 ? 1 : 0);
+      return {
+        upvotes: current.upvotes + scoreDelta,
+        downvotes: current.downvotes + downvoteDelta,
+        userVote: nextVote,
+      };
+    },
+  );
+
+  const [isPending, startTransition] = useTransition();
 
   const submit = useCallback(
-    async (target: -1 | 1) => {
-      if (busy) return;
+    (target: -1 | 1) => {
+      if (isPending) return;
       if (!isAuthenticated) {
         onAuthRequired?.();
         return;
@@ -85,72 +96,52 @@ export function CommentVote({
       // Reddit-style toggle :
       //   * click the arrow you already used → vote = 0 (remove)
       //   * click the opposite arrow         → vote = target (flip)
-      const nextVote: -1 | 0 | 1 = userVote === target ? 0 : target;
+      const nextVote: -1 | 0 | 1 =
+        serverState.userVote === target ? 0 : target;
+      const prevVote = serverState.userVote;
 
-      // Compute the optimistic delta on the score column.
-      //   userVote=0  → upvotes ± 1
-      //   userVote=±1 → upvotes ± 2 (the flip cancels old vote AND adds new)
-      const scoreDelta = nextVote - userVote;
-      const downvoteDelta =
-        (nextVote === -1 ? 1 : 0) - (userVote === -1 ? 1 : 0);
+      startTransition(async () => {
+        addOptimistic(nextVote);
 
-      // Snapshot for rollback.
-      const prevUpvotes = upvotes;
-      const prevDownvotes = downvotes;
-      const prevUserVote = userVote;
-
-      setUpvotes((v) => v + scoreDelta);
-      setDownvotes((v) => v + downvoteDelta);
-      setUserVote(nextVote);
-      setBusy(true);
-
-      const reqId = ++requestIdRef.current;
-
-      try {
         const result = await voteOnComment(commentId, nextVote);
 
-        // Stale response — a newer click already landed.
-        if (reqId !== requestIdRef.current) return;
-
         if (!result.ok) {
-          setUpvotes(prevUpvotes);
-          setDownvotes(prevDownvotes);
-          setUserVote(prevUserVote);
+          // useOptimistic auto-reverts to serverState — no manual rollback.
           if (result.authRequired) onAuthRequired?.();
           return;
         }
 
         // Reconcile against the server's canonical numbers — protects
         // against optimistic-vs-server drift on rapid re-votes.
-        setUpvotes(result.upvotes);
-        setDownvotes(result.downvotes);
-        setUserVote(result.userVote);
-
-        onChange?.({
+        const next: VoteState = {
           upvotes: result.upvotes,
           downvotes: result.downvotes,
           userVote: result.userVote,
-        });
+        };
+        setServerState(next);
+        onChange?.(next);
 
         // Best-effort analytics ping. Whitelisted in migration 038 +
         // /api/track ALLOWED_EVENT_TYPES + track.ts EventType union.
         track("comment.voted", {
           entityType: "comment",
           entityId: commentId,
-          metadata: { vote: result.userVote, prev: prevUserVote },
+          metadata: { vote: result.userVote, prev: prevVote },
         });
-      } catch {
-        if (reqId !== requestIdRef.current) return;
-        setUpvotes(prevUpvotes);
-        setDownvotes(prevDownvotes);
-        setUserVote(prevUserVote);
-      } finally {
-        if (reqId === requestIdRef.current) setBusy(false);
-      }
+      });
     },
-    [busy, isAuthenticated, userVote, upvotes, downvotes, commentId, onAuthRequired, onChange],
+    [
+      isPending,
+      isAuthenticated,
+      serverState.userVote,
+      commentId,
+      addOptimistic,
+      onAuthRequired,
+      onChange,
+    ],
   );
 
+  const { upvotes, downvotes, userVote } = optimisticState;
   const upActive = userVote === 1;
   const downActive = userVote === -1;
   const disabled = !isAuthenticated;
@@ -165,7 +156,7 @@ export function CommentVote({
       <button
         type="button"
         onClick={() => submit(1)}
-        disabled={busy && !upActive}
+        disabled={isPending && !upActive}
         aria-label={upActive ? "Retirer le vote positif" : "Voter positivement"}
         aria-pressed={upActive}
         title={tooltip}
@@ -198,7 +189,7 @@ export function CommentVote({
       <button
         type="button"
         onClick={() => submit(-1)}
-        disabled={busy && !downActive}
+        disabled={isPending && !downActive}
         aria-label={downActive ? "Retirer le vote négatif" : "Voter négativement"}
         aria-pressed={downActive}
         title={tooltip}

@@ -149,6 +149,11 @@ async def main_async(limit: int | None, dry_run: bool, workers: int, force_reenc
         asyncio.create_task(process_one(kill, sem, counters, len(pending)))
         for kill in pending
     ]
+    # Wave 13f: NOT migrated to TaskGroup — this is a one-shot backfill
+    # script (not a daemon hot path), and the explicit
+    # KeyboardInterrupt → cancel-all → drain pattern is intentional for
+    # interactive use. TaskGroup's BaseException handling would interact
+    # awkwardly with the manual cancel/await loop here.
     try:
         await asyncio.gather(*tasks, return_exceptions=False)
     except KeyboardInterrupt:

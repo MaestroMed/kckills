@@ -248,10 +248,17 @@ async def _broadcast_one(db, notif: dict[str, Any], vapid: dict[str, str]) -> No
     # Send in batches to bound concurrency.
     for batch_start in range(0, len(subs), SEND_BATCH_SIZE):
         batch = subs[batch_start:batch_start + SEND_BATCH_SIZE]
-        results = await asyncio.gather(*[
-            _send_one(webpush_fn, WebPushException, notif_id, s, payload, vapid)
-            for s in batch
-        ])
+        # Wave 13f: TaskGroup batch send — _send_one is documented "Never
+        # raises" (returns delivery dict for any failure mode), so this is
+        # semantically equivalent to gather. TaskGroup gives clean
+        # cancellation if the daemon supervisor stops us mid-broadcast.
+        send_tasks: list[asyncio.Task] = []
+        async with asyncio.TaskGroup() as tg:
+            for s in batch:
+                send_tasks.append(tg.create_task(
+                    _send_one(webpush_fn, WebPushException, notif_id, s, payload, vapid)
+                ))
+        results = [t.result() for t in send_tasks]
         deliveries.extend(results)
         for d in results:
             if d["status"] == "expired" and d["subscription_id"]:

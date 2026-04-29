@@ -1,4 +1,14 @@
-"""Gemini 2.5 Flash-Lite client — video/text analysis."""
+"""Gemini 2.5 Flash-Lite client — video/text analysis.
+
+Wave 13f migration : moved from the deprecated `google-generativeai`
+SDK to the modern `google-genai` (note the dash). The old SDK printed
+a FutureWarning on every import ("All support has ended") and Google
+has cut new-model support there. The new SDK exposes a `Client`
+object instead of module-level globals, file uploads on
+`client.files.upload`, and — critically — native structured-output
+support via `responseSchema` (used by the analyzer to retire the
+JSON-fence-stripping defensive layer).
+"""
 
 import json
 import os
@@ -10,14 +20,51 @@ from scheduler import scheduler
 log = structlog.get_logger()
 
 
-def _wait_for_file_active(genai_module, file_ref, timeout: int = 60) -> bool:
-    """Poll until an uploaded file reaches ACTIVE state."""
+# ─── Wave 13f migration — shared client helpers ──────────────────────
+# The new SDK uses a per-process `Client` object instead of the old
+# `genai.configure()` global. We keep a single cached instance — the
+# Client is thread-safe and holds the API key + transport pool, so
+# instantiating it on every call would just leak HTTP connections.
+
+_client = None
+
+
+def get_client():
+    """Return a shared `google.genai.Client` instance (created lazily).
+
+    Returns None if the API key is missing OR the SDK is not installed,
+    so callers can fall back to a degraded mode (text-only / no AI).
+    """
+    global _client
+    if _client is not None:
+        return _client
+    if not config.GEMINI_API_KEY:
+        return None
+    try:
+        from google import genai  # type: ignore
+    except ImportError:
+        log.warn("gemini_sdk_missing")
+        return None
+    _client = genai.Client(api_key=config.GEMINI_API_KEY)
+    return _client
+
+
+def _wait_for_file_active(client, file_ref, timeout: int = 60) -> bool:
+    """Poll until an uploaded file reaches ACTIVE state.
+
+    Wave 13f migration : the first arg used to be the `genai` module
+    (old SDK pattern with `genai.get_file(name)`). It's now a `Client`
+    instance and we call `client.files.get(name=...)`. The signature
+    change is intentional — every consumer in the worker was rewritten
+    to pass the client through, and callers that still pass the module
+    will fail loudly rather than silently using the deprecated API.
+    """
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
-        f = genai_module.get_file(file_ref.name)
+        f = client.files.get(name=file_ref.name)
         state = getattr(f, "state", None)
         if state is None:
-            return True  # older SDK without state tracking
+            return True  # older SDK without state tracking (defensive)
         state_name = state.name if hasattr(state, "name") else str(state)
         if state_name == "ACTIVE":
             return True
@@ -30,7 +77,15 @@ def _wait_for_file_active(genai_module, file_ref, timeout: int = 60) -> bool:
 
 
 async def analyze(prompt: str, video_path: str | None = None) -> dict | None:
-    """Send prompt to Gemini. Returns parsed JSON or None."""
+    """Send prompt to Gemini. Returns parsed JSON or None.
+
+    Wave 13f migration : the public surface is unchanged — callers
+    (legacy or new) still get a `dict | None`. Internals now use the
+    new SDK and request native JSON output via `responseMimeType` so
+    we don't need the old code-fence stripping path. We still
+    json.loads() defensively in case the model returns malformed
+    JSON despite the MIME hint (rare but observed on flash-lite).
+    """
     if not config.GEMINI_API_KEY:
         return None
 
@@ -39,31 +94,48 @@ async def analyze(prompt: str, video_path: str | None = None) -> dict | None:
         log.warn("gemini_quota_exceeded")
         return None
 
+    client = get_client()
+    if client is None:
+        return None
+
     try:
-        import google.generativeai as genai  # type: ignore
-        genai.configure(api_key=config.GEMINI_API_KEY)
+        from google.genai import types  # type: ignore
         model_name = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash-lite")
-        model = genai.GenerativeModel(model_name)
 
         if video_path:
-            video_file = genai.upload_file(video_path)
+            # Wave 13f migration — `client.files.upload(file=...)` instead
+            # of `genai.upload_file(path=...)`. Pass the mime type via
+            # the typed config so the API picks the right decoder.
+            video_file = client.files.upload(
+                file=video_path,
+                config=types.UploadFileConfig(mime_type="video/mp4"),
+            )
             # Wait for the file to become ACTIVE — Gemini processes uploads
             # asynchronously and returns 400 if we query before it's ready.
-            if not _wait_for_file_active(genai, video_file):
+            if not _wait_for_file_active(client, video_file):
                 return None
-            response = model.generate_content([prompt, video_file])
+            contents = [prompt, video_file]
         else:
-            response = model.generate_content(prompt)
+            contents = prompt
 
-        text = response.text.strip()
+        response = client.models.generate_content(
+            model=model_name,
+            contents=contents,
+            config=types.GenerateContentConfig(
+                response_mime_type="application/json",
+            ),
+        )
+
+        text = (response.text or "").strip()
+        # Defensive : even with response_mime_type=application/json the
+        # model has been observed to occasionally wrap JSON in fences.
+        # Strip them if present so downstream parsing doesn't fail.
         if text.startswith("```"):
             text = text.split("```")[1]
             if text.startswith("json"):
                 text = text[4:]
         return json.loads(text)
 
-    except ImportError:
-        log.warn("gemini_sdk_missing")
     except json.JSONDecodeError:
         log.warn("gemini_invalid_json")
     except Exception as e:

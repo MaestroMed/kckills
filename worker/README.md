@@ -143,7 +143,10 @@ Reset quotidien : **07:00 UTC** (minuit Pacific).
 
 ## Troubleshooting
 
-**`ModuleNotFoundError: google.generativeai`** → `pip install -r requirements.txt`
+**`ModuleNotFoundError: google.genai`** → `pip install -r requirements.txt`
+(Wave 13f : the worker moved off the deprecated `google-generativeai`
+package onto `google-genai`. Both are pinned in requirements.txt for
+the transitional release.)
 
 **`ffmpeg: command not found`** → installer ffmpeg système (voir pré-requis)
 

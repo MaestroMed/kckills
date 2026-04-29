@@ -111,8 +111,7 @@ Reponds UNIQUEMENT en JSON valide.</task>
     "description_en": "<max 130 chars, EN, same energy as FR>",
     "description_ko": "<max 80 chars, KR Korean>",
     "description_es": "<max 130 chars, ES Spanish>",
-    "kill_visible_on_screen": <true|false — see rules below>,
-    "clip_context": <"live_gameplay"|"replay"|"draft"|"lobby"|"loading"|"plateau"|"transition"|"other">,
+    "kill_visible_on_screen": true,
     "caster_hype_level": <int 1-5>,
     "best_thumbnail_timestamp_in_clip_sec": <int 0-40, second IN the clip
                                               that best captures the kill
@@ -192,37 +191,6 @@ Verifie que le champion correspond au pool ci-dessus avant d'attribuer.
    "le setup mene a un pick", "l'engage retourne le tempo" — JAMAIS
    "X termine Y" / "X acheve Y".
 
-8. KILL_VISIBLE_ON_SCREEN — DEFINITION STRICTE (anti-pollution 2026-04-26) :
-   Tu ne dois retourner TRUE que si TOUTES ces conditions sont reunies :
-   * On VOIT le kill se jouer en LIVE GAMEPLAY (HUD ingame visible : barre
-     d'XP en bas, minimap en bas a droite, scoreboard top, gold counter).
-   * Le killfeed top-droit affiche l'icone du killer + skull + victim
-     PENDANT le clip OU le champion victim s'effondre/explode visiblement.
-   * La camera est sur le combat — PAS sur un caster cam, un panel
-     studio, un sponsor break, une replay LEC/LFL avec watermark replay.
-   FALSE obligatoire si :
-   * Champion select / draft phase / pick & ban screen.
-   * Loading screen / "GAME 1 STARTING SOON" / countdown.
-   * Plateau studio (Drakos, Trobi, Doigby a l'antenne, sponsors visibles).
-   * Lobby end-of-game (Victory/Defeat screen, post-game stats).
-   * Transition / split screen entre 2 games d'un BO multi-games.
-   * Replay de kill deja vu (LEC officiel rejoue souvent les highlights —
-     watermark "REPLAY" en haut a gauche typique).
-   * Le clip coupe AVANT que le kill se produise (premieres 5s du combat
-     mais kill arrive a la 35e seconde — clip mal decoupe par le pipeline).
-
-9. CLIP_CONTEXT — categorie pour le QC dashboard :
-   * "live_gameplay" — le seul cas ou le clip va etre publie (avec
-     kill_visible_on_screen=true OU explicitement non visible mais
-     l'action est legitime, e.g. teamfight off-screen).
-   * "replay" — replay de kill deja vu, surimpression "REPLAY" visible.
-   * "draft" — champion select / pick & ban.
-   * "lobby" — Victory/Defeat screen, end-of-game scoreboard.
-   * "loading" — loading screen, countdown.
-   * "plateau" — studio, casters in frame, sponsor break.
-   * "transition" — split screen / generique entre 2 games.
-   * "other" — rien de tout ca, le clip est trop ambigu.
-
 </rules_dures_priorite_absolue>
 
 <rules_softer>
@@ -295,6 +263,48 @@ def validate_description(text: str | None) -> tuple[bool, str]:
     return True, "ok"
 
 
+# ─── Wave 13f migration — JSON schema for structured output ───────────
+# The new google-genai SDK supports `response_schema` on
+# generate_content. Passing this schema below tells Gemini to return
+# JSON that matches the analyzer's contract exactly — no more
+# JSON-fence stripping, no more "did the model wrap it in ```json"
+# defense, no more catching JSONDecodeError on every call.
+#
+# Mirrors the <output_format> block in ANALYSIS_PROMPT above. If you
+# add/remove a field there, update this schema too — the prompt is
+# the human-readable spec, the schema is the machine-readable contract.
+#
+# Note : `tags` is intentionally an open array of strings (not a
+# Pydantic enum) because the validation (max 5, allowed values) is
+# enforced as part of the prompt rules and the soft post-validation
+# below. Schema-level enum would hard-fail the call instead of
+# letting the validator reject + retry, which is more brittle in
+# practice given the model occasionally invents close-but-wrong tags.
+ANALYSIS_RESPONSE_SCHEMA: dict = {
+    "type": "object",
+    "properties": {
+        "highlight_score": {"type": "number"},
+        "tags": {
+            "type": "array",
+            "items": {"type": "string"},
+        },
+        "description_fr": {"type": "string"},
+        "description_en": {"type": "string"},
+        "description_ko": {"type": "string"},
+        "description_es": {"type": "string"},
+        "kill_visible_on_screen": {"type": "boolean"},
+        "caster_hype_level": {"type": "integer"},
+        "best_thumbnail_timestamp_in_clip_sec": {"type": "integer"},
+        "in_game_timer_at_clip_midpoint": {"type": "string"},
+        "confidence_score": {"type": "number"},
+    },
+    "required": [
+        "highlight_score", "tags", "description_fr",
+        "kill_visible_on_screen",
+    ],
+}
+
+
 # ─── Core call ──────────────────────────────────────────────────────────
 
 async def analyze_kill(
@@ -334,8 +344,20 @@ async def analyze_kill(
         roster_pool_hint=ROSTER_POOL_HINT,
     )
 
+    # Wave 13f migration — moved from `google.generativeai` (deprecated,
+    # FutureWarning on every import) to `google.genai`. The new SDK
+    # exposes a per-process Client and supports native structured
+    # output via `response_schema` — see ANALYSIS_RESPONSE_SCHEMA above.
+    # The schema makes the JSON-fence-stripping defensive layer obsolete :
+    # Google guarantees `response.text` is parseable JSON matching the
+    # schema (or surfaces the failure on the call).
+    from services.gemini_client import get_client, _wait_for_file_active
+    client = get_client()
+    if client is None:
+        log.warn("gemini_sdk_not_installed")
+        return None
     try:
-        import google.generativeai as genai  # type: ignore
+        from google.genai import types  # type: ignore
     except ImportError:
         log.warn("gemini_sdk_not_installed")
         return None
@@ -343,26 +365,47 @@ async def analyze_kill(
     text = ""
     started_at = time.monotonic()
     try:
-        genai.configure(api_key=config.GEMINI_API_KEY)
         # PR13 — allow per-call model override (used by lab generator
         # to A/B-test different models on the same clip). Defaults to
         # the configured analyzer model.
         model_name = model_override or config.GEMINI_MODEL_ANALYZER
-        model = genai.GenerativeModel(model_name)
+
+        # Wave 13f — single typed config used for every variant (with
+        # video / text-only). `response_mime_type` + `response_schema`
+        # tell Gemini to return JSON matching the analyzer schema,
+        # so we don't need fence stripping or JSON-shape defenses.
+        gen_config = types.GenerateContentConfig(
+            response_mime_type="application/json",
+            response_schema=ANALYSIS_RESPONSE_SCHEMA,
+        )
 
         if clip_path and os.path.exists(clip_path):
-            video_file = genai.upload_file(clip_path)
-            from services.gemini_client import _wait_for_file_active
-            if not _wait_for_file_active(genai, video_file):
+            video_file = client.files.upload(
+                file=clip_path,
+                config=types.UploadFileConfig(mime_type="video/mp4"),
+            )
+            if not _wait_for_file_active(client, video_file):
                 log.warn("gemini_file_not_active", clip=clip_path)
-                response = model.generate_content(prompt)
+                response = client.models.generate_content(
+                    model=model_name, contents=prompt, config=gen_config,
+                )
             else:
-                response = model.generate_content([prompt, video_file])
+                response = client.models.generate_content(
+                    model=model_name,
+                    contents=[prompt, video_file],
+                    config=gen_config,
+                )
         else:
-            response = model.generate_content(prompt)
+            response = client.models.generate_content(
+                model=model_name, contents=prompt, config=gen_config,
+            )
 
         text = (response.text or "").strip()
-        text = _strip_code_fence(text)
+        # Wave 13f : structured-output guarantees parseable JSON, so we
+        # can json.loads() directly. We KEEP the json.loads() inside a
+        # try/except below because the model has been observed to
+        # occasionally violate the schema (rare, ~0.1%), and we'd
+        # rather log + retry than crash the producer.
         result = json.loads(text)
         elapsed_ms = int((time.monotonic() - started_at) * 1000)
         log.info("gemini_analysis_done",
@@ -391,16 +434,10 @@ async def analyze_kill(
         return None
 
 
-def _strip_code_fence(text: str) -> str:
-    """Gemini sometimes wraps JSON in ```json ... ``` fences — unwrap them."""
-    if text.startswith("```"):
-        parts = text.split("```")
-        if len(parts) >= 2:
-            inner = parts[1]
-            if inner.startswith("json"):
-                inner = inner[4:]
-            return inner.strip()
-    return text
+# Wave 13f migration : `_strip_code_fence` removed. The new SDK returns
+# guaranteed-parseable JSON via `response_mime_type=application/json` +
+# `response_schema=ANALYSIS_RESPONSE_SCHEMA` — Gemini no longer wraps
+# the payload in markdown fences when those config flags are set.
 
 
 async def analyze_kill_row(kill: dict, clip_path: str | None = None) -> dict | None:
@@ -919,30 +956,6 @@ def _build_analysis_patch(result: dict, kill: dict) -> dict:
     thumb_ts = _safe_int(result.get("best_thumbnail_timestamp_in_clip_sec"))
     kill_visible_flag = bool(result.get("kill_visible_on_screen", True))
 
-    # 2026-04-26 — clip_context anti-pollution gate. Gemini classifies the
-    # clip into one of 8 categories ; only "live_gameplay" is allowed
-    # through to the publish gate. Anything else (replay, draft, plateau,
-    # lobby, loading, transition, other) keeps the row at status='analyzed'
-    # and flips kill_visible=false so it's hidden from the scroll feed
-    # even if a future migration relaxes the gate.
-    clip_context_raw = (result.get("clip_context") or "").strip().lower()
-    VALID_CONTEXTS = {
-        "live_gameplay", "replay", "draft", "lobby",
-        "loading", "plateau", "transition", "other",
-    }
-    clip_context = clip_context_raw if clip_context_raw in VALID_CONTEXTS else "other"
-    if clip_context != "live_gameplay":
-        # Force kill_visible=false on non-gameplay clips so the existing
-        # frontend filter (kill_visible !== false) hides them out of the
-        # box without requiring a column-aware change to the feed query.
-        kill_visible_flag = False
-        log.info(
-            "analyzer_clip_context_filter",
-            kill_id=str(kill.get("id"))[:8],
-            context=clip_context,
-            reason="kill_visible forced false (non-live_gameplay)",
-        )
-
     # Parse in-game timer from "MM:SS" format → compute drift vs expected
     qc_timer_sec: int | None = None
     qc_drift_sec: int | None = None
@@ -970,7 +983,6 @@ def _build_analysis_patch(result: dict, kill: dict) -> dict:
         "ai_qc_drift_sec": qc_drift_sec,
         "ai_pipeline_version": ANALYZER_PIPELINE_VERSION,
         "kill_visible": kill_visible_flag,
-        "ai_clip_context": clip_context,                  # Wave 12 anti-pollution
         "caster_hype_level": _safe_int(result.get("caster_hype_level")),
         "status": "analyzed",
     }

@@ -72,20 +72,29 @@ async def verify_clip_timing(
         if not can_call:
             return False, 0
 
-        import google.generativeai as genai
-        genai.configure(api_key=config.GEMINI_API_KEY)
-        model = genai.GenerativeModel(config.GEMINI_MODEL_QC)
+        # Wave 13f migration — moved off `google.generativeai`
+        # (deprecated) onto `google.genai`. See gemini_client.get_client().
+        from services.gemini_client import get_client, _wait_for_file_active
+        from google.genai import types
+        client = get_client()
+        if client is None:
+            return False, 0
 
-        img = genai.upload_file(frame_path)
-        from services.gemini_client import _wait_for_file_active
-        _wait_for_file_active(genai, img, timeout=30)
+        img = client.files.upload(
+            file=frame_path,
+            config=types.UploadFileConfig(mime_type="image/jpeg"),
+        )
+        _wait_for_file_active(client, img, timeout=30)
 
-        response = model.generate_content([
-            "Read the in-game League of Legends timer at the top center. "
-            "Reply ONLY MM:SS. If not visible reply NONE.",
-            img,
-        ])
-        timer_text = response.text.strip()
+        response = client.models.generate_content(
+            model=config.GEMINI_MODEL_QC,
+            contents=[
+                "Read the in-game League of Legends timer at the top center. "
+                "Reply ONLY MM:SS. If not visible reply NONE.",
+                img,
+            ],
+        )
+        timer_text = (response.text or "").strip()
 
         match = re.match(r"(\d+):(\d+)", timer_text)
         if not match:

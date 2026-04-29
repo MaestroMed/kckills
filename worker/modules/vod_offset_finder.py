@@ -248,18 +248,27 @@ async def _read_timer_at(youtube_id: str, vod_seconds: int) -> int | None:
         if not await scheduler.wait_for("gemini"):
             return None
 
-        import google.generativeai as genai  # type: ignore
-        from services.gemini_client import _wait_for_file_active
-        genai.configure(api_key=config.GEMINI_API_KEY)
-        model = genai.GenerativeModel(config.GEMINI_MODEL_OFFSET)
-        img = genai.upload_file(frame_path)
-        _wait_for_file_active(genai, img, timeout=30)
-        resp = model.generate_content([
-            "Read the in-game League of Legends timer at the top center "
-            "of the screen. Reply ONLY with MM:SS. If no LoL game is "
-            "visible (interview, draft, panel, replay menu, ad), reply NONE.",
-            img,
-        ])
+        # Wave 13f migration — moved from deprecated `google.generativeai`
+        # to `google.genai` (see services/gemini_client.get_client).
+        from services.gemini_client import get_client, _wait_for_file_active
+        from google.genai import types  # type: ignore
+        client = get_client()
+        if client is None:
+            return None
+        img = client.files.upload(
+            file=frame_path,
+            config=types.UploadFileConfig(mime_type="image/jpeg"),
+        )
+        _wait_for_file_active(client, img, timeout=30)
+        resp = client.models.generate_content(
+            model=config.GEMINI_MODEL_OFFSET,
+            contents=[
+                "Read the in-game League of Legends timer at the top center "
+                "of the screen. Reply ONLY with MM:SS. If no LoL game is "
+                "visible (interview, draft, panel, replay menu, ad), reply NONE.",
+                img,
+            ],
+        )
         text = (resp.text or "").strip()
         m = re.match(r"(\d+):(\d+)", text)
         if not m:

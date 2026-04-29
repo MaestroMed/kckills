@@ -30,12 +30,50 @@ from services.observability import run_logged
 
 log = structlog.get_logger()
 
-MODERATION_PROMPT = """Modere ce commentaire sur un site de clips esport LoL.
-Commentaire de "{username}": "{content}"
-Reponds UNIQUEMENT en JSON: {{"action":"approve|flag|reject","reason":"...","toxicity":0.0-10.0}}
-Regles: le trash talk leger entre fans est OK, les emojis et l'argot gaming sont OK.
-reject = toxique, spam, haine, harcelement, contenu illegal.
-flag = douteux, necessite review humain."""
+# PR-cache (Wave 13e+) : split into static system prompt + dynamic user
+# message so the static block becomes cacheable via Anthropic prompt
+# caching (90% read discount, 5-minute TTL).
+#
+# OLD shape (single .format() call) :
+#   "Modere... Commentaire de "{user}": "{content}"... Regles..."
+# NEW shape :
+#   system  = MODERATION_SYSTEM_PROMPT (static, cached)
+#   user    = f'Commentaire de "{username}": "{content}"' (dynamic, fresh)
+#
+# Anthropic prompt caching pricing (Haiku 4.5, oct 2025) :
+#   * Cache write : $1.25/M tokens (1.25× input)
+#   * Cache read  : $0.10/M tokens (0.10× input — 90% discount)
+#   * Fresh input : $1.00/M tokens
+# At ~500 comments/day with bursts of 5-25 within a 5-min window, the
+# system prompt (~120 tokens) is written once per burst then read for the
+# remaining N-1 calls in the window.
+#
+# IMPORTANT — DO NOT re-merge the system + user blocks back into a single
+# `messages=[...]` call. That kills the cache : every distinct user
+# message becomes a new prefix and Anthropic has no static portion to
+# cache against.
+MODERATION_SYSTEM_PROMPT = """Tu es moderateur de commentaires sur un site de clips esport LoL (League of Legends).
+
+Pour chaque commentaire utilisateur, classifie-le et reponds UNIQUEMENT en JSON :
+{"action":"approve|flag|reject","reason":"...","toxicity":0.0-10.0}
+
+Regles de moderation :
+- approve = OK pour publication. Le trash talk leger entre fans est OK,
+  les emojis et l'argot gaming (tilt, int, smurf, "ggez", "diff", etc.)
+  sont OK. Critique de joueurs ou d'equipes acceptable si non personnelle.
+- flag = douteux, necessite review humain (sarcasme limite, sous-entendu
+  ambigu, attaque indirecte). Toxicity 4-7.
+- reject = toxique, spam, haine, harcelement, contenu illegal, doxxing,
+  insulte ciblee, racisme, homophobie, sexisme, menace. Toxicity 8-10.
+
+Sortie : JSON valide uniquement, pas de markdown, pas de prefix, pas de
+commentaire."""
+
+# Legacy alias kept so any external caller of MODERATION_PROMPT (scripts,
+# tests, the lab) doesn't break. The .format(username=, content=) flow
+# now happens inside moderate_comment() — callers should NOT pre-format
+# the prompt themselves.
+MODERATION_PROMPT = MODERATION_SYSTEM_PROMPT
 
 # Worker-side knobs. Sized for the typical Wave 7 backlog (≤ 50 pending
 # comments per cycle) — bigger batches just stretch the daemon's runtime
@@ -69,19 +107,57 @@ async def moderate_comment(username: str, content: str) -> dict:
     if not can_call:
         return {"action": "approve", "reason": "rate_limited", "toxicity": 0}
 
-    prompt = MODERATION_PROMPT.format(username=username, content=content)
+    # User-specific portion (NOT cached). Kept short so the cache hit ratio
+    # stays high (cache is keyed on the *system* prefix).
+    user_msg = f'Commentaire de "{username}": "{content}"'
 
     try:
         import anthropic
         client = anthropic.Anthropic(api_key=config.ANTHROPIC_API_KEY)
+        # PR-cache (Wave 13e+) : prompt caching on the system block.
+        # `cache_control={"type": "ephemeral"}` tells Anthropic to cache
+        # this block for 5 min. Subsequent calls within that window pay
+        # $0.10/M for the cached portion instead of $1.00/M = 90% discount.
+        # Haiku 4.5 minimum cacheable block = 1024 tokens — our system
+        # prompt is shorter (~120 tokens), so the FIRST call won't actually
+        # cache. The Anthropic API tolerates the cache_control flag on
+        # short blocks (no-op + no error) — when we eventually grow the
+        # rules block past 1024 tokens, caching kicks in automatically.
+        # See https://docs.anthropic.com/en/docs/build-with-claude/prompt-caching#minimum-cacheable-prompt-length
         message = client.messages.create(
             model="claude-haiku-4-5-20251001",
             max_tokens=200,
-            messages=[{"role": "user", "content": prompt}],
+            system=[
+                {
+                    "type": "text",
+                    "text": MODERATION_SYSTEM_PROMPT,
+                    "cache_control": {"type": "ephemeral"},
+                }
+            ],
+            messages=[{"role": "user", "content": user_msg}],
         )
         text = message.content[0].text.strip()
         result = json.loads(text)
-        log.info("comment_moderated", action=result.get("action"), toxicity=result.get("toxicity"))
+        # Surface cache stats for monitoring. usage.cache_read_input_tokens
+        # is the # of tokens served from cache this call ; > 0 = cache HIT.
+        # Logged so the watchdog daily report can show "cache hit ratio".
+        try:
+            usage = getattr(message, "usage", None)
+            cache_read = getattr(usage, "cache_read_input_tokens", 0) or 0
+            cache_create = getattr(usage, "cache_creation_input_tokens", 0) or 0
+            log.info(
+                "comment_moderated",
+                action=result.get("action"),
+                toxicity=result.get("toxicity"),
+                cache_read_tokens=cache_read,
+                cache_create_tokens=cache_create,
+            )
+        except Exception:
+            log.info(
+                "comment_moderated",
+                action=result.get("action"),
+                toxicity=result.get("toxicity"),
+            )
         return result
 
     except ImportError:

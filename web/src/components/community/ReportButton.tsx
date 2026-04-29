@@ -41,6 +41,8 @@ import {
   useRef,
   useCallback,
   useId,
+  useOptimistic,
+  useTransition,
 } from "react";
 import { motion, AnimatePresence } from "motion/react";
 
@@ -277,11 +279,20 @@ export function ReportButton({
   hideTrigger = false,
 }: ReportButtonProps) {
   const [open, setOpen] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
+  const [isPending, startTransition] = useTransition();
   const [toast, setToast] = useState<
     "sent" | "error" | "rate_limited" | null
   >(null);
-  const [reported, setReported] = useState(false);
+  // Confirmed lock state. Hydrated from sessionStorage on mount and
+  // promoted on a successful POST. The optimistic layer below flips
+  // INSTANTLY on click — useOptimistic auto-reverts on failure.
+  const [reportedConfirmed, setReportedConfirmed] = useState(false);
+  const [optimisticReported, setOptimisticReported] = useOptimistic(
+    reportedConfirmed,
+    (_current, next: boolean) => next,
+  );
+  const submitting = isPending;
+  const reported = optimisticReported;
   const [otherText, setOtherText] = useState("");
   const [activeReasonIndex, setActiveReasonIndex] = useState(0);
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -298,7 +309,7 @@ export function ReportButton({
   // Initial dedup check from sessionStorage (sync read in effect to
   // avoid SSR hydration mismatch).
   useEffect(() => {
-    setReported(alreadyReportedThisSession(targetType, targetId));
+    setReportedConfirmed(alreadyReportedThisSession(targetType, targetId));
   }, [targetType, targetId]);
 
   // Imperative controller for parents that own a gesture surface.
@@ -402,51 +413,68 @@ export function ReportButton({
   );
 
   const submit = useCallback(
-    async (reasonCode: string, reasonText?: string) => {
-      if (submitting || reported) return;
-      setSubmitting(true);
-      try {
-        const anonId = getOrCreateAnonId();
-        const res = await fetch("/api/report", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            targetType,
-            targetId,
-            reasonCode,
-            reasonText: reasonText && reasonText.trim().length > 0 ? reasonText.trim() : undefined,
-            reporterAnonId: anonId,
-          }),
-        });
-        if (res.status === 429) {
-          flashToast("rate_limited");
-          return;
-        }
-        if (!res.ok) {
+    (reasonCode: string, reasonText?: string) => {
+      if (isPending || reportedConfirmed) return;
+
+      startTransition(async () => {
+        // Flip the lock instantly — the trigger button greys out and the
+        // sheet rows disable while the POST is in flight. useOptimistic
+        // automatically reverts to `reportedConfirmed` if we exit the
+        // transition without promoting it (i.e. on any error path).
+        setOptimisticReported(true);
+
+        try {
+          const anonId = getOrCreateAnonId();
+          const res = await fetch("/api/report", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              targetType,
+              targetId,
+              reasonCode,
+              reasonText:
+                reasonText && reasonText.trim().length > 0
+                  ? reasonText.trim()
+                  : undefined,
+              reporterAnonId: anonId,
+            }),
+          });
+          if (res.status === 429) {
+            flashToast("rate_limited");
+            return;
+          }
+          if (!res.ok) {
+            flashToast("error");
+            return;
+          }
+          // Both fresh-report and already-reported responses are 200 OK
+          // — server returns {alreadyReported: true} for the latter. Either
+          // way we lock the button for the session.
+          markReportedThisSession(targetType, targetId);
+          setReportedConfirmed(true);
+          flashToast("sent");
+          // Auto-close after success — desktop dropdown closes
+          // immediately; mobile sheet waits for the toast tail so the
+          // user can read the confirmation before the sheet disappears.
+          if (isMobile) {
+            window.setTimeout(() => setOpen(false), 1200);
+          } else {
+            setOpen(false);
+          }
+        } catch {
           flashToast("error");
-          return;
         }
-        // Both fresh-report and already-reported responses are 200 OK
-        // — server returns {alreadyReported: true} for the latter. Either
-        // way we lock the button for the session.
-        markReportedThisSession(targetType, targetId);
-        setReported(true);
-        flashToast("sent");
-        // Auto-close after success — desktop dropdown closes
-        // immediately; mobile sheet waits for the toast tail so the
-        // user can read the confirmation before the sheet disappears.
-        if (isMobile) {
-          window.setTimeout(() => setOpen(false), 1200);
-        } else {
-          setOpen(false);
-        }
-      } catch {
-        flashToast("error");
-      } finally {
-        setSubmitting(false);
-      }
+      });
     },
-    [submitting, reported, targetType, targetId, flashToast, isMobile],
+    [
+      isPending,
+      reportedConfirmed,
+      targetType,
+      targetId,
+      flashToast,
+      isMobile,
+      setOptimisticReported,
+    ],
   );
 
   const sizeBoxClass =

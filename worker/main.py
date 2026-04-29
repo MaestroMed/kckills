@@ -215,6 +215,14 @@ async def run_daemon():
 
     log.info("daemon_running", task_count=len(tasks))
 
+    # Wave 13f: NOT migrated to TaskGroup — this is the supervisor itself.
+    # Each `tasks` entry is a `supervised_task(...)` wrapper that catches
+    # per-module exceptions and respawns the module after RESTART_DELAY,
+    # so the gathered tasks should never raise in normal operation. If
+    # they did (rare bug), TaskGroup would CANCEL ALL OTHER MODULES, which
+    # is the OPPOSITE of the crash-isolation guarantee the daemon provides.
+    # Keep gather() so a freak crash in one module's supervisor wrapper
+    # cannot take down sentinel/harvester/clipper/analyzer with it.
     try:
         await asyncio.gather(*tasks)
     except KeyboardInterrupt:

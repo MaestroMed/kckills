@@ -49,8 +49,13 @@ async def read_timer_from_frame(vod_path: str, vod_pos: int) -> tuple[int | None
     Returns (game_time_seconds, success).
     Tries 3 positions: exact, +15s, -15s to skip replays.
     """
-    import google.generativeai as genai
-    genai.configure(api_key=config.GEMINI_API_KEY)
+    # Wave 13f migration — moved off `google.generativeai`
+    # (deprecated) onto `google.genai`.
+    from services.gemini_client import get_client, _wait_for_file_active
+    from google.genai import types
+    client = get_client()
+    if client is None:
+        return None, False
 
     for offset in [0, 15, -15]:
         pos = max(0, vod_pos + offset)
@@ -68,21 +73,24 @@ async def read_timer_from_frame(vod_path: str, vod_pos: int) -> tuple[int | None
             if not can_call:
                 return None, False
 
-            model = genai.GenerativeModel(
-                os.environ.get("GEMINI_MODEL", "gemini-2.5-flash-lite")
+            model_name = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash-lite")
+            img = client.files.upload(
+                file=frame_path,
+                config=types.UploadFileConfig(mime_type="image/jpeg"),
             )
-            img = genai.upload_file(frame_path)
-            from services.gemini_client import _wait_for_file_active
-            _wait_for_file_active(genai, img, timeout=30)
+            _wait_for_file_active(client, img, timeout=30)
 
-            response = model.generate_content([
-                "Read the in-game League of Legends timer at the top center of the HUD. "
-                "The timer shows elapsed game time in MM:SS format (e.g. 15:30, 23:45). "
-                "Reply ONLY the timer value like 12:34. If no LoL game timer is visible "
-                "(e.g. analyst desk, champion select, replay overlay, scoreboard) reply NONE.",
-                img,
-            ])
-            timer_text = response.text.strip()
+            response = client.models.generate_content(
+                model=model_name,
+                contents=[
+                    "Read the in-game League of Legends timer at the top center of the HUD. "
+                    "The timer shows elapsed game time in MM:SS format (e.g. 15:30, 23:45). "
+                    "Reply ONLY the timer value like 12:34. If no LoL game timer is visible "
+                    "(e.g. analyst desk, champion select, replay overlay, scoreboard) reply NONE.",
+                    img,
+                ],
+            )
+            timer_text = (response.text or "").strip()
             match = re.match(r"(\d+):(\d+)", timer_text)
             if match:
                 game_time = int(match.group(1)) * 60 + int(match.group(2))

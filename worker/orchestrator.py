@@ -205,6 +205,12 @@ async def run_child(role: str) -> None:
     except (ValueError, AttributeError):
         pass
 
+    # Wave 13f: NOT migrated to TaskGroup — same rationale as main.py's
+    # daemon: each task is a supervised_task() wrapper providing per-module
+    # crash isolation. TaskGroup would cascade-cancel siblings on any
+    # unexpected raise, defeating the isolation. Also, the FIRST_COMPLETED
+    # wait against stop_event below requires a Future-like handle, which
+    # TaskGroup's `async with` block doesn't expose for the same purpose.
     gather_task = asyncio.gather(*tasks, return_exceptions=True)
     stop_task = asyncio.create_task(stop_event.wait())
 

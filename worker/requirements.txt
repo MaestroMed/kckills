@@ -11,21 +11,28 @@ Pillow>=10.0.0
 boto3>=1.34.0
 
 # ── AI ─────────────────────────────────────────────────────
-# google-generativeai is OFFICIALLY DEPRECATED (FutureWarning on every
-# import). Migration roadmap target : `google-genai` 1.72+ (already
-# installed transitively). Tracked in docs/audit-2026-04-29.md tier 3.
-google-generativeai>=0.8.6
-# Wave 13e bump — anthropic 0.94 → 0.97 (streaming improvements +
-# better batch API, prep for the moderator/translator batch migration).
-anthropic>=0.97.0
+# Wave 13f migration : moved every Gemini consumer (analyzer,
+# embedder, clip_qc, vod_offset_finder, scripts) to the modern
+# `google-genai` SDK. The old `google-generativeai` package is
+# OFFICIALLY DEPRECATED ("All support has ended" FutureWarning on
+# every import) and Google has cut new-model support there. The new
+# SDK exposes a `Client` API + native structured output via
+# `responseSchema`, which let us retire the JSON-fence-stripping
+# layer in modules/analyzer.py.
+google-genai>=1.72.0
+# Kept for one release as a transitional safety net — there are no
+# imports of `google.generativeai` left in worker code, but
+# downstream tooling (lab notebooks, ad-hoc REPL sessions) might
+# still be on the old API. Drop in the next release.
+google-generativeai>=0.8.0
+anthropic>=0.40.0
 
 # ── Web Push (PR16 — push_notifier daemon) ─────────────────
 # pywebpush handles VAPID signing + payload encryption (RFC 8291).
 # cryptography is a transitive dep but pinned high to avoid the
 # old urllib3-vs-Python-3.12 fiasco.
-# Wave 13e bump — 46 → 47 (CVE patch in 47.x).
 pywebpush>=2.0.0
-cryptography>=47.0.0
+cryptography>=42.0.0
 
 # ── Sentry — error tracking (Wave 11 / DB) ─────────────────
 # Async-aware integration for asyncio.create_task supervised modules ;

@@ -31,9 +31,13 @@ async def main():
     targets = [k for k in all_kills if any(k["id"].startswith(p) for p in WRONG)]
     print(f"Fixing {len(targets)} descriptions...")
 
-    import google.generativeai as genai
-    genai.configure(api_key=config.GEMINI_API_KEY)
-    model = genai.GenerativeModel("gemini-2.5-flash-lite")
+    # Wave 13f migration — moved off `google.generativeai`
+    # (deprecated) onto `google.genai`.
+    from services.gemini_client import get_client
+    client = get_client()
+    if client is None:
+        print("ERROR: google-genai not installed or GEMINI_API_KEY missing")
+        return
 
     for k in targets:
         ft = k.get("fight_type", "?")
@@ -51,8 +55,11 @@ async def main():
         )
 
         await scheduler.wait_for("gemini")
-        resp = model.generate_content(prompt)
-        new_desc = resp.text.strip().strip('"')
+        resp = client.models.generate_content(
+            model="gemini-2.5-flash-lite",
+            contents=prompt,
+        )
+        new_desc = (resp.text or "").strip().strip('"')
 
         httpx.patch(url + f"/rest/v1/kills?id=eq.{k['id']}", headers=hp, json={"ai_description": new_desc})
         print(f"  {k['id'][:8]} {ft:>15} | {new_desc[:80]}")

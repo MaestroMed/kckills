@@ -313,7 +313,12 @@ async def run() -> int:
             else:
                 counters["failed"] += 1
 
-    await asyncio.gather(*[_process(k) for k in pending], return_exceptions=False)
+    # Wave 13f: TaskGroup fan-out — _process catches all internal exceptions
+    # so this is semantically identical to gather, but gives us cleaner
+    # cancellation if the daemon supervisor decides to shut us down mid-batch.
+    async with asyncio.TaskGroup() as tg:
+        for k in pending:
+            tg.create_task(_process(k))
 
     log.info(
         "hls_packager_done",

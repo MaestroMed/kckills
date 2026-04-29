@@ -462,10 +462,14 @@ async def run() -> int:
     sem = asyncio.Semaphore(CONCURRENCY)
     counters = {"generated": 0, "skipped": 0, "status_only": 0}
 
-    await asyncio.gather(
-        *[_process_kill(k, counters, sem) for k in work_kills],
-        return_exceptions=False,
-    )
+    # Wave 13f: TaskGroup fan-out — _process_kill has no top-level try/except,
+    # so an unexpected exception (e.g. R2 outage) used to crash the gather and
+    # leave sibling tasks orphaned. TaskGroup propagates fail-fast as an
+    # ExceptionGroup AND cancels siblings cleanly, releasing the semaphore +
+    # any in-flight HTTP connections.
+    async with asyncio.TaskGroup() as tg:
+        for k in work_kills:
+            tg.create_task(_process_kill(k, counters, sem))
 
     log.info(
         "og_generator_scan_done",

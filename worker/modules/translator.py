@@ -335,14 +335,17 @@ async def run() -> int:
     }
 
     sem = asyncio.Semaphore(parallelism)
-    tasks = [
-        asyncio.create_task(
-            _translate_row(row, router, sem, counters),
-            name=f"translator_{str(row.get('id'))[:8]}",
-        )
-        for row in pending
-    ]
-    await asyncio.gather(*tasks, return_exceptions=False)
+    # Wave 13f: TaskGroup fan-out — _translate_row catches expected provider
+    # errors via counters but doesn't wrap unexpected exceptions; previously
+    # the first crash left siblings orphaned (Python warns at loop close).
+    # TaskGroup propagates fail-fast and cancels siblings cleanly, letting
+    # the daemon supervisor restart the module after RESTART_DELAY.
+    async with asyncio.TaskGroup() as tg:
+        for row in pending:
+            tg.create_task(
+                _translate_row(row, router, sem, counters),
+                name=f"translator_{str(row.get('id'))[:8]}",
+            )
 
     log.info(
         "translator_scan_done",
