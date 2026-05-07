@@ -31,6 +31,14 @@ if (-not (Test-Path $logDir)) { New-Item -ItemType Directory -Path $logDir | Out
 $env:PYTHONIOENCODING = 'utf-8'
 $env:PYTHONUNBUFFERED = '1'
 
+# Reload PATH from registry — when the launcher is spawned by an
+# automation tool, the inherited environment can be missing the User
+# PATH entries (winget installs land there). The worker shells out to
+# ffmpeg / ffprobe / yt-dlp by bare name, so they MUST be on PATH or
+# every clipper / hls_packager call fails with "WinError 2".
+$env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" +
+            [System.Environment]::GetEnvironmentVariable("Path", "User")
+
 # Tag this host so Sentry / logs can identify the station
 if (-not $env:WORKER_HOSTNAME) { $env:WORKER_HOSTNAME = $env:COMPUTERNAME }
 

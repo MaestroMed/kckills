@@ -1,19 +1,11 @@
 import Link from "next/link";
 import Image from "next/image";
+import { Suspense } from "react";
 import { loadRealData, getCurrentRoster, getTeamStats, getMatchesSorted, displayRole } from "@/lib/real-data";
 import { championIconUrl, championSplashUrl } from "@/lib/constants";
 import { PLAYER_PHOTOS, TEAM_LOGOS, KC_LOGO } from "@/lib/kc-assets";
-import {
-  getPublishedKills,
-  getPublishedKcKillCount,
-} from "@/lib/supabase/kills";
-import {
-  getHeroLastMatch,
-  getHeroCareerStats,
-  getHeroTopScorer,
-} from "@/lib/supabase/hero-stats";
+import { getPublishedKills } from "@/lib/supabase/kills";
 import { loadHeroVideos } from "@/lib/hero-videos/storage";
-import { type RosterPlayerStat } from "@/components/HomeTopScorerCarousel";
 import { getEraRosters } from "@/lib/era-rosters";
 import { DesktopOnly } from "@/components/DesktopOnly";
 // 🔴 2026-04-28 — heavy desktop-only sections live in a client wrapper
@@ -23,10 +15,15 @@ import { DesktopOnly } from "@/components/DesktopOnly";
 // so this server page just renders them like any other component.
 import {
   HomeRosterEraCarouselSection,
-  HomeTopScorerCarouselSection,
   HomeQuoteRotatorSection,
   EraComparisonChartSection,
 } from "@/components/homepage-desktop-sections";
+// Wave 13h (2026-05-07) — hero RIGHT column extracted to its own async
+// server component so the LEFT column (title + CTAs + roster pills) can
+// stream into the static shell without blocking on the four Supabase
+// queries that feed the right cards. The Suspense fallback paints a
+// fixed-dimension skeleton in the same column slot → zero CLS.
+import { HeroLiveStats, HeroLiveStatsSkeleton } from "@/components/home/HeroLiveStats";
 // Wave 11 — AudioPlayer (legacy BCC vibes FAB) replaced by the global
 // WolfFloatingPlayer mounted in Providers.tsx. Same UX (auto-fire on
 // first user gesture once opted in) but persistent across pages + with
@@ -173,114 +170,19 @@ export default async function HomePage() {
   const isEmpty = data.total_matches === 0;
   const HERO_CLIPS = await buildHeroClips();
 
-  // Live data fetches in parallel — all opt into the cookie-less anon
-  // Supabase client (`buildTime: true`) so the page stays cacheable per
-  // its `revalidate = 300` ISR setting. Each loader rethrows DynamicError
-  // and falls back to `null` on Supabase failure → the hero degrades to
-  // the static real-data.ts snapshot below if the DB is unreachable.
-  // Wave 13e (2026-04-29) — was `getPublishedKills(500)` then
-  // `.filter(...).length`. Shipped 1.25 MB of full kill rows per cache
-  // miss to compute a single integer. The 2026-04-29 audit identified
-  // this as the single biggest egress driver. Replaced with a HEAD
-  // count-only query (~150 bytes vs 1.25 MB = 8000× smaller). Egress
-  // savings on the homepage alone : ~3 GB/mo at current traffic.
-  const [clipCount, liveLastMatch, liveCareer, liveTopScorer] =
-    await Promise.all([
-      getPublishedKcKillCount({ buildTime: true }),
-      getHeroLastMatch(true),
-      getHeroCareerStats(true),
-      getHeroTopScorer(true),
-    ]);
-
-  // Champion splash for the #1 player (most kills) — keeps using real-data
-  // for the splash because that's the only place we curate the per-player
-  // signature champion list.
-  const topPlayer = [...roster].sort((a, b) => b.totalKills - a.totalKills)[0];
-  const heroChamp = topPlayer?.champions[0] ?? "Jhin";
-
-  // Build the rotating-carousel data : 5 starters with their signature
-  // achievement headline. Achievement label rules — first match wins :
-  //   1. The live top scorer (live DB read)         → "Top kills"
-  //   2. Highest in-roster KDA ≥ 4                  → "KDA Champion"
-  //   3. Most kills in roster (after live top)      → "Sniper"
-  //   4. Otherwise role-based fallback              → "Titulaire"
-  // Falls back gracefully when the live top scorer can't be matched
-  // against the static roster (different IGNs across data sources).
-  // Note : RosterPlayer doesn't carry per-player winRate / pentas (those
-  // would need a separate per-player stat join), so we lean on KDA +
-  // total kills which are present.
-  const computeKda = (p: typeof roster[number]) =>
-    p.totalDeaths > 0
-      ? (p.totalKills + p.totalAssists) / p.totalDeaths
-      : p.totalKills + p.totalAssists; // "perfect" KDA — sky's the limit
-  const liveTopIgn = liveTopScorer?.ign?.toLowerCase() ?? "";
-  const sortedByKills = [...roster].sort((a, b) => b.totalKills - a.totalKills);
-  const top5 = sortedByKills.slice(0, 5);
-  // ─── Hero card display variables (live → fallback chain) ──────────
-  // Each card renders from a unified shape so the JSX below stays the
-  // same regardless of which data source provided the values. Live wins,
-  // static is the safety net for cold-start / DB-down cases.
-  const heroLastMatch = liveLastMatch
-    ? {
-        id: liveLastMatch.externalId ?? liveLastMatch.matchId,
-        date: liveLastMatch.scheduledAt,
-        opponent: liveLastMatch.opponent,
-        kc_score: liveLastMatch.kcScore,
-        opp_score: liveLastMatch.oppScore,
-        kc_won: liveLastMatch.kcWon,
-        stage: liveLastMatch.stage ?? "Saison",
-        best_of: liveLastMatch.bestOf,
-      }
-    : allMatches.length > 0
-      ? allMatches[0]
-      : null;
-  const heroCareerKills = liveCareer?.totalKills ?? stats.totalKills;
-  const heroCareerWins = liveCareer?.wins ?? stats.wins;
-  const heroCareerLosses = liveCareer?.losses ?? stats.losses;
-  const heroCareerGames = liveCareer?.totalGames ?? stats.totalGames;
-  const heroCareerWrPct =
-    liveCareer && liveCareer.wins + liveCareer.losses > 0
-      ? liveCareer.winRate * 100
-      : stats.wins + stats.losses > 0
-        ? (stats.wins / (stats.wins + stats.losses)) * 100
-        : 0;
-  const heroCareerClips = liveCareer?.publishedClips ?? clipCount;
-  const heroCareerYearStart = liveCareer?.yearStart ?? 2024;
-  const heroCareerYearEnd =
-    liveCareer?.yearEnd ?? new Date().getUTCFullYear();
-
-  const carouselPlayers: RosterPlayerStat[] = top5.map((p, i) => {
-    const isLiveTop = !!liveTopIgn && p.name.toLowerCase().includes(liveTopIgn);
-    const kda = computeKda(p);
-    let achievementLabel = "Titulaire";
-    let achievement = `${displayRole(p.role)} · ${p.gamesPlayed} games`;
-    if (isLiveTop && liveTopScorer) {
-      achievementLabel = "Top kills";
-      achievement = `${liveTopScorer.totalKills} kills sur ${
-        liveTopScorer.gamesPlayed || p.gamesPlayed
-      } games — la machine offensive`;
-    } else if (kda >= 4) {
-      achievementLabel = "KDA Champion";
-      achievement = `KDA ${kda.toFixed(2)} — le métronome`;
-    } else if (i === 0) {
-      // Roster top scorer (when live didn't match anyone)
-      achievementLabel = "Sniper";
-      achievement = `${p.totalKills} kills sur ${p.gamesPlayed} games — la machine offensive`;
-    }
-    return {
-      ign: p.name,
-      role: displayRole(p.role),
-      imageUrl: PLAYER_PHOTOS[p.name] ?? null,
-      totalKills: p.totalKills,
-      gamesPlayed: p.gamesPlayed,
-      winRate: 0,
-      pentas: undefined,
-      bestKda: kda,
-      publishedClips: undefined,
-      achievement,
-      achievementLabel,
-    };
-  });
+  // Wave 13h (2026-05-07) — the four Supabase queries that feed the
+  // hero RIGHT column (clip count, last match, career stats, top
+  // scorer) used to live here as a top-level Promise.all. That blocked
+  // the entire page render — including the static hero LEFT (title +
+  // CTAs + roster pills) — on the slowest of the four queries. Now
+  // they live inside `<HeroLiveStats>`, which renders inside a
+  // <Suspense> boundary below : the static shell streams immediately,
+  // the right column paints a fixed-dimension skeleton, and the live
+  // cards swap in as soon as the queries resolve. Zero CLS via
+  // matched skeleton heights.
+  //
+  // Champion splash background (later in the page) uses the static
+  // `roster` only — no live query needed.
 
   return (
     <div
@@ -407,164 +309,19 @@ export default async function HomePage() {
           </div>
 
           {/* ─── RIGHT : vertical stack of info cards ─── */}
-          <div className="md:col-span-5 lg:col-span-6 flex flex-col gap-3 md:max-w-sm md:ml-auto">
-            {/* Next / last match card — live from Supabase if available,
-                falls back to the static real-data.ts snapshot otherwise. */}
-            {heroLastMatch && (() => {
-              const lastMatch = heroLastMatch;
-              const oppLogo = TEAM_LOGOS[lastMatch.opponent.code];
-              const date = new Date(lastMatch.date);
-              return (
-                <Link
-                  href={`/match/${lastMatch.id}`}
-                  className="group rounded-xl bg-black/55 backdrop-blur-md border border-[var(--gold)]/20 px-5 py-4 transition-all hover:border-[var(--gold)]/50 hover:bg-black/70"
-                >
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="font-data text-[9px] uppercase tracking-[0.25em] text-[var(--gold)]/60">
-                      Dernier match
-                    </span>
-                    <span className="text-[9px] text-white/40 font-data">
-                      {date.toLocaleDateString("fr-FR", { day: "numeric", month: "short" })}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3 flex-1 min-w-0">
-                      <Image src={KC_LOGO} alt="KC" width={32} height={32} className="rounded-md flex-shrink-0" />
-                      <div className="font-data text-2xl font-black tabular-nums">
-                        <span className={lastMatch.kc_won ? "text-[var(--green)]" : "text-white/50"}>
-                          {lastMatch.kc_score}
-                        </span>
-                        <span className="text-white/20 mx-1.5">-</span>
-                        <span className={!lastMatch.kc_won ? "text-[var(--red)]" : "text-white/50"}>
-                          {lastMatch.opp_score}
-                        </span>
-                      </div>
-                      {oppLogo ? (
-                        <Image src={oppLogo} alt={lastMatch.opponent.code} width={32} height={32} className="rounded-md flex-shrink-0" />
-                      ) : (
-                        <div className="flex h-8 w-8 items-center justify-center rounded-md bg-[var(--bg-elevated)] text-xs font-bold flex-shrink-0">
-                          {lastMatch.opponent.code}
-                        </div>
-                      )}
-                    </div>
-                    <span
-                      className={`ml-3 rounded-md px-2 py-0.5 text-[9px] font-black uppercase tracking-widest border ${
-                        lastMatch.kc_won
-                          ? "bg-[var(--green)]/15 border-[var(--green)]/40 text-[var(--green)]"
-                          : "bg-[var(--red)]/15 border-[var(--red)]/40 text-[var(--red)]"
-                      }`}
-                    >
-                      {lastMatch.kc_won ? "W" : "L"}
-                    </span>
-                  </div>
-                  <p className="mt-2 text-[10px] text-white/40 uppercase tracking-wider">
-                    {lastMatch.stage} &middot; Bo{lastMatch.best_of} &middot; Voir le d&eacute;tail &rarr;
-                  </p>
-                </Link>
-              );
-            })()}
-
-            {/* Career stats card */}
-            {!isEmpty && (
-              <div className="rounded-xl bg-black/55 backdrop-blur-md border border-[var(--gold)]/20 px-5 py-4">
-                <p className="font-data text-[9px] uppercase tracking-[0.25em] text-[var(--gold)]/60 mb-2">
-                  Carri&egrave;re LEC &middot; {heroCareerYearStart} &rarr; {heroCareerYearEnd}
-                </p>
-                <div className="flex items-baseline gap-2 mb-2">
-                  <AnimatedNumber
-                    value={heroCareerKills}
-                    duration={2}
-                    className="font-data text-5xl lg:text-6xl font-black text-[var(--gold)] tabular-nums leading-none"
-                  />
-                  <span className="text-xs text-white/50 uppercase tracking-widest font-semibold">kills</span>
-                </div>
-                {/* 🐛 2026-04-28 fix : `flex-wrap` + tighter gaps so the
-                    five W/L/G/WR/CLIPS pills can fold to a second line on
-                    the narrow right-rail (md:max-w-sm = 384 px) instead
-                    of overflowing the card. The bullet separators were
-                    moved into a flex-shrink-0 wrapper so the wrap point
-                    falls between pills, not in the middle of one. */}
-                <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-xs font-data">
-                  <span className="flex items-baseline gap-1 flex-shrink-0">
-                    <AnimatedNumber value={heroCareerWins} duration={1.6} className="text-[var(--green)] font-bold text-lg" />
-                    <span className="text-[9px] uppercase tracking-wider text-white/40">W</span>
-                  </span>
-                  <span className="text-white/15 flex-shrink-0">&bull;</span>
-                  <span className="flex items-baseline gap-1 flex-shrink-0">
-                    <AnimatedNumber value={heroCareerLosses} duration={1.6} className="text-[var(--red)] font-bold text-lg" />
-                    <span className="text-[9px] uppercase tracking-wider text-white/40">L</span>
-                  </span>
-                  <span className="text-white/15 flex-shrink-0">&bull;</span>
-                  <span className="flex items-baseline gap-1 flex-shrink-0">
-                    <AnimatedNumber value={heroCareerGames} duration={1.6} className="font-bold text-lg text-white" />
-                    <span className="text-[9px] uppercase tracking-wider text-white/40">G</span>
-                  </span>
-                  <span className="text-white/15 flex-shrink-0">&bull;</span>
-                  <span className="flex items-baseline gap-1 flex-shrink-0">
-                    <AnimatedNumber
-                      value={heroCareerWrPct}
-                      duration={1.8}
-                      format="percent1"
-                      className="text-[var(--gold)] font-bold text-lg"
-                    />
-                    <span className="text-[9px] uppercase tracking-wider text-white/40">WR</span>
-                  </span>
-                  {heroCareerClips > 0 && (
-                    <>
-                      <span className="text-white/15 flex-shrink-0">&bull;</span>
-                      <span className="flex items-baseline gap-1 flex-shrink-0">
-                        <AnimatedNumber value={heroCareerClips} duration={1.8} className="text-[var(--cyan)] font-bold text-lg" />
-                        <span className="text-[9px] uppercase tracking-wider text-white/40">CLIPS</span>
-                      </span>
-                    </>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {/* Rotating spotlight on the 5 starters — desktop ; static
-                lightweight top-scorer card fallback on mobile. */}
-            {carouselPlayers.length > 0 && (
-              <HomeTopScorerCarouselSection
-                players={carouselPlayers}
-                fallback={
-                  <Link
-                    href={`/player/${encodeURIComponent(carouselPlayers[0].ign)}`}
-                    className="rounded-xl bg-black/55 backdrop-blur-md border border-[var(--gold)]/20 px-5 py-4"
-                  >
-                    <p className="font-data text-[9px] uppercase tracking-[0.25em] text-[var(--gold)]/60 mb-2">
-                      {carouselPlayers[0].achievementLabel}
-                    </p>
-                    <div className="flex items-center gap-3">
-                      {carouselPlayers[0].imageUrl ? (
-                        <Image
-                          src={carouselPlayers[0].imageUrl}
-                          alt={carouselPlayers[0].ign}
-                          width={44}
-                          height={44}
-                          className="rounded-full border border-[var(--gold)]/40 object-cover object-top"
-                        />
-                      ) : null}
-                      <div className="flex-1 min-w-0">
-                        <p className="font-display text-lg font-black text-white truncate">
-                          {carouselPlayers[0].ign}
-                        </p>
-                        <p className="text-[10px] text-white/50 font-data uppercase tracking-wider">
-                          {carouselPlayers[0].role} · {carouselPlayers[0].gamesPlayed} games
-                        </p>
-                      </div>
-                      <div className="text-right">
-                        <p className="font-data text-2xl font-black text-[var(--gold)] tabular-nums leading-none">
-                          {carouselPlayers[0].totalKills}
-                        </p>
-                        <p className="text-[9px] text-white/40 uppercase tracking-wider mt-1">kills</p>
-                      </div>
-                    </div>
-                  </Link>
-                }
-              />
-            )}
-          </div>
+          {/* Wave 13h — streamed via Suspense. Skeleton paints in the
+              same column box (matched fixed heights → zero CLS) while
+              the four Supabase queries resolve in parallel inside
+              HeroLiveStats. The static hero LEFT (title + CTAs +
+              roster pills) renders to the client without waiting. */}
+          <Suspense fallback={<HeroLiveStatsSkeleton />}>
+            <HeroLiveStats
+              roster={roster}
+              isEmpty={isEmpty}
+              stats={stats}
+              allMatches={allMatches}
+            />
+          </Suspense>
         </div>
 
         {/* Scroll indicator — tiny, bottom center */}
