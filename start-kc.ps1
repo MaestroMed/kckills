@@ -39,6 +39,16 @@ $env:PYTHONUNBUFFERED = '1'
 $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" +
             [System.Environment]::GetEnvironmentVariable("Path", "User")
 
+# Defense-in-depth — verify the binaries the worker needs are actually
+# resolvable now. If a winget upgrade renamed a path or PATH refresh
+# didn't pick up a recent install, error early with a clear message
+# rather than letting the daemon boot then crash 30s later mid-encode.
+foreach ($bin in @('ffmpeg', 'ffprobe', 'yt-dlp')) {
+    if (-not (Get-Command $bin -ErrorAction SilentlyContinue)) {
+        Write-Error "$bin not on PATH. Re-run setup or manually add the winget package dir to User PATH."
+    }
+}
+
 # Tag this host so Sentry / logs can identify the station
 if (-not $env:WORKER_HOSTNAME) { $env:WORKER_HOSTNAME = $env:COMPUTERNAME }
 

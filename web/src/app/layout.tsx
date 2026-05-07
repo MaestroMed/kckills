@@ -1,10 +1,39 @@
 import type { Metadata, Viewport } from "next";
 import Script from "next/script";
+import { Oswald, Inter_Tight, JetBrains_Mono } from "next/font/google";
 import { Analytics } from "@vercel/analytics/next";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import "./globals.css";
 import { Providers } from "@/components/Providers";
 import { LayoutChrome } from "@/components/LayoutChrome";
+
+// Wave 13i (2026-05-07) — self-hosted Google Fonts via next/font/google.
+// Replaces the previous raw <link rel=preload> + async-CSS pattern with:
+//   • automatic Latin glyph subsetting (~70 % smaller per family)
+//   • self-hosted woff2 (no fonts.gstatic.com handshake — kills 2 DNS + 2 TLS round-trips on cold visits)
+//   • size-adjust fallback metrics → zero CLS during font swap
+//   • per-family CSS variable so Tailwind v4 picks them up via globals.css
+//
+// `display: 'swap'` renders the system fallback first, swaps to the
+// Google font when ready — eliminates FOIT entirely.
+const oswald = Oswald({
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+  variable: "--font-oswald",
+  display: "swap",
+});
+const interTight = Inter_Tight({
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700", "900"],
+  variable: "--font-inter-tight",
+  display: "swap",
+});
+const jetbrainsMono = JetBrains_Mono({
+  subsets: ["latin"],
+  weight: ["400", "500", "700"],
+  variable: "--font-jetbrains-mono",
+  display: "swap",
+});
 
 const UMAMI_SRC = process.env.NEXT_PUBLIC_UMAMI_SRC;
 const UMAMI_WEBSITE_ID = process.env.NEXT_PUBLIC_UMAMI_WEBSITE_ID;
@@ -174,19 +203,19 @@ export default async function RootLayout({
   const htmlLang = LANG_META[initialLang].htmlLang;
 
   return (
-    <html lang={htmlLang}>
+    <html
+      lang={htmlLang}
+      className={`${oswald.variable} ${interTight.variable} ${jetbrainsMono.variable}`}
+    >
       <head>
         <link rel="manifest" href="/manifest.json" />
         {/* ─── Preconnects ────────────────────────────────────────────
-            Wave 7 perf audit (2026-04-25, Agent AE) — every cold mobile
-            visit pays a fresh DNS+TLS handshake (~120-150 ms each) the
-            moment the parser hits the first <Image src="https://…" />
-            referencing one of these origins. Preconnecting in the doc
-            head warms the connection in parallel with HTML parsing so
-            the first poster / champion icon / R2 asset paints faster.
+            Wave 13i (2026-05-07) — fonts.googleapis.com / fonts.gstatic.com
+            preconnects DROPPED. next/font/google self-hosts the woff2
+            files (Oswald, Inter Tight, JetBrains Mono) at /_next/static/
+            so visitors no longer pay DNS+TLS to Google. The remaining
+            origins are first-paint asset hosts.
 
-              • fonts.googleapis.com / fonts.gstatic.com — already in
-                use for Oswald/Inter Tight/JetBrains Mono.
               • clips.kckills.com — primary R2 CDN for clips, posters,
                 thumbnails, OG images. Hit on EVERY page that renders
                 a kill (scroll, kill detail, search, player, top, …).
@@ -194,65 +223,12 @@ export default async function RootLayout({
                 (home roster band, kill detail, player profile).
               • *.r2.cloudflarestorage.com — legacy R2 direct hostname
                 for assets not yet migrated behind the custom domain.
-
-            crossOrigin="" is required for fetch-style CORS preconnect
-            on the gstatic & R2 endpoints; HTML lint flags `crossOrigin`
-            on origins that don't need credentials but the spec is happy. */}
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
+              • Supabase — homepage hero stats queries (count, last-match,
+                career, top-scorer) on cache miss. */}
         <link rel="preconnect" href="https://clips.kckills.com" crossOrigin="" />
         <link rel="preconnect" href="https://ddragon.leagueoflegends.com" />
         <link rel="dns-prefetch" href="https://r2.cloudflarestorage.com" />
-        {/* Wave 13g (2026-05-07) — Supabase preconnect. Homepage hero stats
-            queries (count, last-match, career, top-scorer) hit Supabase
-            on every cache miss. Warming the connection in parallel with
-            HTML parsing saves ~80-150 ms on cold 4G visits. */}
         <link rel="preconnect" href="https://guasqaistzpeapxoyxrc.supabase.co" crossOrigin="" />
-        {/* ─── Non-blocking Google Fonts ──────────────────────────────
-            Wave 7 perf audit (2026-04-25) — the previous setup shipped
-            BOTH a `<link rel="preload" as="style">` AND a render-blocking
-            `<link rel=stylesheet>` for the same URL. The stylesheet
-            form blocked first paint until the CSS roundtrip resolved
-            (~200-400 ms on 4G).
-
-            New pattern (canonical async-CSS recipe):
-              1. `<link rel="preload" as="style">` warms the request so
-                 it lands in the browser cache early.
-              2. `<link rel="stylesheet" media="print">` LOADS the same
-                 URL but with a media query that doesn't apply to screen
-                 — the browser fetches it but DOES NOT render-block.
-                 The inline script below flips `media` to `"all"` once
-                 it loads. Net effect: zero render-block, fonts apply
-                 the moment they finish downloading.
-              3. <noscript> fallback ships the blocking version for
-                 crawlers + JS-off users.
-
-            display=swap is on the URL itself — text paints in the
-            fallback font immediately, then re-renders in Oswald/Inter
-            once available. Eliminates FOIT entirely. */}
-        <link
-          rel="preload"
-          as="style"
-          href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Inter+Tight:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;700&display=swap"
-        />
-        <link
-          id="kc-fonts"
-          rel="stylesheet"
-          href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Inter+Tight:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;700&display=swap"
-          media="print"
-        />
-        <script
-          dangerouslySetInnerHTML={{
-            __html:
-              "(function(){var l=document.getElementById('kc-fonts');if(l){l.addEventListener('load',function(){l.media='all'});if(l.sheet){l.media='all'}}})();",
-          }}
-        />
-        <noscript>
-          <link
-            rel="stylesheet"
-            href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Inter+Tight:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;700&display=swap"
-          />
-        </noscript>
         {/* JSON-LD structured data for SEO */}
         <script
           type="application/ld+json"

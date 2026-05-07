@@ -29,7 +29,7 @@
 body {
   background: var(--bg-primary);
   color: var(--text-primary);
-  font-family: "Inter Tight", system-ui, -apple-system, sans-serif;
+  font-family: var(--font-inter-tight), "Inter Tight", system-ui, -apple-system, sans-serif;
   -webkit-font-smoothing: antialiased;
   /* `clip` is more aggressive than `hidden` and prevents the 4px bleed
      full-bleed sections (`width: 100vw + -50vw margins`) can cause on
@@ -40,12 +40,12 @@ body {
 }
 
 h1, h2, h3, h4, .font-display {
-  font-family: "Oswald", "Inter Tight", sans-serif;
+  font-family: var(--font-oswald), "Oswald", "Inter Tight", sans-serif;
   letter-spacing: -0.01em;
   font-weight: 700;
   text-transform: uppercase;
 }
-.font-data { font-family: "JetBrains Mono", monospace; font-feature-settings: "zero", "ss02"; }
+.font-data { font-family: var(--font-jetbrains-mono), "JetBrains Mono", monospace; font-feature-settings: "zero", "ss02"; }
 
 /* ═══════════════════════════════════════════════════════════════
    WORLD-CLASS ANIMATIONS
