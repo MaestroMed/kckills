@@ -71,8 +71,13 @@ if ($Detached) {
     # launching shell. Use this when starting the worker from automation
     # tooling that may kill the parent process. Stop via stop-kc.ps1.
     $errFile = Join-Path $logDir "worker-$ts.err.log"
+    # PS 5.1 quirk : `$Args` is `$null` (not @()) when the param is empty
+    # and Start-Process refuses an array containing $null. Build the list
+    # conditionally.
+    $argList = @('main.py')
+    if ($Args) { $argList += $Args }
     $proc = Start-Process -FilePath $venvPy `
-        -ArgumentList (@('main.py') + $Args) `
+        -ArgumentList $argList `
         -WindowStyle Hidden `
         -PassThru `
         -RedirectStandardOutput $logFile `
