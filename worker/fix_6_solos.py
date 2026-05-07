@@ -56,7 +56,7 @@ async def main():
 
         await scheduler.wait_for("gemini")
         resp = client.models.generate_content(
-            model="gemini-2.5-flash-lite",
+            model="gemini-3.1-flash-lite",
             contents=prompt,
         )
         new_desc = (resp.text or "").strip().strip('"')

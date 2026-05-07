@@ -274,7 +274,7 @@ with sensible tier presets in `worker/config.py`. The default ("free")
 is what the daemon ran on for free-tier deployment.
 
 ```
-KCKILLS_GEMINI_TIER=free          # default — gemini-2.5-flash-lite everywhere
+KCKILLS_GEMINI_TIER=free          # default — gemini-3.1-flash-lite everywhere (GA 2026-05-07)
 KCKILLS_GEMINI_TIER=balanced      # gemini-3-flash for descriptions
 KCKILLS_GEMINI_TIER=premium       # gemini-2.5-pro for descriptions  ← €45 KC config
 KCKILLS_GEMINI_TIER=experimental  # gemini-3.1-pro-preview (shutdown risk)
@@ -283,8 +283,8 @@ KCKILLS_GEMINI_TIER=experimental  # gemini-3.1-pro-preview (shutdown risk)
 Per-stage env-var overrides win over the tier preset :
 ```
 GEMINI_MODEL_ANALYZER=gemini-2.5-pro
-GEMINI_MODEL_QC=gemini-2.5-flash-lite
-GEMINI_MODEL_OFFSET=gemini-2.5-flash-lite
+GEMINI_MODEL_QC=gemini-3.1-flash-lite
+GEMINI_MODEL_OFFSET=gemini-3.1-flash-lite
 ```
 
 ### €45 budget plan (premium tier on the entire 2,021-kill KC catalog)

@@ -350,7 +350,7 @@ def test_gemini_provider_cost_constants():
     selection BEFORE the real call is wired."""
     p = GeminiProvider(api_key="fake")
     assert p.name == "gemini"
-    assert p.model_name == "gemini-2.5-flash-lite"
+    assert p.model_name == "gemini-3.1-flash-lite"
     assert p.cost_per_m_input == 0.10
     assert p.cost_per_m_output == 0.40
     assert p.supports_vision is True

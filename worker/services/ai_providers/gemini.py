@@ -30,7 +30,7 @@ class GeminiProvider:
     """Implements AIProvider for Google Gemini 2.5 Flash-Lite."""
 
     name: str = "gemini"
-    model_name: str = "gemini-2.5-flash-lite"
+    model_name: str = "gemini-3.1-flash-lite"
     # USD per 1M tokens — see ai_pricing.GEMINI_PRICES (single source of truth).
     cost_per_m_input: float = 0.10
     cost_per_m_output: float = 0.40

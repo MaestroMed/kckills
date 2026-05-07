@@ -81,40 +81,36 @@ class Config:
     #   GEMINI_TIER=premium
     # (Equivalent to:
     #   GEMINI_MODEL_ANALYZER=gemini-2.5-pro
-    #   GEMINI_MODEL_QC=gemini-2.5-flash-lite
-    #   GEMINI_MODEL_OFFSET=gemini-2.5-flash-lite
+    #   GEMINI_MODEL_QC=gemini-3.1-flash-lite
+    #   GEMINI_MODEL_OFFSET=gemini-3.1-flash-lite
     # )
     #
     # Free-tier-only fallback (KCKILLS_GEMINI_TIER not set):
-    #   All three = gemini-2.5-flash-lite (the safe, free, default).
+    #   All three = gemini-3.1-flash-lite (the safe, free, default).
 
     _GEMINI_TIER = (os.getenv("KCKILLS_GEMINI_TIER", "free") or "free").lower()
     _TIER_DEFAULTS = {
-        "free": {  # all free-tier models
-            "analyzer": "gemini-2.5-flash-lite",
-            "qc":       "gemini-2.5-flash-lite",
-            "offset":   "gemini-2.5-flash-lite",
-        },
-        "fast-3.1": {  # Wave 13o (2026-05-07) — Gemini 3.1 Flash-Lite
-            # GA'd this week. Same input/output cost as 2.5 Flash-Lite
-            # ($0.25/$1.50 per M tokens) but 2.5× faster TTFT, +45 % output
-            # throughput, and quality matching/beating 2.5 Flash. Best
-            # default for the analyzer when speed > squeezing the last
-            # 1-2 % of description quality. Cheaper than `balanced`
-            # (which uses 3 Flash at $0.30/$2.50) AND faster.
+        "free": {  # default — Gemini 3.1 Flash-Lite (GA 2026-05-07).
+            # Replaced 2.5 Flash-Lite at the same $0.25/$1.50 price tier,
+            # with 64 % faster throughput, 2.5× faster TTFT, +62 %
+            # Intelligence Index, and matching-or-beating 2.5 Flash on
+            # most benchmarks. Strict upgrade. Free tier RPD dropped
+            # from 1000 (2.5 Lite) → 500 (3.1 Lite) — fall back to
+            # GEMINI_MODEL_ANALYZER=gemini-2.5-flash-lite if the worker
+            # consistently exhausts the 500 RPD daily quota.
             "analyzer": "gemini-3.1-flash-lite",
             "qc":       "gemini-3.1-flash-lite",
             "offset":   "gemini-3.1-flash-lite",
         },
-        "balanced": {  # paid Flash 3 for descriptions, free Lite for QC
+        "balanced": {  # paid Flash 3 for descriptions, 3.1 Lite for QC
             "analyzer": "gemini-3-flash",
-            "qc":       "gemini-2.5-flash-lite",
-            "offset":   "gemini-2.5-flash-lite",
+            "qc":       "gemini-3.1-flash-lite",
+            "offset":   "gemini-3.1-flash-lite",
         },
         "premium": {  # Pro 2.5 for descriptions (the €45 KC config)
             "analyzer": "gemini-2.5-pro",
-            "qc":       "gemini-2.5-flash-lite",
-            "offset":   "gemini-2.5-flash-lite",
+            "qc":       "gemini-3.1-flash-lite",
+            "offset":   "gemini-3.1-flash-lite",
         },
         "experimental": {  # Pro 3.1 Preview (shutdown risk!)
             "analyzer": "gemini-3.1-pro-preview",

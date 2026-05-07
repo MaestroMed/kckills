@@ -127,9 +127,10 @@ pressure becomes recurring.
 2. **No clips coming out** — check `KCKILLS_YT_COOKIES_FIREFOX_PROFILE`
    is set and the Firefox profile actually has YouTube cookies. Tail
    `worker\logs\worker-*.log` for "Sign in to confirm" patterns.
-3. **Gemini quota exhausted** — quota resets at 07:00 UTC. Set
-   `KCKILLS_GEMINI_TIER=balanced` to switch to gemini-3-flash (paid tier
-   with prompt caching) if you need to keep going.
+3. **Gemini quota exhausted** — quota resets at 07:00 UTC. Default
+   tier `free` uses gemini-3.1-flash-lite (500 RPD on free tier).
+   Set `KCKILLS_GEMINI_TIER=balanced` to switch to gemini-3-flash
+   (paid, $0.30/$2.50 per M tokens) for unlimited capacity.
 4. **Disk full** — see Disk hygiene above.
 5. **Crash loop** — the supervisor (in `worker\main.py`) restarts modules
    individually. If the parent supervisor dies, just rerun `.\start-kc.ps1`.

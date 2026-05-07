@@ -100,7 +100,7 @@ async def analyze(prompt: str, video_path: str | None = None) -> dict | None:
 
     try:
         from google.genai import types  # type: ignore
-        model_name = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash-lite")
+        model_name = os.environ.get("GEMINI_MODEL", "gemini-3.1-flash-lite")
 
         if video_path:
             # Wave 13f migration — `client.files.upload(file=...)` instead

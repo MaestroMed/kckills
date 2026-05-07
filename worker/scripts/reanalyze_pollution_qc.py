@@ -229,7 +229,7 @@ async def _main() -> int:
                    help="Seconds between Gemini calls (free tier 15 RPM = 4.0s)")
     args = p.parse_args()
 
-    print(f"Model    : {os.environ.get('GEMINI_MODEL', 'gemini-2.5-flash-lite')}")
+    print(f"Model    : {os.environ.get('GEMINI_MODEL', 'gemini-3.1-flash-lite')}")
     print(f"Mode     : {'DRY-RUN' if args.dry_run else 'LIVE'}")
     print(f"Limit    : {args.limit or 'no cap'}")
     print(f"Since    : {args.since_days or 'all-time'} days")

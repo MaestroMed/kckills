@@ -72,7 +72,7 @@ async def read_timer_from_clip(clip_path: str, frame_at: int = 15) -> int | None
             if not can_call:
                 return None
 
-            model_name = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash-lite")
+            model_name = os.environ.get("GEMINI_MODEL", "gemini-3.1-flash-lite")
             img = client.files.upload(
                 file=frame_path,
                 config=types.UploadFileConfig(mime_type="image/jpeg"),
