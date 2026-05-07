@@ -15,6 +15,7 @@
 
 import { useEffect, useMemo, useState, useCallback } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { ScoreChip } from "@/components/admin/ScoreChip";
 import { ClipDetailDrawer } from "@/components/admin/ClipDetailDrawer";
 import { AdminBadge } from "@/components/admin/ui/AdminBadge";
@@ -519,8 +520,7 @@ function ClipRowView({
       <td className="px-2 py-2">
         {clip.thumbnail_url ? (
           <div className="relative w-14 h-24 rounded overflow-hidden bg-black">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={clip.thumbnail_url} alt="" className="w-full h-full object-cover" loading="lazy" />
+            <Image src={clip.thumbnail_url} alt="" fill sizes="56px" className="object-cover" loading="lazy" />
             {clip.multi_kill && (
               <span className="absolute top-0.5 right-0.5 rounded bg-[var(--orange)] text-[8px] font-black text-black px-1">
                 {clip.multi_kill[0].toUpperCase()}
@@ -617,11 +617,12 @@ function ClipGridCard({
     >
       <div className="relative aspect-[3/4] bg-black">
         {clip.thumbnail_url ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
+          <Image
             src={clip.thumbnail_url}
             alt={`${clip.killer_champion} → ${clip.victim_champion}`}
-            className="w-full h-full object-cover"
+            fill
+            sizes="(max-width: 768px) 50vw, 25vw"
+            className="object-cover"
             loading="lazy"
           />
         ) : (

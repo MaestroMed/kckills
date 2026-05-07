@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Image from "next/image";
 import { m, AnimatePresence } from "motion/react";
 import type { Era, EraLink } from "@/lib/eras";
 
@@ -63,11 +64,12 @@ export function EraClipsSection({ era }: { era: Era }) {
                 className="group relative overflow-hidden rounded-2xl border border-[var(--border-gold)] bg-[var(--bg-surface)] text-left transition-all hover:border-[var(--gold)]/50"
                 style={{ aspectRatio: "16/9" }}
               >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
+                <Image
                   src={youtubeThumb(videoId)}
                   alt={link.label}
-                  className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                  fill
+                  sizes="(max-width: 768px) 100vw, (max-width: 1024px) 50vw, 33vw"
+                  className="object-cover group-hover:scale-105 transition-transform duration-500"
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-black via-black/30 to-transparent" />
 

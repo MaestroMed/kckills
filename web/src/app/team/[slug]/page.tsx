@@ -120,12 +120,13 @@ export default async function TeamPage({ params }: Props) {
           <div className="flex items-start gap-5">
             <div className="flex-shrink-0">
               {team.logo_url ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
+                <Image
                   src={team.logo_url}
                   alt={`Logo ${team.name}`}
+                  width={96}
+                  height={96}
                   className="h-20 w-20 md:h-24 md:w-24 object-contain"
-                  loading="eager"
+                  priority
                 />
               ) : (
                 <div className="h-20 w-20 md:h-24 md:w-24 flex items-center justify-center rounded-xl bg-[var(--bg-elevated)] border border-[var(--border-gold)] text-2xl font-display font-black text-[var(--gold)]">

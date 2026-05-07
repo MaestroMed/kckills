@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import Image from "next/image";
 import { StarRating } from "@/components/star-rating";
 import Link from "next/link";
 import { ReportButton } from "@/components/community/ReportButton";
@@ -474,8 +475,7 @@ function CommentThread({ comment: c, depth, onAuthRequired, onVoteChange }: Thre
       } ${c.pending ? "opacity-55" : ""}`}>
         <div className="flex items-center gap-2 mb-1">
           {c.avatar ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={c.avatar} alt="" className="h-6 w-6 rounded-full" />
+            <Image src={c.avatar} alt="" width={24} height={24} className="h-6 w-6 rounded-full" />
           ) : (
             <div className="flex h-6 w-6 items-center justify-center rounded-full bg-[var(--bg-elevated)] text-[10px] font-bold text-[var(--gold)]">
               {c.user[0]?.toUpperCase() ?? "?"}

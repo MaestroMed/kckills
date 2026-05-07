@@ -1200,13 +1200,25 @@ function AggregateScrollItem({ item, index, total }: { item: AggregateFeedItem; 
         </div>
       )}
 
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        src={championSplashUrl(killerChamp)}
-        alt={`Splash art du champion ${killerChamp}`}
-        className={`absolute inset-0 h-full w-full object-cover transition-all duration-700 ${visible ? "scale-100 opacity-40" : "scale-110 opacity-0"}`}
-        loading={index < 3 ? "eager" : "lazy"}
-      />
+      {index < 3 ? (
+        <Image
+          src={championSplashUrl(killerChamp)}
+          alt={`Splash art du champion ${killerChamp}`}
+          fill
+          sizes="100vw"
+          className={`object-cover transition-all duration-700 ${visible ? "scale-100 opacity-40" : "scale-110 opacity-0"}`}
+          priority
+        />
+      ) : (
+        <Image
+          src={championSplashUrl(killerChamp)}
+          alt={`Splash art du champion ${killerChamp}`}
+          fill
+          sizes="100vw"
+          className={`object-cover transition-all duration-700 ${visible ? "scale-100 opacity-40" : "scale-110 opacity-0"}`}
+          loading="lazy"
+        />
+      )}
 
       <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-black/60 pointer-events-none" />
       <div className="absolute inset-0 bg-gradient-to-r from-black/50 via-transparent to-black/50 pointer-events-none" />

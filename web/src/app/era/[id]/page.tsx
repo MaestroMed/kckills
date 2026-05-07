@@ -563,11 +563,12 @@ function EraNavCard({ era, direction }: { era: Era; direction: "prev" | "next" }
       className="group relative overflow-hidden rounded-2xl border border-[var(--border-gold)] bg-[var(--bg-surface)] p-6 transition-all hover:border-[var(--gold)]/40 hover:scale-[1.01]"
     >
       {era.image && (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
+        <Image
           src={era.image}
           alt=""
-          className="absolute inset-0 w-full h-full object-cover opacity-20 group-hover:opacity-40 transition-opacity"
+          fill
+          sizes="(max-width: 768px) 100vw, 50vw"
+          className="object-cover opacity-20 group-hover:opacity-40 transition-opacity"
         />
       )}
       <div className="absolute inset-0 bg-gradient-to-r from-black via-black/70 to-transparent" />

@@ -31,6 +31,7 @@
  */
 
 import { useState, useEffect, useRef, useMemo, useCallback, useId } from "react";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "motion/react";
 
@@ -460,10 +461,11 @@ function TeamRowButton({ team, active, onSelect, onMouseEnter }: TeamRowButtonPr
       }`}
     >
       {team.logo_url ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
+        <Image
           src={team.logo_url}
           alt=""
+          width={28}
+          height={28}
           className="h-7 w-7 object-contain flex-shrink-0"
           loading="lazy"
         />

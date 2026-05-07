@@ -34,6 +34,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import Image from "next/image";
 import { motion, AnimatePresence, useMotionValue } from "motion/react";
 import { ReportButton } from "./ReportButton";
 import { CommentVote } from "./CommentVote";
@@ -481,8 +482,7 @@ function CommentRow({ comment, depth, onAuthRequired, onVoteChange }: RowProps) 
 
 function Avatar({ user, avatar }: { user: string; avatar?: string }) {
   if (avatar) {
-    // eslint-disable-next-line @next/next/no-img-element
-    return <img src={avatar} alt="" className="h-9 w-9 rounded-full flex-shrink-0 object-cover" />;
+    return <Image src={avatar} alt="" width={36} height={36} className="h-9 w-9 rounded-full flex-shrink-0 object-cover" />;
   }
   return (
     <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-[var(--bg-elevated)] text-xs font-bold text-[var(--gold)]">

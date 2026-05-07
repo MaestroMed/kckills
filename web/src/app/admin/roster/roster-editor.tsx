@@ -13,6 +13,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { AdminBadge } from "@/components/admin/ui/AdminBadge";
 import { AdminBreadcrumbs } from "@/components/admin/ui/AdminBreadcrumbs";
 import { AdminButton } from "@/components/admin/ui/AdminButton";
@@ -239,10 +240,11 @@ export function RosterEditor({
                     <tr key={p.id} className="border-b border-[var(--border-gold)]/20">
                       <td className="px-3 py-2">
                         {p.image_url ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img
+                          <Image
                             src={p.image_url}
                             alt={p.ign}
+                            width={32}
+                            height={32}
                             className="h-8 w-8 rounded-full object-cover"
                           />
                         ) : (
@@ -424,10 +426,11 @@ function PlayerCard({ player }: { player: Player }) {
     >
       <div className="flex items-center gap-3">
         {player.image_url ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
+          <Image
             src={player.image_url}
             alt={player.ign}
+            width={48}
+            height={48}
             className="h-12 w-12 rounded-full object-cover"
           />
         ) : (

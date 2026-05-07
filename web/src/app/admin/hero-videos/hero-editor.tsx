@@ -19,6 +19,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import Image from "next/image";
 import {
   ALLOWED_HERO_VIDEO_MIMES,
   MAX_HERO_VIDEO_BYTES,
@@ -500,12 +501,13 @@ export function HeroVideosEditor() {
               >
                 {/* Thumbnail */}
                 <div className="relative aspect-video w-full md:w-[120px] rounded-md overflow-hidden bg-black border border-white/10">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
                   {v.posterUrl ? (
-                    <img
+                    <Image
                       src={v.posterUrl}
                       alt=""
-                      className="absolute inset-0 w-full h-full object-cover"
+                      fill
+                      sizes="(max-width: 768px) 100vw, 120px"
+                      className="object-cover"
                     />
                   ) : (
                     <video

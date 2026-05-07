@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
+import Image from "next/image";
 
 interface Comment {
   id: string;
@@ -218,7 +219,7 @@ function CommentItem({ comment }: { comment: Comment }) {
       {/* Avatar */}
       <div className="h-8 w-8 shrink-0 rounded-full bg-[var(--bg-elevated)] overflow-hidden">
         {avatar ? (
-          <img src={avatar} alt="" className="h-full w-full object-cover" />
+          <Image src={avatar} alt="" width={32} height={32} className="h-full w-full object-cover" />
         ) : (
           <div className="h-full w-full flex items-center justify-center text-xs text-[var(--text-muted)]">
             {username[0]?.toUpperCase()}

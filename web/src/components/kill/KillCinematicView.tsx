@@ -195,20 +195,22 @@ export function KillCinematicView({
         {/* Splash backdrop — split screen killer/victim */}
         <div className="absolute inset-0 pointer-events-none">
           <div className="absolute inset-y-0 left-0 right-1/2 overflow-hidden">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
+            <Image
               src={CHAMPION_SPLASH(killerChamp)}
               alt=""
-              className="h-full w-full object-cover scale-110 opacity-25 blur-md"
+              fill
+              sizes="(max-width: 768px) 50vw, 50vw"
+              className="object-cover scale-110 opacity-25 blur-md"
               style={{ transform: "scale(1.15) translateX(-2%)" }}
             />
           </div>
           <div className="absolute inset-y-0 left-1/2 right-0 overflow-hidden">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
+            <Image
               src={CHAMPION_SPLASH(victimChamp)}
               alt=""
-              className="h-full w-full object-cover scale-110 opacity-25 blur-md"
+              fill
+              sizes="(max-width: 768px) 50vw, 50vw"
+              className="object-cover scale-110 opacity-25 blur-md"
               style={{ transform: "scale(1.15) translateX(2%)" }}
             />
           </div>
@@ -593,11 +595,12 @@ export function KillCinematicView({
               >
                 <div className="relative aspect-video w-full bg-black overflow-hidden">
                   {rk.thumbnail_url ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
+                    <Image
                       src={rk.thumbnail_url}
                       alt=""
-                      className="h-full w-full object-cover group-hover:scale-105 transition-transform duration-500"
+                      fill
+                      sizes="224px"
+                      className="object-cover group-hover:scale-105 transition-transform duration-500"
                       loading="lazy"
                     />
                   ) : (

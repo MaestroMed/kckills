@@ -13,6 +13,7 @@
  * → friendly empty state instead of 500).
  */
 import Link from "next/link";
+import Image from "next/image";
 import { notFound } from "next/navigation";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { JobRowActions } from "../job-row-actions";
@@ -314,17 +315,16 @@ export default async function JobDetailPage({
           </h2>
           <div className="rounded-xl border border-[var(--border-gold)] bg-[var(--bg-surface)] p-4 flex flex-col md:flex-row gap-4">
             {killPreview.thumbnail_url ? (
-              // Plain <img> — Next/Image needs explicit remote allowlist
-              // in next.config.js and we don't want to risk a 500 here
-              // for a back-office preview.
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
+              <Image
                 src={killPreview.thumbnail_url}
                 alt={
                   killPreview.killer_champion && killPreview.victim_champion
                     ? `${killPreview.killer_champion} kills ${killPreview.victim_champion}`
                     : "Kill thumbnail"
                 }
+                width={128}
+                height={224}
+                unoptimized
                 className="w-32 h-56 object-cover rounded-lg border border-[var(--border-gold)] shrink-0"
               />
             ) : (

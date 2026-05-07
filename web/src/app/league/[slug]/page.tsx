@@ -15,6 +15,7 @@
 
 import { notFound } from "next/navigation";
 import Link from "next/link";
+import Image from "next/image";
 import type { Metadata } from "next";
 import {
   getLeagueBySlug,
@@ -158,10 +159,11 @@ export default async function LeaguePage({ params }: Props) {
                         className="text-[var(--text-primary)] hover:text-[var(--gold)] transition-colors flex items-center gap-2"
                       >
                         {t.logo_url ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img
+                          <Image
                             src={t.logo_url}
                             alt=""
+                            width={24}
+                            height={24}
                             className="h-6 w-6 object-contain"
                             loading="lazy"
                           />

@@ -573,11 +573,12 @@ function LegacyKillDetail({ kill, id }: { kill: LegacyKill; id: string }) {
       </nav>
 
       <div className="relative aspect-video w-full overflow-hidden rounded-xl border border-[var(--border-gold)]">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
+        <Image
           src={`https://ddragon.leagueoflegends.com/cdn/img/champion/splash/${kill.champion}_0.jpg`}
           alt=""
-          className="absolute inset-0 w-full h-full object-cover opacity-30"
+          fill
+          sizes="(max-width: 768px) 100vw, 768px"
+          className="object-cover opacity-30"
         />
         <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-black/50" />
         <div className="relative z-10 flex h-full items-center justify-center">

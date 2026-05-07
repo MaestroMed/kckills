@@ -18,6 +18,7 @@
  */
 
 import { useState, useEffect } from "react";
+import Image from "next/image";
 import type { BgmTrack } from "@/lib/scroll/bgm-playlist";
 
 const GENRES: BgmTrack["genre"][] = [
@@ -295,10 +296,11 @@ export function BgmEditor({ initial, readOnly = false }: Props) {
                 <span className="font-mono text-xs text-[var(--text-muted)] w-6">
                   {idx + 1}.
                 </span>
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
+                <Image
                   src={`https://img.youtube.com/vi/${track.youtubeId}/default.jpg`}
                   alt=""
+                  width={64}
+                  height={48}
                   className="h-12 w-16 rounded object-cover pointer-events-none"
                 />
                 <div className="flex-1 min-w-0 pointer-events-none">

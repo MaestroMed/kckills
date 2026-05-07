@@ -16,6 +16,7 @@
  */
 
 import Link from "next/link";
+import Image from "next/image";
 import { AdminButton } from "@/components/admin/ui/AdminButton";
 import { AdminBadge } from "@/components/admin/ui/AdminBadge";
 
@@ -131,10 +132,11 @@ export function ReportTriageCard({ group, busy, onHide, onDismiss }: Props) {
             className="flex-shrink-0 self-start"
             aria-label="Ouvrir le kill"
           >
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
+            <Image
               src={killMeta.thumbnail_url}
               alt=""
+              width={48}
+              height={80}
               className="h-20 w-12 rounded object-cover"
               loading="lazy"
             />

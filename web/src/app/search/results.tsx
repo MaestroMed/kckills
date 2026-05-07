@@ -245,12 +245,13 @@ function SearchResultCard({ kill }: { kill: PublishedKillRow }) {
     >
       <div className="relative aspect-[9/16] w-full overflow-hidden bg-[var(--bg-elevated)]">
         {kill.thumbnail_url ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
+          <Image
             src={kill.thumbnail_url}
             alt={`${killerChamp} elimine ${victimChamp}`}
+            fill
+            sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 20vw"
             loading="lazy"
-            className="h-full w-full object-cover transition-transform group-hover:scale-105"
+            className="object-cover transition-transform group-hover:scale-105"
           />
         ) : (
           <div className="flex h-full w-full items-center justify-center bg-[var(--bg-elevated)] text-xs text-[var(--text-muted)]">

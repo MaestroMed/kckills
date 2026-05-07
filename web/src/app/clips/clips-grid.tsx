@@ -250,7 +250,7 @@ export function ClipsGrid({ initialCards, initialFilters }: { initialCards: Clip
               }`}
             >
               {TEAM_LOGOS[code] && (
-                <img src={TEAM_LOGOS[code]} alt="" className="h-3.5 w-3.5 object-contain" />
+                <Image src={TEAM_LOGOS[code]} alt="" width={14} height={14} className="h-3.5 w-3.5 object-contain" />
               )}
               {code}
             </button>
@@ -421,7 +421,7 @@ function ClipCardComponent({ card }: { card: ClipCard }) {
             <span className="font-bold text-[var(--gold)]">KC</span>
             <span className="text-white/50">vs</span>
             {oppLogo ? (
-              <img src={oppLogo} alt="" className="h-3 w-3 object-contain" />
+              <Image src={oppLogo} alt="" width={12} height={12} className="h-3 w-3 object-contain" />
             ) : null}
             <span className="font-bold text-white">{card.opponentCode}</span>
           </div>

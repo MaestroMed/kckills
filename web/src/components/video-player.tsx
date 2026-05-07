@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
+import Image from "next/image";
 
 interface VideoPlayerProps {
   src?: string | null;
@@ -49,11 +50,12 @@ export function VideoPlayer({
             onClick={() => setYtLoaded(true)}
             aria-label="Lancer le clip"
           >
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
+            <Image
               src={thumbUrl}
               alt={title}
-              className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+              fill
+              sizes="(max-width: 768px) 100vw, 50vw"
+              className="object-cover transition-transform duration-300 group-hover:scale-105"
             />
             <div className="absolute inset-0 bg-black/30 transition-colors group-hover:bg-black/20" />
             {/* Play button */}
