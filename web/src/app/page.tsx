@@ -24,6 +24,11 @@ import {
 // queries that feed the right cards. The Suspense fallback paints a
 // fixed-dimension skeleton in the same column slot → zero CLS.
 import { HeroLiveStats, HeroLiveStatsSkeleton } from "@/components/home/HeroLiveStats";
+// Wave 13j (2026-05-07) — generic skeleton for below-the-fold async
+// sections. Each section becomes its own Suspense boundary so the HTML
+// streams progressively rather than blocking the entire homepage on
+// the slowest below-fold Supabase query.
+import { SectionSkeleton } from "@/components/home/SectionSkeleton";
 // Wave 11 — AudioPlayer (legacy BCC vibes FAB) replaced by the global
 // WolfFloatingPlayer mounted in Providers.tsx. Same UX (auto-fire on
 // first user gesture once opted in) but persistent across pages + with
@@ -347,10 +352,14 @@ export default async function HomePage() {
           de semaine). Re-ranke par score IA + boost multi-kill +
           boost communauté. Ne s'affiche pas si zéro clip dans le
           système (fresh deploy / worker pas encore tourné). */}
-      <HomeWeekendBestClips />
+      <Suspense fallback={<SectionSkeleton size="lg" label="Meilleurs clips du week-end en cours de chargement" />}>
+        <HomeWeekendBestClips />
+      </Suspense>
 
       {/* ═══ KILL OF THE WEEK — surface the featured clip first ═════════ */}
-      <KillOfTheWeek />
+      <Suspense fallback={<SectionSkeleton size="md" label="Kill de la semaine en cours de chargement" />}>
+        <KillOfTheWeek />
+      </Suspense>
 
       {/* ═══ KC TIMELINE + DEFAULT FEED ════════════════════════════════
           Per CLAUDE.md §6.2 : the timeline is a horizontal era strip
@@ -360,7 +369,9 @@ export default async function HomePage() {
           state lives client-side so the heavy homepage RSC never
           re-renders on selection. */}
       <HomeTimelineFeed>
-        <HomeRecentClips />
+        <Suspense fallback={<SectionSkeleton size="xl" label="Clips récents en cours de chargement" />}>
+          <HomeRecentClips />
+        </Suspense>
       </HomeTimelineFeed>
 
       {/* ═══ DISCOVERY STRIP — 3 curated entry points to go deeper ═════ */}
@@ -430,14 +441,18 @@ export default async function HomePage() {
       <HomeQuoteRotatorSection quotes={QUOTES} />
 
       {/* ═══ CARTES LEGENDAIRES — TCG visual layer en showcase home ═════ */}
-      <HomeRareCards />
+      <Suspense fallback={<SectionSkeleton size="lg" label="Cartes légendaires en cours de chargement" />}>
+        <HomeRareCards />
+      </Suspense>
 
       {/* ═══ YOUTUBE PARALLAX SHOWCASE (RSS-driven 3D carousel) ═══════════
           🔴 DesktopOnly : the parallax 3D transforms + drag handlers +
           all the curated YouTube thumbnails were the heaviest single
           mobile-hostile section. Skipped entirely on mobile. */}
       <DesktopOnly>
-        <HomeYouTubeShowcase />
+        <Suspense fallback={<SectionSkeleton size="xl" label="Showcase YouTube en cours de chargement" />}>
+          <HomeYouTubeShowcase />
+        </Suspense>
       </DesktopOnly>
 
       {/* ═══ ERA COMPARISON CHARTS ═══════════════════════════════════════ */}
