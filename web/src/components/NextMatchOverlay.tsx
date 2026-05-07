@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { TEAM_LOGOS } from "@/lib/kc-assets";
 import {
   getLiveMatch,
@@ -169,10 +170,11 @@ export function NextMatchOverlay() {
             </span>
             <span className="text-white/30 text-xs">vs</span>
             {oppLogo ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
+              <Image
                 src={oppLogo}
                 alt={next.opponentCode}
+                width={28}
+                height={28}
                 className="h-7 w-7 object-contain rounded-md"
               />
             ) : (

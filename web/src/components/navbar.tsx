@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { useState, useEffect } from "react";
 import { CommandPaletteButton } from "./CommandPalette";
 import { LangSwitcher } from "./i18n/LangSwitcher";
@@ -115,8 +116,14 @@ export function Navbar() {
           {user ? (
             <Link href="/settings" className="flex items-center gap-2 rounded-lg border border-[var(--border-gold)] bg-[var(--bg-surface)] px-3 py-1.5 text-xs font-medium text-[var(--text-secondary)] hover:border-[var(--gold)]/40">
               {user.avatar ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={user.avatar} alt="" className="h-5 w-5 rounded-full" />
+                <Image
+                  src={user.avatar}
+                  alt=""
+                  width={20}
+                  height={20}
+                  className="h-5 w-5 rounded-full"
+                  unoptimized
+                />
               ) : (
                 <div className="h-5 w-5 rounded-full bg-[var(--gold)] text-[8px] font-bold text-black flex items-center justify-center">{user.name[0]}</div>
               )}
