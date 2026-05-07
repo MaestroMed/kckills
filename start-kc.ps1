@@ -1,15 +1,21 @@
 # start-kc.ps1 — Launch the KCKills worker (24/7 station)
 #
 # Usage:
-#   pwsh ./start-kc.ps1                  # supervised daemon (default)
-#   pwsh ./start-kc.ps1 sentinel         # one-shot module run
-#   pwsh ./start-kc.ps1 pipeline <id>    # end-to-end on one match
+#   pwsh ./start-kc.ps1                    # foreground supervised daemon (default)
+#   pwsh ./start-kc.ps1 -Detached          # detached background daemon (survives terminal)
+#   pwsh ./start-kc.ps1 sentinel           # one-shot module run
+#   pwsh ./start-kc.ps1 pipeline <id>      # end-to-end on one match
 #
-# The worker runs in the foreground in this terminal. Ctrl-C to stop
-# (or use stop-kc.ps1 from another window).
+# Foreground mode prints to the current terminal — Ctrl-C stops it
+# (or use stop-kc.ps1 from another window). Detached mode launches
+# python via Start-Process so the daemon survives the launcher exit
+# and any orchestrator that may kill the parent shell.
 
 [CmdletBinding()]
-param([Parameter(ValueFromRemainingArguments=$true)] [string[]] $Args)
+param(
+    [switch] $Detached,
+    [Parameter(ValueFromRemainingArguments=$true)] [string[]] $Args
+)
 
 $ErrorActionPreference = 'Stop'
 $root   = Split-Path -Parent $MyInvocation.MyCommand.Definition
@@ -59,4 +65,21 @@ Write-Host "→ worker  $venvPy main.py $($Args -join ' ')" -ForegroundColor Cya
 Write-Host "→ logs    $logFile" -ForegroundColor DarkGray
 Write-Host "→ host    $env:WORKER_HOSTNAME" -ForegroundColor DarkGray
 Write-Host ""
-& $venvPy main.py @Args 2>&1 | Tee-Object -FilePath $logFile
+
+if ($Detached) {
+    # Background detached — survives this script's exit, survives the
+    # launching shell. Use this when starting the worker from automation
+    # tooling that may kill the parent process. Stop via stop-kc.ps1.
+    $errFile = Join-Path $logDir "worker-$ts.err.log"
+    $proc = Start-Process -FilePath $venvPy `
+        -ArgumentList (@('main.py') + $Args) `
+        -WindowStyle Hidden `
+        -PassThru `
+        -RedirectStandardOutput $logFile `
+        -RedirectStandardError $errFile
+    Write-Host "→ pid     $($proc.Id) (detached)" -ForegroundColor Green
+    Write-Host "→ stderr  $errFile" -ForegroundColor DarkGray
+} else {
+    # Foreground — output to terminal AND log file via Tee-Object.
+    & $venvPy main.py @Args 2>&1 | Tee-Object -FilePath $logFile
+}

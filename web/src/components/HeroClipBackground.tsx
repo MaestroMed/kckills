@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import Image from "next/image";
 import { m, AnimatePresence } from "motion/react";
 
 interface ClipEntry {
@@ -224,16 +225,18 @@ export function HeroClipBackground({ clips, posterSrc = "/images/hero-bg.jpg" }:
   }, []);
 
   if (clips.length === 0) {
+    // Wave 13k (2026-05-07) — next/image with priority unlocks AVIF /
+    // WebP auto-conversion + Next's image cache layer. The original
+    // local /public/images/hero-bg.jpg gets served as ~50% smaller
+    // AVIF on supported browsers (>95% in 2026).
     return (
-      // eslint-disable-next-line @next/next/no-img-element
-      <img
+      <Image
         src={posterSrc}
         alt=""
-        className="absolute inset-0 w-full h-full object-cover"
-        style={{ opacity: 1 }}
-        fetchPriority="high"
-        loading="eager"
-        decoding="async"
+        fill
+        sizes="100vw"
+        priority
+        className="object-cover"
       />
     );
   }
@@ -246,14 +249,16 @@ export function HeroClipBackground({ clips, posterSrc = "/images/hero-bg.jpg" }:
       {/* Poster stays at full opacity underneath the video so the Sacre
           celebration photo is always visible through the overlay.
           The video rotator is layered on top at 0.85 opacity. */}
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
+      {/* Wave 13k — see note in the empty-clips branch. The hero poster
+          image is the LCP candidate ; next/image with `priority` ships
+          AVIF + preconnects + the new fetchPriority signal in one prop. */}
+      <Image
         src={posterSrc}
         alt=""
-        className="hero-poster-breathe absolute inset-0 w-full h-full object-cover"
-        fetchPriority="high"
-        loading="eager"
-        decoding="async"
+        fill
+        sizes="100vw"
+        priority
+        className="hero-poster-breathe object-cover"
       />
 
       {/* 🔴 2026-04-27 mobile crash mitigation Tier 2 :
