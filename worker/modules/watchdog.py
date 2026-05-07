@@ -32,6 +32,7 @@ the watchdog loop.
 from __future__ import annotations
 
 import math
+import os
 import time
 from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
@@ -41,11 +42,43 @@ import structlog
 
 from local_cache import cache
 from scheduler import scheduler
-from services import discord_webhook
+from services import discord_webhook, disk_hygiene
 from services.observability import note, run_logged
 from services.supabase_client import get_db, safe_select, safe_update
 
 log = structlog.get_logger()
+
+
+# ─── Wave 14 alert thresholds (operator overrides via env) ────────────
+# Proactive mid-day alerts. The watchdog's 5-min cycle calls these on
+# every loop ; cooldown prevents Discord spam by only firing once per
+# threshold-crossing per UTC day.
+
+# Gemini quota — alert when remaining drops below this %.
+GEMINI_ALERT_PCT = int(os.getenv("KCKILLS_ALERT_GEMINI_PCT", "20") or "20")
+
+# Disk free — alert when host free space drops below this %.
+DISK_ALERT_FREE_PCT = float(os.getenv("KCKILLS_ALERT_DISK_FREE_PCT", "10") or "10")
+
+# DLQ growth — alert when added-today exceeds this count.
+DLQ_ALERT_TODAY_THRESHOLD = int(os.getenv("KCKILLS_ALERT_DLQ_TODAY", "20") or "20")
+
+# Disk GC cadence — purge stale artefacts every N hours. None disables.
+DISK_GC_INTERVAL_HOURS = float(os.getenv("KCKILLS_DISK_GC_HOURS", "24") or "24")
+
+# In-memory cooldown state. Keyed by (alert_kind, utc_date).
+_alert_state: dict[tuple[str, str], bool] = {}
+_last_disk_gc_ts: float = 0.0
+
+
+def _alerted_today(kind: str) -> bool:
+    """True if `kind` already fired today (UTC). Mutates state."""
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    key = (kind, today)
+    if _alert_state.get(key):
+        return True
+    _alert_state[key] = True
+    return False
 
 
 # ─── Reset thresholds ────────────────────────────────────────────────
@@ -416,6 +449,109 @@ def _kills_published_today(db) -> int:
         return 0
 
 
+# ─── Wave 14 proactive alerts ─────────────────────────────────────────
+
+
+async def _send_alert(title: str, body: str, color: int = 0xFF6B00) -> None:
+    """Wrap Discord webhook posting so a webhook outage never crashes
+    the watchdog cycle. Called only on threshold-crossing events."""
+    try:
+        await discord_webhook.send(embed={
+            "title": title,
+            "description": body,
+            "color": color,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        })
+    except Exception as e:
+        log.warn("watchdog_alert_send_failed", title=title, error=str(e)[:160])
+
+
+async def _maybe_alert_low_quota(stats: dict, disk: dict) -> None:
+    """Check the three Wave 14 alert thresholds and post a Discord
+    embed when one is crossed (once per UTC day per alert kind)."""
+
+    # ── Gemini quota ──
+    # scheduler.get_stats() returns daily_remaining as ABSOLUTE counts
+    # against scheduler limits. Convert to %. If `gemini` isn't in the
+    # daily_counts dict at all, the scheduler hasn't seen a call yet —
+    # skip silently.
+    counts = stats.get("daily_counts") or {}
+    remaining = stats.get("daily_remaining") or {}
+    gemini_total = counts.get("gemini", 0) + remaining.get("gemini", 0)
+    if gemini_total > 0:
+        pct_remaining = remaining.get("gemini", 0) / gemini_total * 100
+        if pct_remaining < GEMINI_ALERT_PCT and not _alerted_today("gemini_low"):
+            await _send_alert(
+                "⚠️ Gemini daily quota nearly exhausted",
+                f"Remaining : **{remaining.get('gemini', 0)}** "
+                f"calls (**{pct_remaining:.0f} %**) of "
+                f"{gemini_total} daily.\n"
+                f"Consider switching `KCKILLS_GEMINI_TIER=balanced` "
+                f"(paid 3 Flash, $0.30/$2.50) or letting analyzer "
+                f"degrade until 07:00 UTC reset.",
+                color=0xFFB000,
+            )
+
+    # ── Disk free space ──
+    free_pct = disk.get("host_free_pct", 100)
+    if free_pct < DISK_ALERT_FREE_PCT and not _alerted_today("disk_low"):
+        free_gb = disk.get("host_free_bytes", 0) / 1024 / 1024 / 1024
+        managed_gb = disk.get("managed_total_bytes", 0) / 1024 / 1024 / 1024
+        await _send_alert(
+            "🔴 Worker host disk free below threshold",
+            f"Free : **{free_pct:.1f} %** "
+            f"(~{free_gb:.1f} GB free).\n"
+            f"Worker-managed : {managed_gb:.1f} GB.\n"
+            f"GC runs every {DISK_GC_INTERVAL_HOURS:.0f} h ; "
+            f"if this re-fires daily, lower the per-dir retention "
+            f"(`KCKILLS_VODS_RETENTION_DAYS=3` etc.) or extend the host.",
+            color=0xFF3030,
+        )
+
+    # ── DLQ growth ──
+    # build_daily_report assembles _dlq_growth lazily ; replicate the
+    # cheap part here so we don't run every queue/error query each
+    # watchdog cycle. Just count today.
+    db = get_db()
+    if db is not None:
+        try:
+            client = db._get_client()
+            today_start = datetime.now(timezone.utc).replace(
+                hour=0, minute=0, second=0, microsecond=0
+            )
+            r = client.get(
+                f"{db.base}/dead_letter_jobs",
+                params={
+                    "select": "id",
+                    "failed_at": f"gte.{today_start.isoformat()}",
+                    "limit": "1",
+                },
+                headers={**db.headers, "Prefer": "count=exact"},
+            )
+            r.raise_for_status()
+            cr = r.headers.get("content-range") or ""
+            today_n = 0
+            if "/" in cr:
+                tail = cr.split("/")[-1]
+                if tail and tail != "*":
+                    try:
+                        today_n = int(tail)
+                    except ValueError:
+                        today_n = 0
+            if today_n >= DLQ_ALERT_TODAY_THRESHOLD and not _alerted_today("dlq_spike"):
+                await _send_alert(
+                    "⚠️ Dead-letter queue spiking",
+                    f"**{today_n}** jobs failed terminally today.\n"
+                    f"Threshold : `{DLQ_ALERT_TODAY_THRESHOLD}`.\n"
+                    f"Check `/admin/pipeline/dlq` and run "
+                    f"`scripts/backfill_stuck_pipeline.py --state failed` "
+                    f"if it's a transient external (Gemini / yt-dlp / R2) issue.",
+                    color=0xFF6060,
+                )
+        except Exception as e:
+            log.warn("watchdog_dlq_alert_check_failed", error=str(e)[:160])
+
+
 # ─── @run_logged main loop ────────────────────────────────────────────
 
 @run_logged()
@@ -434,6 +570,25 @@ async def run() -> dict:
 
     # Scheduler stats
     stats = scheduler.get_stats()
+
+    # Wave 14 — disk usage snapshot + periodic GC
+    disk = disk_hygiene.usage_stats()
+    global _last_disk_gc_ts
+    if DISK_GC_INTERVAL_HOURS > 0 and (
+        time.time() - _last_disk_gc_ts > DISK_GC_INTERVAL_HOURS * 3600
+    ):
+        try:
+            purge = disk_hygiene.purge_aged()
+            log.info(
+                "disk_gc_cycle",
+                files_deleted=purge["files_deleted"],
+                bytes_freed_mb=round(purge["bytes_freed"] / 1024 / 1024, 1),
+                errors=purge["errors"],
+            )
+        except Exception as e:
+            log.warn("disk_gc_failed", error=str(e)[:200])
+        _last_disk_gc_ts = time.time()
+
     log.info(
         "watchdog_stats",
         gemini_remaining=stats["daily_remaining"].get("gemini", "?"),
@@ -442,7 +597,12 @@ async def run() -> dict:
         stuck_reset=reset_stats["reset"],
         stuck_skipped_active_job=reset_stats["skipped_active_job"],
         stuck_skipped_recent=reset_stats["skipped_recent"],
+        disk_free_pct=disk.get("host_free_pct", -1),
+        disk_managed_mb=round(disk.get("managed_total_bytes", 0) / 1024 / 1024, 1),
     )
+
+    # Wave 14 — proactive Discord alerts (cooldown : once per UTC day per alert kind)
+    await _maybe_alert_low_quota(stats, disk)
 
     note(
         items_scanned=reset_stats["reset"]
@@ -479,6 +639,13 @@ def build_daily_report() -> dict:
     runs = _fetch_pipeline_runs_24h(db)
     stats = scheduler.get_stats()
 
+    # Wave 14 — disk usage + GC summary in the daily report
+    try:
+        disk = disk_hygiene.usage_stats()
+    except Exception as e:
+        log.warn("watchdog_daily_disk_failed", error=str(e)[:160])
+        disk = None
+
     return {
         "scheduler": {
             "gemini_calls":   stats["daily_counts"].get("gemini", 0),
@@ -491,6 +658,7 @@ def build_daily_report() -> dict:
         "dlq_growth":         _dlq_growth(db),
         "per_module_latency": _per_module_latency(runs),
         "queue_depth":        _queue_depth_per_kind(db),
+        "disk":               disk,
     }
 
 
@@ -517,6 +685,17 @@ def _format_report_lines(report: dict) -> list[str]:
         f"**DLQ growth** : today={dlq.get('today', 0)}, "
         f"yesterday={dlq.get('yesterday', 0)}"
     )
+
+    # Wave 14 — disk health
+    disk = report.get("disk") or {}
+    if disk:
+        managed_mb = disk.get("managed_total_bytes", 0) / 1024 / 1024
+        free_pct = disk.get("host_free_pct", 0)
+        free_gb = disk.get("host_free_bytes", 0) / 1024 / 1024 / 1024
+        lines.append(
+            f"**Disk** : worker {managed_mb:.0f} MB · "
+            f"host free {free_pct:.1f} % (~{free_gb:.0f} GB)"
+        )
 
     top = report.get("top_error_codes") or []
     if top:

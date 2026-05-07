@@ -94,11 +94,23 @@ except Exception:
 
 import structlog
 
+# Wave 14 (2026-05-07) — switch to JSONRenderer when KCKILLS_ENV=production
+# so logs are parseable by Loki / Sentry / Datadog. ConsoleRenderer stays
+# the default for dev because it's much easier to read interactively.
+# Operator can force either explicitly via KCKILLS_LOG_FORMAT={console,json}.
+_log_format = (os.environ.get("KCKILLS_LOG_FORMAT", "") or "").lower()
+if not _log_format:
+    _log_format = "json" if os.environ.get("KCKILLS_ENV", "").lower() == "production" else "console"
+_renderer = (
+    structlog.processors.JSONRenderer()
+    if _log_format == "json"
+    else structlog.dev.ConsoleRenderer()
+)
 structlog.configure(
     processors=[
         structlog.processors.TimeStamper(fmt="iso"),
         structlog.processors.add_log_level,
-        structlog.dev.ConsoleRenderer(),
+        _renderer,
     ]
 )
 
