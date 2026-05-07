@@ -203,6 +203,11 @@ export default async function RootLayout({
         <link rel="preconnect" href="https://clips.kckills.com" crossOrigin="" />
         <link rel="preconnect" href="https://ddragon.leagueoflegends.com" />
         <link rel="dns-prefetch" href="https://r2.cloudflarestorage.com" />
+        {/* Wave 13g (2026-05-07) — Supabase preconnect. Homepage hero stats
+            queries (count, last-match, career, top-scorer) hit Supabase
+            on every cache miss. Warming the connection in parallel with
+            HTML parsing saves ~80-150 ms on cold 4G visits. */}
+        <link rel="preconnect" href="https://guasqaistzpeapxoyxrc.supabase.co" crossOrigin="" />
         {/* ─── Non-blocking Google Fonts ──────────────────────────────
             Wave 7 perf audit (2026-04-25) — the previous setup shipped
             BOTH a `<link rel="preload" as="style">` AND a render-blocking

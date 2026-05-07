@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 
 /**
- * Middleware — protects /admin/* and /api/admin/* (admin auth gate).
+ * Proxy — protects /admin/* and /api/admin/* (admin auth gate).
+ *
+ * Renamed from `middleware.ts` for Next 16 (Wave 13g, 2026-05-07). Same
+ * matcher + same behaviour ; just the file convention + export name
+ * changed per https://nextjs.org/docs/messages/middleware-to-proxy.
  *
  * Two acceptance paths for admin:
  *   1. Cookie `kc_admin` matches `KCKILLS_ADMIN_TOKEN` env var
@@ -10,15 +14,15 @@ import { NextRequest, NextResponse } from "next/server";
  *
  * Fail-closed in production : if neither KCKILLS_ADMIN_TOKEN nor
  * KCKILLS_ADMIN_DISCORD_IDS is set in a production environment, the
- * middleware DENIES every admin request. This prevents a misconfigured
+ * proxy DENIES every admin request. This prevents a misconfigured
  * Vercel deployment from silently exposing the backoffice.
  *
  * Local dev : NODE_ENV=development with no env vars = open access (the
  * historical behaviour that lets `pnpm dev` work without setup).
  *
- * Lang detection moved out of middleware (2026-04-27 cache fix) :
+ * Lang detection moved out of proxy (2026-04-27 cache fix) :
  *   * Used to live here as Accept-Language → kc_lang cookie soft detect.
- *   * Reading request.cookies / request.headers in middleware opted
+ *   * Reading request.cookies / request.headers in proxy opted
  *     EVERY matched response into dynamic rendering, killing CDN cache.
  *   * Lang detection now happens client-side in `LangProvider`
  *     (reads cookie + localStorage on mount). Acceptable trade-off for
@@ -29,12 +33,12 @@ import { NextRequest, NextResponse } from "next/server";
  *   - The login route sets the kc_admin cookie (httpOnly, secure)
  */
 
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   // The matcher (see config below) ONLY routes /admin/*, /api/admin/*,
-  // /api/kills/:id/edit and /api/bgm to this middleware as of the
-  // 2026-04-27 cache fix. Public pages skip middleware entirely so they
+  // /api/kills/:id/edit and /api/bgm to this proxy as of the
+  // 2026-04-27 cache fix. Public pages skip the proxy entirely so they
   // can stay statically cached on the Vercel CDN. The `needsAuth` check
   // here is belt-and-braces : if the matcher ever expands again, the
   // body still does the right thing for /admin/login (no auth) vs the
@@ -100,10 +104,10 @@ export function middleware(request: NextRequest) {
   }
 
   // For Discord OAuth path, the cookie is `sb-access-token` from Supabase
-  // — we can't validate it in middleware (no DB call), so we let the
+  // — we can't validate it in the proxy (no DB call), so we let the
   // request through and rely on the per-handler requireAdmin() to block
   // unauthorised users. The handler check is THE security boundary
-  // for Discord-only admins ; middleware is just the cookie short-circuit.
+  // for Discord-only admins ; the proxy is just the cookie short-circuit.
   if (allowedDiscordIds.length > 0) {
     return noStore(NextResponse.next({ request: { headers: passthroughHeaders } }));
   }
@@ -129,16 +133,16 @@ export const config = {
   //
   // 2026-04-27 cache fix : the previous matcher ALSO included public
   // pages for soft language detection (set kc_lang cookie from
-  // Accept-Language). But ANY middleware execution that reads
+  // Accept-Language). But ANY proxy execution that reads
   // request.cookies / request.headers opts the matched response into
-  // dynamic rendering — even when the middleware does nothing else.
+  // dynamic rendering — even when the proxy does nothing else.
   // Result : every public page was running SSR for every visitor
   // regardless of `revalidate = 300` (X-Vercel-Cache: MISS forever).
   //
-  // The new matcher covers ONLY paths that genuinely need middleware
+  // The new matcher covers ONLY paths that genuinely need the proxy
   // (admin auth + sensitive mutation routes). Public-page lang
   // detection now lives entirely in `LangProvider` client-side
-  // (reads cookie + localStorage on mount) — no middleware needed,
+  // (reads cookie + localStorage on mount) — no proxy needed,
   // pages stay cacheable per their `revalidate` settings.
   matcher: [
     "/admin/:path*",

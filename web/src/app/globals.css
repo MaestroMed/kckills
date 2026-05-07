@@ -56,14 +56,20 @@ h1, h2, h3, h4, .font-display {
   from { opacity: 0; transform: translateY(20px); }
   to { opacity: 1; transform: translateY(0); }
 }
-main > * > * {
-  animation: fadeInUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) both;
+/* Wave 13g (2026-05-07) — gate the staggered fadeInUp on
+   prefers-reduced-motion: no-preference. The animation is pure decoration
+   and on low-end mobiles it caused ~150 ms of FCP delay + repaint cascade
+   on every section. Reduced-motion users now see the page paint instantly. */
+@media (prefers-reduced-motion: no-preference) {
+  main > * > * {
+    animation: fadeInUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+  main > * > *:nth-child(2) { animation-delay: 0.08s; }
+  main > * > *:nth-child(3) { animation-delay: 0.16s; }
+  main > * > *:nth-child(4) { animation-delay: 0.20s; }
+  main > * > *:nth-child(5) { animation-delay: 0.24s; }
+  main > * > *:nth-child(6) { animation-delay: 0.28s; }
 }
-main > * > *:nth-child(2) { animation-delay: 0.08s; }
-main > * > *:nth-child(3) { animation-delay: 0.16s; }
-main > * > *:nth-child(4) { animation-delay: 0.20s; }
-main > * > *:nth-child(5) { animation-delay: 0.24s; }
-main > * > *:nth-child(6) { animation-delay: 0.28s; }
 
 /* Floating gold particles */
 @keyframes float {
@@ -125,17 +131,27 @@ main > * > *:nth-child(6) { animation-delay: 0.28s; }
   -webkit-background-clip: text;
   color: transparent;
   -webkit-text-fill-color: transparent;
-  animation: textShimmer 4s linear infinite;
+  /* Wave 13g — animation paused by default; resumed for users who haven't
+     opted out of motion. Saves the textShimmer keyframe loop for
+     prefers-reduced-motion: reduce visitors. */
+  animation: textShimmer 4s linear infinite paused;
   /* Subtle text-stroke for the dark outline that keeps edges sharp on any bg */
   -webkit-text-stroke: 1px rgba(0, 0, 0, 0.5);
 }
+@media (prefers-reduced-motion: no-preference) {
+  .text-shimmer { animation-play-state: running; }
+}
 
 /* Wrapper that adds glow + breathing via filter (respects the actual
-   rendered gold gradient pixels, NOT the invisible text shape). */
+   rendered gold gradient pixels, NOT the invisible text shape).
+   Wave 13g — gated on prefers-reduced-motion: no-preference so the
+   continuous filter animation stops for reduced-motion visitors. */
 .hero-title-glow {
   display: inline-block;
-  animation: heroBreathe 4s ease-in-out infinite;
   will-change: transform, filter;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .hero-title-glow { animation: heroBreathe 4s ease-in-out infinite; }
 }
 
 /* ─── Hextech Ornaments ──────────────────────────── */

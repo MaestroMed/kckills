@@ -57,7 +57,25 @@ const nextConfig: NextConfig = {
     // Inline critical CSS into the SSR HTML so first paint doesn't
     // wait on the stylesheet HTTP request. Big mobile latency win.
     inlineCss: true,
+    // Wave 13g (2026-05-07) — auto tree-shake barrel imports for the
+    // libraries that ship enormous index re-exports. Without this,
+    // `import { Heart } from "lucide-react"` pulls every icon into the
+    // bundle. With it, Next rewrites to deep paths (`lucide-react/dist/
+    // esm/icons/heart`) at build time and drops the rest. Typical saving
+    // on the homepage path : ~40-80 KB First Load JS.
+    optimizePackageImports: [
+      "lucide-react",
+      "motion",
+      "date-fns",
+      "@react-three/drei",
+      "@supabase/ssr",
+      "@supabase/supabase-js",
+    ],
   },
+
+  // No "X-Powered-By: Next.js" leak — saves bytes per response and
+  // doesn't advertise the framework to drive-by scanners.
+  poweredByHeader: false,
 
   images: {
     remotePatterns: [

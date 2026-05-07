@@ -231,6 +231,9 @@ export function HeroClipBackground({ clips, posterSrc = "/images/hero-bg.jpg" }:
         alt=""
         className="absolute inset-0 w-full h-full object-cover"
         style={{ opacity: 1 }}
+        fetchPriority="high"
+        loading="eager"
+        decoding="async"
       />
     );
   }
@@ -248,6 +251,9 @@ export function HeroClipBackground({ clips, posterSrc = "/images/hero-bg.jpg" }:
         src={posterSrc}
         alt=""
         className="hero-poster-breathe absolute inset-0 w-full h-full object-cover"
+        fetchPriority="high"
+        loading="eager"
+        decoding="async"
       />
 
       {/* 🔴 2026-04-27 mobile crash mitigation Tier 2 :
@@ -280,7 +286,7 @@ export function HeroClipBackground({ clips, posterSrc = "/images/hero-bg.jpg" }:
                 muted={!wantsAudio}
                 loop
                 playsInline
-                preload="auto"
+                preload="metadata"
               />
             ) : current.videoId ? (
               /* YouTube iframe fallback (may trigger CAPTCHA on low-traffic domains) */

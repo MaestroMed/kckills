@@ -48,6 +48,11 @@
   "pnpm": {
     "overrides": {
       "postcss": "^8.5.12"
-    }
+    },
+    "onlyBuiltDependencies": [
+      "@sentry/cli",
+      "sharp",
+      "unrs-resolver"
+    ]
   }
 }

@@ -151,7 +151,7 @@ export default async function LabPage() {
               coût) :
             </p>
             <pre className="rounded bg-[var(--bg-elevated)] p-3 text-xs font-mono text-[var(--gold)] overflow-x-auto">
-              {`cd C:/Users/Matter1/Karmine_Stats/worker
+              {`cd C:/Users/Matter1/Kckills/worker
 python scripts/lab_generate_evaluations.py`}
             </pre>
             <p className="text-sm text-[var(--text-muted)]">
