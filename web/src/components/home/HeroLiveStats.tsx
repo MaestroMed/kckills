@@ -19,12 +19,17 @@ import Link from "next/link";
 import Image from "next/image";
 import { type RealData, type RosterPlayer, displayRole } from "@/lib/real-data";
 import { PLAYER_PHOTOS, TEAM_LOGOS, KC_LOGO } from "@/lib/kc-assets";
-import { getPublishedKcKillCount } from "@/lib/supabase/kills";
+// Wave 13n (2026-05-07) — switched from raw fetchers to unstable_cache-
+// wrapped versions so the homepage hero data is cached across requests
+// with a 5-min TTL + 'hero-stats' tag. Worker-driven invalidation will
+// land via a Server Action that calls revalidateTag('hero-stats') after
+// new match writes.
 import {
-  getHeroLastMatch,
-  getHeroCareerStats,
-  getHeroTopScorer,
-} from "@/lib/supabase/hero-stats";
+  getCachedHeroLastMatch as getHeroLastMatch,
+  getCachedHeroCareerStats as getHeroCareerStats,
+  getCachedHeroTopScorer as getHeroTopScorer,
+  getCachedPublishedKcKillCount as getPublishedKcKillCount,
+} from "@/lib/supabase/hero-stats-cached";
 import { type RosterPlayerStat } from "@/components/HomeTopScorerCarousel";
 import { HomeTopScorerCarouselSection } from "@/components/homepage-desktop-sections";
 import { AnimatedNumber } from "@/components/AnimatedNumber";
@@ -50,10 +55,10 @@ export async function HeroLiveStats({
   // below if the DB is unreachable.
   const [clipCount, liveLastMatch, liveCareer, liveTopScorer] =
     await Promise.all([
-      getPublishedKcKillCount({ buildTime: true }),
-      getHeroLastMatch(true),
-      getHeroCareerStats(true),
-      getHeroTopScorer(true),
+      getPublishedKcKillCount(),
+      getHeroLastMatch(),
+      getHeroCareerStats(),
+      getHeroTopScorer(),
     ]);
 
   // ─── Carousel computation (achievements based on live + static) ───

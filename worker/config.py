@@ -95,6 +95,17 @@ class Config:
             "qc":       "gemini-2.5-flash-lite",
             "offset":   "gemini-2.5-flash-lite",
         },
+        "fast-3.1": {  # Wave 13o (2026-05-07) — Gemini 3.1 Flash-Lite
+            # GA'd this week. Same input/output cost as 2.5 Flash-Lite
+            # ($0.25/$1.50 per M tokens) but 2.5× faster TTFT, +45 % output
+            # throughput, and quality matching/beating 2.5 Flash. Best
+            # default for the analyzer when speed > squeezing the last
+            # 1-2 % of description quality. Cheaper than `balanced`
+            # (which uses 3 Flash at $0.30/$2.50) AND faster.
+            "analyzer": "gemini-3.1-flash-lite",
+            "qc":       "gemini-3.1-flash-lite",
+            "offset":   "gemini-3.1-flash-lite",
+        },
         "balanced": {  # paid Flash 3 for descriptions, free Lite for QC
             "analyzer": "gemini-3-flash",
             "qc":       "gemini-2.5-flash-lite",
