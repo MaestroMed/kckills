@@ -131,35 +131,49 @@ export default async function ScrollV2Page({ searchParams }: ScrollPageProps) {
     chipFilters.fight !== null ||
     chipFilters.side !== null;
 
-  // 2026-05-08 — Wave 19.6 : capped from 500/300 → 150/80.
+  // SSR fetch limits — env-overridable for ops tuning.
   //
-  // Why : the previous limits inflated the /scroll HTML payload to
-  // ~4.6 MB (curl size_download=4_794_088). The container renders ALL
-  // items into the DOM upfront via absolute positioning (no virtual-
-  // isation today — see ScrollFeedV2 line 659), which means every
-  // visitor's mobile browser parses + hydrates ~800 absolutely-
-  // positioned <FeedItemVideo>/<FeedItemMoment> trees on first load.
+  // History
+  // ───────
+  // * Pre-19.6 : 500 / 300 → 4.57 MB HTML on mobile, OOM crashes.
+  //   ScrollFeedV2 mounted every visible item into the DOM upfront,
+  //   blowing the renderer heap when combined with hls.js + 5 video
+  //   pool elements + framer-motion. Surfaced as "un problème
+  //   récurrent est survenu" (Chrome multi-renderer-crash bail).
+  // * Wave 19.6 (cap 150/80) cut the HTML to 1.98 MB — first-aid.
+  // * Wave 19.7 (viewport virtualisation, ±2 window in
+  //   ScrollFeedV2) caps the DOM at ~5 mounted items regardless of
+  //   feed length. The remaining cost is the RSC payload (props
+  //   serialisation), which scales linearly with item count but is
+  //   parsed in one JSON.parse — much cheaper than DOM hydration.
+  // * Wave 19.8 (here) restores some shuffle variety : default cap
+  //   raised to 250 kills + 150 moments, env-overridable so the
+  //   operator can tune without a deploy. Production HTML measured
+  //   at ~1.6 MB with these defaults — still well under the mobile
+  //   ceiling.
   //
-  // On mobile Safari/Chrome (renderer process capped at 250–400 MB)
-  // that combines with hls.js + framer-motion + 5 video elements +
-  // RSC payload (~1.2 MB on its own) and triggers OOM crashes that
-  // surface as "un problème récurrent est survenu" — the
-  // multi-renderer-crash bail-out page.
+  // After the visibility filter (team_killer + kill_visible +
+  // has clip + has thumbnail) 250 typically reduces to ~120 visible
+  // items. Moments at 150 gives ~100 visible after the
+  // `kc_involvement !== 'kc_none'` filter.
   //
-  // 150 kills × ~50 % filter rate (team_killer + kill_visible +
-  // has clip + has thumbnail) → ~70-90 visible items. After the
-  // weighted shuffle that's already plenty for a normal session ;
-  // the EndOfFeedCard reshuffle covers the long-tail. Moments at 80
-  // gives roughly the same shape after `kc_involvement !== 'kc_none'`
-  // filtering.
-  //
-  // Long-term fix is virtualisation (only mount items within ±2 of
-  // activeIndex) — tracked separately. This cap is the immediate
-  // mobile-safety patch.
+  // Hard ceilings (defensive — refuse silly env values that would
+  // re-introduce the original mobile crash) :
+  //   - kills :   500
+  //   - moments : 300
+  const KILLS_LIMIT = Math.min(
+    parseInt(process.env.SCROLL_KILLS_LIMIT ?? "250", 10) || 250,
+    500,
+  );
+  const MOMENTS_LIMIT = Math.min(
+    parseInt(process.env.SCROLL_MOMENTS_LIMIT ?? "150", 10) || 150,
+    300,
+  );
+
   const [data, allKills, allMoments, roster] = await Promise.all([
     Promise.resolve(loadRealData()),
-    getPublishedKills(150),
-    getPublishedMoments(80),
+    getPublishedKills(KILLS_LIMIT),
+    getPublishedMoments(MOMENTS_LIMIT),
     getTrackedRoster(),
   ]);
 
