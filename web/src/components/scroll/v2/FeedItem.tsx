@@ -115,6 +115,22 @@ function useFeedItemAnalytics({
           dwell_fraction: dwellFraction,
         },
       });
+      // V21 (Wave 21.4) — broadcast a same-window CustomEvent so
+      // useRecommendationFeed can weight anchors by dwell strength
+      // without going through the network round-trip of /api/track.
+      try {
+        window.dispatchEvent(
+          new CustomEvent("kc:clip-dwell-recorded", {
+            detail: {
+              itemId,
+              dwellMs,
+              dwellFraction,
+            },
+          }),
+        );
+      } catch {
+        /* CustomEvent unsupported in some sandboxes */
+      }
     };
   }, [itemId, isActive]);
 

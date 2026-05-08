@@ -49,12 +49,22 @@ import { track } from "@/lib/analytics/track";
 const DWELL_MS = 1500;
 /** How many recent kill_ids feed into the anchor query. Bigger = more
  *  inertia in recommendations, smaller = tighter coupling to the very
- *  last clip. 5 strikes a decent balance. */
-const ANCHOR_WINDOW = 5;
+ *  last clip. V21 (Wave 21.4) — extended from 5 to 12 since we now
+ *  rank by dwell fraction (best engagement wins) so the longer
+ *  rolling window doesn't dilute — it just gives the ranker more to
+ *  pick from. */
+const ANCHOR_WINDOW = 12;
+/** How many anchors actually go to the recommendations API per request.
+ *  V21 — picks the top-K by `dwellFraction DESC`. Smaller than
+ *  ANCHOR_WINDOW so the cosine centroid stays sharp. */
+const ANCHOR_TOP_K = 5;
 /** Cap on /api/scroll/recommendations limit per request. */
 const FETCH_LIMIT = 20;
-/** Debounce window for refetches when anchors change rapidly. */
-const REFETCH_DEBOUNCE_MS = 600;
+/** Debounce window for refetches when anchors change rapidly.
+ *  V21 (Wave 21.4) — tightened from 600 to 350 ms. The dwell signal
+ *  is the primary driver now ; we want to follow user intent more
+ *  responsively without flooding the API. */
+const REFETCH_DEBOUNCE_MS = 350;
 
 const SESSION_STORAGE_KEY = "kc_session_id";
 
@@ -104,8 +114,18 @@ export function useRecommendationFeed<T extends { id: string }>(
 ): UseRecommendationFeedResult<T> {
   const { seedItems, activeIndex, enabled, toFeedItem } = opts;
 
-  // Ordered list of recently-anchored kill ids (oldest → newest).
-  const [anchorIds, setAnchorIds] = useState<string[]>([]);
+  // V21 (Wave 21.4) — anchor entries now carry a dwell-fraction so
+  // we can rank them. The list is still capped at ANCHOR_WINDOW
+  // (oldest evicted on overflow). On each fetch we sort by
+  // dwellFraction DESC and take the top ANCHOR_TOP_K.
+  interface AnchorEntry {
+    id: string;
+    dwellFraction: number;
+    /** Wall-clock time of the last dwell update. Used for tie-breaking
+     *  when two anchors have identical dwell — recent wins. */
+    lastSeen: number;
+  }
+  const [anchors, setAnchors] = useState<AnchorEntry[]>([]);
   const [appended, setAppended] = useState<T[]>([]);
   const [isFetching, setIsFetching] = useState(false);
   const [usingFallback, setUsingFallback] = useState(true);
@@ -127,6 +147,17 @@ export function useRecommendationFeed<T extends { id: string }>(
   }, [seedItems]);
 
   // ─── Anchor capture (dwell-based) ────────────────────────────────
+  // V21 (Wave 21.4) — two pathways feed anchors into the ranker :
+  //   1. The 1.5 s soft-threshold (existing) — ensures we always have
+  //      SOMETHING in the anchor list as soon as the user lingers,
+  //      even before the active→inactive transition fires the real
+  //      dwell event. Defaults to dwellFraction=0.4 (= "barely past
+  //      the noise floor") so the entry exists but doesn't dominate.
+  //   2. The `kc:clip-dwell-recorded` CustomEvent (new) — emitted by
+  //      FeedItem's analytics hook on isActive→inactive transition
+  //      with the REAL dwell duration + clip length. Updates the
+  //      anchor's dwellFraction in place when the entry already
+  //      exists, or adds it.
   useEffect(() => {
     if (!enabled) return;
     if (dwellTimerRef.current != null) {
@@ -138,12 +169,32 @@ export function useRecommendationFeed<T extends { id: string }>(
     if (!id || !UUID_RE.test(id)) return;
 
     dwellTimerRef.current = window.setTimeout(() => {
-      setAnchorIds((prev) => {
-        // Don't add the same anchor twice in a row — that would dilute
-        // the centroid by counting the same vector multiple times.
-        if (prev[prev.length - 1] === id) return prev;
-        const next = [...prev.filter((x) => x !== id), id];
-        return next.slice(-ANCHOR_WINDOW);
+      setAnchors((prev) => {
+        const existing = prev.findIndex((a) => a.id === id);
+        if (existing >= 0) {
+          // Already known — refresh lastSeen but don't lower dwell.
+          const copy = prev.slice();
+          copy[existing] = { ...copy[existing], lastSeen: Date.now() };
+          return copy;
+        }
+        const next: AnchorEntry = {
+          id,
+          dwellFraction: 0.4, // floor — real value lands via the CustomEvent
+          lastSeen: Date.now(),
+        };
+        const merged = [...prev, next];
+        if (merged.length > ANCHOR_WINDOW) {
+          // Evict the entry with the LOWEST score, NOT the oldest. Keeps
+          // high-engagement anchors around even if the user scrolled
+          // through 30 quick clips since.
+          merged.sort(
+            (a, b) =>
+              a.dwellFraction - b.dwellFraction ||
+              a.lastSeen - b.lastSeen,
+          );
+          merged.shift();
+        }
+        return merged;
       });
     }, DWELL_MS);
 
@@ -155,10 +206,67 @@ export function useRecommendationFeed<T extends { id: string }>(
     };
   }, [activeIndex, enabled, seedItems, appended]);
 
+  // V21 — listen for the real dwell event from FeedItem and upgrade
+  // the corresponding anchor's dwellFraction in place.
+  useEffect(() => {
+    if (!enabled || typeof window === "undefined") return;
+    const onDwellRecorded = (ev: Event) => {
+      const detail = (
+        ev as CustomEvent<{
+          itemId?: string;
+          dwellFraction?: number | null;
+        }>
+      ).detail;
+      const id = detail?.itemId;
+      const frac = detail?.dwellFraction;
+      if (!id || !UUID_RE.test(id) || typeof frac !== "number" || !Number.isFinite(frac)) {
+        return;
+      }
+      setAnchors((prev) => {
+        const existing = prev.findIndex((a) => a.id === id);
+        if (existing >= 0) {
+          // Take the MAX dwell fraction observed so far. If the user
+          // came back to a clip and dwelled longer the second time,
+          // we honour the better engagement signal.
+          const copy = prev.slice();
+          const merged = Math.max(copy[existing].dwellFraction, frac);
+          copy[existing] = {
+            id,
+            dwellFraction: merged,
+            lastSeen: Date.now(),
+          };
+          return copy;
+        }
+        // First time we see this id (the 1.5 s timer hadn't fired
+        // yet before user swiped). Add fresh.
+        const merged = [...prev, { id, dwellFraction: frac, lastSeen: Date.now() }];
+        if (merged.length > ANCHOR_WINDOW) {
+          merged.sort(
+            (a, b) =>
+              a.dwellFraction - b.dwellFraction ||
+              a.lastSeen - b.lastSeen,
+          );
+          merged.shift();
+        }
+        return merged;
+      });
+    };
+    window.addEventListener(
+      "kc:clip-dwell-recorded",
+      onDwellRecorded as EventListener,
+    );
+    return () => {
+      window.removeEventListener(
+        "kc:clip-dwell-recorded",
+        onDwellRecorded as EventListener,
+      );
+    };
+  }, [enabled]);
+
   // ─── Debounced fetch on anchor change ────────────────────────────
   useEffect(() => {
     if (!enabled) return;
-    if (anchorIds.length === 0) return;
+    if (anchors.length === 0) return;
 
     if (debounceTimerRef.current != null) {
       window.clearTimeout(debounceTimerRef.current);
@@ -168,7 +276,20 @@ export function useRecommendationFeed<T extends { id: string }>(
     debounceTimerRef.current = window.setTimeout(() => {
       const sessionId = readSessionId();
       const params = new URLSearchParams();
-      params.set("anchors", anchorIds.join(","));
+      // V21 — pick the top-K anchors by dwellFraction (DESC), break
+      // ties by lastSeen (DESC). High-engagement entries dominate the
+      // cosine centroid ; flick-pasts and floor-rated entries stay in
+      // the rolling window for replay potential but don't drive
+      // recommendations.
+      const topAnchors = [...anchors]
+        .sort(
+          (a, b) =>
+            b.dwellFraction - a.dwellFraction ||
+            b.lastSeen - a.lastSeen,
+        )
+        .slice(0, ANCHOR_TOP_K)
+        .map((a) => a.id);
+      params.set("anchors", topAnchors.join(","));
       params.set("limit", String(FETCH_LIMIT));
       if (sessionId) params.set("session", sessionId);
 
@@ -212,7 +333,7 @@ export function useRecommendationFeed<T extends { id: string }>(
                 entityId: id,
                 metadata: {
                   similarity: row.similarity,
-                  anchors: anchorIds.length,
+                  anchors: topAnchors.length,
                 },
               });
             } catch {
@@ -241,7 +362,7 @@ export function useRecommendationFeed<T extends { id: string }>(
         debounceTimerRef.current = null;
       }
     };
-  }, [anchorIds, enabled, toFeedItem]);
+  }, [anchors, enabled, toFeedItem]);
 
   // ─── Final folded list ────────────────────────────────────────────
   const items = useMemo(() => {

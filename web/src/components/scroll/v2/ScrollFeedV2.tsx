@@ -57,20 +57,28 @@ import type { RecommendedKillRow } from "@/lib/supabase/recommendations";
 import { track } from "@/lib/analytics/track";
 
 /**
- * Wave 11 — Recommendation engine feature flag (Agent DI).
+ * Recommendation engine feature flag.
  *
- * NEXT_PUBLIC_RECOMMENDATIONS_ENABLED defaults to OFF. When false (or
- * unset) the scroll feed renders byte-identically to today : the
- * server-rendered `items` are passed straight through, no anchor
- * tracking, no /api/scroll/recommendations call.
+ * V30 (Wave 21.4) — DEFAULT FLIPPED TO ON. The flag remains an
+ * `NEXT_PUBLIC_*` env var so an operator can kill-switch it during
+ * an outage by setting `NEXT_PUBLIC_RECOMMENDATIONS_ENABLED=false` on
+ * Vercel. Was previously default-OFF, which meant every visitor saw
+ * an identical weighted-shuffle feed regardless of personal taste.
  *
- * Flip to "true" to enable per-session similarity-based recommendations
- * (anchored on the last 5 actively-watched kills, blended with Wilson
- * via personalizedFeedScore). The env var must be exposed at build time
- * because we read it client-side.
+ * Default rationale (post-V21) :
+ * * Anchors now carry dwell-fraction + are ranked top-K (high
+ *   engagement wins over recency alone).
+ * * Cold start still works — when no anchors exist, the API
+ *   returns `{rows: [], fallback: true}` and the feed falls back
+ *   to the SSR seed unchanged.
+ * * Anti-repeat caps in `weightedShuffle` (V25) ensure even the
+ *   recommended-then-folded list stays varied.
+ *
+ * To kill : set `NEXT_PUBLIC_RECOMMENDATIONS_ENABLED=false` on
+ * Vercel + redeploy. The flag is read at build time.
  */
 const RECOMMENDATIONS_ENABLED =
-  process.env.NEXT_PUBLIC_RECOMMENDATIONS_ENABLED === "true";
+  process.env.NEXT_PUBLIC_RECOMMENDATIONS_ENABLED !== "false";
 
 /**
  * Viewport-bounded virtualisation window. Items where
