@@ -159,11 +159,11 @@ async def analyze(prompt: str, video_path: str | None = None) -> dict | None:
         text = (response.text or "").strip()
         # Defensive : even with response_mime_type=application/json the
         # model has been observed to occasionally wrap JSON in fences.
-        # Strip them if present so downstream parsing doesn't fail.
-        if text.startswith("```"):
-            text = text.split("```")[1]
-            if text.startswith("json"):
-                text = text[4:]
+        # Wave 27.6 — use the shared strip_json_fence which handles
+        # leading commentary, missing closing fence, and tilde fences
+        # in addition to the simple ```json prefix the old code knew.
+        from services.ai_providers._text_utils import strip_json_fence
+        text = strip_json_fence(text)
         result = json.loads(text)
         # Wave 19.9 — surface usage_metadata + model name on the returned
         # dict so callers (notably services/ai_providers/gemini.py and
@@ -175,10 +175,34 @@ async def analyze(prompt: str, video_path: str | None = None) -> dict | None:
         try:
             um = getattr(response, "usage_metadata", None)
             if um is not None and isinstance(result, dict):
+                # Wave 27.6 — tolerate SDK field-name drift. The
+                # google-genai SDK has shipped at least three variants
+                # over the past year (prompt_token_count,
+                # input_token_count, prompt_tokens) ; we read whichever
+                # is present and fall back to None if none are.
+                def _first(*names):
+                    for n in names:
+                        v = getattr(um, n, None)
+                        if v is not None:
+                            return v
+                    return None
                 result["_usage"] = {
-                    "prompt_tokens": getattr(um, "prompt_token_count", None),
-                    "candidates_tokens": getattr(um, "candidates_token_count", None),
-                    "total_tokens": getattr(um, "total_token_count", None),
+                    "prompt_tokens": _first(
+                        "prompt_token_count",
+                        "input_token_count",
+                        "prompt_tokens",
+                        "input_tokens",
+                    ),
+                    "candidates_tokens": _first(
+                        "candidates_token_count",
+                        "output_token_count",
+                        "candidates_tokens",
+                        "output_tokens",
+                    ),
+                    "total_tokens": _first(
+                        "total_token_count",
+                        "total_tokens",
+                    ),
                 }
                 result["_model"] = model_name
         except Exception:

@@ -122,13 +122,11 @@ class AnthropicProvider:
             )
 
         # Strip ```json fences (Haiku occasionally wraps despite "JSON only").
-        if text.startswith("```"):
-            parts = text.split("```")
-            if len(parts) >= 2:
-                inner = parts[1]
-                if inner.startswith("json"):
-                    inner = inner[4:]
-                text = inner.strip()
+        # Wave 27.6 — use the shared strip_json_fence which handles
+        # leading commentary, missing closing fence, and tilde fences
+        # the old startswith("```") guard rejected outright.
+        from services.ai_providers._text_utils import strip_json_fence
+        text = strip_json_fence(text)
 
         # Optional JSON parse for callers that expect structured output.
         parsed: dict | None = None
