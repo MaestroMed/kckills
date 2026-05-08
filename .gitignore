@@ -38,6 +38,12 @@ worker/logs/
 worker/.backfill_state.json
 worker/vods/
 worker/cache/
+
+# Auto-generated wrappers from install-*.ps1 (per-machine paths inside)
+_run-*.ps1
+
+# TypeScript incremental build cache
+**/tsconfig.tsbuildinfo
 worker/golgg_backfill_state.json
 
 # YouTube auth cookies — contains active session tokens, NEVER commit

@@ -56,6 +56,8 @@ BEGIN
 END $$;
 
 DO $$
+DECLARE
+    r RECORD;
 BEGIN
     IF EXISTS (
         SELECT 1 FROM pg_proc p
@@ -75,6 +77,8 @@ BEGIN
 END $$;
 
 DO $$
+DECLARE
+    r RECORD;
 BEGIN
     FOR r IN
         SELECT p.oid::regprocedure AS sig
@@ -89,6 +93,8 @@ END $$;
 -- Also lock fn_get_feed_kills + fn_similar_kills + fn_recommend_kills
 -- since they're SECURITY DEFINER too (we want consistency).
 DO $$
+DECLARE
+    r RECORD;
 BEGIN
     FOR r IN
         SELECT p.oid::regprocedure AS sig

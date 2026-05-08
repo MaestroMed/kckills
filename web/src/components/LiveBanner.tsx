@@ -71,10 +71,14 @@ export function LiveBanner() {
     ? { href: data.streamUrl, target: "_blank", rel: "noopener noreferrer" }
     : {};
 
+  // 2026-05-08 — was `fixed top-0 z-[60]`, which overlaid the sticky
+  // navbar (z-50) and hid the desktop menu. Normal flow is fine: the
+  // banner stacks above the navbar in LayoutChrome's render order, and
+  // when the user scrolls past it the navbar takes over via sticky-top.
   return (
     <Wrapper
       {...wrapperProps}
-      className="fixed top-0 left-0 right-0 z-[60] flex items-center justify-center gap-3 bg-gradient-to-r from-[var(--red)] via-[#FF3B5C] to-[var(--red)] px-4 py-2 text-center text-sm font-bold text-white shadow-lg hover:opacity-95 transition-opacity"
+      className="relative z-[60] flex items-center justify-center gap-3 bg-gradient-to-r from-[var(--red)] via-[#FF3B5C] to-[var(--red)] px-4 py-2 text-center text-sm font-bold text-white shadow-lg hover:opacity-95 transition-opacity"
       style={{ paddingTop: "max(0.5rem, env(safe-area-inset-top, 0.5rem))" }}
     >
       {/* Pulsing live dot */}

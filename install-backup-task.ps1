@@ -1,4 +1,4 @@
-# install-backup-task.ps1 — Register the Supabase backup as a Windows
+﻿# install-backup-task.ps1 — Register the Supabase backup as a Windows
 # scheduled task. Wave 14 (2026-05-07) — addresses architecture audit
 # STOP item #1 (no scheduled backups).
 #

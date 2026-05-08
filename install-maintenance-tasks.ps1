@@ -1,4 +1,4 @@
-# install-maintenance-tasks.ps1 — Register the daily/weekly maintenance
+﻿# install-maintenance-tasks.ps1 — Register the daily/weekly maintenance
 # tasks (zombie release, pipeline_jobs prune, user_events prune) as
 # Windows scheduled tasks. Wave 17 (2026-05-07) — addresses
 # architecture-audit-2026-05-07 W10 + retention follow-ups.
@@ -86,7 +86,7 @@ foreach ($j in $jobs) {
 `$env:PYTHONIOENCODING = 'utf-8'
 `$env:PYTHONUNBUFFERED = '1'
 `$ts = Get-Date -Format 'yyyyMMdd-HHmmss'
-`$logFile = Join-Path '$logDir' '$logPrefix-`$ts.log'
+`$logFile = Join-Path '$logDir' "$logPrefix-`$ts.log"
 Set-Location '$worker'
 & '$venvPy' '$script' 2>&1 | Tee-Object -FilePath `$logFile
 "@ | Set-Content -Path $wrapper -Encoding UTF8
@@ -134,7 +134,8 @@ Set-Location '$worker'
         -Settings $settings `
         -Description $j.Desc | Out-Null
 
-    Write-Host "✓ $name registered → $($j.Time) ($($j.Day ?? 'daily'))" -ForegroundColor Green
+    $cadence = if ($null -eq $j.Day) { 'daily' } else { $j.Day }
+    Write-Host "✓ $name registered → $($j.Time) ($cadence)" -ForegroundColor Green
 }
 
 Write-Host ""

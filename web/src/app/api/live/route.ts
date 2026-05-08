@@ -27,6 +27,19 @@ import { NextResponse } from "next/server";
 const LOL_ESPORTS_KEY = process.env.LOL_ESPORTS_API_KEY ?? "0TvQnueqKa5mxJntVWt0w4LpLfEkrV1Ta8rQBb9Z";
 const LOL_ESPORTS_URL = "https://esports-api.lolesports.com/persisted/gw/getLive?hl=en-US";
 
+// KCKILLS is a KC fan site, so the live-banner CTA points at the KC
+// co-stream rather than whatever official broadcast LolEsports returns
+// first (which has been varying — `otp_lol`, `lec`, etc.). Kameto co-
+// streams every KC match in French and is the natural destination for
+// our audience. Constant here so swapping it later (kameto vacation,
+// permanent etostark, …) is a one-line change.
+//
+// Trade-off : if Kameto is offline mid-match for some reason, users
+// land on his offline channel page (which still works — Twitch shows
+// past broadcasts + recent clips). That's a strictly better landing
+// than otp_lol's English broadcast for a French KC audience.
+const KC_PREFERRED_STREAM_URL = "https://www.twitch.tv/kamet0";
+
 interface LolEsportsTeam {
   code: string;
   name?: string;
@@ -74,16 +87,20 @@ export async function GET() {
           blockName?: string;
           match?: { id?: string; teams?: LolEsportsTeam[]; strategy?: { type?: string; count?: number } };
         };
+        // We still resolve the upstream stream (kept for telemetry +
+        // graceful degradation if the constant ever becomes empty),
+        // but the banner CTA always opens Kameto's channel for KC.
         const stream = eventFull.streams?.find((s) => s.locale === "fr-FR")
           ?? eventFull.streams?.find((s) => s.provider === "twitch")
           ?? eventFull.streams?.[0];
-        const streamUrl = stream
+        const officialStreamUrl = stream
           ? stream.provider === "twitch"
             ? `https://twitch.tv/${stream.parameter}`
             : stream.provider === "youtube"
               ? `https://youtube.com/watch?v=${stream.parameter}`
               : null
           : null;
+        const streamUrl = KC_PREFERRED_STREAM_URL || officialStreamUrl;
         return NextResponse.json(
           {
             isLive: true,
