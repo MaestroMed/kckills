@@ -174,6 +174,18 @@ export function FeedPlayerPool({
     Array.from({ length: POOL_SIZE }, () => null),
   );
 
+  /** V7 (Wave 21.3) — Time-to-first-frame instrumentation. When a slot
+   *  takes a new item we stamp `performance.now()` ; when the matching
+   *  `<video>`'s `loadeddata` (= first frame decoded) fires we measure
+   *  the delta and emit `clip.ttff`. Per-kill dedup so we only count
+   *  the first paint, not subsequent loops. Cold-start = first item
+   *  of the session (no prior LIVE-slot ttff event recorded). */
+  const slotAttachedAtRef = useRef<number[]>(
+    Array.from({ length: POOL_SIZE }, () => 0),
+  );
+  const ttffReportedRef = useRef<Set<string>>(new Set());
+  const sessionFirstTtffRef = useRef<boolean>(true);
+
   /** Sync mute state across all 5 elements when shared mute toggles. */
   useEffect(() => {
     for (const v of videoRefs.current) {
@@ -234,6 +246,12 @@ export function FeedPlayerPool({
         if (fallbackMp4 && v.src !== fallbackMp4) {
           v.src = fallbackMp4;
         }
+        // V7 (Wave 21.3) — stamp the slot-attach timestamp so the
+        // upcoming `loadeddata` event can measure TTFF. We stamp on
+        // EVERY slot-rebind, not just the LIVE one, because warm
+        // slots can transition to LIVE before they finish loading
+        // and we want the full attach→first-frame window in that case.
+        slotAttachedAtRef.current[s] = performance.now();
         // Capture stable refs for the async closure — `s` and `item`
         // are loop-scoped and may be reassigned before the promise
         // resolves on the next tick.
@@ -376,6 +394,36 @@ export function FeedPlayerPool({
             willChange: "transform",
             backfaceVisibility: "hidden",
             WebkitBackfaceVisibility: "hidden",
+          }}
+          onLoadedData={() => {
+            // V7 (Wave 21.3) — first decoded frame for this slot's
+            // current item. Measure attach→first-frame delta.
+            const itemIdx = slotItemIndex[slotIdx];
+            const item = items[itemIdx];
+            if (!item) return;
+            const attachedAt = slotAttachedAtRef.current[slotIdx];
+            if (!attachedAt) return;
+            // Dedup per kill — pool reuse means a kill can land in
+            // multiple slots, but the first paint is the one that
+            // matters for cold-start TTFF measurement.
+            if (ttffReportedRef.current.has(item.id)) return;
+            ttffReportedRef.current.add(item.id);
+            const ttffMs = Math.round(performance.now() - attachedAt);
+            const wasFirst = sessionFirstTtffRef.current;
+            sessionFirstTtffRef.current = false;
+            try {
+              track("clip.ttff", {
+                entityType: "kill",
+                entityId: item.id,
+                metadata: {
+                  ttff_ms: ttffMs,
+                  delivery: slotDeliveryRef.current[slotIdx] ?? "mp4",
+                  cold_start: wasFirst,
+                },
+              });
+            } catch {
+              /* tracker is silent on failure by design */
+            }
           }}
           onError={(e) => {
             const v = e.currentTarget;

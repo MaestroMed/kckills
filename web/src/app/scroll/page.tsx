@@ -479,6 +479,21 @@ function momentMatchesChips(m: MomentFeedItem, c: ScrollChipFilters): boolean {
   return true;
 }
 
+/**
+ * weightedShuffle — score-aware feed ordering with anti-repeat caps.
+ *
+ * V25 (Wave 21.3) — generalised the original 2-back lookahead into a
+ * multi-axis cap :
+ *
+ *   * Same player : not within 2 items (was : not in last 2).
+ *   * Same champion : not within 3 items in a 10-item window.
+ *   * Same fight type : not 2 in a row.
+ *
+ * The picker walks `LOOKAHEAD=8` ahead in the jittered candidate list
+ * and skips items that would violate ANY cap. Falls back to the head
+ * if no candidate clears the caps (avoid infinite loops on small
+ * filtered feeds).
+ */
 function weightedShuffle(items: FeedItem[]): FeedItem[] {
   if (items.length <= 2) return items;
   const maxScore = Math.max(1, ...items.map((i) => i.score));
@@ -489,27 +504,71 @@ function weightedShuffle(items: FeedItem[]): FeedItem[] {
     }))
     .sort((a, b) => b.sortKey - a.sortKey)
     .map((j) => j.item);
-  const LOOKAHEAD = 6;
+  const LOOKAHEAD = 8;
   const out: FeedItem[] = [];
   const remaining = [...jittered];
   while (remaining.length > 0) {
-    const last1 = out[out.length - 1];
-    const last2 = out[out.length - 2];
-    const k1 = last1 ? clumpKey(last1) : null;
-    const k2 = last2 ? clumpKey(last2) : null;
     let pickIndex = 0;
-    if (k1 || k2) {
-      for (let i = 0; i < Math.min(LOOKAHEAD, remaining.length); i++) {
-        const ck = clumpKey(remaining[i]);
-        if (ck !== k1 && ck !== k2) {
-          pickIndex = i;
-          break;
-        }
+    // Try each candidate in lookahead until one passes the caps.
+    for (let i = 0; i < Math.min(LOOKAHEAD, remaining.length); i++) {
+      if (!violatesAntiRepeat(remaining[i], out)) {
+        pickIndex = i;
+        break;
       }
     }
     out.push(remaining.splice(pickIndex, 1)[0]);
   }
   return out;
+}
+
+/** Multi-axis anti-repeat check. Returns true if placing `next`
+ *  at the END of `out` would violate any cap. V25 axes :
+ *  - same player within last 2 → block
+ *  - same champion within last 3 in a 10-window → block (3 occurrences)
+ *  - same fight_type 2 in a row → block
+ */
+function violatesAntiRepeat(next: FeedItem, out: FeedItem[]): boolean {
+  if (out.length === 0) return false;
+  const lastN = (n: number) => out.slice(-n);
+
+  // Same player within last 2 (kills only — moments don't carry a
+  // killer_player_id).
+  if (next.kind === "video" && next.killerPlayerId) {
+    for (const prev of lastN(2)) {
+      if (prev.kind === "video" && prev.killerPlayerId === next.killerPlayerId) {
+        return true;
+      }
+    }
+  }
+
+  // Same champion (killer or victim) appearing 3+ times in last 10.
+  if (next.kind === "video") {
+    const champs = new Set([next.killerChampion, next.victimChampion]);
+    let occurrences = 0;
+    for (const prev of lastN(10)) {
+      if (prev.kind !== "video") continue;
+      if (champs.has(prev.killerChampion) || champs.has(prev.victimChampion)) {
+        occurrences += 1;
+      }
+    }
+    if (occurrences >= 2) return true; // adding next would make 3
+  }
+
+  // Same fight_type 2 in a row (only meaningful when fightType is set).
+  if (next.kind === "video" && next.fightType) {
+    const prev = out[out.length - 1];
+    if (prev?.kind === "video" && prev.fightType === next.fightType) {
+      // Tighter cap : 3-in-a-row is the real annoyance ; allow 2 since
+      // combo "solo_kill, solo_kill" is normal rhythm but 3 starts to
+      // feel monotone.
+      const prev2 = out[out.length - 2];
+      if (prev2?.kind === "video" && prev2.fightType === next.fightType) {
+        return true;
+      }
+    }
+  }
+
+  return false;
 }
 
 function clumpKey(item: FeedItem): string {
