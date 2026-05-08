@@ -3,10 +3,25 @@ LoLTok Scheduler — Centralized rate limiter for ALL external API calls.
 
 Every external call must go through: await scheduler.wait_for('service_name')
 This ensures we never exceed rate limits on any service.
+
+Wave 27.3 hardening :
+  * Daily-reset is gated by a `threading.Lock` so the sync entry points
+    (get_stats / get_remaining, called from /admin endpoints + dashboards)
+    don't race with the asyncio wait_for path. The asyncio lock alone
+    wouldn't help because sync callers don't await it.
+  * Backward wall-clock jumps no longer wipe the daily counters. We only
+    reset when the new date is STRICTLY LATER than the stored date. An
+    NTP correction that pulls the clock back (or a TZ misconfig) would
+    otherwise zero out the counts mid-day and let the worker exceed the
+    Gemini RPD quota.
+  * The threading.Lock + atomic dict reassignment also means concurrent
+    coroutines on different per-service locks can't observe a partially-
+    cleared count dict.
 """
 
 import asyncio
 import os
+import threading
 import time
 from datetime import datetime, timezone
 
@@ -66,6 +81,12 @@ class LoLTokScheduler:
         self._daily_counts: dict[str, int] = {}
         self._daily_reset_date: str = ""
         self._locks: dict[str, asyncio.Lock] = {}
+        # Wave 27.3 — sync lock around the daily-reset bookkeeping.
+        # Both the async wait_for() path and the sync get_stats() /
+        # get_remaining() paths can trigger a reset, and the sync
+        # callers can't await an asyncio.Lock. A threading.Lock works
+        # for both since it doesn't yield to the event loop.
+        self._reset_lock = threading.Lock()
         self._reset_daily_if_needed()
 
     def _get_lock(self, service: str) -> asyncio.Lock:
@@ -74,6 +95,18 @@ class LoLTokScheduler:
         return self._locks[service]
 
     def _reset_daily_if_needed(self):
+        """Reset the daily counters when we cross 07:00 UTC.
+
+        Wave 27.3 — strictly forward-only date comparison. Previously a
+        wall-clock backward jump (NTP correction, sleep/wake on a laptop
+        with a flaky RTC, manual TZ change) would change the computed
+        `today` string and trigger a reset mid-day, wiping the Gemini
+        quota counter and letting the worker exceed the daily cap.
+
+        Now we only reset when `today > self._daily_reset_date` — string
+        comparison works because the format is ISO `YYYY-MM-DD`, which
+        sorts chronologically.
+        """
         now = datetime.now(timezone.utc)
         # Day resets at 07:00 UTC
         if now.hour >= self.QUOTA_RESET_HOUR_UTC:
@@ -82,9 +115,17 @@ class LoLTokScheduler:
             from datetime import timedelta
             today = (now - timedelta(days=1)).strftime("%Y-%m-%d")
 
-        if self._daily_reset_date != today:
-            self._daily_reset_date = today
-            self._daily_counts = {k: 0 for k in self.DAILY_QUOTAS}
+        # Fast-path : date hasn't moved. Avoids the lock cost on the
+        # 99.9% of calls that don't trigger a reset.
+        if today <= self._daily_reset_date:
+            return
+
+        with self._reset_lock:
+            # Re-check inside the lock — another caller may have reset
+            # between our fast-path check and the lock acquisition.
+            if today > self._daily_reset_date:
+                self._daily_reset_date = today
+                self._daily_counts = {k: 0 for k in self.DAILY_QUOTAS}
 
     async def wait_for(self, service: str) -> bool:
         """Wait until it's safe to call the service. Returns False if daily quota exceeded."""
