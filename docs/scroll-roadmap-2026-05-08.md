@@ -10,6 +10,85 @@
 > shipé pendant la rédaction du doc** (fix du `commentCount` hardcodé à
 > 0 dans `FeedSidebarV2`, wired end-to-end depuis le row SQL). Les autres
 > findings sont dans la roadmap.
+>
+> ## ✅ Wave 21 (2026-05-08) — 13 versions shippées
+>
+> Le commit "fais les 50" : ship en série de quick + medium wins.
+>
+> | Ver | Wave | Quoi |
+> |---|---|---|
+> | **V1**  | 21.1 | `clip.dwell` event tracking + `kc:clip-dwell-recorded` CustomEvent. Fondation algo. |
+> | **V5**  | 21.1 | `navigator.vibrate(8\|12)` haptique sur snap commit (Android Chrome). |
+> | **V7**  | 21.3 | TTFF instrumentation : `clip.ttff` event sur `loadeddata`, per-kill dedup, cold-start flag. |
+> | **V11** | 21.2 | Drag indicator scaling : remplace les 5 dots hardcodés par un thin progress rail aligné sur la longueur réelle du feed. |
+> | **V12** | 21.2 | Tap-on-killer-name → `/scroll?player=<id>` (réutilise contrat URL filter). |
+> | **V13** | 21.2 | Tap-on-champion → `/champion/<name>` (route existante). |
+> | **V14** | 21.2 | AI-tag chip row + `?tag=` filter sur /scroll + clearable cyan pill dans le ChipBar. |
+> | **V18** | 21.5 | StreakBadge component "🔥 Day N" (localStorage UTC-day-keyed, hidden on day 1). |
+> | **V19** | 21.7 | Speed control [0.5×, 1×, 1.5×, 2×] dans le settings drawer + `<video playbackRate>` sync. |
+> | **V20** | 21.6 | Auto-advance toggle + ScrollSettingsDrawer (⚙ button top bar) + `kc:auto-advance` event wiring. |
+> | **V21** | 21.4 | `AnchorEntry` carrying dwell-fraction, top-K=5 par dwell DESC, eviction by lowest score. Fondation perso. |
+> | **V25** | 21.3 | Anti-repeat cap multi-axis : same-player ≤2, same-champion ≤3 in 10, same-fight-type ≤2 in a row. |
+> | **V30** | 21.4 | `RECOMMENDATIONS_ENABLED` default ON (kill-switch via `=false` env). Atterrit derrière V21. |
+>
+> **Tests** : 74 worker tests still green ; tsc clean après chaque
+> commit ; aucune migration DB requise ; aucune nouvelle route admin.
+>
+> ## ⏳ Deferred — pourquoi
+>
+> Pas par paresse — chaque deferral a un coût/risque concret :
+>
+> * **V2** tap-to-pause vs unmute — gesture coordination avec
+>   DoubleTapHeart + swipe-share + drag, fragile, demande tests
+>   manuels par device.
+> * **V3** long-press menu — UX device-specific (iOS long-press vs
+>   right-click vs PWA), ~2-3 j de QA.
+> * **V6** smart preload tier — modification non-triviale du
+>   FeedPlayerPool, risque de régression mobile (Wave 19.7).
+> * **V8** Web Share enrichment — sheet redesign + per-platform deep
+>   links, ~1 j de boulot frontend.
+> * **V9** like-state persistence — déjà partiellement présent dans
+>   `LikeButton` (optimistic state) ; finir le wiring localStorage
+>   est ~30 min.
+> * **V10** bookmarks — **nouvelle table DB** (`kill_bookmarks`) +
+>   migration + route admin + RLS. ~1 j.
+> * **V15** comment overlay partial-height — refactor de
+>   `CommentSheetV2` (555 lignes), risque haut.
+> * **V16** emoji reactions — nouvelle feature, table DB, modération.
+>   ~1.5 j.
+> * **V17** viewer count en live — Supabase Realtime WebSocket
+>   subscription, infra config requise.
+> * **V22-V24** algo signals supplémentaires — nécessitent extension
+>   de `/api/scroll/recommendations` + RPC SQL, pas client-only.
+> * **V26** feed split tabs (Pour toi / Récent / Top semaine) —
+>   reroutage logique du data flow, ~1 j.
+> * **V27** onboarding — nouveau flow, design + impl, ~1.5 j.
+> * **V28** cold-start hybrid — vérifier que `weightedShuffle` actuel
+>   suffit. Probablement déjà ok.
+> * **V29** negative signal — dépend de V3 (long-press menu).
+> * **V31-V40** social graph — chaque item nécessite migration DB +
+>   nouvelle route + RLS + souvent push infra. **Profil utilisateur
+>   public** + **follow joueurs** + **push par follow** = 3-5 j minimum.
+> * **V41** auto-captions — pipeline worker majeur (Whisper /
+>   Gemini transcribe → SRT → R2). Coût AI non-trivial.
+> * **V42-V43** best-thumbnail seek — `best_thumbnail_timestamp_in_clip_sec`
+>   est dans `ai_annotations` mais pas exposé sur `kills` row.
+>   Migration + view query + plumbing ~0.5 j.
+> * **V44** iOS Capacitor + **V45** Android TWA — buildchain native,
+>   compte Apple Developer, signing keys, store reviews. **2+ semaines**.
+> * **V46** finir KO/ES translations — besoin de speakers natifs LCK
+>   et LATAM. Skipped logiciel-only.
+> * **V47-V48** multi-team / multi-league — heavy worker pipeline
+>   refactor (sentinel + harvester) + UI team-picker.
+> * **V49** AI highlight reel — pipeline ffmpeg-concat quotidien.
+>   ~1 j.
+> * **V50** editor mode — overlay annotations community-style.
+>   Heavy frontend + DB + modération. ~1+ semaine.
+>
+> **Cherry-pick proposé pour la prochaine sprint (4 semaines)** :
+> V2, V3, V6, V8, V9, V10 (bookmarks avec migration), V22, V42-V43.
+> Plus une attaque ciblée sur V32 + V34 + V35 (profil + follow +
+> push) qui débloquent vraiment la dimension sociale.
 
 ---
 
