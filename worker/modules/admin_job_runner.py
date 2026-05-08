@@ -54,7 +54,7 @@ from pathlib import Path
 import structlog
 
 from services import job_queue
-from services.observability import run_logged, worker_id
+from services.observability import note, run_logged, worker_id
 
 log = structlog.get_logger()
 
@@ -289,10 +289,16 @@ async def _process_one_job(job: dict) -> None:
         return
 
     # 3. Run the script (off the event loop — subprocess.run is blocking).
+    # asyncio.to_thread keeps the event loop free during the (potentially
+    # 10-minute) shell-out ; the note() bookends record entry/exit so an
+    # operator can correlate run_logged elapsed_s with the actual subprocess
+    # window even if other tasks log in between.
     log.info("admin_job_runner_exec", job_id=job_id, argv=argv)
+    note(shellout_started=script, shellout_job_id=job_id)
     try:
         result = await asyncio.to_thread(_run_script_blocking, argv)
     except Exception as e:
+        note(shellout_threw=script, shellout_error=type(e).__name__)
         log.error(
             "admin_job_runner_exec_threw",
             job_id=job_id, error=str(e)[:200],
@@ -305,6 +311,12 @@ async def _process_one_job(job: dict) -> None:
         return
 
     # 4. Mark succeeded / failed based on exit code.
+    note(
+        shellout_finished=script,
+        shellout_exit_code=result["exit_code"],
+        shellout_duration_s=result["duration_s"],
+        shellout_timeout=result["timeout"],
+    )
     if result["exit_code"] == 0 and not result["timeout"]:
         await asyncio.to_thread(
             job_queue.succeed, job_id, result,
