@@ -19,6 +19,7 @@ When the window fires :
 
 from __future__ import annotations
 
+import asyncio
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
@@ -53,7 +54,10 @@ def _is_in_window(now: datetime) -> bool:
     return now.weekday() == WINDOW_DAY_UTC and now.hour == WINDOW_HOUR_UTC
 
 
-def _pick_top_kill(db) -> Optional[dict]:
+async def _pick_top_kill(db) -> Optional[dict]:
+    """Wave 27.10 — async + asyncio.to_thread offload so the once-per-
+    hour KOTW pick doesn't freeze the event loop on the PostgREST
+    round-trip."""
     cutoff = (datetime.now(timezone.utc) - timedelta(days=LOOKBACK_DAYS)).isoformat()
     params = {
         "select": (
@@ -70,7 +74,13 @@ def _pick_top_kill(db) -> Optional[dict]:
         "limit": "1",
     }
     try:
-        r = httpx.get(f"{db.base}/kills", headers=db.headers, params=params, timeout=15)
+        r = await asyncio.to_thread(
+            httpx.get,
+            f"{db.base}/kills",
+            headers=db.headers,
+            params=params,
+            timeout=15,
+        )
         r.raise_for_status()
         rows = r.json() or []
         return rows[0] if rows else None
@@ -79,7 +89,8 @@ def _pick_top_kill(db) -> Optional[dict]:
         return None
 
 
-def _already_pinned_for(db, valid_from_iso: str) -> bool:
+async def _already_pinned_for(db, valid_from_iso: str) -> bool:
+    """Wave 27.10 — async + asyncio.to_thread."""
     params = {
         "select": "kill_id,valid_from,set_by",
         "valid_from": f"eq.{valid_from_iso}",
@@ -87,7 +98,13 @@ def _already_pinned_for(db, valid_from_iso: str) -> bool:
         "limit": "1",
     }
     try:
-        r = httpx.get(f"{db.base}/featured_clips", headers=db.headers, params=params, timeout=15)
+        r = await asyncio.to_thread(
+            httpx.get,
+            f"{db.base}/featured_clips",
+            headers=db.headers,
+            params=params,
+            timeout=15,
+        )
         r.raise_for_status()
         return bool(r.json())
     except Exception as e:
@@ -153,11 +170,11 @@ async def run() -> None:
     valid_from_iso = valid_from.isoformat()
     valid_to_iso = valid_to.isoformat()
 
-    if _already_pinned_for(db, valid_from_iso):
+    if await _already_pinned_for(db, valid_from_iso):
         log.info("kotw_already_pinned", window=valid_from_iso)
         return
 
-    kill = _pick_top_kill(db)
+    kill = await _pick_top_kill(db)
     if not kill:
         log.warn(
             "kotw_no_qualifying_kill",

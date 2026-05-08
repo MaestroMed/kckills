@@ -240,10 +240,13 @@ def _moment_to_event_row(moment: dict) -> dict:
     }
 
 
-def _bulk_insert_events(db, rows: list[dict]) -> int:
+async def _bulk_insert_events(db, rows: list[dict]) -> int:
     """POST a batch of events to PostgREST. Idempotent via unique partial
     indexes on kill_id / moment_id — duplicates are silently dropped via
     Prefer: resolution=ignore-duplicates.
+
+    Wave 27.10 — converted to async + asyncio.to_thread (the inner
+    httpx.post call is offloaded). Caller in map_game() now awaits.
 
     Note (2026-04-27) : we tried to use `?on_conflict=kill_id` to make
     duplicates a no-op INSTEAD of a 409. That returned 42P10 ("no
@@ -268,7 +271,10 @@ def _bulk_insert_events(db, rows: list[dict]) -> int:
         "Prefer": "resolution=ignore-duplicates,return=representation",
     }
     try:
-        r = httpx.post(
+        # Wave 27.10 — sync httpx.post offloaded so a 30s upper bound
+        # on a multi-row insert doesn't freeze the event loop.
+        r = await asyncio.to_thread(
+            httpx.post,
             f"{db.base}/game_events",
             headers=headers,
             json=rows,
@@ -332,7 +338,7 @@ async def map_game(db, game: dict) -> dict:
         rows.append(_moment_to_event_row(m))
 
     if rows:
-        counters["inserted"] = _bulk_insert_events(db, rows)
+        counters["inserted"] = await _bulk_insert_events(db, rows)
 
     # Mark the game as mapped (idempotent — flip is cheap)
     safe_update(
@@ -484,7 +490,11 @@ async def run() -> int:
         # PostgREST query — both filters as eq.X. Limit to the cap so a
         # huge backlog doesn't stall the daemon.
         try:
-            r = httpx.get(
+            # Wave 27.10 — sync httpx.get offloaded so the legacy-
+            # fallback scan doesn't block the event loop on startup
+            # before the queue path takes over.
+            r = await asyncio.to_thread(
+                httpx.get,
                 f"{db.base}/games",
                 headers=db.headers,
                 params={

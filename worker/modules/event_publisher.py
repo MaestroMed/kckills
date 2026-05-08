@@ -92,7 +92,10 @@ async def _fetch_publishable(db) -> list[dict]:
     """
     for col in (_INVOLVEMENT_COL_NEW, _INVOLVEMENT_COL_LEGACY):
         try:
-            r = httpx.get(
+            # Wave 27.10 — offloaded so the publish loop doesn't freeze
+            # the event loop on every per-cycle scan.
+            r = await asyncio.to_thread(
+                httpx.get,
                 f"{db.base}/game_events",
                 headers=db.headers,
                 params={
@@ -137,7 +140,9 @@ async def _fetch_retractable(db) -> list[dict]:
     WERE published before). Callers re-check the kill row's status.
     """
     try:
-        r = httpx.get(
+        # Wave 27.10 — offloaded.
+        r = await asyncio.to_thread(
+            httpx.get,
             f"{db.base}/game_events",
             headers=db.headers,
             params={
@@ -244,6 +249,11 @@ def _process_publish_check(job: dict) -> bool:
     ev: dict | None = None
     for col in (_INVOLVEMENT_COL_NEW, _INVOLVEMENT_COL_LEGACY):
         try:
+            # NOTE : the entire _process_publish_check function runs
+            # inside asyncio.to_thread (see caller at line ~340) so
+            # this sync httpx.get is already offloaded from the event
+            # loop. Don't wrap it in another to_thread or it'd recurse
+            # into another thread for nothing.
             r = httpx.get(
                 f"{db.base}/game_events",
                 headers=db.headers,
