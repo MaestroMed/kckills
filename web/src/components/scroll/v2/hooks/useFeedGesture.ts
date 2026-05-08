@@ -99,6 +99,24 @@ export function useFeedGesture({
       animate(y, targetY, useFlickSpring ? SPRING_FLICK : SPRING_SNAP);
       if (clamped !== stateRef.current.activeIndex) {
         setActiveIndex(clamped);
+        // V5 (Wave 21.1) — light haptic feedback on snap commit. Only
+        // fires when the index actually changes (not on bounce-back),
+        // and only on devices with the API (Android Chrome, some iOS
+        // PWA builds). The vibration spec is conservative — 8 ms is
+        // imperceptible on broken implementations and feels right on
+        // good ones. iOS Safari mostly ignores it (no native haptic
+        // API exposed to the web), so iPhone users get the visual
+        // spring snap as their feedback.
+        try {
+          if (
+            typeof navigator !== "undefined" &&
+            typeof navigator.vibrate === "function"
+          ) {
+            navigator.vibrate(useFlickSpring ? 12 : 8);
+          }
+        } catch {
+          /* navigator.vibrate may throw on unsupported scenarios */
+        }
         onActiveChange?.(clamped);
       }
     },

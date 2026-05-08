@@ -418,11 +418,21 @@ export function FeedPlayerPool({
               // FeedItem's analytics hook + downstream listeners can
               // correlate clip.started with the delivery method without
               // having to inspect the source URL.
+              // V1 (Wave 21.1) — also include the actual clip duration
+              // in seconds (when known) so the dwell-fraction
+              // calculation in FeedItem's useFeedItemAnalytics has the
+              // denominator. May be NaN/0 on first paint before
+              // metadata loads — the consumer guards for that.
+              const durationSec = videoRefs.current[slotIdx]?.duration;
               window.dispatchEvent(
                 new CustomEvent("kc:clip-played", {
                   detail: {
                     itemId: item.id,
                     delivery: slotDeliveryRef.current[slotIdx] ?? "mp4",
+                    durationSec:
+                      durationSec && Number.isFinite(durationSec)
+                        ? durationSec
+                        : null,
                   },
                 }),
               );

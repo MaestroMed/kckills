@@ -75,6 +75,13 @@ function useFeedItemAnalytics({
   isActive: boolean;
 }) {
   const viewedRef = useRef(false);
+  // V1 (Wave 21.1) — dwell tracking. When the item becomes active we
+  // stamp a start timestamp ; when it becomes inactive (user swiped
+  // away or unmounted) we emit `clip.dwell` with the wall-clock dwell
+  // duration. The recommendation engine consumes this to weight
+  // anchors by engagement strength.
+  const dwellStartRef = useRef<number | null>(null);
+  const clipDurationSecRef = useRef<number | null>(null);
 
   useEffect(() => {
     if (!isActive) return;
@@ -82,13 +89,45 @@ function useFeedItemAnalytics({
       viewedRef.current = true;
       track("clip.viewed", { entityType: "kill", entityId: itemId });
     }
+    // Mark the dwell-start moment.
+    dwellStartRef.current = performance.now();
+    return () => {
+      // Item became inactive (or unmounted while active). Emit dwell.
+      const startedAt = dwellStartRef.current;
+      dwellStartRef.current = null;
+      if (startedAt == null) return;
+      const dwellMs = Math.round(performance.now() - startedAt);
+      // Sub-100ms dwell almost always = a fast scroll-past, not real
+      // engagement. Drop the noise so the analytics dashboard isn't
+      // dominated by "user flicked through 30 items in 3 s".
+      if (dwellMs < 100) return;
+      const clipS = clipDurationSecRef.current ?? null;
+      const dwellFraction =
+        clipS != null && clipS > 0
+          ? Math.min(1, dwellMs / 1000 / clipS)
+          : null;
+      track("clip.dwell", {
+        entityType: "kill",
+        entityId: itemId,
+        metadata: {
+          dwell_ms: dwellMs,
+          clip_duration_s: clipS,
+          dwell_fraction: dwellFraction,
+        },
+      });
+    };
   }, [itemId, isActive]);
 
   useEffect(() => {
     if (!isActive) return;
     const onPlay = (ev: Event) => {
-      const detail = (ev as CustomEvent<{ itemId?: string }>).detail;
+      const detail = (ev as CustomEvent<{ itemId?: string; durationSec?: number }>).detail;
       if (detail?.itemId !== itemId) return;
+      // Capture clip duration if the dispatcher provided it — used by
+      // the dwell-fraction calculation in the cleanup above.
+      if (typeof detail?.durationSec === "number" && detail.durationSec > 0) {
+        clipDurationSecRef.current = detail.durationSec;
+      }
       track("clip.started", { entityType: "kill", entityId: itemId });
     };
     const onEnded = (ev: Event) => {

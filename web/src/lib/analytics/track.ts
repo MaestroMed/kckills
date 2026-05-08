@@ -121,7 +121,34 @@ export type EventType =
   // follow-up migration whitelists this value, inserts are silently
   // dropped by Postgres (best-effort tracker). The API gate accepts
   // the event so the request validates client-side.
-  | "feed.recommendation_score";
+  | "feed.recommendation_score"
+  // V1 (Wave 21.1) — Watch-time fraction signal. Fired once per
+  // active→inactive transition of a feed item, carrying :
+  //   { dwell_ms: number,           // wall-clock dwell on the item
+  //     clip_duration_s: number|null, // clip length (null until metadata)
+  //     dwell_fraction: 0..1|null }  // dwell_ms/1000 / clip_duration_s
+  // Foundation for V21 (anchor weighting by dwell) — the recommendation
+  // engine will read this to weight recently-watched anchors by
+  // engagement strength rather than treating them all equally.
+  // The DB CHECK constraint must be extended before non-zero traffic ;
+  // until then events are silently dropped by Postgres but Umami /
+  // local analytics still see them.
+  | "clip.dwell"
+  // V7 (Wave 21.1) — Time-to-first-frame instrumentation. Fired once
+  // per LIVE-slot clip, carrying :
+  //   { ttff_ms: number,            // ms from slot-assignment to first paint
+  //     delivery: 'hls'|'mp4',      // which path served it
+  //     network: NetworkClass,      // useNetworkQuality at fire time
+  //     cold_start: bool }          // first item of the session
+  // Surfaced on the perf dashboard alongside Web Vitals.
+  | "clip.ttff"
+  // V14 (Wave 21.2) — AI-tag chip click. Fired by FeedItem when a user
+  // taps an `ai_tags` chip → filter applied. metadata: { tag: string }
+  | "clip.tag_clicked"
+  // V12/V13 (Wave 21.2) — discoverability taps. Fired when the killer
+  // name or the champion bubble is tapped from the active feed item.
+  // metadata: { kind: 'player'|'champion', target: string, source: 'feed' }
+  | "clip.profile_tap";
 
 // ─── perf.vital metadata contract ──────────────────────────────────────
 // Exported so WebVitalsReporter can build a strict-typed payload and so
