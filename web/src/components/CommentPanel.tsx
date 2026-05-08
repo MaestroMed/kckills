@@ -125,10 +125,12 @@ export function CommentPanel({ killId, isOpen, onClose }: CommentPanelProps) {
             {totalComments} commentaire{totalComments !== 1 ? "s" : ""}
           </h3>
           <button
+            type="button"
             onClick={onClose}
+            aria-label="Fermer le panneau de commentaires"
             className="flex h-7 w-7 items-center justify-center rounded-full bg-white/10"
           >
-            <svg className="h-4 w-4 text-white/70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg aria-hidden className="h-4 w-4 text-white/70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
@@ -176,11 +178,13 @@ export function CommentPanel({ killId, isOpen, onClose }: CommentPanelProps) {
               className="flex-1 rounded-full bg-white/5 border border-white/10 px-4 py-2 text-sm text-white placeholder-white/30 outline-none focus:border-[var(--gold)]/50"
             />
             <button
+              type="button"
               onClick={handlePost}
               disabled={!postText.trim() || posting}
+              aria-label="Envoyer le commentaire"
               className="flex h-9 w-9 items-center justify-center rounded-full bg-[var(--gold)]/20 text-[var(--gold)] disabled:opacity-30"
             >
-              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg aria-hidden className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
               </svg>
             </button>
@@ -237,8 +241,10 @@ function CommentItem({ comment }: { comment: Comment }) {
             </span>
           )}
           <button
+            type="button"
             onClick={handleReport}
             disabled={reported || reporting}
+            aria-label={reported ? "Commentaire signalé" : "Signaler ce commentaire"}
             className="ml-auto text-[10px] text-[var(--text-muted)] hover:text-[var(--red)] opacity-0 group-hover:opacity-100 transition-opacity disabled:opacity-50"
             title="Signaler"
           >
