@@ -1002,6 +1002,16 @@ def _build_analysis_patch(result: dict, kill: dict) -> dict:
         "ai_description_ko": desc_ko,
         "ai_description_es": desc_es,
         "ai_thumbnail_timestamp_sec": thumb_ts,
+        # Wave 27.8 / V42 — populate the new public-API column from
+        # migration 058. The frontend (FeedPlayerPool, web/src/lib/
+        # supabase/kills.ts) seeks the LIVE-slot video to this offset
+        # BEFORE first paint so the poster frame is already the
+        # action-frame instead of a random 0-sec cover. We keep
+        # ai_thumbnail_timestamp_sec around for back-compat with the
+        # AI-annotations consumers — both columns carry the same
+        # value, and a tiny double-write is cheaper than a coordinated
+        # column rename across worker + scripts + admin tooling.
+        "best_thumbnail_seconds": thumb_ts,
         "ai_qc_timer_sec": qc_timer_sec,
         "ai_qc_drift_sec": qc_drift_sec,
         "ai_pipeline_version": ANALYZER_PIPELINE_VERSION,
