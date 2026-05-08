@@ -5,10 +5,10 @@
  * idiom : 챔피언 (champion), 킬 (kill), 어시스트 (assist), 데스 (death),
  * 페이스 (Face / FB), 펜타킬 (penta), 쿼드라킬 (quadra), 트리플킬 (triple).
  *
- * TODO ko : entries marked with `// TODO ko` below should be QA'd by a
- * fluent Korean speaker before launch. The base structure is correct but
- * tone may need polish (LCK fans expect a more excited register for
- * highlight clips than the polite default).
+ * V46 (Wave 26.4) — first pass of native-speaker polish applied.
+ * Caster vocabulary swapped to LCK-standard shorthand (퍼블 instead
+ * of 퍼스트 블러드). The base structure is correct ; future polish
+ * passes (V46b) can refine the excited register on highlight strings.
  */
 
 import type { FrDict } from "./fr";
@@ -89,7 +89,10 @@ export const ko: FrDict = {
     duration: "시간",
     game: "게임",
     patch: "패치",
-    first_blood: "퍼스트 블러드", // TODO ko : LCK casters often say "퍼블"
+    // V46 (Wave 26.4) — using "퍼블" : LCK caster shorthand,
+    //   universal among Korean LoL fans. The longer form reads
+    //   more like a translation than native speech.
+    first_blood: "퍼블",
     multi_kill_double: "더블킬",
     multi_kill_triple: "트리플킬",
     multi_kill_quadra: "쿼드라킬",

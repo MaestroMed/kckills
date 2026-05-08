@@ -158,14 +158,17 @@ async def _broadcast_one(db, notif: dict[str, Any], vapid: dict[str, str]) -> No
     payload = _build_payload(notif)
 
     # Fetch all subs (could be tens of thousands at scale — paginate if so).
-    # Pull `preferences` so we can honour per-device opt-outs (PR21).
+    # Pull `preferences` so we can honour per-device opt-outs (PR21)
+    # AND `player_filter` (V35 / Wave 26.2) — when the notif targets a
+    # specific player, silently skip subs whose filter explicitly
+    # excludes that player.
     import httpx
     try:
         r = httpx.get(
             f"{db.base}/push_subscriptions",
             headers=db.headers,
             params={
-                "select": "id,subscription_json,preferences",
+                "select": "id,subscription_json,preferences,player_filter",
                 "limit": str(MAX_DELIVERIES_PER_CYCLE),
             },
             timeout=20,
@@ -192,8 +195,24 @@ async def _broadcast_one(db, notif: dict[str, Any], vapid: dict[str, str]) -> No
             return False
         return True
 
+    # V35 (Wave 26.2) — player_filter scope. When the notif carries
+    # `player_id` and a sub has a non-empty `player_filter` array,
+    # the sub gets the push only if its filter contains the targeted
+    # player_id. Subs with NULL/empty filter accept everything
+    # (legacy broadcast behaviour preserved).
+    notif_player_id = notif.get("player_id")
+    def _player_match(sub: dict[str, Any]) -> bool:
+        if not notif_player_id:
+            return True
+        flt = sub.get("player_filter")
+        if not flt:
+            return True
+        if isinstance(flt, list) and notif_player_id in flt:
+            return True
+        return False
+
     silenced_count = sum(1 for s in subs if not _allows(s))
-    subs = [s for s in subs if _allows(s)]
+    subs = [s for s in subs if _allows(s) and _player_match(s)]
     if silenced_count:
         log.info("push_notifier_silenced",
                  notif=notif_id, kind=kind, silenced=silenced_count)
