@@ -86,20 +86,23 @@ When you add a new script :
 | `seed_leagues.py` | Upsert major Riot pro circuits into the `leagues` catalog. *(Wave 19 — re-run after migration 056.)* |
 | `seed_more_channels.py` | Add `@kameto` / `@LCSEsports` / `@lolesports` channels + trigger discoverer. |
 
-## Deletion candidates
+## Archived (`_archive/`)
 
-These are flagged with high confidence as superseded. **Don't bulk-
-delete** — confirm with `git log --since='3 months ago' --
-worker/scripts/<name>.py` that the script wasn't run recently, then
-move it to `worker/scripts/_archive/` (keep one cycle for safety).
+The following scripts were moved to `worker/scripts/_archive/` on
+2026-05-08 (Wave 19.7) after confirming they hadn't been run in 3+
+months and their logic is covered elsewhere. They remain in git
+history for forensic / point-in-time replay but are not part of the
+active toolchain. See `_archive/README.md` for the full retirement
+rationale.
 
-| Script | Why | Replacement |
-|---|---|---|
-| `recompute_champion_class.py` | Logic baked into analyser at insert-time as of Wave 12. Last touched 2026-04-07. | analyser pipeline. |
-| `recompute_fight_type.py` | Deterministic re-classifier baked into analyser post-Gemini. Last touched 2026-04-07. | analyser pipeline. |
-| `regen_audit_targets.py` | One-shot for 45 specific audit clips ; idempotent but no recurring use case. Last touched 2026-04-07. | n/a (run was completed). |
-| `quarantine_offset_zero.py` | Root cause fixed in `sentinel.py` (PR7-A). | sentinel does it on the way in. |
-| `fix_qc_described_threshold.py` + `force_publish_stuck.py` | Both absorbed into `auto_fix_loop.py` running every 4 h. | `auto_fix_loop`. |
+| Script | Replacement |
+|---|---|
+| `recompute_champion_class.py` | analyser pipeline (insert-time static-map lookup). |
+| `recompute_fight_type.py` | analyser pipeline (deterministic post-Gemini step). |
+| `regen_audit_targets.py` | n/a — one-shot run completed. |
+| `quarantine_offset_zero.py` | `sentinel.py` (PR7-A) filters at ingest. |
+| `fix_qc_described_threshold.py` | `auto_fix_loop.py::_fix_qc_described` (every 4 h). |
+| `force_publish_stuck.py` | `auto_fix_loop.py::_force_publish_stuck` (every 4 h). |
 
 ## Operator notes
 
