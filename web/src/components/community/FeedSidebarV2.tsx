@@ -26,6 +26,7 @@ import { useRef, useState } from "react";
 import Link from "next/link";
 import { LikeButton } from "./LikeButton";
 import { CommentSheetV2 } from "./CommentSheetV2";
+import { EmojiReactions } from "@/components/scroll/v2/EmojiReactions";
 import { InlineAuthPrompt } from "./InlineAuthPrompt";
 import { ReportButton, type ReportButtonController } from "./ReportButton";
 import { track } from "@/lib/analytics/track";
@@ -149,6 +150,13 @@ export function FeedSidebarV2({
             onAuthRequired={() => setAuthPromptIntent("like")}
           />
         </div>
+        {/* V16 (Wave 23.1) — emoji reactions palette. Lives between
+            Like and Comments so it's discoverable but doesn't compete
+            with the primary like CTA. Hidden when the item isn't
+            active (visible=false) so off-screen sidebars don't keep
+            mounted state. */}
+        <EmojiReactions killId={killId} visible={visible} />
+
         <div className="hidden lg:block">
           <LikeButton
             killId={killId}

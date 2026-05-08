@@ -259,19 +259,27 @@ export function CommentSheetV2({ killId, isOpen, onClose, onAuthRequired }: Prop
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
         >
-          {/* Backdrop */}
+          {/* Backdrop — V15 (Wave 23.1) : was opaque dark + blur, now
+              semi-transparent so the video behind the sheet stays
+              visible and the user keeps the conversation context.
+              Tap to dismiss. */}
           <motion.div
-            className="absolute inset-0 bg-black/55 backdrop-blur-[2px]"
+            className="absolute inset-0 bg-black/30"
             onClick={onClose}
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
           />
 
-          {/* Sheet */}
+          {/* Sheet — V15 : sheet height shrunk from 90vh to 62vh so the
+              clip stays visible behind the dim layer (TikTok-style
+              "peek-into-the-comments" pattern). At 62 % the active
+              clip's bottom 1/3 (where the player names + tags live)
+              still shows, so the conversation always knows what
+              kill it's about. */}
           <motion.div
-            className="absolute bottom-0 left-0 right-0 flex flex-col rounded-t-3xl bg-[var(--bg-surface)] border-t border-[var(--gold)]/25 shadow-[0_-30px_80px_rgba(0,0,0,0.65)]"
-            style={{ height: "90vh", y }}
+            className="absolute bottom-0 left-0 right-0 flex flex-col rounded-t-3xl bg-[var(--bg-surface)]/92 backdrop-blur-md border-t border-[var(--gold)]/25 shadow-[0_-30px_80px_rgba(0,0,0,0.65)]"
+            style={{ height: "62vh", y }}
             initial={{ y: "100%" }}
             animate={{ y: 0 }}
             exit={{ y: "100%" }}

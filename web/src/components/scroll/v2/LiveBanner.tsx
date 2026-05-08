@@ -26,6 +26,7 @@ import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
 import { motion, useReducedMotion } from "motion/react";
+import { useLiveViewerCount } from "./hooks/useLiveViewerCount";
 
 interface Props {
   isLive: boolean;
@@ -48,12 +49,19 @@ export function LiveBanner({ isLive, matchId, opponentCode, gameNumber, onTap }:
   }, []);
 
   const reducedMotion = useReducedMotion();
+  // V17 (Wave 23.1) — live viewer count via Supabase Realtime
+  // presence. Returns null until subscribed ; below 2 we hide the
+  // chip (you alone in the room is not impressive — wait until
+  // there's actual social proof to surface).
+  const viewerCount = useLiveViewerCount(isLive ? matchId ?? null : null);
+  const showViewers = viewerCount != null && viewerCount >= 2;
 
   if (!isLive || !portalTarget) return null;
 
   const opp = opponentCode ?? "?";
   const game = typeof gameNumber === "number" ? `Game ${gameNumber}` : "EN COURS";
-  const label = `KC EN LIVE • vs ${opp} • ${game}`;
+  const viewerLabel = showViewers ? ` • ${viewerCount} regardent` : "";
+  const label = `KC EN LIVE • vs ${opp} • ${game}${viewerLabel}`;
   // Repeat the label so the marquee loop doesn't show a visible gap.
   const marqueeText = `${label}     ★     ${label}     ★     `;
 
