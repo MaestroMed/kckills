@@ -21,8 +21,9 @@ from __future__ import annotations
 
 import os
 
-import httpx
 import structlog
+
+from services import http_pool
 
 log = structlog.get_logger()
 
@@ -31,13 +32,18 @@ _TOKEN = os.getenv("KCKILLS_REVALIDATE_TOKEN", "")
 
 
 async def revalidate_hero_stats() -> None:
-    """Invalidate the homepage hero-stats cache. Fire-and-forget."""
+    """Invalidate the homepage hero-stats cache. Fire-and-forget.
+
+    Wave 27.2 — pooled client. We hit this endpoint on every kill
+    publish + every OG generate, so the keep-alive socket pays for
+    itself within the first match.
+    """
     if not _URL or not _TOKEN:
         return
     try:
-        async with httpx.AsyncClient(timeout=5) as c:
-            r = await c.post(_URL, json={"token": _TOKEN})
-            if r.status_code != 200:
-                log.warn("web_revalidate_failed", status=r.status_code)
+        c = http_pool.get("web_revalidate", timeout=5)
+        r = await c.post(_URL, json={"token": _TOKEN})
+        if r.status_code != 200:
+            log.warn("web_revalidate_failed", status=r.status_code)
     except Exception as e:
         log.warn("web_revalidate_error", error=str(e)[:200])

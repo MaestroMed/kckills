@@ -95,6 +95,22 @@ def get_db() -> SupabaseRest | None:
     return _db
 
 
+def close_db() -> None:
+    """Wave 27.2 — close the pooled Supabase client at shutdown.
+
+    Idempotent. main.py's `finally` calls this alongside http_pool's
+    close_all() so we don't leave keep-alive sockets dangling when the
+    worker exits.
+    """
+    global _db
+    if _db is not None:
+        try:
+            _db.close()
+        except Exception as e:
+            log.warn("supabase_close_failed", error=str(e)[:160])
+        _db = None
+
+
 def safe_insert(table: str, data: dict) -> dict | None:
     """Insert with fallback to local cache if Supabase is down."""
     db = get_db()

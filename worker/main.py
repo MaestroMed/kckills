@@ -241,6 +241,15 @@ async def run_daemon():
         log.info("daemon_stopped_by_user")
     except asyncio.CancelledError:
         log.info("daemon_cancelled")
+    finally:
+        # Wave 27.2 — drain the pooled httpx clients so the asyncio loop
+        # can close cleanly without "Unclosed client session" warnings.
+        try:
+            from services import http_pool, supabase_client as _sb
+            await http_pool.close_all()
+            _sb.close_db()
+        except Exception as e:
+            log.warn("http_pool_close_failed", error=str(e)[:160])
 
 
 async def run_once(module_name: str):
@@ -267,14 +276,33 @@ async def run_once(module_name: str):
         log.error("module_no_run", module=canonical)
         return
 
-    await mod.run()
+    try:
+        await mod.run()
+    finally:
+        # Wave 27.2 — same as the daemon path : close pooled clients
+        # before asyncio.run() tears down the loop, avoiding spurious
+        # "Unclosed client session" warnings on one-shot module runs.
+        try:
+            from services import http_pool, supabase_client as _sb
+            await http_pool.close_all()
+            _sb.close_db()
+        except Exception as e:
+            log.warn("http_pool_close_failed", error=str(e)[:160])
 
 
 async def run_pipeline(match_external_id: str):
     """Run the end-to-end pipeline on a single match."""
     from modules import pipeline
-    report = await pipeline.run_for_match(match_external_id)
-    pipeline.print_report(report)
+    try:
+        report = await pipeline.run_for_match(match_external_id)
+        pipeline.print_report(report)
+    finally:
+        try:
+            from services import http_pool, supabase_client as _sb
+            await http_pool.close_all()
+            _sb.close_db()
+        except Exception as e:
+            log.warn("http_pool_close_failed", error=str(e)[:160])
 
 
 def main():

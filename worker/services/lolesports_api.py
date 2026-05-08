@@ -1,18 +1,30 @@
-"""Client for esports-api.lolesports.com — schedule, matches, teams, events."""
+"""Client for esports-api.lolesports.com — schedule, matches, teams, events.
+
+Wave 27.2 — uses :mod:`services.http_pool` for a process-wide keep-alive
+client. The sentinel polls getSchedule + getEventDetails frequently
+during the live window ; pooling cuts handshake overhead to zero after
+the first call.
+"""
 
 from __future__ import annotations
 
 import time
 
-import httpx
 import structlog
 
 from config import config
 from scheduler import scheduler
+from services import http_pool
 
 log = structlog.get_logger()
 
 HEADERS = {"x-api-key": config.LOLESPORTS_API_KEY}
+
+
+def _client():
+    # Pre-set the headers on the pooled client so we don't pass them
+    # on every request. The api-key is stable for the worker lifetime.
+    return http_pool.get("lolesports", timeout=30, headers=HEADERS)
 
 
 async def api_get(endpoint: str, params: dict) -> dict | None:
@@ -20,10 +32,12 @@ async def api_get(endpoint: str, params: dict) -> dict | None:
     await scheduler.wait_for("lolesports_idle")
     params["hl"] = "en-US"
     try:
-        async with httpx.AsyncClient(timeout=30) as client:
-            r = await client.get(f"{config.LOLESPORTS_API_URL}/{endpoint}", headers=HEADERS, params=params)
-            r.raise_for_status()
-            return r.json()
+        r = await _client().get(
+            f"{config.LOLESPORTS_API_URL}/{endpoint}",
+            params=params,
+        )
+        r.raise_for_status()
+        return r.json()
     except Exception:
         return None
 

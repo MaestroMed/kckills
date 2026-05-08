@@ -1,11 +1,23 @@
-"""Client for feed.lolesports.com — live game stats with frame-by-frame KDA."""
+"""Client for feed.lolesports.com — live game stats with frame-by-frame KDA.
 
-import httpx
+Wave 27.2 — uses the shared :mod:`services.http_pool` so a single
+keep-alive AsyncClient serves the whole match instead of one fresh
+TCP+TLS handshake per 10-second poll. Hot path : during a live match
+we hit get_window every 10s ; one client per process is plenty.
+"""
+
 import structlog
 from config import config
 from scheduler import scheduler
+from services import http_pool
 
 log = structlog.get_logger()
+
+
+def _client():
+    # Pooled module singleton. Created on first call, reused across
+    # the worker's lifetime, closed by main.py at shutdown.
+    return http_pool.get("livestats", timeout=30)
 
 
 async def get_window(game_id: str, starting_time: str | None = None) -> dict | None:
@@ -23,18 +35,17 @@ async def get_window(game_id: str, starting_time: str | None = None) -> dict | N
     if starting_time:
         params["startingTime"] = starting_time
     try:
-        async with httpx.AsyncClient(timeout=30) as client:
-            r = await client.get(url, params=params)
-            if r.status_code == 200 and len(r.content) > 100:
-                return r.json()
-            # Non-200 or suspiciously empty body — log so the operator
-            # can correlate "no kills detected" with upstream issues.
-            log.warn(
-                "livestats_window_unhealthy",
-                game_id=game_id,
-                status=r.status_code,
-                content_len=len(r.content),
-            )
+        r = await _client().get(url, params=params)
+        if r.status_code == 200 and len(r.content) > 100:
+            return r.json()
+        # Non-200 or suspiciously empty body — log so the operator
+        # can correlate "no kills detected" with upstream issues.
+        log.warn(
+            "livestats_window_unhealthy",
+            game_id=game_id,
+            status=r.status_code,
+            content_len=len(r.content),
+        )
     except Exception as e:
         log.warn(
             "livestats_window_failed",
@@ -57,16 +68,15 @@ async def get_details(game_id: str, starting_time: str | None = None) -> dict | 
     if starting_time:
         params["startingTime"] = starting_time
     try:
-        async with httpx.AsyncClient(timeout=30) as client:
-            r = await client.get(url, params=params)
-            if r.status_code == 200 and len(r.content) > 100:
-                return r.json()
-            log.warn(
-                "livestats_details_unhealthy",
-                game_id=game_id,
-                status=r.status_code,
-                content_len=len(r.content),
-            )
+        r = await _client().get(url, params=params)
+        if r.status_code == 200 and len(r.content) > 100:
+            return r.json()
+        log.warn(
+            "livestats_details_unhealthy",
+            game_id=game_id,
+            status=r.status_code,
+            content_len=len(r.content),
+        )
     except Exception as e:
         log.warn(
             "livestats_details_failed",
