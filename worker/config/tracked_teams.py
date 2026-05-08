@@ -72,22 +72,33 @@ TRACKED_TEAMS: list[TrackedTeam] = [
 ]
 
 
+# Wave 27.7 — precomputed lookup tables. Building these once at import
+# time costs ~1µs but turns the linear-scan by_code() and the
+# resorting-on-every-call headline_team() into constant-time dict
+# accesses. Not load-bearing today (no caller is in a hot path) but
+# saves the next contributor from wondering why a label-up flow hit
+# the harvester loop hard once we expand to 20+ tracked teams.
+_BY_CODE: dict[str, TrackedTeam] = {t.code: t for t in TRACKED_TEAMS}
+_BY_REGION: dict[str, list[TrackedTeam]] = {}
+for _t in TRACKED_TEAMS:
+    _BY_REGION.setdefault(_t.region, []).append(_t)
+del _t
+
+_HEADLINE: TrackedTeam = max(TRACKED_TEAMS, key=lambda t: t.priority)
+
+
 def by_code(code: str) -> TrackedTeam | None:
-    for t in TRACKED_TEAMS:
-        if t.code == code:
-            return t
-    return None
+    return _BY_CODE.get(code)
 
 
 def by_region(region: str) -> list[TrackedTeam]:
-    return [t for t in TRACKED_TEAMS if t.region == region]
+    # Defensive copy : callers shouldn't be able to mutate the cached
+    # list and silently corrupt every other lookup.
+    return list(_BY_REGION.get(region, ()))
 
 
 def headline_team() -> TrackedTeam:
     """The single highest-priority tracked team. Drives the homepage
     hero, the daily Discord report's primary section, and the OG
     image generator's default branding."""
-    sorted_teams = sorted(
-        TRACKED_TEAMS, key=lambda t: t.priority, reverse=True
-    )
-    return sorted_teams[0]
+    return _HEADLINE
