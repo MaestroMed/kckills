@@ -47,6 +47,7 @@ import { KeyboardHelpOverlay } from "./KeyboardHelpOverlay";
 import { LiveBanner } from "./LiveBanner";
 import { OfflineBanner, useIsOffline } from "./OfflineBanner";
 import { FeedItemSkeleton } from "./FeedItemSkeleton";
+import { StreakBadge } from "./StreakBadge";
 import { useScrollRestore } from "./hooks/useScrollRestore";
 import { ScrollChipBar, type ChipFilters } from "@/components/scroll/ScrollChipBar";
 import type {
@@ -623,10 +624,11 @@ export function ScrollFeedV2({
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
           </svg>
         </Link>
-        <div className="flex flex-col items-center">
+        <div className="flex flex-col items-center gap-0.5">
           <span className="font-display text-sm font-bold tracking-widest text-[var(--gold)]/80">
             KCKILLS
           </span>
+          <StreakBadge />
           <span className="font-data text-[9px] uppercase tracking-widest text-[var(--gold)]/50">
             v2 · {videoCount} clips
             {effectiveType ? ` · ${effectiveType}` : ""}
