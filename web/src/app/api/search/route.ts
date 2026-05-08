@@ -34,6 +34,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
 import { searchKills, type SearchFilters } from "@/lib/supabase/search";
 
 export const runtime = "nodejs";
@@ -41,87 +42,97 @@ export const dynamic = "force-dynamic";
 
 // ─── Query param parsing ───────────────────────────────────────────────
 
-const ALLOWED_MULTI = new Set(["double", "triple", "quadra", "penta"]);
-const ALLOWED_KC_ROLE = new Set(["team_killer", "team_victim", "team_assist"]);
-
 /**
- * Parse + sanitise the query string into a SearchFilters object plus
- * the bare `q` and pagination opts. All values are length-capped and
- * type-narrowed before reaching the supabase layer — defence in depth
- * against junk URLs.
+ * Zod schema for the search query string. Coerces + caps every value
+ * before it reaches the supabase layer — defence in depth against junk
+ * URLs. Keeps the original semantics of `parseSearchParams`: empty
+ * strings become undefined filters, lengths are capped, ranges clamped.
  */
-function parseSearchParams(sp: URLSearchParams): {
+const SearchQuery = z.object({
+  q: z
+    .string()
+    .max(120)
+    .optional()
+    .transform((s) => (s ?? "").trim().slice(0, 120)),
+  player: z
+    .string()
+    .max(32)
+    .optional()
+    .transform((s) => {
+      if (!s) return undefined;
+      const v = s.trim().toLowerCase();
+      return v.length > 0 ? v : undefined;
+    }),
+  multi: z
+    .enum(["double", "triple", "quadra", "penta"])
+    .optional(),
+  fb: z
+    .string()
+    .optional()
+    .transform((v) => v === "1" || v === "true"),
+  tag: z
+    .string()
+    .max(32)
+    .optional()
+    .transform((s) => {
+      if (!s) return undefined;
+      const v = s.trim();
+      return v.length > 0 ? v : undefined;
+    }),
+  era: z
+    .string()
+    .max(64)
+    .optional()
+    .transform((s) => {
+      if (!s) return undefined;
+      const v = s.trim();
+      return v.length > 0 ? v : undefined;
+    }),
+  match: z
+    .string()
+    .max(64)
+    .optional()
+    .transform((s) => {
+      if (!s) return undefined;
+      const v = s.trim();
+      return v.length > 0 ? v : undefined;
+    }),
+  min_score: z.coerce.number().min(0).max(10).optional(),
+  min_rating: z.coerce.number().min(0).max(5).optional(),
+  kc_role: z
+    .enum(["team_killer", "team_victim", "team_assist"])
+    .optional(),
+  cursor: z
+    .string()
+    .max(256)
+    .optional()
+    .transform((s) => {
+      if (!s) return undefined;
+      const v = s.trim();
+      return v.length > 0 ? v : undefined;
+    }),
+  limit: z.coerce.number().int().min(1).max(60).default(24),
+});
+
+interface ParsedSearch {
   q: string;
   filters: SearchFilters;
   cursor: string | undefined;
   limit: number;
-} {
-  const q = (sp.get("q") ?? "").trim().slice(0, 120);
+}
 
+function toFilters(parsed: z.infer<typeof SearchQuery>): ParsedSearch {
   const filters: SearchFilters = {};
-
-  const player = sp.get("player")?.trim().toLowerCase();
-  if (player && player.length > 0 && player.length <= 32) {
-    filters.playerSlug = player;
-  }
-
-  const multi = sp.get("multi")?.trim().toLowerCase();
-  if (multi && ALLOWED_MULTI.has(multi)) {
-    filters.multiKill = multi as SearchFilters["multiKill"];
-  }
-
-  const fb = sp.get("fb");
-  if (fb === "1" || fb === "true") {
-    filters.isFirstBlood = true;
-  }
-
-  const tag = sp.get("tag")?.trim();
-  if (tag && tag.length > 0 && tag.length <= 32) {
-    filters.tag = tag;
-  }
-
-  const era = sp.get("era")?.trim();
-  if (era && era.length > 0 && era.length <= 64) {
-    filters.eraId = era;
-  }
-
-  const match = sp.get("match")?.trim();
-  if (match && match.length > 0 && match.length <= 64) {
-    filters.matchExternalId = match;
-  }
-
-  const minScoreRaw = sp.get("min_score");
-  if (minScoreRaw) {
-    const n = Number(minScoreRaw);
-    if (Number.isFinite(n) && n >= 0 && n <= 10) {
-      filters.minScore = n;
-    }
-  }
-
-  const minRatingRaw = sp.get("min_rating");
-  if (minRatingRaw) {
-    const n = Number(minRatingRaw);
-    if (Number.isFinite(n) && n >= 0 && n <= 5) {
-      filters.minRating = n;
-    }
-  }
-
-  const kcRole = sp.get("kc_role")?.trim();
-  if (kcRole && ALLOWED_KC_ROLE.has(kcRole)) {
-    filters.trackedTeam = kcRole as SearchFilters["trackedTeam"];
-  }
-
-  const cursorRaw = sp.get("cursor")?.trim();
-  // Cursor format is base64url — cap length defensively. Real cursors
-  // are <100 chars, anything bigger is a malformed URL.
-  const cursor = cursorRaw && cursorRaw.length > 0 && cursorRaw.length <= 256 ? cursorRaw : undefined;
-
-  const limitRaw = Number(sp.get("limit") ?? "24");
-  const limit = Number.isFinite(limitRaw)
-    ? Math.max(1, Math.min(60, Math.floor(limitRaw)))
-    : 24;
-
-  return { q, filters, cursor, limit };
+  if (parsed.player) filters.playerSlug = parsed.player;
+  if (parsed.multi) filters.multiKill = parsed.multi;
+  if (parsed.fb) filters.isFirstBlood = true;
+  if (parsed.tag) filters.tag = parsed.tag;
+  if (parsed.era) filters.eraId = parsed.era;
+  if (parsed.match) filters.matchExternalId = parsed.match;
+  if (typeof parsed.min_score === "number") filters.minScore = parsed.min_score;
+  if (typeof parsed.min_rating === "number") filters.minRating = parsed.min_rating;
+  if (parsed.kc_role) filters.trackedTeam = parsed.kc_role;
+  return { q: parsed.q, filters, cursor: parsed.cursor, limit: parsed.limit };
 }
 
 // ─── Server-side analytics ─────────────────────────────────────────────
@@ -190,7 +201,15 @@ function fireSearchExecutedEvent(opts: {
 // ─── Handler ───────────────────────────────────────────────────────────
 
 export async function GET(req: NextRequest) {
-  const { q, filters, cursor, limit } = parseSearchParams(req.nextUrl.searchParams);
+  const sp = req.nextUrl.searchParams;
+  const parsed = SearchQuery.safeParse(Object.fromEntries(sp));
+  if (!parsed.success) {
+    return NextResponse.json(
+      { error: "Invalid params", issues: parsed.error.issues },
+      { status: 400 },
+    );
+  }
+  const { q, filters, cursor, limit } = toFilters(parsed.data);
 
   const result = await searchKills(q, filters, { cursor, limit });
 

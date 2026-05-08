@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
 import { loadRealData, getMatchesSorted } from "@/lib/real-data";
 
 /**
@@ -10,10 +11,22 @@ import { loadRealData, getMatchesSorted } from "@/lib/real-data";
  *
  * Returns match list with opponent, result, game scores, date, stage.
  */
+
+const Query = z.object({
+  limit: z.coerce.number().int().min(1).max(100).default(20),
+  year: z.coerce.number().int().min(2000).max(2100).optional(),
+});
+
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
-  const limit = Math.min(parseInt(searchParams.get("limit") || "20"), 100);
-  const year = searchParams.get("year") ? parseInt(searchParams.get("year")!) : undefined;
+  const parsed = Query.safeParse(Object.fromEntries(searchParams));
+  if (!parsed.success) {
+    return NextResponse.json(
+      { error: "Invalid params", issues: parsed.error.issues },
+      { status: 400 },
+    );
+  }
+  const { limit, year } = parsed.data;
 
   const data = loadRealData();
   const matches = getMatchesSorted(data, year).slice(0, limit);

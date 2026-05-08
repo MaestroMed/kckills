@@ -14,13 +14,28 @@
  * the edge cache and never the lambda.
  */
 
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
 import { getSearchFacets } from "@/lib/supabase/search";
 
 export const runtime = "nodejs";
 export const revalidate = 3600;
 
-export async function GET() {
+// No filters today — schema is in place so future facet params are
+// validated on arrival (and so the validation pattern matches the rest
+// of the public API surface).
+const Query = z.object({}).passthrough();
+
+export async function GET(request: NextRequest) {
+  const { searchParams } = new URL(request.url);
+  const parsed = Query.safeParse(Object.fromEntries(searchParams));
+  if (!parsed.success) {
+    return NextResponse.json(
+      { error: "Invalid params", issues: parsed.error.issues },
+      { status: 400 },
+    );
+  }
+
   const facets = await getSearchFacets();
   return NextResponse.json(facets, {
     headers: {

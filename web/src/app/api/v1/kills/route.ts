@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
 import { createServerSupabase } from "@/lib/supabase/server";
+import { Pagination } from "@/lib/schemas/pagination";
 
 /**
  * GET /api/v1/kills — Public API for published KC kills.
@@ -14,13 +16,25 @@ import { createServerSupabase } from "@/lib/supabase/server";
  * Returns JSON array of kill objects with clip URLs, scores, and metadata.
  * Rate limited to anon key RLS — only published kills visible.
  */
+
+const Query = Pagination.extend({
+  champion: z.string().min(1).max(64).optional(),
+  involvement: z.enum(["team_killer", "team_victim"]).optional(),
+  sort: z
+    .enum(["highlight_score", "created_at", "game_time_seconds"])
+    .default("highlight_score"),
+});
+
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
-  const limit = Math.min(parseInt(searchParams.get("limit") || "20"), 100);
-  const offset = parseInt(searchParams.get("offset") || "0");
-  const champion = searchParams.get("champion");
-  const involvement = searchParams.get("involvement");
-  const sort = searchParams.get("sort") || "highlight_score";
+  const parsed = Query.safeParse(Object.fromEntries(searchParams));
+  if (!parsed.success) {
+    return NextResponse.json(
+      { error: "Invalid params", issues: parsed.error.issues },
+      { status: 400 },
+    );
+  }
+  const { limit, offset, champion, involvement, sort } = parsed.data;
 
   const supabase = await createServerSupabase();
 
@@ -40,15 +54,12 @@ export async function GET(request: NextRequest) {
   if (champion) {
     query = query.eq("killer_champion", champion);
   }
-  if (involvement && ["team_killer", "team_victim"].includes(involvement)) {
+  if (involvement) {
     query = query.eq("tracked_team_involvement", involvement);
   }
 
-  const sortCol = ["highlight_score", "created_at", "game_time_seconds"].includes(sort)
-    ? sort
-    : "highlight_score";
   query = query
-    .order(sortCol, { ascending: false, nullsFirst: false })
+    .order(sort, { ascending: false, nullsFirst: false })
     .range(offset, offset + limit - 1);
 
   const { data, error } = await query;

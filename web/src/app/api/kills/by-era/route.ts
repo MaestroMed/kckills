@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { z } from "zod";
 import { getKillsByEra } from "@/lib/supabase/kills";
 import { getEraById } from "@/lib/eras";
 
@@ -17,22 +18,30 @@ export const revalidate = 300; // 5 min — same cadence as the homepage RSC
  *
  * Anonymous reads — RLS policy "Public kills" is the only gate.
  */
+
+const Query = z.object({
+  eraId: z.string().min(1).max(64),
+  limit: z.coerce.number().int().min(1).max(60).default(30),
+});
+
 export async function GET(req: Request) {
   try {
     const url = new URL(req.url);
-    const eraId = url.searchParams.get("eraId");
-    if (!eraId) {
-      return NextResponse.json({ error: "eraId required" }, { status: 400 });
+    const parsed = Query.safeParse(Object.fromEntries(url.searchParams));
+    if (!parsed.success) {
+      // Preserve the original behaviour : missing eraId returned 400 with
+      // `{ error: 'eraId required' }`. Zod failure also lands here.
+      return NextResponse.json(
+        { error: "Invalid params", issues: parsed.error.issues },
+        { status: 400 },
+      );
     }
+    const { eraId, limit } = parsed.data;
+
     const era = getEraById(eraId);
     if (!era) {
       return NextResponse.json({ error: "unknown era" }, { status: 404 });
     }
-    const limitRaw = Number(url.searchParams.get("limit") ?? "30");
-    // Clamp to a sane window — this endpoint is hit on every era click.
-    const limit = Number.isFinite(limitRaw)
-      ? Math.max(1, Math.min(60, Math.floor(limitRaw)))
-      : 30;
 
     const kills = await getKillsByEra({
       startDate: era.dateStart,

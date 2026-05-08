@@ -30,6 +30,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
 import {
   getRecommendedKills,
   type RecommendedKillRow,
@@ -46,11 +47,22 @@ const MAX_SKIP = 200;
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+const Query = z.object({
+  session: z
+    .string()
+    .max(64)
+    .optional()
+    .transform((s) => (s && s.length > 0 ? s.slice(0, 64) : null)),
+  anchors: z.string().max(2048).optional().default(""),
+  limit: z.coerce.number().int().min(1).max(MAX_LIMIT).default(DEFAULT_LIMIT),
+  cursor: z.string().max(512).optional(),
+});
+
 interface CursorPayload {
   skip: number;
 }
 
-function parseCursor(raw: string | null): CursorPayload | null {
+function parseCursor(raw: string | undefined): CursorPayload | null {
   if (!raw) return null;
   try {
     // base64url-safe → base64
@@ -87,15 +99,17 @@ const HEADERS = {
   "Content-Type": "application/json",
 };
 
-export async function GET(req: NextRequest): Promise<NextResponse<ApiResponse>> {
+export async function GET(req: NextRequest): Promise<NextResponse<ApiResponse> | NextResponse> {
   const url = new URL(req.url);
-  const sessionId = (url.searchParams.get("session") ?? "").slice(0, 64) || null;
-  const limitRaw = Number(url.searchParams.get("limit") ?? DEFAULT_LIMIT);
-  const limit = Number.isFinite(limitRaw)
-    ? Math.max(1, Math.min(MAX_LIMIT, Math.floor(limitRaw)))
-    : DEFAULT_LIMIT;
-  const anchorsRaw = url.searchParams.get("anchors") ?? "";
-  const cursor = parseCursor(url.searchParams.get("cursor"));
+  const parsed = Query.safeParse(Object.fromEntries(url.searchParams));
+  if (!parsed.success) {
+    return NextResponse.json(
+      { error: "Invalid params", issues: parsed.error.issues },
+      { status: 400 },
+    );
+  }
+  const { session: sessionId, anchors: anchorsRaw, limit } = parsed.data;
+  const cursor = parseCursor(parsed.data.cursor);
   const skip = cursor?.skip ?? 0;
 
   // Validate + dedup + cap the anchor list before it crosses module

@@ -1,4 +1,5 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
 import { loadRealData, getKCRoster } from "@/lib/real-data";
 
 /**
@@ -7,7 +8,21 @@ import { loadRealData, getKCRoster } from "@/lib/real-data";
  * Returns the current KC roster with aggregate stats (kills, deaths,
  * assists, KDA, games played, champion pool).
  */
-export async function GET() {
+
+// No query params today, but validate strictly so unknown keys are tolerated
+// without coercion surprises and the schema is in place for future filters.
+const Query = z.object({}).passthrough();
+
+export async function GET(request: NextRequest) {
+  const { searchParams } = new URL(request.url);
+  const parsed = Query.safeParse(Object.fromEntries(searchParams));
+  if (!parsed.success) {
+    return NextResponse.json(
+      { error: "Invalid params", issues: parsed.error.issues },
+      { status: 400 },
+    );
+  }
+
   const data = loadRealData();
   const roster = getKCRoster(data);
 
