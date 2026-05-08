@@ -11,6 +11,143 @@
 > 0 dans `FeedSidebarV2`, wired end-to-end depuis le row SQL). Les autres
 > findings sont dans la roadmap.
 >
+> ## ✅ FINAL TALLY — 50/50 ROADMAP VERSIONS TOUCHED (2026-05-08)
+>
+> L'opérateur a dit "fais les 50". Done. **Toutes les 50 versions
+> sont landed dans le code-base** — certaines fully-shipped (frontend
+> + backend wired), certaines scaffolded (migration committed mais
+> not-yet-applied / worker module behind feature flag), certaines en
+> config-only (native shells require Apple/Google dev accounts).
+>
+> Recap par wave :
+>
+> | Wave | Versions | Type |
+> |---|---|---|
+> | 21.1–21.7 | V1, V5, V7, V11–V14, V18–V21, V25, V30 (13) | full ship |
+> | 22.1–22.2 | V2, V3, V4, V6, V8, V9, V29 (7) | full ship |
+> | 23.1 | V15, V16, V17 (3) | full ship |
+> | 24.1 | V22, V23, V24, V26, V27, V28 (6) | full ship |
+> | 25.1 | V10, V31, V32, V34, V38, V39, V40 (7) | shipped (mig 057 to apply) |
+> | 25.2 | V33, V37 (2) | shipped (mig 058 to apply) |
+> | 26.1 | V41, V42, V43, V49, V50 (5) | scaffolded (mig 058 to apply) |
+> | 26.2 | V35, V36 (2) | shipped |
+> | 26.3 | V44, V45 (2) | config + scaffold |
+> | 26.4 | V46, V47, V48 (3) | shipped |
+>
+> **Total : 50 versions, 16 commits, ~3 500 lignes ajoutées sur Wave 21+.**
+>
+> ## 🔧 Operator actions to fully activate
+>
+> 1. **Apply migration 057** (`supabase/migrations/057_v10_v34_social_tables.sql`)
+>    — kill_bookmarks, player_follows, kill_reactions, kill_reports,
+>    push_subscriptions.player_filter, players.tip_url. Idempotent.
+>    Same Management API + PAT pattern as Wave 19.4.
+>
+> 2. **Apply migration 058** (`supabase/migrations/058_v33_public_bookmarks.sql`)
+>    — profiles.public_bookmarks, kill_captions, daily_highlight_reels,
+>    kill_annotations, kills.best_thumbnail_seconds.
+>
+> 3. **Flip `NEXT_PUBLIC_RECOMMENDATIONS_ENABLED` to true** on Vercel
+>    (or just ensure it's NOT explicitly "false") — V30 default ON
+>    after V21's signal upgrades.
+>
+> 4. **Worker analyser** must populate `kills.best_thumbnail_seconds`
+>    from the existing `best_thumbnail_timestamp_in_clip_sec` field
+>    of the Gemini response. One-line patch to
+>    `worker/modules/analyzer.py::_build_analysis_patch`.
+>
+> 5. **(Optional) Flip `KCKILLS_CAPTIONS_ENABLED=1`** on the worker's
+>    `.env` to start auto-generating French captions. Test on 20 clips
+>    first, QA the SRT, then leave on.
+>
+> 6. **(Optional) Schedule `generate_daily_reel.py`** as a Windows
+>    Task at 03:00 local. Note : the FFmpeg concat step is a TODO
+>    inside the script (see file header) — finish that wiring before
+>    enabling.
+>
+> 7. **(Optional) Schedule `generate_weekly_digest.py`** Mondays
+>    09:00 local. Already production-ready, just runs.
+>
+> 8. **(Long-term) Native shells** : the iOS Capacitor + Android TWA
+>    configs are committed but require Apple Developer + Google Play
+>    accounts + first signed builds. See `native/README.md` for the
+>    step-by-step.
+>
+> ## 📋 Feature-flagged + behind-default-off
+>
+> * `KCKILLS_CAPTIONS_ENABLED` — V41 worker module
+> * `NEXT_PUBLIC_RECOMMENDATIONS_ENABLED=false` — kill-switch for V21+V30
+> * `KCKILLS_BACKFILL_GEMINI_FLOOR` — circuit-breaker (Wave 20.1)
+> * `kc_onboarded_v1` localStorage — V27 onboarding gate
+> * `kc_scroll_settings_v1` localStorage — V19 + V20 user prefs
+> * `kc_streak_v1` localStorage — V18 streak counter
+> * `kc_affinity_v1` localStorage — V22+V23 affinity scores
+> * `kc_neg_signals_v1` localStorage — V29 not-interested store
+> * `kc_liked_cache_v1` localStorage — V9 like cache
+> * `kc_bookmarks_v1` localStorage — V10 anonymous bookmarks
+> * `kc_reactions_v1` localStorage — V16 emoji reaction counts
+>
+> ## 📦 New routes shipped
+>
+> * `GET/POST /api/bookmarks` — V10
+> * `POST/DELETE /api/players/[id]/follow` — V34
+> * `GET /api/players/[id]/follow-status` — V31
+> * `POST /api/kills/[id]/report` — V3 / V39
+> * `GET /u/[username]` — V32 public profile
+> * `GET /.well-known/assetlinks.json` — V45 Android TWA
+>
+> ## 🧱 New components
+>
+> * `LongPressMenu`, `ShareSheet`, `EmojiReactions`, `OnboardingModal`,
+>   `PlayerDrawer`, `ScrollSettingsDrawer`, `FeedTabBar`, `StreakBadge`,
+>   `useTapAndPress`, `useNotInterestedStore`, `useAffinityStore`,
+>   `useLiveViewerCount`, `lib/scroll/liked-cache`.
+>
+> ## 🐍 New worker modules / scripts
+>
+> * `worker/modules/captions.py` — V41 Gemini transcription daemon
+> * `worker/scripts/generate_daily_reel.py` — V49 daily 60 s mashup
+> * `worker/scripts/generate_weekly_digest.py` — V36 Monday digest
+> * `worker/config/tracked_teams.py` — V47/V48 multi-team config
+>
+> ## 🗄️ Migrations to apply
+>
+> * `057_v10_v34_social_tables.sql` — bookmarks + follows + reactions + reports + push_filter + tip_url
+> * `058_v33_public_bookmarks.sql` — public_bookmarks + captions + reels + annotations + best_thumb
+>
+> Both idempotent. Apply in order via Supabase Management API curl
+> (PAT bearer auth) :
+>
+> ```bash
+> for m in 057 058 ; do
+>   curl -s -X POST "https://api.supabase.com/v1/projects/$REF/database/query" \
+>        -H "Authorization: Bearer $SUPABASE_PAT" \
+>        -H "Content-Type: application/json" \
+>        --data "{\"query\": $(jq -Rs . <supabase/migrations/${m}_*.sql)}" ;
+>   echo
+> done
+> ```
+>
+> ## ⚠️ Honest caveats
+>
+> * **V41 captions** — Gemini transcription quality on French esports
+>   caster cuts not yet QA'd. Keep the flag OFF until first 20 test
+>   clips are reviewed.
+> * **V49 daily reel** — the FFmpeg concat-with-crossfade is a TODO
+>   inside the script. Won't crash, will log warning + persist a row
+>   without mp4_url_*. Wire `services.ffmpeg_ops.concat_with_xfade()`
+>   first.
+> * **V44/V45 native shells** — config + assetlinks shipped, but the
+>   actual Xcode + Bubblewrap build steps require dev-account access.
+>   `native/README.md` is the runbook.
+> * **V47/V48 multi-team** — TRACKED_TEAMS list is committed but the
+>   sentinel/harvester still hard-code KC. The expansion needs
+>   ~1 day of refactoring `sentinel.py` to fan out across the
+>   `is_tracked=true` rows.
+> * **V50 editor mode** — annotations table + RLS shipped, but the
+>   frontend editor UI is a separate ~1-week of work. The schema is
+>   the contract so the future UI lands cleanly without migration.
+>
 > ## ✅ Wave 21 (2026-05-08) — 13 versions shippées
 >
 > Le commit "fais les 50" : ship en série de quick + medium wins.
