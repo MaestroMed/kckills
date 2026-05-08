@@ -79,13 +79,32 @@ def _is_already_published(match_ext_id: str) -> bool:
     return False
 
 
+# Wave 20.1 — circuit-breaker threshold. Stops the backfill loop when
+# Gemini's remaining daily quota drops below this many calls. Each
+# match analysis spends 5-15 calls (one per kill) ; 50 leaves room for
+# the in-flight match to finish without the rest of the loop accumulating
+# silent quota-exceeded failures (which were turning into
+# `analyzed_failed` ghosts the operator only saw the next morning).
+#
+# Override via KCKILLS_BACKFILL_GEMINI_FLOOR. Set to 0 to disable
+# (e.g. paid tier, no quota concern).
+_GEMINI_QUOTA_FLOOR = int(os.environ.get("KCKILLS_BACKFILL_GEMINI_FLOOR", "50") or "50")
+
+
 async def run(
     limit: int | None = None,
     since: str | None = None,
     resume: bool = False,
     dry_run: bool = False,
 ) -> dict:
-    """Main backfill loop. Returns a summary report."""
+    """Main backfill loop. Returns a summary report.
+
+    Wave 20.1 — adds a Gemini quota circuit-breaker. The loop stops
+    early (clean break, summary still printed) when remaining daily
+    quota drops below `_GEMINI_QUOTA_FLOOR`. This prevents the silent
+    "quota exceeded → kill stuck → operator finds out next morning"
+    failure mode that the audit flagged.
+    """
     all_matches = _load_matches()
     if not all_matches:
         return {"error": "no matches in data/kc_matches.json"}
@@ -114,9 +133,38 @@ async def run(
         "errors": [],
     }
 
-    log.info("backfill_start", total=len(all_matches), resume=resume, dry=dry_run)
+    log.info(
+        "backfill_start",
+        total=len(all_matches),
+        resume=resume,
+        dry=dry_run,
+        gemini_floor=_GEMINI_QUOTA_FLOOR,
+    )
 
     for idx, match in enumerate(all_matches, start=1):
+        # Wave 20.1 — Gemini quota circuit-breaker. Check BEFORE each
+        # match so we don't enqueue work that's guaranteed to stall on
+        # `scheduler.wait_for("gemini")` returning False.
+        if _GEMINI_QUOTA_FLOOR > 0:
+            try:
+                from scheduler import scheduler
+                remaining = scheduler.get_remaining("gemini")
+            except Exception:
+                remaining = None
+            if remaining is not None and remaining < _GEMINI_QUOTA_FLOOR:
+                log.warn(
+                    "backfill_stopping_low_quota",
+                    gemini_remaining=remaining,
+                    floor=_GEMINI_QUOTA_FLOOR,
+                    matches_remaining=len(all_matches) - idx + 1,
+                )
+                report["errors"].append(
+                    f"stopped early : gemini quota {remaining} < floor "
+                    f"{_GEMINI_QUOTA_FLOOR}, {len(all_matches) - idx + 1} "
+                    f"matches deferred"
+                )
+                break
+
         match_ext_id = match.get("id")
         if not match_ext_id:
             continue
