@@ -120,6 +120,11 @@ interface Props {
    *  keep its videos in lockstep with the drag — every video element's
    *  transform stays anchored to its item position even mid-flick. */
   containerY?: MotionValue<number>;
+  /** V20 (Wave 21.6) — when true, disables the `<video loop>` attribute
+   *  and the `onEnded` handler dispatches a `kc:auto-advance` window
+   *  event so the parent ScrollFeedV2 can call `jumpTo(activeIndex+1)`.
+   *  Default false (loops, classic TikTok behavior). */
+  autoAdvance?: boolean;
 }
 
 export function FeedPlayerPool({
@@ -134,6 +139,7 @@ export function FeedPlayerPool({
   onError,
   resetOnFirstPlay = true,
   containerY,
+  autoAdvance = false,
 }: Props) {
   const { slotItemIndex, priorities } = useFeedPlayer({
     activeIndex,
@@ -372,7 +378,14 @@ export function FeedPlayerPool({
             }
           }}
           muted={muted}
-          loop
+          // V20 (Wave 21.6) — `loop` is conditional on the autoAdvance
+          // setting. When the user opts into auto-advance, we want the
+          // `ended` event to fire so the parent can move to the next
+          // clip ; otherwise we keep the TikTok-default loop behavior.
+          // The HTML spec : `<video loop>` SUPPRESSES the `ended` event
+          // (the video silently restarts on completion), so we have to
+          // toggle the attribute, not just listen and ignore.
+          loop={!autoAdvance}
           playsInline
           preload="metadata"
           // Video sizing:
@@ -492,6 +505,21 @@ export function FeedPlayerPool({
             const itemIdx = slotItemIndex[slotIdx];
             const item = items[itemIdx];
             if (!item) return;
+            // V20 — only the LIVE slot's `ended` triggers auto-advance.
+            // Warm/cold slots also fire `ended` if they happen to roll
+            // through a short clip while waiting, and we DON'T want
+            // those to jump the active item.
+            if (autoAdvance && itemIdx === activeIndex) {
+              try {
+                window.dispatchEvent(
+                  new CustomEvent("kc:auto-advance", {
+                    detail: { from: itemIdx },
+                  }),
+                );
+              } catch {
+                /* CustomEvent unsupported */
+              }
+            }
             try {
               window.dispatchEvent(
                 new CustomEvent("kc:clip-ended", {

@@ -48,6 +48,10 @@ import { LiveBanner } from "./LiveBanner";
 import { OfflineBanner, useIsOffline } from "./OfflineBanner";
 import { FeedItemSkeleton } from "./FeedItemSkeleton";
 import { StreakBadge } from "./StreakBadge";
+import {
+  ScrollSettingsDrawer,
+  useScrollSettings,
+} from "./ScrollSettingsDrawer";
 import { useScrollRestore } from "./hooks/useScrollRestore";
 import { ScrollChipBar, type ChipFilters } from "@/components/scroll/ScrollChipBar";
 import type {
@@ -167,6 +171,11 @@ export function ScrollFeedV2({
   const containerRef = useRef<HTMLDivElement>(null);
   const [itemHeight, setItemHeight] = useState(0);
   const [muted, setMuted] = useState(true);
+  // V20 (Wave 21.6) — local-storage settings (auto-advance for now,
+  // more later). The hook re-reads on the kc:scroll-settings-changed
+  // CustomEvent so drawer toggles propagate immediately to the pool.
+  const settings = useScrollSettings();
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [isDesktop, setIsDesktop] = useState(false);
   const [reducedMotion, setReducedMotion] = useState(false);
   const [brokenIds, setBrokenIds] = useState<Set<string>>(() => new Set());
@@ -506,6 +515,25 @@ export function ScrollFeedV2({
     // Esc closes the help overlay (handled inside the hook).
   });
 
+  // V20 (Wave 21.6) — auto-advance handler. Listens for the
+  // `kc:auto-advance` event the pool fires when a LIVE-slot video
+  // ends while autoAdvance is on. Calls jumpTo(activeIndex+1) to
+  // walk the user forward. Defensively gated on `settings.autoAdvance`
+  // so a stale setting from a previous session doesn't trigger
+  // unwanted advances.
+  useEffect(() => {
+    if (!settings.autoAdvance || typeof window === "undefined") return;
+    const onAutoAdvance = () => {
+      jumpTo(activeIndex + 1);
+    };
+    window.addEventListener("kc:auto-advance", onAutoAdvance as EventListener);
+    return () =>
+      window.removeEventListener(
+        "kc:auto-advance",
+        onAutoAdvance as EventListener,
+      );
+  }, [settings.autoAdvance, activeIndex, jumpTo]);
+
   // ─── Pool error handler ──────────────────────────────────────────
   const handlePoolError = (itemId: string) => {
     setBrokenIds((prev) => {
@@ -634,18 +662,50 @@ export function ScrollFeedV2({
             {effectiveType ? ` · ${effectiveType}` : ""}
           </span>
         </div>
-        <button
-          onClick={toggleMute}
-          className="flex h-9 w-9 items-center justify-center rounded-full bg-black/60 backdrop-blur-sm"
-          aria-label={muted ? "Activer le son" : "Couper le son"}
-        >
-          {muted ? (
-            <svg className="h-4 w-4 text-white/70" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2" /></svg>
-          ) : (
-            <svg className="h-4 w-4 text-[var(--gold)]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.536 8.464a5 5 0 010 7.072M18.364 5.636a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" /></svg>
-          )}
-        </button>
+        <div className="flex items-center gap-2">
+          {/* V20 (Wave 21.6) — settings ⚙ button. Opens the
+              ScrollSettingsDrawer with auto-advance toggle. Lives left
+              of the mute button so the mute button stays the most-
+              prominent action (most-used). */}
+          <button
+            type="button"
+            onClick={() => setSettingsOpen((v) => !v)}
+            aria-label="Réglages du scroll"
+            aria-expanded={settingsOpen}
+            className="flex h-9 w-9 items-center justify-center rounded-full bg-black/60 backdrop-blur-sm hover:bg-black/80 transition-colors"
+          >
+            <svg
+              className={`h-4 w-4 transition-colors ${
+                settings.autoAdvance ? "text-[var(--gold)]" : "text-white/70"
+              }`}
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+              aria-hidden
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+            </svg>
+          </button>
+          <button
+            onClick={toggleMute}
+            className="flex h-9 w-9 items-center justify-center rounded-full bg-black/60 backdrop-blur-sm"
+            aria-label={muted ? "Activer le son" : "Couper le son"}
+          >
+            {muted ? (
+              <svg className="h-4 w-4 text-white/70" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2" /></svg>
+            ) : (
+              <svg className="h-4 w-4 text-[var(--gold)]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.536 8.464a5 5 0 010 7.072M18.364 5.636a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" /></svg>
+            )}
+          </button>
+        </div>
       </div>
+
+      {/* V20 — settings drawer. Renders nothing when closed. */}
+      <ScrollSettingsDrawer
+        open={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+      />
 
       {/* Filter chip bar — sticky just below the top bar (Phase 5).
           Reuses the v1 ScrollChipBar component since the URL state
@@ -676,6 +736,7 @@ export function ScrollFeedV2({
           reducedMotion={reducedMotion}
           onError={handlePoolError}
           containerY={y}
+          autoAdvance={settings.autoAdvance}
         />
       )}
 
