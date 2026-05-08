@@ -204,6 +204,30 @@ export function FeedPlayerPool({
     }
   }, [muted]);
 
+  /** V2 (Wave 22.1) — single-tap-to-pause. FeedItem dispatches
+   *  `kc:toggle-playback` on a single tap, the pool toggles the
+   *  LIVE-slot video's paused state. */
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const onToggle = () => {
+      // Find the LIVE slot (priority === "live"). If none, no-op.
+      for (let s = 0; s < POOL_SIZE; s++) {
+        if (priorities[s] === "live") {
+          const v = videoRefs.current[s];
+          if (!v) return;
+          if (v.paused) {
+            void v.play().catch(() => {});
+          } else {
+            v.pause();
+          }
+          return;
+        }
+      }
+    };
+    window.addEventListener("kc:toggle-playback", onToggle);
+    return () => window.removeEventListener("kc:toggle-playback", onToggle);
+  }, [priorities]);
+
   /** V19 (Wave 21.7) — sync `playbackRate` across every slot whenever
    *  the user picks a new speed in the settings drawer. Defensive
    *  clamp : reject anything outside [0.25, 4] to dodge spec-non-

@@ -48,8 +48,18 @@ export const SPRING_RUBBER: ValueAnimationTransition = {
 export const SNAP_DISTANCE_FRACTION = 0.22;
 
 /** Velocity threshold (px/ms) above which a release counts as a flick
- *  even if the distance hasn't passed SNAP_DISTANCE_FRACTION. */
-export const FLICK_VELOCITY_THRESHOLD = 0.55;
+ *  even if the distance hasn't passed SNAP_DISTANCE_FRACTION.
+ *
+ *  V4 (Wave 22.1) — relaxed from 0.55 → 0.45. Mobile touch-flick
+ *  inertia lands in the 0.45–0.8 px/ms range ; the previous threshold
+ *  let some "intended swipes" register as bounce-backs. Test feel
+ *  on iPhone after merging — too low triggers spurious skips. */
+export const FLICK_VELOCITY_THRESHOLD = 0.45;
 
-/** Velocity above this triggers a multi-step skip (advance by 2). */
-export const FAST_FLICK_VELOCITY = 1.6;
+/** Velocity above this triggers a multi-step skip (advance by 2).
+ *
+ *  V4 — relaxed from 1.6 → 1.2 px/ms. Aggressive iOS Safari + Pixel
+ *  flicks regularly hit 2+ px/ms ; the previous bar was too high
+ *  (multi-skip rarely engaged on real devices). 1.2 keeps casual
+ *  flicks at 1-skip and only the deliberately-fast ones jump 2. */
+export const FAST_FLICK_VELOCITY = 1.2;

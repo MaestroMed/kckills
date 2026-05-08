@@ -28,8 +28,13 @@ interface Props {
    *  the gesture means (usually: toggle ON the like). */
   onDoubleTap: () => void;
   /** Optional single-tap handler — fires after DOUBLE_TAP_WINDOW_MS
-   *  if no second tap arrived. Used for tap-to-pause. */
+   *  if no second tap arrived. Used for tap-to-pause (V2). */
   onSingleTap?: () => void;
+  /** V3 (Wave 22.1) — long-press handler. Fires after LONG_PRESS_MS
+   *  of held pointer with < MOVE_TOLERANCE_PX displacement. Used to
+   *  open the contextual action menu (Pas intéressé / Sauvegarder /
+   *  Partager / Signaler / Profil). */
+  onLongPress?: () => void;
   /** Called when an action requires auth — surfaces the inline prompt. */
   onAuthRequired?: () => void;
   /** Whether the user is currently liked — drives whether to fire
@@ -39,6 +44,12 @@ interface Props {
 }
 
 const DOUBLE_TAP_WINDOW_MS = 280;
+/** V3 — long-press threshold. 450 ms matches TikTok's "..." menu and
+ *  is comfortable above the noise floor of accidental holds. */
+const LONG_PRESS_MS = 450;
+/** Pointer must stay within this radius for a long-press to register —
+ *  any drag past this turns into a swipe handled by useFeedGesture. */
+const MOVE_TOLERANCE_PX = 10;
 
 interface Burst {
   id: number;
@@ -49,15 +60,23 @@ interface Burst {
 export function DoubleTapHeart({
   onDoubleTap,
   onSingleTap,
+  onLongPress,
   isLiked,
 }: Props) {
   const [bursts, setBursts] = useState<Burst[]>([]);
   const lastTapRef = useRef<{ time: number; x: number; y: number } | null>(null);
   const singleTapTimerRef = useRef<number | null>(null);
+  // V3 — long-press tracking refs.
+  const longPressTimerRef = useRef<number | null>(null);
+  const longPressFiredRef = useRef(false);
+  const downPosRef = useRef<{ x: number; y: number } | null>(null);
 
   useEffect(() => () => {
     if (singleTapTimerRef.current != null) {
       window.clearTimeout(singleTapTimerRef.current);
+    }
+    if (longPressTimerRef.current != null) {
+      window.clearTimeout(longPressTimerRef.current);
     }
   }, []);
 
@@ -70,6 +89,35 @@ export function DoubleTapHeart({
     const now = Date.now();
     const pos = pointerPos(e);
     const last = lastTapRef.current;
+
+    // V3 — start long-press timer.
+    longPressFiredRef.current = false;
+    downPosRef.current = { x: e.clientX, y: e.clientY };
+    if (onLongPress) {
+      if (longPressTimerRef.current != null) {
+        window.clearTimeout(longPressTimerRef.current);
+      }
+      longPressTimerRef.current = window.setTimeout(() => {
+        if (longPressTimerRef.current == null) return;
+        longPressTimerRef.current = null;
+        longPressFiredRef.current = true;
+        // Cancel any pending single-tap so the user gets the menu,
+        // not a phantom pause/play after lifting.
+        if (singleTapTimerRef.current != null) {
+          window.clearTimeout(singleTapTimerRef.current);
+          singleTapTimerRef.current = null;
+        }
+        lastTapRef.current = null;
+        try {
+          if (typeof navigator?.vibrate === "function") {
+            navigator.vibrate([15, 30, 15]);
+          }
+        } catch {
+          /* navigator.vibrate not supported */
+        }
+        onLongPress();
+      }, LONG_PRESS_MS);
+    }
 
     if (last && now - last.time < DOUBLE_TAP_WINDOW_MS) {
       // Double-tap detected. Cancel the pending single-tap.
@@ -118,6 +166,38 @@ export function DoubleTapHeart({
         className="absolute inset-0 z-[5]"
         style={{ pointerEvents: "auto", touchAction: "manipulation" }}
         onPointerDown={handlePointer}
+        onPointerMove={(e) => {
+          // V3 — cancel long-press if the pointer drifts past the
+          // tolerance (= becomes a swipe).
+          if (!downPosRef.current) return;
+          const dx = Math.abs(e.clientX - downPosRef.current.x);
+          const dy = Math.abs(e.clientY - downPosRef.current.y);
+          if ((dx > MOVE_TOLERANCE_PX || dy > MOVE_TOLERANCE_PX) && longPressTimerRef.current != null) {
+            window.clearTimeout(longPressTimerRef.current);
+            longPressTimerRef.current = null;
+          }
+        }}
+        onPointerUp={() => {
+          downPosRef.current = null;
+          if (longPressTimerRef.current != null) {
+            window.clearTimeout(longPressTimerRef.current);
+            longPressTimerRef.current = null;
+          }
+          // If long-press fired, neuter any single-tap that the
+          // standard handler scheduled.
+          if (longPressFiredRef.current && singleTapTimerRef.current != null) {
+            window.clearTimeout(singleTapTimerRef.current);
+            singleTapTimerRef.current = null;
+            lastTapRef.current = null;
+          }
+        }}
+        onPointerCancel={() => {
+          downPosRef.current = null;
+          if (longPressTimerRef.current != null) {
+            window.clearTimeout(longPressTimerRef.current);
+            longPressTimerRef.current = null;
+          }
+        }}
         // Use suppressed dblclick to avoid a system-level dbltap that
         // would zoom the page on iOS Safari.
         onDoubleClick={(e) => e.preventDefault()}

@@ -34,6 +34,9 @@ import { FeedSidebarV2 } from "@/components/community/FeedSidebarV2";
 import { DoubleTapHeart } from "@/components/community/DoubleTapHeart";
 import { FeedItemError } from "./FeedItemError";
 import { track } from "@/lib/analytics/track";
+import { LongPressMenu } from "./LongPressMenu";
+import { ShareSheet } from "./ShareSheet";
+import { useNotInterestedStore } from "./hooks/useNotInterestedStore";
 
 interface SharedFeedItemProps {
   index: number;
@@ -192,6 +195,10 @@ export function FeedItemVideo({
   useFeedItemAnalytics({ itemId: item.id, isActive });
   const errState = useFeedItemError(item.id);
   const [shareToast, setShareToast] = useState<string | null>(null);
+  // V3 + V8 — local UI state for the contextual menu + custom share sheet.
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [shareSheetOpen, setShareSheetOpen] = useState(false);
+  const { recordNotInterested } = useNotInterestedStore();
 
   const triggerShare = useCallback(async () => {
     if (typeof window === "undefined") return;
@@ -365,8 +372,8 @@ export function FeedItemVideo({
 
       {/* DoubleTapHeart — TikTok signature gesture. Double-tap on the
           video → fire a like via the LikeButton's mechanism (custom
-          event consumed by LikeButton). Single-tap is forwarded to the
-          existing tap-to-pause if any.
+          event consumed by LikeButton). Single-tap toggles pause/play
+          (V2). Long-press opens the contextual menu (V3).
           Wave 6 — also fires the clip.liked analytic with source.  */}
       {isActive && (
         <DoubleTapHeart
@@ -386,6 +393,96 @@ export function FeedItemVideo({
               /* CustomEvent unsupported in some sandboxes */
             }
           }}
+          onSingleTap={() => {
+            // V2 (Wave 22.1) — single tap toggles pause/play. The
+            // pool listens for `kc:toggle-playback` and pauses /
+            // resumes the LIVE slot's video.
+            try {
+              window.dispatchEvent(
+                new CustomEvent("kc:toggle-playback", {
+                  detail: { killId: item.id },
+                }),
+              );
+            } catch {
+              /* CustomEvent unsupported */
+            }
+          }}
+          onLongPress={() => {
+            // V3 (Wave 22.1) — open contextual action menu.
+            setMenuOpen(true);
+          }}
+        />
+      )}
+
+      {/* V3 — long-press menu. Opens from a 450ms hold on the active
+          item (gated to !isActive to avoid stray menus on swipes). */}
+      {isActive && menuOpen && (
+        <LongPressMenu
+          open={menuOpen}
+          onClose={() => setMenuOpen(false)}
+          killId={item.id}
+          killerPlayerId={item.killerPlayerId}
+          killerChampion={item.killerChampion}
+          victimChampion={item.victimChampion}
+          onNotInterested={() => {
+            recordNotInterested({
+              id: item.id,
+              killerPlayerId: item.killerPlayerId,
+              killerChampion: item.killerChampion,
+              victimChampion: item.victimChampion,
+              fightType: item.fightType,
+              aiTags: item.aiTags,
+            });
+            // Auto-skip to next so the user doesn't keep seeing it.
+            onAutoSkipNext?.();
+          }}
+          onSave={() => {
+            // V10 (deferred) — persist the bookmark. For now we
+            // localStorage-only-fallback save, the V10 commit will
+            // wire it to /api/bookmarks + DB.
+            try {
+              const raw = window.localStorage.getItem("kc_bookmarks_v1");
+              const arr: string[] = raw ? JSON.parse(raw) : [];
+              if (!arr.includes(item.id)) {
+                arr.push(item.id);
+                window.localStorage.setItem(
+                  "kc_bookmarks_v1",
+                  JSON.stringify(arr.slice(-200)),
+                );
+                window.dispatchEvent(new CustomEvent("kc:bookmarks-changed"));
+              }
+            } catch {
+              /* storage disabled */
+            }
+          }}
+          onShare={() => setShareSheetOpen(true)}
+          onReport={() => {
+            void fetch(`/api/kills/${item.id}/report`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ reason: "inappropriate" }),
+              credentials: "same-origin",
+            }).catch(() => {
+              /* best-effort */
+            });
+          }}
+        />
+      )}
+
+      {/* V8 — custom share sheet, shown on share-button tap or from
+          the long-press menu. */}
+      {isActive && shareSheetOpen && (
+        <ShareSheet
+          open={shareSheetOpen}
+          onClose={() => setShareSheetOpen(false)}
+          killId={item.id}
+          shareTitle={`${item.killerChampion} → ${item.victimChampion} · KCKILLS`}
+          shareText={item.aiDescription ?? undefined}
+          shareUrl={
+            typeof window !== "undefined"
+              ? `${window.location.origin}/kill/${item.id}`
+              : `https://kckills.com/kill/${item.id}`
+          }
         />
       )}
 
@@ -660,6 +757,10 @@ export function FeedItemMoment({
   useFeedItemAnalytics({ itemId: item.id, isActive });
   const errState = useFeedItemError(item.id);
   const [shareToast, setShareToast] = useState<string | null>(null);
+  // V3 + V8 — local UI state for the contextual menu + custom share sheet.
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [shareSheetOpen, setShareSheetOpen] = useState(false);
+  const { recordNotInterested } = useNotInterestedStore();
 
   const triggerShare = useCallback(async () => {
     if (typeof window === "undefined") return;
