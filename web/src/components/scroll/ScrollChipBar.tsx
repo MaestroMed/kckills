@@ -30,6 +30,12 @@ export interface ChipFilters {
   player: string | null;
   fight: string | null;
   side: "kc" | "vs" | null;
+  /** V14 — `?tag=` filter active (e.g. "outplay", "clutch"). Lower-cased
+   *  string ; null when the user hasn't pinned a tag. The chip bar
+   *  doesn't expose tag chips itself (would be too many) — the bar
+   *  surfaces a "clear tag" pill when one is active so the user can
+   *  unfilter without leaving /scroll. */
+  tag: string | null;
 }
 
 interface PlayerChipDef {
@@ -69,7 +75,8 @@ export function ScrollChipBar({ filters, rosterChips = [] }: Props) {
     (filters.firstBloodsOnly ? 1 : 0) +
     (filters.player ? 1 : 0) +
     (filters.fight ? 1 : 0) +
-    (filters.side ? 1 : 0);
+    (filters.side ? 1 : 0) +
+    (filters.tag ? 1 : 0);
 
   const hasAny = activeCount > 0;
 
@@ -91,8 +98,10 @@ export function ScrollChipBar({ filters, rosterChips = [] }: Props) {
   };
 
   const clearAll = () => {
-    navigate({ multi: null, fb: null, player: null, fight: null, side: null });
+    navigate({ multi: null, fb: null, player: null, fight: null, side: null, tag: null });
   };
+
+  const clearTag = () => navigate({ tag: null });
 
   const toggleBoolean = (key: "multi" | "fb", currently: boolean) => {
     navigate({ [key]: currently ? null : "1" });
@@ -146,6 +155,22 @@ export function ScrollChipBar({ filters, rosterChips = [] }: Props) {
           >
             ★ Multi
           </ChipButton>
+          {/* V14 — when a tag is pinned (deep-linked from a feed item),
+              show a clearable pill so the user can unfilter without
+              leaving /scroll. The tag chip bar doesn't enumerate every
+              possible tag (would be 30+ chips) — discovery happens via
+              tap on a clip's tag row. */}
+          {filters.tag && (
+            <ChipButton
+              active
+              onClick={clearTag}
+              ariaLabel={`Effacer le filtre #${filters.tag}`}
+              accent="var(--cyan)"
+            >
+              #{filters.tag}
+              <span aria-hidden className="ml-1 text-white/70">×</span>
+            </ChipButton>
+          )}
           <ChipButton
             active={filters.firstBloodsOnly}
             onClick={() => toggleBoolean("fb", filters.firstBloodsOnly)}

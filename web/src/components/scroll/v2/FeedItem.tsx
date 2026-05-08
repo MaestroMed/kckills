@@ -443,13 +443,47 @@ export function FeedItemVideo({
             )}
           </div>
 
-          {/* Player line — small, ALL-CAPS data font, HIGH contrast */}
+          {/* Player line — small, ALL-CAPS data font, HIGH contrast.
+              V12 (Wave 21.2) — killer name now tappable when we have
+              the killerPlayerId, deep-linking the scroll feed filtered
+              by that player. Re-uses the existing `?player=<id>` URL
+              state contract so chip-bar + scroll-restore both work. */}
           {(item.killerName || item.victimName) && (
-            <p className="font-data text-[11px] md:text-[12px] uppercase tracking-[0.2em] text-white/70 drop-shadow-md">
+            <p className="font-data text-[11px] md:text-[12px] uppercase tracking-[0.2em] text-white/70 drop-shadow-md pointer-events-auto">
               {item.killerName ? (
-                <span className={isKcKill ? "text-[var(--gold)] font-bold" : "text-white/85"}>
-                  {item.killerName}
-                </span>
+                item.killerPlayerId ? (
+                  <Link
+                    href={`/scroll?player=${item.killerPlayerId}`}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      track("clip.profile_tap", {
+                        entityType: "kill",
+                        entityId: item.id,
+                        metadata: {
+                          kind: "player",
+                          target: item.killerPlayerId ?? "",
+                          source: "feed",
+                        },
+                      });
+                    }}
+                    className={
+                      "underline-offset-4 decoration-transparent hover:decoration-current transition-colors " +
+                      (isKcKill
+                        ? "text-[var(--gold)] font-bold hover:text-[var(--gold-bright)]"
+                        : "text-white/85 hover:text-white")
+                    }
+                  >
+                    {item.killerName}
+                  </Link>
+                ) : (
+                  <span
+                    className={
+                      isKcKill ? "text-[var(--gold)] font-bold" : "text-white/85"
+                    }
+                  >
+                    {item.killerName}
+                  </span>
+                )
               ) : (
                 <span className="text-white/55">?</span>
               )}
@@ -464,15 +498,54 @@ export function FeedItemVideo({
             </p>
           )}
 
-          {/* Matchup — the headliner, big display font */}
-          <p className="font-display text-2xl md:text-4xl lg:text-5xl font-black leading-[1.05] text-white drop-shadow-[0_4px_24px_rgba(0,0,0,0.85)]">
-            <span className={isKcKill ? "text-[var(--gold)]" : "text-white"}>
+          {/* Matchup — the headliner, big display font.
+              V13 (Wave 21.2) — both champions are now tappable, deep-
+              linking to /champion/<name>. Stops gesture bubbling so a
+              tap on the champion doesn't accidentally pause the video. */}
+          <p className="font-display text-2xl md:text-4xl lg:text-5xl font-black leading-[1.05] text-white drop-shadow-[0_4px_24px_rgba(0,0,0,0.85)] pointer-events-auto">
+            <Link
+              href={`/champion/${encodeURIComponent(item.killerChampion)}`}
+              onClick={(e) => {
+                e.stopPropagation();
+                track("clip.profile_tap", {
+                  entityType: "kill",
+                  entityId: item.id,
+                  metadata: {
+                    kind: "champion",
+                    target: item.killerChampion,
+                    source: "feed",
+                  },
+                });
+              }}
+              className={
+                "underline-offset-4 decoration-transparent hover:decoration-current transition-colors " +
+                (isKcKill ? "text-[var(--gold)]" : "text-white")
+              }
+            >
               {item.killerChampion}
-            </span>
+            </Link>
             <span className="text-[var(--gold)]/80 mx-2 md:mx-3 text-[0.85em] align-middle">→</span>
-            <span className={!isKcKill ? "text-[var(--gold)]" : "text-white/80"}>
+            <Link
+              href={`/champion/${encodeURIComponent(item.victimChampion)}`}
+              onClick={(e) => {
+                e.stopPropagation();
+                track("clip.profile_tap", {
+                  entityType: "kill",
+                  entityId: item.id,
+                  metadata: {
+                    kind: "champion",
+                    target: item.victimChampion,
+                    source: "feed",
+                  },
+                });
+              }}
+              className={
+                "underline-offset-4 decoration-transparent hover:decoration-current transition-colors " +
+                (!isKcKill ? "text-[var(--gold)]" : "text-white/80")
+              }
+            >
               {item.victimChampion}
-            </span>
+            </Link>
           </p>
 
           {/* AI description — language-aware via <Description>.
@@ -495,6 +568,33 @@ export function FeedItemVideo({
               quoted
               className="text-[13px] md:text-[15px] lg:text-base text-white/90 italic leading-relaxed line-clamp-3 md:line-clamp-4 drop-shadow-md"
             />
+          )}
+
+          {/* V14 (Wave 21.2) — AI-tag chip row. Each tag deep-links into
+              /scroll?tag=<tag> (the page-level handler treats unknown
+              `tag` query as a chip-style filter). Limited to top 4 tags
+              to avoid sidebar collisions. */}
+          {item.aiTags && item.aiTags.length > 0 && (
+            <ul className="flex flex-wrap items-center gap-1.5 pointer-events-auto">
+              {item.aiTags.slice(0, 4).map((tag) => (
+                <li key={tag}>
+                  <Link
+                    href={`/scroll?tag=${encodeURIComponent(tag)}`}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      track("clip.tag_clicked", {
+                        entityType: "kill",
+                        entityId: item.id,
+                        metadata: { tag },
+                      });
+                    }}
+                    className="inline-flex items-center rounded-full border border-white/20 bg-black/35 backdrop-blur-sm px-2 py-0.5 text-[10px] font-data tracking-widest text-white/75 hover:border-[var(--gold)]/55 hover:text-[var(--gold)] hover:bg-black/55 transition-colors"
+                  >
+                    #{tag.replace(/_/g, " ")}
+                  </Link>
+                </li>
+              ))}
+            </ul>
           )}
 
           {/* Match meta — small line at the bottom */}

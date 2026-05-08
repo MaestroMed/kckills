@@ -90,6 +90,9 @@ interface ScrollPageProps {
     player?: string | string[];
     fight?: string | string[];
     side?: string | string[];
+    /** V14 (Wave 21.2) — `?tag=outplay` filter, deep-linked from
+     *  ai_tag chips on a feed item. Single value at a time. */
+    tag?: string | string[];
   }>;
 }
 
@@ -104,6 +107,10 @@ export interface ScrollChipFilters {
   player: string | null;
   fight: string | null;
   side: "kc" | "vs" | null;
+  /** V14 — when set, only items whose `ai_tags` include this string
+   *  are kept. Comparison is exact (no fuzzy matching) and lowercase
+   *  to match how the analyser writes tags. */
+  tag: string | null;
 }
 
 export default async function ScrollV2Page({ searchParams }: ScrollPageProps) {
@@ -117,18 +124,21 @@ export default async function ScrollV2Page({ searchParams }: ScrollPageProps) {
 
   const isTrue = (v: string | undefined) => v === "1" || v === "true";
   const sideRaw = firstString(sp.side);
+  const tagRaw = firstString(sp.tag);
   const chipFilters: ScrollChipFilters = {
     multiKillsOnly: isTrue(firstString(sp.multi)),
     firstBloodsOnly: isTrue(firstString(sp.fb)),
     player: firstString(sp.player) ?? null,
     fight: firstString(sp.fight) ?? null,
     side: sideRaw === "kc" || sideRaw === "vs" ? sideRaw : null,
+    tag: tagRaw && tagRaw.length > 0 && tagRaw.length < 64 ? tagRaw.toLowerCase() : null,
   };
   const hasChipFilter =
     chipFilters.multiKillsOnly ||
     chipFilters.firstBloodsOnly ||
     chipFilters.player !== null ||
     chipFilters.fight !== null ||
+    chipFilters.tag !== null ||
     chipFilters.side !== null;
 
   // SSR fetch limits — env-overridable for ops tuning.
@@ -437,6 +447,12 @@ function videoMatchesChips(v: VideoFeedItem, c: ScrollChipFilters): boolean {
   if (c.side === "kc" && v.kcInvolvement !== "team_killer") return false;
   if (c.side === "vs" && v.kcInvolvement !== "team_victim") return false;
   if (c.player && v.killerPlayerId !== c.player) return false;
+  // V14 — exact-match tag filter against the analyser's lowercase
+  // `ai_tags` array. Items with no tags fail closed.
+  if (c.tag) {
+    const tags = (v.aiTags ?? []).map((t) => t.toLowerCase());
+    if (!tags.includes(c.tag)) return false;
+  }
   return true;
 }
 
@@ -444,6 +460,10 @@ function momentMatchesChips(m: MomentFeedItem, c: ScrollChipFilters): boolean {
   if (c.multiKillsOnly) return false;
   if (c.firstBloodsOnly) return false;
   if (c.player) return false;
+  // V14 — tag filter excludes moments by default. The aggregate tags
+  // overlap awkwardly with kill-level tags ; keep the user's "#outplay"
+  // intent crisp by showing kills only.
+  if (c.tag) return false;
   if (c.fight) {
     if (c.fight === "teamfight_5v5" || c.fight === "teamfight_4v4") {
       if (m.classification !== "teamfight" && m.classification !== "ace") return false;

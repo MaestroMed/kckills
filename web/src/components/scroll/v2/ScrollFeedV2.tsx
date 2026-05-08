@@ -815,26 +815,26 @@ export function ScrollFeedV2({
           events: none on the wrapper). */}
       <OfflineBanner />
 
-      {/* Drag indicator — subtle dot grid showing position in feed */}
-      {visibleItems.length > 1 && (
-        <div className="fixed right-2 top-1/2 -translate-y-1/2 z-50 flex flex-col gap-1">
-          {visibleItems.slice(0, 5).map((_, i) => {
-            const offset = activeIndex - 2 + i;
-            const isActive = offset === activeIndex;
-            const inRange = offset >= 0 && offset < visibleItems.length;
-            return (
-              <span
-                key={i}
-                className={`block h-1 w-1 rounded-full transition-all ${
-                  isActive
-                    ? "bg-[var(--gold)] h-2"
-                    : inRange
-                    ? "bg-white/40"
-                    : "bg-white/10"
-                }`}
-              />
-            );
-          })}
+      {/* Drag indicator — V11 (Wave 21.2) : was 5 hardcoded dots which
+          collapsed all positions of a 100+ feed into the same 5 slots.
+          Now renders a single thin progress rail with the thumb position
+          mapped linearly across the full feed length. Power-user signal :
+          quickly see "I'm at 12/87" without opening anything. */}
+      {visibleItems.length > 1 && itemHeight > 0 && (
+        <div
+          className="fixed right-1.5 top-[10%] bottom-[10%] z-50 w-0.5 rounded-full bg-white/10 pointer-events-none"
+          aria-hidden
+        >
+          <span
+            className="absolute left-0 right-0 rounded-full bg-[var(--gold)] transition-all"
+            style={{
+              top: `${(activeIndex / Math.max(1, visibleItems.length)) * 100}%`,
+              height: `${
+                Math.max(4, (1 / visibleItems.length) * 100)
+              }%`,
+              minHeight: 6,
+            }}
+          />
         </div>
       )}
 
