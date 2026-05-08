@@ -69,16 +69,28 @@ hero data, Gemini 3.1 Lite as default). Worker fully operational
 
 ## 🔵 INFO — backlog (no urgency)
 
-- VideoClip JSON-LD on `/kill/[id]` + `/match/[slug]` for SEO rich snippets.
+- ~~VideoClip JSON-LD on `/kill/[id]` + `/match/[slug]`~~ — **FALSE POSITIVE** :
+  VideoObject already shipped on `/kill/[id]` ; SportsEvent on
+  `/match/[slug]` ; JSON-LD is also present on `/player/[slug]`,
+  `/champion/[name]`, `/alumni/[slug]`, `/matchup/...`. Audit agent
+  miscategorised. Verified via grep `application/ld\+json` 2026-05-08.
 - `globals.css` 826 lines → split via `@layer` (DX, no perf gain).
 - Vercel Speed Insights + Sentry custom thresholds.
 - Drop IVFFlat (`046`) when HNSW proves sufficient at <100K rows (passive monitor 6 months).
 - AI Router Phase 2 wiring (analyzer → Anthropic Haiku fallback for cost win).
 - Local→Hetzner/Fly.io migration runbook (worker is already stateless-compatible).
 - 60+ scripts in `worker/scripts/` — categorize ACTIVE / MAINTENANCE / DEPRECATED + README.
-- CORS headers on public API routes (currently only `/api/v1/kills`).
+- ~~CORS headers on public API routes~~ — **FALSE POSITIVE** :
+  `Access-Control-Allow-Origin` already on `/api/v1/kills`,
+  `/api/v1/matches`, `/api/v1/players`, `/api/leagues`, `/api/teams`.
+  Audit agent flagged only the first one. Other public routes
+  (`/api/featured/today`, `/api/next-match`) are same-origin
+  intentionally — adding CORS would be an attack-surface increase
+  with no benefit.
 - Tests for `clipper.py`, `analyzer.py`, `hls_packager.py` (critical-path low coverage).
-- `leagues` table missing explicit RLS (read-only, low risk).
+- ~~`leagues` table missing explicit RLS (read-only, low risk).~~ —
+  **FIXED in Wave 19 / migration 056** : RLS enabled, public SELECT
+  policy + deny anon writes. Service role bypasses RLS unchanged.
 
 ---
 
