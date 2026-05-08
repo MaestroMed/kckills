@@ -93,7 +93,22 @@ interface ScrollPageProps {
     /** V14 (Wave 21.2) — `?tag=outplay` filter, deep-linked from
      *  ai_tag chips on a feed item. Single value at a time. */
     tag?: string | string[];
+    /** V26 (Wave 24.1) — feed split tab. `pour-toi` (default,
+     *  uses recommendation engine), `recent` (created_at DESC, no
+     *  shuffle), `top-semaine` (last 7 d sorted by highlight_score). */
+    feed?: string | string[];
   }>;
+}
+
+/** V26 — supported feed-tab values. Anything else falls back to "pour-toi". */
+const FEED_TABS = ["pour-toi", "recent", "top-semaine"] as const;
+type FeedTab = (typeof FEED_TABS)[number];
+
+function parseFeedTab(raw: string | undefined): FeedTab {
+  if (raw && (FEED_TABS as readonly string[]).includes(raw)) {
+    return raw as FeedTab;
+  }
+  return "pour-toi";
 }
 
 function firstString(v: string | string[] | undefined): string | undefined {
@@ -125,6 +140,8 @@ export default async function ScrollV2Page({ searchParams }: ScrollPageProps) {
   const isTrue = (v: string | undefined) => v === "1" || v === "true";
   const sideRaw = firstString(sp.side);
   const tagRaw = firstString(sp.tag);
+  // V26 — active feed tab.
+  const feedTab: FeedTab = parseFeedTab(firstString(sp.feed));
   const chipFilters: ScrollChipFilters = {
     multiKillsOnly: isTrue(firstString(sp.multi)),
     firstBloodsOnly: isTrue(firstString(sp.fb)),
@@ -355,9 +372,54 @@ export default async function ScrollV2Page({ searchParams }: ScrollPageProps) {
 
   // Moments disabled — duplicate kills without adding value
   const allClips: FeedItem[] = [...filteredVideos];
-  const items: FeedItem[] = initialKillId
-    ? [...allClips].sort((a, b) => b.score - a.score)
-    : weightedShuffle(allClips);
+
+  // V24 (Wave 24.1) — time-of-day / recency bonus. Items from a
+  // match in the last 24 h get a +50 % score boost ; last 72 h get
+  // +25 %. Stale historical clips are unaffected. The boost is
+  // applied PRE-shuffle so weightedShuffle can dilute it back across
+  // the feed (prevents "all 24 h items at top").
+  const now = Date.now();
+  const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+  const recencyBoosted = allClips.map((it) => {
+    if (it.kind !== "video") return it;
+    const matchTs = Date.parse(it.matchDate);
+    if (!Number.isFinite(matchTs)) return it;
+    const ageMs = now - matchTs;
+    let factor = 1;
+    if (ageMs < ONE_DAY_MS) factor = 1.5;
+    else if (ageMs < 3 * ONE_DAY_MS) factor = 1.25;
+    return factor === 1 ? it : { ...it, score: it.score * factor };
+  });
+
+  // V26 — feed-tab routing :
+  //   pour-toi    → weighted shuffle with anti-repeat caps (default)
+  //   recent      → sort by matchDate DESC, no shuffle
+  //   top-semaine → last 7 d only, sort by score DESC
+  let items: FeedItem[];
+  if (initialKillId) {
+    items = [...recencyBoosted].sort((a, b) => b.score - a.score);
+  } else if (feedTab === "recent") {
+    items = [...recencyBoosted].sort((a, b) => {
+      const ad = a.kind === "video" ? Date.parse(a.matchDate) : 0;
+      const bd = b.kind === "video" ? Date.parse(b.matchDate) : 0;
+      return bd - ad;
+    });
+  } else if (feedTab === "top-semaine") {
+    const sevenDaysAgo = now - 7 * ONE_DAY_MS;
+    items = recencyBoosted
+      .filter((it) => {
+        if (it.kind !== "video") return false;
+        const t = Date.parse(it.matchDate);
+        return Number.isFinite(t) && t >= sevenDaysAgo;
+      })
+      .sort((a, b) => b.score - a.score);
+  } else {
+    // V28 (Wave 24.1) — cold-start hybrid : weightedShuffle with the
+    // V25 multi-axis anti-repeat caps. When the recommendation
+    // engine kicks in (post-V21 dwell signals), it folds personalised
+    // suggestions into the tail of this list.
+    items = weightedShuffle(recencyBoosted);
+  }
   const clipCount = items.length;
 
   // ─── JSON-LD : ItemList of the first 20 highest-scored published
@@ -420,6 +482,7 @@ export default async function ScrollV2Page({ searchParams }: ScrollPageProps) {
         initialKillId={initialKillId}
         chipFilters={chipFilters}
         rosterChips={rosterChips}
+        feedTab={feedTab}
       />
     </>
   );

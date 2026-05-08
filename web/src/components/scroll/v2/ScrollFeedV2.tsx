@@ -52,6 +52,9 @@ import {
   ScrollSettingsDrawer,
   useScrollSettings,
 } from "./ScrollSettingsDrawer";
+import { OnboardingModal } from "./OnboardingModal";
+import { useAffinityStore } from "./hooks/useAffinityStore";
+import { FeedTabBar } from "./FeedTabBar";
 import { useScrollRestore } from "./hooks/useScrollRestore";
 import { ScrollChipBar, type ChipFilters } from "@/components/scroll/ScrollChipBar";
 import type {
@@ -159,6 +162,10 @@ interface Props {
   initialKillId?: string;
   chipFilters?: ChipFilters;
   rosterChips?: { id: string; ign: string; role: "TOP" | "JGL" | "MID" | "ADC" | "SUP" }[];
+  /** V26 — active feed tab from the URL. The server already
+   *  ordered the items list according to this ; the prop is just
+   *  for the FeedTabBar's active-pill state. */
+  feedTab?: "pour-toi" | "recent" | "top-semaine";
 }
 
 export function ScrollFeedV2({
@@ -167,6 +174,7 @@ export function ScrollFeedV2({
   initialKillId,
   chipFilters,
   rosterChips,
+  feedTab = "pour-toi",
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [itemHeight, setItemHeight] = useState(0);
@@ -176,6 +184,43 @@ export function ScrollFeedV2({
   // CustomEvent so drawer toggles propagate immediately to the pool.
   const settings = useScrollSettings();
   const [settingsOpen, setSettingsOpen] = useState(false);
+  // V22 + V23 (Wave 24.1) — affinity store (player + champion
+  // long-term dwell aggregation). Listens for the dwell event from
+  // V1 / V21 and accumulates per-facet scores in localStorage with
+  // 21-day decay. Top-K used to bias recommendations.
+  const affinity = useAffinityStore();
+  // V22+V23 — listen for dwell events broadcast by FeedItem (V21) and
+  // route them into the affinity store. We piggy-back on the same
+  // CustomEvent so we don't double-track.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const onDwell = (ev: Event) => {
+      const detail = (
+        ev as CustomEvent<{
+          itemId?: string;
+          dwellFraction?: number | null;
+        }>
+      ).detail;
+      const frac = detail?.dwellFraction;
+      const id = detail?.itemId;
+      if (!id || typeof frac !== "number" || !Number.isFinite(frac)) return;
+      // Find the matching item to extract player + champions.
+      const found = itemsProp.find((it) => it.id === id);
+      if (!found || found.kind !== "video") return;
+      affinity.recordDwell(
+        found.killerPlayerId,
+        found.killerChampion,
+        found.victimChampion,
+        frac,
+      );
+    };
+    window.addEventListener("kc:clip-dwell-recorded", onDwell as EventListener);
+    return () =>
+      window.removeEventListener(
+        "kc:clip-dwell-recorded",
+        onDwell as EventListener,
+      );
+  }, [itemsProp, affinity]);
   const [isDesktop, setIsDesktop] = useState(false);
   const [reducedMotion, setReducedMotion] = useState(false);
   const [brokenIds, setBrokenIds] = useState<Set<string>>(() => new Set());
@@ -706,6 +751,23 @@ export function ScrollFeedV2({
         open={settingsOpen}
         onClose={() => setSettingsOpen(false)}
       />
+
+      {/* V27 (Wave 24.1) — first-visit onboarding modal. Self-gates
+          on `localStorage.kc_onboarded_v1` ; renders nothing for
+          returning users. Roster picks from the SSR-fetched chips. */}
+      {rosterChips && rosterChips.length > 0 && (
+        <OnboardingModal
+          roster={rosterChips.map((p) => ({
+            id: p.id,
+            ign: p.ign,
+            role: p.role,
+          }))}
+        />
+      )}
+
+      {/* V26 (Wave 24.1) — feed-tab pills (Pour toi / Récent / Top
+          7j). Sticky below the top bar, above the chip bar. */}
+      <FeedTabBar active={feedTab} />
 
       {/* Filter chip bar — sticky just below the top bar (Phase 5).
           Reuses the v1 ScrollChipBar component since the URL state
