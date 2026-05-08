@@ -91,7 +91,20 @@ async def analyze(prompt: str, video_path: str | None = None) -> dict | None:
 
     can_call = await scheduler.wait_for("gemini")
     if not can_call:
-        log.warn("gemini_quota_exceeded")
+        # Wave 20.1 — was a bare `gemini_quota_exceeded` log with no
+        # context. Now surface remaining count + the daily reset hour
+        # so the operator (or a Discord alert consumer) can tell at a
+        # glance whether quota is just under the floor or actually 0,
+        # and how long until 07:00 UTC reset.
+        try:
+            remaining = scheduler.get_remaining("gemini")
+        except Exception:
+            remaining = None
+        log.warn(
+            "gemini_quota_exhausted",
+            remaining=remaining,
+            reset_hour_utc=scheduler.QUOTA_RESET_HOUR_UTC,
+        )
         return None
 
     client = get_client()

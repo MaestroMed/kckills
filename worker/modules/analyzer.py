@@ -332,7 +332,19 @@ async def analyze_kill(
 
     can_call = await scheduler.wait_for("gemini")
     if not can_call:
-        log.warn("gemini_quota_exceeded")
+        # Wave 20.1 — surface the remaining count so the operator can
+        # distinguish "literally 0 left" from "drifted under the floor"
+        # at a glance. Same shape as services/gemini_client.py for
+        # consistency.
+        try:
+            remaining = scheduler.get_remaining("gemini")
+        except Exception:
+            remaining = None
+        log.warn(
+            "gemini_quota_exhausted",
+            remaining=remaining,
+            reset_hour_utc=scheduler.QUOTA_RESET_HOUR_UTC,
+        )
         return None
 
     prompt = ANALYSIS_PROMPT.format(
@@ -426,8 +438,19 @@ async def analyze_kill(
         result["_latency_ms"] = elapsed_ms
         result["_raw_text"] = text
         return result
-    except json.JSONDecodeError:
-        log.warn("gemini_invalid_json", text=text[:200] if text else "")
+    except json.JSONDecodeError as e:
+        # Wave 20.1 — was warn ; bumped to error since this means the
+        # structured-output schema (which is supposed to GUARANTEE
+        # parseable JSON) was violated. Worth surfacing in Sentry-class
+        # dashboards. text[:300] is enough to tell whether Gemini
+        # returned a fence, a truncation, or pure prose.
+        log.error(
+            "gemini_invalid_json",
+            killer=killer_name,
+            victim=victim_name,
+            decode_error=str(e)[:160],
+            text=text[:300] if text else "",
+        )
         return None
     except Exception as e:
         log.error("gemini_error", error=str(e))
