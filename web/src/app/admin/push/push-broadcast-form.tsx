@@ -8,11 +8,12 @@
  * confirm dialog, and toast feedback on every submit.
  */
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useTransition } from "react";
 import { AdminButton } from "@/components/admin/ui/AdminButton";
 import { AdminCard } from "@/components/admin/ui/AdminCard";
 import { AdminSection } from "@/components/admin/ui/AdminSection";
 import { PushPreview } from "@/components/admin/push/PushPreview";
+import { broadcastPush } from "./actions";
 
 const KINDS = [
   { id: "broadcast", label: "Broadcast", desc: "Annonce générale, événement, etc." },
@@ -40,6 +41,7 @@ export function PushBroadcastForm({ subscriberCount }: { subscriberCount: number
   const [dedupeKey, setDedupeKey] = useState("");
   const [pending, setPending] = useState(false);
   const [toasts, setToasts] = useState<ToastMsg[]>([]);
+  const [, startTransition] = useTransition();
 
   const sendNowDisabled = subscriberCount > 200;
 
@@ -49,7 +51,7 @@ export function PushBroadcastForm({ subscriberCount }: { subscriberCount: number
     setTimeout(() => setToasts((prev) => prev.filter((t) => t.id !== id)), 2800);
   };
 
-  const submit = async (mode: "enqueue" | "send_now") => {
+  const submit = (mode: "enqueue" | "send_now") => {
     if (mode === "send_now") {
       if (
         !confirm(
@@ -60,11 +62,9 @@ export function PushBroadcastForm({ subscriberCount }: { subscriberCount: number
       }
     }
     setPending(true);
-    try {
-      const r = await fetch("/api/admin/push/broadcast", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+    startTransition(async () => {
+      try {
+        const result = await broadcastPush({
           mode,
           kind,
           title: title.trim() || undefined,
@@ -74,31 +74,30 @@ export function PushBroadcastForm({ subscriberCount }: { subscriberCount: number
           image_url: imageUrl.trim() || undefined,
           kill_id: killId.trim() || undefined,
           dedupe_key: dedupeKey.trim() || undefined,
-        }),
-      });
-      const data = await r.json().catch(() => ({}));
-      if (!r.ok) {
-        pushToast(`Erreur : ${data.error ?? `HTTP ${r.status}`}`, "error");
-        return;
+        });
+        if (!result.ok) {
+          pushToast(`Erreur : ${result.error ?? "inconnue"}`, "error");
+          return;
+        }
+        if (result.deduped) {
+          pushToast("Déjà envoyé (dedupe key).", "info");
+        } else if (mode === "send_now") {
+          pushToast(
+            `Envoyé. ${result.sent ?? 0} ok · ${result.failed ?? 0} fails · ${result.expired ?? 0} expirés.`,
+          );
+        } else {
+          pushToast("Mis en file. Le worker enverra sous ~5 min.");
+        }
+        setTitle("");
+        setBody("");
+        setKillId("");
+        setDedupeKey("");
+      } catch (e) {
+        pushToast(e instanceof Error ? e.message : "Erreur action", "error");
+      } finally {
+        setPending(false);
       }
-      if (data.deduped) {
-        pushToast("Déjà envoyé (dedupe key).", "info");
-      } else if (mode === "send_now") {
-        pushToast(
-          `Envoyé. ${data.sent ?? 0} ok · ${data.failed ?? 0} fails · ${data.expired ?? 0} expirés.`,
-        );
-      } else {
-        pushToast("Mis en file. Le worker enverra sous ~5 min.");
-      }
-      setTitle("");
-      setBody("");
-      setKillId("");
-      setDedupeKey("");
-    } catch (e) {
-      pushToast(e instanceof Error ? e.message : "Erreur réseau", "error");
-    } finally {
-      setPending(false);
-    }
+    });
   };
 
   const previewUrl = useMemo(() => url, [url]);

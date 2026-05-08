@@ -19,8 +19,9 @@
  * until then.
  */
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import Image from "next/image";
+import { pinFeature, toggleKillHide } from "./actions";
 
 interface PinnedFeature {
   valid_from: string | null;
@@ -67,8 +68,11 @@ export function EditorialCard(props: EditorialCardProps) {
   const [localHidden, setLocalHidden] = useState(props.isHidden);
   const [localPinned, setLocalPinned] = useState<PinnedFeature | null>(props.pinnedFeature);
   const [discordPushedAt, setDiscordPushedAt] = useState<string | null>(null);
+  const [, startTransition] = useTransition();
 
-  const post = async (path: string, body: unknown) => {
+  // Discord push still uses fetch — it fires an external HTTP call
+  // mid-handler, kept on the API route per Wave 18 scope.
+  const postDiscord = async (path: string, body: unknown) => {
     setError(null);
     const r = await fetch(path, {
       method: "POST",
@@ -83,30 +87,42 @@ export function EditorialCard(props: EditorialCardProps) {
     return r.json();
   };
 
-  const handlePin = async () => {
+  const handlePin = () => {
     setPending("pin");
-    try {
-      const fromIso = new Date(range.from).toISOString();
-      const toIso = new Date(range.to).toISOString();
-      await post("/api/admin/editorial/feature", {
-        kill_id: props.id,
-        valid_from: fromIso,
-        valid_to: toIso,
-        custom_note: note || null,
-      });
-      setLocalPinned({ valid_from: fromIso, valid_to: toIso, set_by: "admin", custom_note: note || null });
-      setPinOpen(false);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Erreur");
-    } finally {
-      setPending(null);
-    }
+    setError(null);
+    startTransition(async () => {
+      try {
+        const fromIso = new Date(range.from).toISOString();
+        const toIso = new Date(range.to).toISOString();
+        const result = await pinFeature({
+          kill_id: props.id,
+          valid_from: fromIso,
+          valid_to: toIso,
+          custom_note: note || null,
+        });
+        if (result.ok) {
+          setLocalPinned({
+            valid_from: fromIso,
+            valid_to: toIso,
+            set_by: "admin",
+            custom_note: note || null,
+          });
+          setPinOpen(false);
+        } else {
+          setError(result.error ?? "Erreur");
+        }
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Erreur");
+      } finally {
+        setPending(null);
+      }
+    });
   };
 
   const handleDiscord = async () => {
     setPending("discord");
     try {
-      await post("/api/admin/editorial/discord", { kill_id: props.id });
+      await postDiscord("/api/admin/editorial/discord", { kill_id: props.id });
       setDiscordPushedAt(new Date().toISOString());
     } catch (e) {
       setError(e instanceof Error ? e.message : "Erreur");
@@ -115,17 +131,24 @@ export function EditorialCard(props: EditorialCardProps) {
     }
   };
 
-  const handleHideToggle = async () => {
+  const handleHideToggle = () => {
     setPending("hide");
+    setError(null);
     const nextHidden = !localHidden;
-    try {
-      await post("/api/admin/editorial/hide", { kill_id: props.id, hide: nextHidden });
-      setLocalHidden(nextHidden);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Erreur");
-    } finally {
-      setPending(null);
-    }
+    startTransition(async () => {
+      try {
+        const result = await toggleKillHide({ kill_id: props.id, hide: nextHidden });
+        if (result.ok) {
+          setLocalHidden(nextHidden);
+        } else {
+          setError(result.error ?? "Erreur");
+        }
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Erreur");
+      } finally {
+        setPending(null);
+      }
+    });
   };
 
   const score = props.highlightScore;

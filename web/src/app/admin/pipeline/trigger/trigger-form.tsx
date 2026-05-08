@@ -13,9 +13,10 @@
  * The endpoint behind it (POST /api/admin/pipeline/jobs) still writes to
  * the legacy `worker_jobs` table — see job kinds whitelist there.
  */
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useTransition } from "react";
 import Link from "next/link";
 import { AdminButton } from "@/components/admin/ui/AdminButton";
+import { enqueueJob } from "./actions";
 
 const JOB_KINDS = [
   {
@@ -68,6 +69,7 @@ export function TriggerForm() {
   const [selectedKind, setSelectedKind] = useState(JOB_KINDS[0].kind);
   const [payload, setPayload] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
+  const [, startTransition] = useTransition();
 
   const [toasts, setToasts] = useState<Toast[]>([]);
   const pushToast = useCallback((tone: Toast["tone"], text: string) => {
@@ -82,33 +84,30 @@ export function TriggerForm() {
 
   const job = JOB_KINDS.find((j) => j.kind === selectedKind)!;
 
-  const submit = async (e: React.FormEvent) => {
+  const submit = (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitting(true);
-    try {
-      const r = await fetch("/api/admin/pipeline/jobs", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ kind: selectedKind, payload }),
-      });
-      const data = await r.json();
-      if (r.ok) {
+    startTransition(async () => {
+      try {
+        const result = await enqueueJob({ kind: selectedKind, payload });
+        if (result.ok) {
+          pushToast(
+            "success",
+            `Job enqueued (${result.job?.id?.slice(0, 8) ?? "ok"}). Worker traitera au prochain cycle.`,
+          );
+          setPayload({});
+        } else {
+          pushToast("error", `Erreur : ${result.error ?? "inconnue"}`);
+        }
+      } catch (err) {
         pushToast(
-          "success",
-          `Job enqueued (${data.job?.id?.slice(0, 8) ?? "ok"}). Worker traitera au prochain cycle.`,
+          "error",
+          `Erreur : ${err instanceof Error ? err.message : "action failed"}`,
         );
-        setPayload({});
-      } else {
-        pushToast("error", `Erreur : ${data.error ?? `HTTP ${r.status}`}`);
+      } finally {
+        setSubmitting(false);
       }
-    } catch (err) {
-      pushToast(
-        "error",
-        `Erreur : ${err instanceof Error ? err.message : "request failed"}`,
-      );
-    } finally {
-      setSubmitting(false);
-    }
+    });
   };
 
   return (

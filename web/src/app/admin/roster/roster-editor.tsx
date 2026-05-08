@@ -11,7 +11,7 @@
  *   - Toast on save.
  */
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { AdminBadge } from "@/components/admin/ui/AdminBadge";
@@ -20,6 +20,7 @@ import { AdminButton } from "@/components/admin/ui/AdminButton";
 import { AdminCard } from "@/components/admin/ui/AdminCard";
 import { AdminEmptyState } from "@/components/admin/ui/AdminEmptyState";
 import { AdminSection } from "@/components/admin/ui/AdminSection";
+import { patchPlayer } from "./actions";
 
 interface Player {
   id: string;
@@ -77,6 +78,7 @@ export function RosterEditor({
   const [editMode, setEditMode] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [toasts, setToasts] = useState<ToastMsg[]>([]);
+  const [, startTransition] = useTransition();
 
   const pushToast = (text: string, tone: ToastMsg["tone"] = "success") => {
     const id = Date.now() + Math.random();
@@ -108,31 +110,27 @@ export function RosterEditor({
     [players],
   );
 
-  const updatePlayer = async (id: string, patch: Partial<Player>) => {
+  const updatePlayer = (id: string, patch: Partial<Player>) => {
     const previous = players.find((p) => p.id === id);
     setPlayers((prev) => prev.map((p) => (p.id === id ? { ...p, ...patch } : p)));
-    try {
-      const r = await fetch(`/api/admin/players/${id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(patch),
-      });
-      if (r.ok) {
-        pushToast(`${previous?.ign ?? id} mis à jour.`);
-      } else {
-        const e = await r.json().catch(() => ({}));
-        pushToast(`Erreur : ${e.error ?? `HTTP ${r.status}`}`, "error");
-        // Revert local change
+    startTransition(async () => {
+      try {
+        const result = await patchPlayer(id, patch as Parameters<typeof patchPlayer>[1]);
+        if (result.ok) {
+          pushToast(`${previous?.ign ?? id} mis à jour.`);
+        } else {
+          pushToast(`Erreur : ${result.error ?? "inconnue"}`, "error");
+          if (previous) {
+            setPlayers((prev) => prev.map((p) => (p.id === id ? previous : p)));
+          }
+        }
+      } catch (e) {
+        pushToast(e instanceof Error ? e.message : "Erreur action", "error");
         if (previous) {
           setPlayers((prev) => prev.map((p) => (p.id === id ? previous : p)));
         }
       }
-    } catch (e) {
-      pushToast(e instanceof Error ? e.message : "Erreur réseau", "error");
-      if (previous) {
-        setPlayers((prev) => prev.map((p) => (p.id === id ? previous : p)));
-      }
-    }
+    });
   };
 
   const teamMap = useMemo(() => new Map(teams.map((t) => [t.id, t])), [teams]);

@@ -27,6 +27,7 @@ import {
   type FeaturedCalendarPin,
 } from "@/components/admin/featured/FeaturedCalendar";
 import { setFeaturedKill, removeFeaturedKill } from "./actions";
+import { pinFeature } from "../editorial/actions";
 
 interface KillLite {
   id: string;
@@ -180,25 +181,20 @@ export function FeaturedPicker({
     if (!confirm(`Pin « ${candidate.killerChampion} → ${candidate.victimChampion} » pour ${label} ?`)) {
       return;
     }
-    try {
-      const r = await fetch("/api/admin/editorial/feature", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+    startTransition(async () => {
+      try {
+        const result = await pinFeature({
           kill_id: candidate.id,
           valid_from: from.toISOString(),
           valid_to: to.toISOString(),
           custom_note: `Auto-pin ${windowKind}`,
-        }),
-      });
-      if (r.ok) pushToast("Pin enregistré.");
-      else {
-        const e = await r.json().catch(() => ({}));
-        pushToast(`Erreur : ${e.error ?? `HTTP ${r.status}`}`, "error");
+        });
+        if (result.ok) pushToast("Pin enregistré.");
+        else pushToast(`Erreur : ${result.error ?? "inconnue"}`, "error");
+      } catch (e) {
+        pushToast(e instanceof Error ? e.message : "Erreur action", "error");
       }
-    } catch (e) {
-      pushToast(e instanceof Error ? e.message : "Erreur réseau", "error");
-    }
+    });
   };
 
   const filteredKills = useMemo(() => {

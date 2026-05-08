@@ -18,18 +18,15 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { readFile, writeFile, mkdir } from "fs/promises";
+import { readFile } from "fs/promises";
 import path from "path";
-import {
-  deriveActorRole,
-  logAdminAction,
-  requireAdmin,
-} from "@/lib/admin/audit";
+import { requireAdmin } from "@/lib/admin/audit";
 import {
   DEFAULT_PLAYLISTS,
   type BgmTrack,
   type PlaylistId,
 } from "@/lib/audio/playlists";
+import { savePlaylists } from "@/app/admin/playlists/actions";
 
 const STORAGE_PATH = path.join(process.cwd(), ".cache", "playlists.json");
 
@@ -93,54 +90,21 @@ export async function GET(request: NextRequest) {
   });
 }
 
+/** POST /api/admin/playlists — Wave 18 thin proxy onto the server
+ *  action. Internal admin editor calls savePlaylists() directly without
+ *  this HTTP hop ; we keep the route for any external integration. */
 export async function POST(request: NextRequest) {
-  const admin = await requireAdmin();
-  if (!admin.ok) {
-    return NextResponse.json({ error: admin.error }, { status: 403 });
-  }
-
   let body: unknown;
   try {
     body = await request.json();
   } catch {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
-
   const playlistsRaw = (body as { playlists?: unknown }).playlists;
-  if (!isValidPlaylists(playlistsRaw)) {
-    return NextResponse.json(
-      {
-        error:
-          "Body must be { playlists: { homepage: BgmTrack[], scroll: BgmTrack[] } } where each track has id/title/artist/youtubeId(11ch)/durationSeconds/genre.",
-      },
-      { status: 400 },
-    );
+  const result = await savePlaylists(playlistsRaw as Record<PlaylistId, BgmTrack[]>);
+  if (!result.ok) {
+    const status = result.error?.includes("Forbidden") ? 403 : 400;
+    return NextResponse.json({ error: result.error }, { status });
   }
-
-  const before = await loadStored();
-  const next: StoredShape = {
-    playlists: playlistsRaw,
-    updatedAt: new Date().toISOString(),
-  };
-
-  // Ensure .cache/ exists
-  try {
-    await mkdir(path.dirname(STORAGE_PATH), { recursive: true });
-  } catch {
-    /* may already exist */
-  }
-  await writeFile(STORAGE_PATH, JSON.stringify(next, null, 2), "utf-8");
-
-  // Audit (mirror of /api/bgm pattern from Wave 2)
-  await logAdminAction({
-    action: "playlists.update",
-    entityType: "audio_playlists",
-    entityId: "default",
-    before: before.playlists,
-    after: next.playlists,
-    actorRole: deriveActorRole(admin),
-    request,
-  });
-
-  return NextResponse.json({ ok: true, updatedAt: next.updatedAt });
+  return NextResponse.json({ ok: true, updatedAt: result.updatedAt });
 }

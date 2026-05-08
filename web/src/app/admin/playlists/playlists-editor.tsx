@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useTransition } from "react";
 import {
   DEFAULT_PLAYLISTS,
   type BgmTrack,
   type PlaylistId,
 } from "@/lib/audio/playlists";
+import { savePlaylists } from "./actions";
 
 const PLAYLIST_LABELS: Record<PlaylistId, { label: string; subtitle: string; emoji: string }> = {
   homepage: {
@@ -68,6 +69,7 @@ export function PlaylistsEditor() {
   const [saving, setSaving] = useState(false);
   const [savedAt, setSavedAt] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [, startTransition] = useTransition();
 
   // Hydrate from server
   useEffect(() => {
@@ -128,23 +130,23 @@ export function PlaylistsEditor() {
     setState((prev) => ({ ...prev, [activeId]: copy }));
   };
 
-  const save = async () => {
+  const save = () => {
     setSaving(true);
     setError(null);
-    try {
-      const res = await fetch("/api/admin/playlists", {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ playlists: state }),
-      });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      setSavedAt(Date.now());
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Erreur de sauvegarde");
-    } finally {
-      setSaving(false);
-    }
+    startTransition(async () => {
+      try {
+        const result = await savePlaylists(state);
+        if (result.ok) {
+          setSavedAt(Date.now());
+        } else {
+          setError(result.error ?? "Erreur de sauvegarde");
+        }
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Erreur action");
+      } finally {
+        setSaving(false);
+      }
+    });
   };
 
   if (loading) {
