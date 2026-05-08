@@ -23,11 +23,19 @@ import { useEffect, useRef, useState } from "react";
 
 const STORAGE_KEY = "kc_scroll_settings_v1";
 
+/** V19 (Wave 21.7) — speed multipliers exposed to the user. Kept
+ *  intentionally small (0.5×, 1×, 1.5×, 2×) — wider ranges aren't
+ *  useful for short kill clips and just confuse the UI. */
+export const SPEED_OPTIONS = [0.5, 1, 1.5, 2] as const;
+export type ScrollSpeed = (typeof SPEED_OPTIONS)[number];
+
 export interface ScrollSettingsState {
   autoAdvance: boolean;
+  /** V19 — clip playback rate. Default 1× = normal. */
+  speed: ScrollSpeed;
 }
 
-const DEFAULTS: ScrollSettingsState = { autoAdvance: false };
+const DEFAULTS: ScrollSettingsState = { autoAdvance: false, speed: 1 };
 
 function readSettings(): ScrollSettingsState {
   if (typeof window === "undefined") return DEFAULTS;
@@ -35,13 +43,19 @@ function readSettings(): ScrollSettingsState {
     const raw = window.localStorage.getItem(STORAGE_KEY);
     if (!raw) return DEFAULTS;
     const parsed = JSON.parse(raw) as Partial<ScrollSettingsState>;
+    // Defensive coercion of each known field. Future schema additions
+    // should follow the same pattern so a stale localStorage entry
+    // never corrupts the runtime.
+    const speed = (SPEED_OPTIONS as readonly number[]).includes(parsed.speed as number)
+      ? (parsed.speed as ScrollSpeed)
+      : DEFAULTS.speed;
     return {
       ...DEFAULTS,
       ...parsed,
-      // Defensive : coerce any non-boolean into the default.
       autoAdvance: typeof parsed.autoAdvance === "boolean"
         ? parsed.autoAdvance
         : DEFAULTS.autoAdvance,
+      speed,
     };
   } catch {
     return DEFAULTS;
@@ -177,6 +191,35 @@ export function ScrollSettingsDrawer({ open, onClose }: DrawerProps) {
           className="mt-1 h-4 w-4 cursor-pointer accent-[var(--gold)]"
         />
       </label>
+
+      {/* V19 (Wave 21.7) — Speed control. Useful for slow-mo of pentas
+          (0.5×) or fast-skim of long teamfights (1.5×). */}
+      <fieldset className="space-y-2">
+        <legend className="block text-[var(--text-primary)] font-semibold">
+          Vitesse de lecture
+        </legend>
+        <p className="text-[10px] text-[var(--text-muted)] -mt-1">
+          Slow-mo pour les pentas, fast-skim pour les teamfights.
+        </p>
+        <div className="flex items-center gap-1.5">
+          {SPEED_OPTIONS.map((s) => (
+            <button
+              key={s}
+              type="button"
+              onClick={() => updateSetting("speed", s)}
+              aria-pressed={settings.speed === s}
+              className={
+                "flex-1 rounded-md px-2 py-1 text-xs font-data tabular-nums transition-colors " +
+                (settings.speed === s
+                  ? "bg-[var(--gold)] text-black font-bold"
+                  : "border border-[var(--border-gold)] text-[var(--text-muted)] hover:bg-[var(--bg-elevated)] hover:text-[var(--gold)]")
+              }
+            >
+              {s}×
+            </button>
+          ))}
+        </div>
+      </fieldset>
     </div>
   );
 }

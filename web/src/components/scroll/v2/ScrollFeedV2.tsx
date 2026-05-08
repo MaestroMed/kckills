@@ -737,6 +737,7 @@ export function ScrollFeedV2({
           onError={handlePoolError}
           containerY={y}
           autoAdvance={settings.autoAdvance}
+          speed={settings.speed}
         />
       )}
 

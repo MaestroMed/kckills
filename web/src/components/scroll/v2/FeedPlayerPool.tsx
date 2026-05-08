@@ -125,6 +125,10 @@ interface Props {
    *  event so the parent ScrollFeedV2 can call `jumpTo(activeIndex+1)`.
    *  Default false (loops, classic TikTok behavior). */
   autoAdvance?: boolean;
+  /** V19 (Wave 21.7) — playback rate applied to every slot's video.
+   *  Default 1× = normal. Useful for slow-mo of pentas / fast-skim of
+   *  teamfights. */
+  speed?: number;
 }
 
 export function FeedPlayerPool({
@@ -140,6 +144,7 @@ export function FeedPlayerPool({
   resetOnFirstPlay = true,
   containerY,
   autoAdvance = false,
+  speed = 1,
 }: Props) {
   const { slotItemIndex, priorities } = useFeedPlayer({
     activeIndex,
@@ -198,6 +203,17 @@ export function FeedPlayerPool({
       if (v) v.muted = muted;
     }
   }, [muted]);
+
+  /** V19 (Wave 21.7) — sync `playbackRate` across every slot whenever
+   *  the user picks a new speed in the settings drawer. Defensive
+   *  clamp : reject anything outside [0.25, 4] to dodge spec-non-
+   *  compliant browsers that throw on extreme values. */
+  useEffect(() => {
+    const safeSpeed = Math.max(0.25, Math.min(4, speed || 1));
+    for (const v of videoRefs.current) {
+      if (v) v.playbackRate = safeSpeed;
+    }
+  }, [speed]);
 
   /** Main effect: react to slot assignments + priority changes.
    *  Run play/pause/preload commands and update src as needed. */
