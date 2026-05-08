@@ -131,10 +131,35 @@ export default async function ScrollV2Page({ searchParams }: ScrollPageProps) {
     chipFilters.fight !== null ||
     chipFilters.side !== null;
 
+  // 2026-05-08 — Wave 19.6 : capped from 500/300 → 150/80.
+  //
+  // Why : the previous limits inflated the /scroll HTML payload to
+  // ~4.6 MB (curl size_download=4_794_088). The container renders ALL
+  // items into the DOM upfront via absolute positioning (no virtual-
+  // isation today — see ScrollFeedV2 line 659), which means every
+  // visitor's mobile browser parses + hydrates ~800 absolutely-
+  // positioned <FeedItemVideo>/<FeedItemMoment> trees on first load.
+  //
+  // On mobile Safari/Chrome (renderer process capped at 250–400 MB)
+  // that combines with hls.js + framer-motion + 5 video elements +
+  // RSC payload (~1.2 MB on its own) and triggers OOM crashes that
+  // surface as "un problème récurrent est survenu" — the
+  // multi-renderer-crash bail-out page.
+  //
+  // 150 kills × ~50 % filter rate (team_killer + kill_visible +
+  // has clip + has thumbnail) → ~70-90 visible items. After the
+  // weighted shuffle that's already plenty for a normal session ;
+  // the EndOfFeedCard reshuffle covers the long-tail. Moments at 80
+  // gives roughly the same shape after `kc_involvement !== 'kc_none'`
+  // filtering.
+  //
+  // Long-term fix is virtualisation (only mount items within ±2 of
+  // activeIndex) — tracked separately. This cap is the immediate
+  // mobile-safety patch.
   const [data, allKills, allMoments, roster] = await Promise.all([
     Promise.resolve(loadRealData()),
-    getPublishedKills(500),
-    getPublishedMoments(300),
+    getPublishedKills(150),
+    getPublishedMoments(80),
     getTrackedRoster(),
   ]);
 
