@@ -126,6 +126,10 @@ Deferred (medium severity, no immediate failure mode) :
 | **Wave 19.8** /scroll cap restored + env-tunable | bonus | ✅ shipped 2026-05-08 |
 | **Wave 19.9** GeminiProvider.analyze_clip wired (router groundwork) | AI Router phase 2 (partial) | ✅ shipped 2026-05-08 |
 | **Wave 20.1** Audit follow-ups (3 batches) | observability + mobile yellow flag | ✅ shipped 2026-05-08 |
+| **Wave 20.2** loading skeletons + CommentPanel a11y | ULTRAPLAN TODOs | ✅ shipped 2026-05-08 |
+| **Wave 20.3** livestats + discord_webhook logging | post-audit silent failure pass | ✅ shipped 2026-05-08 |
+| **Wave 20.4** `production_rate.py` CLI snapshot | "what's our throughput" answered in one cmd | ✅ shipped 2026-05-08 |
+| **Wave 20.5** `/admin/pipeline/rate` web mirror | production rate visible in admin UI | ✅ shipped 2026-05-08 |
 
 **Open items**
 
