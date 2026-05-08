@@ -1,12 +1,22 @@
 """Client for feed.lolesports.com — live game stats with frame-by-frame KDA."""
 
 import httpx
+import structlog
 from config import config
 from scheduler import scheduler
 
+log = structlog.get_logger()
+
 
 async def get_window(game_id: str, starting_time: str | None = None) -> dict | None:
-    """Get game window (frames with per-player KDA snapshots)."""
+    """Get game window (frames with per-player KDA snapshots).
+
+    Returns None on any failure (HTTP error, timeout, parse error, empty
+    body). Wave 20.3 — failures now log instead of being silent. The
+    livestats feed is the *primary* kill-detection source, so an outage
+    here directly degrades the pipeline ; logging makes the cause
+    surface in real time instead of "why aren't we detecting any kills".
+    """
     await scheduler.wait_for("livestats")
     url = f"{config.LOLESPORTS_FEED_URL}/window/{game_id}"
     params = {}
@@ -17,13 +27,30 @@ async def get_window(game_id: str, starting_time: str | None = None) -> dict | N
             r = await client.get(url, params=params)
             if r.status_code == 200 and len(r.content) > 100:
                 return r.json()
-    except Exception:
-        pass
+            # Non-200 or suspiciously empty body — log so the operator
+            # can correlate "no kills detected" with upstream issues.
+            log.warn(
+                "livestats_window_unhealthy",
+                game_id=game_id,
+                status=r.status_code,
+                content_len=len(r.content),
+            )
+    except Exception as e:
+        log.warn(
+            "livestats_window_failed",
+            game_id=game_id,
+            error_type=type(e).__name__,
+            error=str(e)[:160],
+        )
     return None
 
 
 async def get_details(game_id: str, starting_time: str | None = None) -> dict | None:
-    """Get detailed game stats (items, runes, extended stats)."""
+    """Get detailed game stats (items, runes, extended stats).
+
+    Same logging discipline as get_window — failures surface as
+    structured warnings rather than silent None returns.
+    """
     await scheduler.wait_for("livestats")
     url = f"{config.LOLESPORTS_FEED_URL}/details/{game_id}"
     params = {}
@@ -34,8 +61,19 @@ async def get_details(game_id: str, starting_time: str | None = None) -> dict | 
             r = await client.get(url, params=params)
             if r.status_code == 200 and len(r.content) > 100:
                 return r.json()
-    except Exception:
-        pass
+            log.warn(
+                "livestats_details_unhealthy",
+                game_id=game_id,
+                status=r.status_code,
+                content_len=len(r.content),
+            )
+    except Exception as e:
+        log.warn(
+            "livestats_details_failed",
+            game_id=game_id,
+            error_type=type(e).__name__,
+            error=str(e)[:160],
+        )
     return None
 
 

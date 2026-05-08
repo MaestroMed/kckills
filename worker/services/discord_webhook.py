@@ -1,13 +1,22 @@
 """Discord webhook notifications."""
 
 import httpx
+import structlog
 from datetime import datetime, timezone
 from config import config
 from scheduler import scheduler
 
+log = structlog.get_logger()
+
 
 async def send(content: str = "", embed: dict | None = None):
-    """Send a message to the Discord webhook."""
+    """Send a message to the Discord webhook.
+
+    Wave 20.3 — failures used to silently swallow ; now log a warn so
+    a misconfigured webhook URL or Discord rate-limit shows up in the
+    daemon logs instead of "why aren't I getting any notifications".
+    Still NEVER re-raises — Discord must not block the worker.
+    """
     if not config.DISCORD_WEBHOOK_URL:
         return
     await scheduler.wait_for("discord")
@@ -18,9 +27,22 @@ async def send(content: str = "", embed: dict | None = None):
         payload["embeds"] = [embed]
     try:
         async with httpx.AsyncClient(timeout=10) as client:
-            await client.post(config.DISCORD_WEBHOOK_URL, json=payload)
-    except Exception:
-        pass
+            r = await client.post(config.DISCORD_WEBHOOK_URL, json=payload)
+            # Discord returns 204 on success ; 4xx = bad webhook,
+            # 429 = rate-limited, 5xx = Discord's problem. All worth
+            # surfacing.
+            if r.status_code >= 400:
+                log.warn(
+                    "discord_webhook_non_2xx",
+                    status=r.status_code,
+                    body=(r.text or "")[:200],
+                )
+    except Exception as e:
+        log.warn(
+            "discord_webhook_failed",
+            error_type=type(e).__name__,
+            error=str(e)[:160],
+        )
 
 
 async def notify_match(blue: str, red: str, games: int, tournament: str):
