@@ -47,7 +47,7 @@
  *     - Keeps cold slots at preload=metadata
  */
 
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useMotionValue, useMotionValueEvent, type MotionValue } from "motion/react";
 import {
   POOL_SIZE,
@@ -227,6 +227,84 @@ export function FeedPlayerPool({
     window.addEventListener("kc:toggle-playback", onToggle);
     return () => window.removeEventListener("kc:toggle-playback", onToggle);
   }, [priorities]);
+
+  /** V6 (Wave 22.2) — Visibility API integration. When the tab goes
+   *  hidden (user switched apps / Safari tabs), we pause every video
+   *  in the pool. On return, only the LIVE slot resumes — warm/cold
+   *  stay paused so we don't burn data on background buffering.
+   *  Stops the pre-V6 silent-data-waste pattern where a backgrounded
+   *  /scroll tab kept downloading subsequent clips. */
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    const onVisibilityChange = () => {
+      if (document.hidden) {
+        for (const v of videoRefs.current) {
+          if (v && !v.paused) v.pause();
+        }
+        return;
+      }
+      // Tab visible again — re-resume only the LIVE slot.
+      for (let s = 0; s < POOL_SIZE; s++) {
+        if (priorities[s] === "live") {
+          const v = videoRefs.current[s];
+          if (v && v.paused) void v.play().catch(() => {});
+        }
+      }
+    };
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () =>
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+  }, [priorities]);
+
+  /** V6 — Battery + saveData awareness. Anything below 20 % battery
+   *  AND not plugged in downgrades EVERY slot's preload to "metadata"
+   *  (= no big chunk fetches) until the conditions reverse. The
+   *  Battery Status API has been deprecated on Safari but still ships
+   *  on Chrome/Edge ; we feature-detect carefully. */
+  const [batterySaver, setBatterySaver] = useState(false);
+  useEffect(() => {
+    if (typeof navigator === "undefined") return;
+    type BatteryManager = {
+      level: number;
+      charging: boolean;
+      addEventListener: (e: string, fn: () => void) => void;
+      removeEventListener: (e: string, fn: () => void) => void;
+    };
+    const navWithBattery = navigator as Navigator & {
+      getBattery?: () => Promise<BatteryManager>;
+    };
+    if (typeof navWithBattery.getBattery !== "function") return;
+    let cancelled = false;
+    let battery: BatteryManager | null = null;
+    const update = () => {
+      if (!battery || cancelled) return;
+      const lowAndUnplugged = battery.level < 0.2 && !battery.charging;
+      setBatterySaver(lowAndUnplugged);
+    };
+    void navWithBattery.getBattery().then((b) => {
+      if (cancelled) return;
+      battery = b;
+      update();
+      battery.addEventListener("levelchange", update);
+      battery.addEventListener("chargingchange", update);
+    });
+    return () => {
+      cancelled = true;
+      if (battery) {
+        battery.removeEventListener("levelchange", update);
+        battery.removeEventListener("chargingchange", update);
+      }
+    };
+  }, []);
+
+  /** Apply the battery-saver preload downgrade across the whole pool
+   *  when triggered. */
+  useEffect(() => {
+    if (!batterySaver) return;
+    for (const v of videoRefs.current) {
+      if (v) v.preload = "metadata";
+    }
+  }, [batterySaver]);
 
   /** V19 (Wave 21.7) — sync `playbackRate` across every slot whenever
    *  the user picks a new speed in the settings drawer. Defensive

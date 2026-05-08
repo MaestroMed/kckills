@@ -56,9 +56,25 @@ export function LikeButton({
   variant = "compact",
   onAuthRequired,
 }: Props) {
-  const [serverState, setServerState] = useState<LikeState>({
-    liked: false,
-    count: initialCount,
+  // V9 (Wave 22.2) — hydrate the OPTIMISTIC initial state from the
+  // localStorage liked-cache so the heart shows pre-filled instantly
+  // on mount (before the server round-trip resolves the truth). For
+  // anonymous visitors the cache IS the persistence ; for authed
+  // visitors it's just a perceptually-snappier render.
+  const [serverState, setServerState] = useState<LikeState>(() => {
+    let liked = false;
+    if (typeof window !== "undefined") {
+      try {
+        const raw = window.localStorage.getItem("kc_liked_cache_v1");
+        if (raw) {
+          const parsed = JSON.parse(raw) as { ids?: Record<string, number> };
+          liked = !!(parsed?.ids && killId in parsed.ids);
+        }
+      } catch {
+        /* corrupted JSON — silent */
+      }
+    }
+    return { liked, count: initialCount };
   });
   const [optimisticState, addOptimistic] = useOptimistic(
     serverState,
@@ -128,6 +144,25 @@ export function LikeButton({
           // Trust server's count (might differ from optimistic if other
           // users liked concurrently between request + response).
           setServerState({ liked: result.liked, count: result.ratingCount });
+          // V9 — sync the localStorage liked-cache so subsequent
+          // mounts of this kill (other ScrollFeed renders, /kill/[id]
+          // detail page, ClipReel cards) show the heart filled in.
+          try {
+            const raw = window.localStorage.getItem("kc_liked_cache_v1");
+            const parsed = raw ? JSON.parse(raw) : { ids: {} };
+            const ids = (parsed.ids ?? {}) as Record<string, number>;
+            if (result.liked) {
+              ids[killId] = Date.now();
+            } else {
+              delete ids[killId];
+            }
+            window.localStorage.setItem(
+              "kc_liked_cache_v1",
+              JSON.stringify({ ids }),
+            );
+          } catch {
+            /* quota / disabled — silent, server is still source-of-truth */
+          }
         } catch {
           // Network error — useOptimistic auto-reverts.
         }
