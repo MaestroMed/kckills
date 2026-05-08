@@ -36,6 +36,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { searchKills, type SearchFilters } from "@/lib/supabase/search";
+import { rateLimit } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -201,6 +202,11 @@ function fireSearchExecutedEvent(opts: {
 // ─── Handler ───────────────────────────────────────────────────────────
 
 export async function GET(req: NextRequest) {
+  // Wave 18 W6 — fixed-window rate limit. Search is more expensive
+  // (full-text + facets) than scroll, so 60/min is reasonable.
+  const rate = await rateLimit(req, "search", { windowSec: 60, max: 60 });
+  if (rate.blocked) return rate.response!;
+
   const sp = req.nextUrl.searchParams;
   const parsed = SearchQuery.safeParse(Object.fromEntries(sp));
   if (!parsed.success) {

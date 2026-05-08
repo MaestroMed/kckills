@@ -35,6 +35,7 @@ import {
   getRecommendedKills,
   type RecommendedKillRow,
 } from "@/lib/supabase/recommendations";
+import { rateLimit } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -100,6 +101,11 @@ const HEADERS = {
 };
 
 export async function GET(req: NextRequest): Promise<NextResponse<ApiResponse> | NextResponse> {
+  // Wave 18 W6 — fixed-window rate limit (Postgres-backed). 30 req/min
+  // per IP-hash matches typical scroll-feed cadence with headroom.
+  const rate = await rateLimit(req, "scroll-rec", { windowSec: 60, max: 30 });
+  if (rate.blocked) return rate.response!;
+
   const url = new URL(req.url);
   const parsed = Query.safeParse(Object.fromEntries(url.searchParams));
   if (!parsed.success) {

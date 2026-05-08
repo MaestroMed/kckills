@@ -2,7 +2,20 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Image from "next/image";
-import { m, AnimatePresence } from "motion/react";
+import dynamic from "next/dynamic";
+
+// Wave 18 (2026-05-08) — motion/react extracted into a lazy child.
+// HeroClipMotionLayer is a `next/dynamic({ ssr: false })` import so
+// motion ships only after the static hero shell paints. LCP-safe :
+// the poster image (next/image with priority) renders synchronously
+// from THIS component ; the rotating overlay arrives lazily on top.
+// The "loading: () => null" fallback is intentional — the poster
+// already covers the viewport, so there's nothing to render while
+// the motion chunk loads.
+const HeroClipMotionLayer = dynamic(
+  () => import("./HeroClipMotionLayer"),
+  { ssr: false, loading: () => null },
+);
 
 interface ClipEntry {
   /** YouTube 11-char videoId. Omit if using mp4Url instead. */
@@ -267,83 +280,21 @@ export function HeroClipBackground({ clips, posterSrc = "/images/hero-bg.jpg" }:
           which gives mobile users the same striking cinematic image
           without the GPU/memory pressure that was killing iOS Safari.
           The desktop "wow" feature (full-bleed clip rotation) is
-          preserved for viewports ≥ 768 px. */}
+          preserved for viewports ≥ 768 px.
+          Wave 18 — the motion-using rotating overlay + caption are
+          now rendered inside the lazy `HeroClipMotionLayer` so
+          motion/react no longer ships in the homepage initial JS. */}
       {!isMobile && (
-        <AnimatePresence mode="sync">
-          <m.div
-            key={`${current.mp4Url ?? current.videoId}-${index}`}
-            className="absolute inset-0 overflow-hidden pointer-events-none"
-            initial={{ opacity: 0, scale: 1.02 }}
-            animate={{ opacity: 0.85, scale: 1 }}
-            exit={{ opacity: 0, scale: 1.02 }}
-            transition={{ duration: 1.4, ease: [0.16, 1, 0.3, 1] }}
-          >
-            {current.mp4Url ? (
-              /* Direct MP4 from R2 — no CAPTCHA, instant CDN-cached playback.
-                 Audio honoured if the user has opted in. */
-              <video
-                ref={videoRef}
-                key={current.mp4Url}
-                className="absolute inset-0 w-full h-full object-cover pointer-events-none"
-                src={current.mp4Url}
-                poster={current.posterUrl}
-                autoPlay
-                muted={!wantsAudio}
-                loop
-                playsInline
-                preload="metadata"
-              />
-            ) : current.videoId ? (
-              /* YouTube iframe fallback (may trigger CAPTCHA on low-traffic domains) */
-              <iframe
-                title={current.title}
-                className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none"
-                style={{
-                  width: "max(100vw, 177.77vh)",
-                  height: "max(56.25vw, 100vh)",
-                  border: 0,
-                }}
-                src={`https://www.youtube-nocookie.com/embed/${current.videoId}?autoplay=1&mute=1&loop=1&playlist=${current.videoId}&controls=0&showinfo=0&rel=0&modestbranding=1&playsinline=1&iv_load_policy=3&disablekb=1&fs=0&start=${current.start ?? 0}`}
-                allow="autoplay; encrypted-media; picture-in-picture"
-                allowFullScreen={false}
-                loading="lazy"
-              />
-            ) : null}
-          </m.div>
-        </AnimatePresence>
+        <HeroClipMotionLayer
+          current={current}
+          index={index}
+          wantsAudio={wantsAudio}
+          setVideoEl={(el) => {
+            // Preserve the existing audio-fade effect's videoRef target.
+            (videoRef as React.MutableRefObject<HTMLVideoElement | null>).current = el;
+          }}
+        />
       )}
-
-      {/* Bottom-left caption for the currently-playing clip.
-          🐛 2026-04-28 fix : only render the caption when we control the
-          rendered video (mp4Url R2 source). YouTube iframes routinely
-          override the loop= parameter to surface related-video end
-          screens or interstitials, so the caption was lying about what
-          the user actually saw on screen. Hiding it for YouTube clips
-          is more honest than mismatching captions. */}
-      <AnimatePresence mode="wait">
-        {!isMobile && current.mp4Url && (
-          <m.div
-            key={`caption-${index}`}
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 10 }}
-            transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
-            className="absolute bottom-4 left-4 md:bottom-8 md:left-8 z-20 pointer-events-none max-w-[90vw] md:max-w-md"
-          >
-            <div className="rounded-xl bg-black/50 backdrop-blur-md border border-[var(--gold)]/25 px-4 py-3">
-              <div className="flex items-center gap-2 mb-1">
-                <span className="h-1.5 w-1.5 rounded-full bg-red-500 animate-pulse" />
-                <p className="font-data text-[9px] uppercase tracking-[0.25em] text-white/50">
-                  En lecture &middot; {current.context}
-                </p>
-              </div>
-              <p className="font-display text-sm md:text-base font-bold text-white leading-tight line-clamp-2">
-                {current.title}
-              </p>
-            </div>
-          </m.div>
-        )}
-      </AnimatePresence>
 
       {/* "Activer le son" prompt — bottom-right, only when relevant */}
       {showAudioPrompt && (
