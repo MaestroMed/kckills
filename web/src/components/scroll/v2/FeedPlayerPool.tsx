@@ -95,6 +95,14 @@ export interface PoolItem {
    *  pickSrc prefers it over the legacy clip* fields. NULL on older
    *  rows — back-compat path keeps using the clip* fields. */
   assetsManifest?: PoolAssetsManifest | null;
+  /** V42-V43 (Wave 25.2) — analyser-picked second offset within the
+   *  clip of the most informative frame. The pool seeks the LIVE-
+   *  slot video to this frame on `loadedmetadata` so the poster the
+   *  user sees during the buffering window is already the action
+   *  moment, not a random first-frame cover. NULL on rows analysed
+   *  before the migration ; the seek then defaults to 0.5 s as a
+   *  small "skip the loading screen" cushion. */
+  bestThumbnailSeconds?: number | null;
 }
 
 interface Props {
@@ -525,6 +533,31 @@ export function FeedPlayerPool({
             willChange: "transform",
             backfaceVisibility: "hidden",
             WebkitBackfaceVisibility: "hidden",
+          }}
+          onLoadedMetadata={(e) => {
+            // V42-V43 (Wave 25.2) — once the metadata is loaded
+            // (duration known), seek the video to the analyser-
+            // derived best frame so the FIRST decoded frame the user
+            // sees is the action moment, not a generic cover.
+            const v = e.currentTarget;
+            const itemIdx = slotItemIndex[slotIdx];
+            const item = items[itemIdx];
+            if (!item) return;
+            const seekTo = (item.bestThumbnailSeconds ?? null) ?? 0.5;
+            const dur = v.duration;
+            if (
+              Number.isFinite(seekTo) &&
+              seekTo > 0 &&
+              Number.isFinite(dur) &&
+              dur > 0 &&
+              seekTo < dur
+            ) {
+              try {
+                v.currentTime = seekTo;
+              } catch {
+                /* some browsers throw before metadata fully loaded */
+              }
+            }
           }}
           onLoadedData={() => {
             // V7 (Wave 21.3) — first decoded frame for this slot's

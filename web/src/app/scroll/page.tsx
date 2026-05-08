@@ -286,6 +286,7 @@ export default async function ScrollV2Page({ searchParams }: ScrollPageProps) {
       hlsMasterUrl: k.hls_master_url ?? null,
       assetsManifest: k.assets_manifest ?? null,
       thumbnail: k.thumbnail_url ?? null,
+      bestThumbnailSeconds: k.best_thumbnail_seconds ?? null,
       highlightScore: k.highlight_score ?? null,
       avgRating: k.avg_rating ?? null,
       ratingCount: k.rating_count,

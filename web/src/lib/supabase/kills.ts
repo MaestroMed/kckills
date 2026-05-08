@@ -134,6 +134,9 @@ export interface PublishedKillRow {
   game_minute_bucket: MinuteBucket | null;
   impression_count: number;
   comment_count: number;
+  /** V42-V43 — best-thumbnail second offset within the clip. NULL
+   *  on rows analysed before the migration. */
+  best_thumbnail_seconds?: number | null;
   created_at: string;
   /** Source of this kill row :
    *   - 'livestats' : Riot live stats feed (real-time, current season)
@@ -218,6 +221,7 @@ const KILL_SELECT = `
   game_minute_bucket,
   impression_count,
   comment_count,
+  best_thumbnail_seconds,
   created_at,
   data_source,
   status,

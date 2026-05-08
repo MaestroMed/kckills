@@ -60,6 +60,9 @@ export interface VideoFeedItem {
    *  clipped before the migration ran. */
   assetsManifest?: import("./v2/FeedPlayerPool").PoolAssetsManifest | null;
   thumbnail: string | null;
+  /** V42-V43 — analyser-derived best-frame offset (s) for poster
+   *  + initial seek. NULL on rows analysed before the migration. */
+  bestThumbnailSeconds?: number | null;
   highlightScore: number | null;
   avgRating: number | null;
   ratingCount: number;

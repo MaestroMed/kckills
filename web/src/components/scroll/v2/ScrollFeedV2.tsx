@@ -621,6 +621,11 @@ export function ScrollFeedV2({
             hlsMasterUrl: it.hlsMasterUrl ?? null,
             assetsManifest: it.assetsManifest ?? null,
             thumbnail: it.thumbnail,
+            // V42-V43 — only video items carry the analyser-derived
+            // best-thumb offset (moments don't go through the same
+            // analyser path).
+            bestThumbnailSeconds:
+              it.kind === "video" ? it.bestThumbnailSeconds ?? null : null,
           };
         }
         return {
