@@ -245,7 +245,13 @@ async def run_daemon():
         # Wave 27.2 — drain the pooled httpx clients so the asyncio loop
         # can close cleanly without "Unclosed client session" warnings.
         try:
-            from services import http_pool, supabase_client as _sb
+            from services import http_pool, supabase_client as _sb, task_supervisor
+            # Wave 27.9 — let in-flight bg tasks finish (5s budget) so
+            # we don't kill a supabase_batch flusher mid-write or a
+            # boost loop that's about to log its "done" line.
+            drained = await task_supervisor.drain(timeout=5.0)
+            if drained:
+                log.info("bg_tasks_drained", count=drained)
             await http_pool.close_all()
             _sb.close_db()
         except Exception as e:
@@ -283,7 +289,13 @@ async def run_once(module_name: str):
         # before asyncio.run() tears down the loop, avoiding spurious
         # "Unclosed client session" warnings on one-shot module runs.
         try:
-            from services import http_pool, supabase_client as _sb
+            from services import http_pool, supabase_client as _sb, task_supervisor
+            # Wave 27.9 — let in-flight bg tasks finish (5s budget) so
+            # we don't kill a supabase_batch flusher mid-write or a
+            # boost loop that's about to log its "done" line.
+            drained = await task_supervisor.drain(timeout=5.0)
+            if drained:
+                log.info("bg_tasks_drained", count=drained)
             await http_pool.close_all()
             _sb.close_db()
         except Exception as e:
@@ -298,7 +310,13 @@ async def run_pipeline(match_external_id: str):
         pipeline.print_report(report)
     finally:
         try:
-            from services import http_pool, supabase_client as _sb
+            from services import http_pool, supabase_client as _sb, task_supervisor
+            # Wave 27.9 — let in-flight bg tasks finish (5s budget) so
+            # we don't kill a supabase_batch flusher mid-write or a
+            # boost loop that's about to log its "done" line.
+            drained = await task_supervisor.drain(timeout=5.0)
+            if drained:
+                log.info("bg_tasks_drained", count=drained)
             await http_pool.close_all()
             _sb.close_db()
         except Exception as e:

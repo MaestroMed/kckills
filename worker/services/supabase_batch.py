@@ -207,7 +207,12 @@ class BatchedSupabaseWriter:
                 1 for p in self._update_buf if p.table == table
             )
         if size_after >= self._flush_threshold:
-            asyncio.create_task(self.flush_now())
+            # Wave 27.9 — task_supervisor.spawn keeps a strong reference
+            # so the threshold-flush isn't at risk of being GC'd before
+            # it runs. Bare create_task here was the canonical Python
+            # \"task disappears mid-execution\" footgun.
+            from services.task_supervisor import spawn
+            spawn(self.flush_now(), name="supabase_batch_threshold_flush")
 
     async def queue_insert(self, table: str, data: dict) -> None:
         if not self._enabled:
@@ -222,7 +227,12 @@ class BatchedSupabaseWriter:
             self._stats["queued_inserts"] += 1
             size_after = sum(1 for p in self._insert_buf if p.table == table)
         if size_after >= self._flush_threshold:
-            asyncio.create_task(self.flush_now())
+            # Wave 27.9 — task_supervisor.spawn keeps a strong reference
+            # so the threshold-flush isn't at risk of being GC'd before
+            # it runs. Bare create_task here was the canonical Python
+            # \"task disappears mid-execution\" footgun.
+            from services.task_supervisor import spawn
+            spawn(self.flush_now(), name="supabase_batch_threshold_flush")
 
     # ─── Flush ────────────────────────────────────────────────────────
 

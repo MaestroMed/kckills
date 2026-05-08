@@ -94,12 +94,27 @@ async def _sentinel_boost(payload: dict) -> dict:
     until_seconds = int(payload.get("until_seconds") or 7200)
     match_ext = payload.get("match_external_id")
 
-    # Don't spawn if a previous boost is already running for this match
-    # (cheap mutex via a module-level set; not crash-safe but enough).
-    if match_ext and match_ext in _active_boosts:
-        return {"boost_skipped": "already_running", "match": match_ext}
+    # Wave 27.9 — atomic check-then-mark. Adding to the set BEFORE
+    # spawning closes a race where two boost jobs for the same match
+    # arriving back-to-back could both pass the membership check
+    # (the spawned task adds to the set inside the coroutine, which
+    # only runs once the event loop yields). The boost loop's finally
+    # block discards the entry on exit, so a crashed loop doesn't
+    # poison subsequent runs.
+    if match_ext:
+        if match_ext in _active_boosts:
+            return {"boost_skipped": "already_running", "match": match_ext}
+        _active_boosts.add(match_ext)
 
-    asyncio.create_task(_run_boost_loop(until_seconds, match_ext))
+    # Wave 27.9 — task_supervisor.spawn keeps a strong reference + logs
+    # uncaught exceptions. The previous bare create_task could be GC'd
+    # mid-run if the loop ran out of memory or the task wasn't picked up
+    # by the scheduler before the next gc.collect() cycle.
+    from services.task_supervisor import spawn
+    spawn(
+        _run_boost_loop(until_seconds, match_ext),
+        name=f"boost_loop_{match_ext or 'unknown'}",
+    )
     return {
         "boost_started": True,
         "duration_s": until_seconds,
@@ -111,9 +126,14 @@ _active_boosts: set[str] = set()
 
 
 async def _run_boost_loop(until_seconds: int, match_ext: str | None):
-    """Inner loop — sentinel + harvester every 30s for the duration."""
-    if match_ext:
-        _active_boosts.add(match_ext)
+    """Inner loop — sentinel + harvester every 30s for the duration.
+
+    Wave 27.9 — _active_boosts membership is owned by the caller now
+    (_sentinel_boost adds atomically with the create_task spawn so two
+    racing boost jobs can't both pass the duplicate check). The finally
+    block below still discards on exit so a crashed loop releases the
+    slot.
+    """
     log.info("boost_loop_start", match=match_ext, duration_s=until_seconds)
     end = time.monotonic() + until_seconds
     cycles = 0
