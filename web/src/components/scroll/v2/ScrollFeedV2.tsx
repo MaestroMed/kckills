@@ -73,6 +73,24 @@ const RECOMMENDATIONS_ENABLED =
   process.env.NEXT_PUBLIC_RECOMMENDATIONS_ENABLED === "true";
 
 /**
+ * Viewport-bounded virtualisation window. Items where
+ * `|index - activeIndex| > VIRTUAL_WINDOW` don't render — they live in
+ * the data array (so gesture math, scroll-restore, deep-link jumps
+ * still work) but no FeedItem fiber is allocated for them.
+ *
+ * 2 = render the active item, 1 ahead, 1 behind, plus 1 extra each
+ * direction for swipe-overshoot cushioning. That's 5 mounted items
+ * max — same shape as the FeedPlayerPool's video-slot capacity, so
+ * we never have an FeedItem overlay without a matching video lane.
+ *
+ * If raised : larger initial-mount cost (each FeedItem is ~7 KB of
+ * DOM after sidebar + overlays). If lowered to 1 : pinching a
+ * fast swipe past the active item briefly shows a black gap before
+ * the next FeedItem mounts. 2 is the empirical sweet spot.
+ */
+const VIRTUAL_WINDOW = 2;
+
+/**
  * Build a minimal VideoFeedItem from a RecommendedKillRow. Kept
  * deliberately conservative — we don't have the per-game roster
  * snapshot here (that lives in kc_matches.json server-side), so player
@@ -650,13 +668,36 @@ export function ScrollFeedV2({
         />
       )}
 
-      {/* Items container — gesture-driven, items absolutely positioned. */}
+      {/* Items container — gesture-driven, items absolutely positioned.
+          Wave 19.7 (2026-05-08) : viewport-bounded virtualisation.
+          Only items within ±VIRTUAL_WINDOW of activeIndex render. The
+          rest return null — their absolute-positioned slots don't need
+          DOM nodes since the gesture engine drives container Y from
+          totalItems × itemHeight, and no neighbour layout depends on
+          siblings (each item is `position: absolute` at `top:
+          i * itemHeight`).
+
+          DOM impact : pre-virtualisation we mounted ~80 items (post-
+          filter) on first paint → ~1 MB of <FeedItemVideo> trees on
+          mobile (sidebar, image, overlays per item). With WINDOW=2 the
+          mount count caps at 5 regardless of feed size, dropping the
+          mobile DOM cost by ~94 %. Pool video elements are managed
+          separately by FeedPlayerPool (5-slot fixed pool with portal-
+          like positioning) so the LIVE/warm/cold ladder stays intact —
+          virtualisation here only affects the overlay layer, not video
+          playback continuity. */}
       <motion.div
         className="absolute inset-0"
         style={{ y, willChange: "transform" }}
         {...bind()}
       >
         {visibleItems.map((item, i) => {
+          // Skip rendering items outside the viewport window. The map
+          // still iterates the full list (cheap) but returns null for
+          // far-away items so React's reconciler doesn't allocate
+          // fibers for them.
+          if (Math.abs(i - activeIndex) > VIRTUAL_WINDOW) return null;
+
           const isActive = i === activeIndex;
           const top = i * itemHeight;
           if (item.kind === "video") {
