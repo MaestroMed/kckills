@@ -51,12 +51,14 @@ CREATE TABLE IF NOT EXISTS kill_rate_limit_buckets (
   PRIMARY KEY (key, window_start)
 );
 
--- Partial index for the reaper. Rows older than expires_at can be
--- deleted at any time ; we do it lazily at the start of fn_check_rate_limit
--- so we never need a separate cron.
-CREATE INDEX IF NOT EXISTS idx_rate_limit_buckets_expired
-  ON kill_rate_limit_buckets(expires_at)
-  WHERE expires_at < now();
+-- Index for the reaper. Rows older than expires_at can be deleted at
+-- any time ; the lazy cleanup at the start of fn_check_rate_limit
+-- uses this index. A partial-index `WHERE expires_at < now()` would
+-- be smaller but Postgres rejects STABLE functions like `now()` in
+-- index predicates (must be IMMUTABLE). Full index is fine since the
+-- table stays small (lazy reaper keeps it bounded).
+CREATE INDEX IF NOT EXISTS idx_rate_limit_buckets_expires_at
+  ON kill_rate_limit_buckets(expires_at);
 
 ALTER TABLE kill_rate_limit_buckets ENABLE ROW LEVEL SECURITY;
 

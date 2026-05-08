@@ -48,9 +48,25 @@
 -- ─── 1. Rename the column ───────────────────────────────────────────
 -- ALTER TABLE ... RENAME COLUMN is metadata-only, no row rewrite, no
 -- table lock beyond the brief catalog update. Safe on a hot table.
+--
+-- Idempotency : 2026-05-08 — wrapped in a DO block that checks if the
+-- old column still exists. The column was renamed by a hand-applied
+-- run of this migration before the file was committed to the repo,
+-- so re-running it now would fail on `column "kc_involvement" does
+-- not exist`. The guard makes it a no-op when the rename has already
+-- happened.
 
-ALTER TABLE game_events
-    RENAME COLUMN kc_involvement TO tracked_team_involvement;
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'game_events'
+        AND column_name = 'kc_involvement'
+    ) THEN
+        ALTER TABLE game_events
+            RENAME COLUMN kc_involvement TO tracked_team_involvement;
+    END IF;
+END $$;
 
 COMMENT ON COLUMN game_events.tracked_team_involvement IS
     'Renamed from kc_involvement (PR-loltok DH, migration 045). Mirrors '

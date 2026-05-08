@@ -29,12 +29,16 @@
 
 BEGIN;
 
--- Partial index covers ~5 % of the table at any given time (rows older
--- than 30 days, which is the safety floor for the prune function).
--- Postgres planner will pick it for the prune DELETE.
-CREATE INDEX IF NOT EXISTS idx_user_events_old
-  ON user_events (created_at)
-  WHERE created_at < (now() - interval '30 days');
+-- Index on created_at to support both the monthly prune DELETE and
+-- the time-windowed analytics queries (today / this-week / this-month).
+-- A WHERE-predicate partial index would be smaller but Postgres
+-- requires IMMUTABLE functions in index predicates, and `now()` is
+-- STABLE (transaction-scoped) — not eligible. Full index is fine :
+-- created_at distribution is uniform-ish, the planner picks it for
+-- range scans, and the size cost is negligible relative to the
+-- table content.
+CREATE INDEX IF NOT EXISTS idx_user_events_created_at
+  ON user_events (created_at);
 
 CREATE OR REPLACE FUNCTION fn_prune_user_events(p_keep_days INT DEFAULT 90)
 RETURNS BIGINT
