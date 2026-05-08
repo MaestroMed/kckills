@@ -30,10 +30,12 @@ if (DSN && process.env.NODE_ENV === "production") {
     // ceiling at expected V0 traffic (~3000 page loads/day).
     tracesSampleRate: 0.1,
 
-    // Session Replay — record 10% of all sessions, 100% of sessions where
-    // an error fires. Replays are heavy ; bump down if budget hurts.
+    // Session Replay — Wave 15 (2026-05-07) tuned per audit-2026-05-07
+    // (W3) : 1.0 on-error can blow the free-tier 100K perf events/mo
+    // budget during an outage spike (10-50 events / replay session).
+    // 0.5 keeps statistically meaningful coverage with halved blast.
     replaysSessionSampleRate: 0.1,
-    replaysOnErrorSampleRate: 1.0,
+    replaysOnErrorSampleRate: 0.5,
 
     integrations: [
       Sentry.replayIntegration({

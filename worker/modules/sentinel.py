@@ -23,9 +23,11 @@ per-event loop is unchanged ; only the outer driver is new.
 
 from __future__ import annotations
 
+import asyncio
+
 import structlog
 
-from services import discord_webhook, league_config, lolesports_api
+from services import discord_webhook, league_config, lolesports_api, web_revalidate
 from services.observability import run_logged
 from services.supabase_client import safe_insert, safe_select, safe_upsert
 
@@ -138,8 +140,13 @@ async def _scan_league_schedule(league: league_config.TrackedLeague) -> int:
             continue
 
         # Skip if already fully processed (kills_extracted=true on every game)
-        existing = safe_select("matches", "id", external_id=match_ext_id)
+        # Wave 15 — we also fetch `state` so we can detect a transition from
+        # a non-completed state to 'completed' and force-invalidate the
+        # homepage hero-stats cache (otherwise users see stale data up to
+        # the 5-minute TTL on /api/revalidate/hero-stats).
+        existing = safe_select("matches", "id, state", external_id=match_ext_id)
         already_seen = bool(existing)
+        prev_state = (existing[0].get("state") if existing else None) or None
 
         # For unstarted matches, getEventDetails often has no game info yet,
         # but we DO want to insert the match shell so the /matches page
@@ -201,6 +208,18 @@ async def _scan_league_schedule(league: league_config.TrackedLeague) -> int:
         match_db_id = (match_row or {}).get("id") if match_row else None
         if not match_db_id and existing:
             match_db_id = existing[0]["id"]
+
+        # Wave 15 — hero-stats cache invalidation. The homepage "Last match"
+        # card is fed by an unstable_cache layer with a 5-minute TTL. When
+        # a match transitions to `completed` we force-invalidate the
+        # `'hero-stats'` tag so visitors see the new score immediately
+        # rather than waiting for the TTL. Fire-and-forget : a failed
+        # revalidate just falls back to the TTL.
+        newly_completed = (
+            db_state == "completed" and prev_state != "completed"
+        )
+        if newly_completed:
+            asyncio.create_task(web_revalidate.revalidate_hero_stats())
 
         # Insert / upsert each game with proper match_id FK
         # PR23.12 — also accept inProgress games so the harvester can
