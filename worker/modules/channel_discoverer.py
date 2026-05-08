@@ -291,7 +291,10 @@ async def run() -> int:
     if not db:
         return 0
 
-    r = httpx.get(
+    # Wave 27.5 — sync httpx.get offloaded so the discoverer doesn't
+    # freeze the event loop while waiting on the channels list.
+    r = await asyncio.to_thread(
+        httpx.get,
         f"{db.base}/channels",
         headers=db.headers,
         params={"select": "id,handle,display_name,role,last_video_id", "is_active": "eq.true"},

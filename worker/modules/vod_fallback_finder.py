@@ -32,6 +32,7 @@ Daemon interval : 30 minutes. The bottleneck is reconciler completion
 
 from __future__ import annotations
 
+import asyncio
 import re
 from datetime import datetime, timezone
 
@@ -68,8 +69,12 @@ def _role_to_source(role: str | None) -> tuple[str, int]:
     return ("other", 10)
 
 
-def _games_missing_vod(db, limit: int) -> list[dict]:
-    """Pull games where vod_youtube_id IS NULL, with parent match info."""
+async def _games_missing_vod(db, limit: int) -> list[dict]:
+    """Pull games where vod_youtube_id IS NULL, with parent match info.
+
+    Wave 27.5 — async + asyncio.to_thread so the sync httpx.get doesn't
+    block the event loop while the fallback finder waits on PostgREST.
+    """
     params: list[tuple[str, str]] = [
         ("select",
          "id,external_id,game_number,vod_youtube_id,"
@@ -78,7 +83,8 @@ def _games_missing_vod(db, limit: int) -> list[dict]:
         ("order", "created_at.desc"),
         ("limit", str(limit)),
     ]
-    r = httpx.get(
+    r = await asyncio.to_thread(
+        httpx.get,
         f"{db.base}/games",
         headers=db.headers,
         params=params,
@@ -94,8 +100,12 @@ def _games_missing_vod(db, limit: int) -> list[dict]:
     return r.json() or []
 
 
-def _videos_for_match(db, match_external_id: str) -> list[dict]:
-    """Pull all reconciled videos linked to a match (with channel role)."""
+async def _videos_for_match(db, match_external_id: str) -> list[dict]:
+    """Pull all reconciled videos linked to a match (with channel role).
+
+    Wave 27.5 — async + asyncio.to_thread (same rationale as
+    _games_missing_vod above).
+    """
     params: list[tuple[str, str]] = [
         ("select",
          "id,channel_id,title,published_at,duration_seconds,"
@@ -104,7 +114,8 @@ def _videos_for_match(db, match_external_id: str) -> list[dict]:
         ("matched_match_external_id", f"eq.{match_external_id}"),
         ("status", "eq.matched"),
     ]
-    r = httpx.get(
+    r = await asyncio.to_thread(
+        httpx.get,
         f"{db.base}/channel_videos",
         headers=db.headers,
         params=params,
@@ -232,7 +243,7 @@ async def run() -> int:
         log.warn("vod_fallback_no_db")
         return 0
 
-    games = _games_missing_vod(db, GAMES_PER_CYCLE)
+    games = await _games_missing_vod(db, GAMES_PER_CYCLE)
     if not games:
         log.info("vod_fallback_no_games_pending")
         return 0
@@ -251,7 +262,7 @@ async def run() -> int:
             continue
 
         if match_ext not in video_cache:
-            video_cache[match_ext] = _videos_for_match(db, match_ext)
+            video_cache[match_ext] = await _videos_for_match(db, match_ext)
         videos = video_cache[match_ext]
         if not videos:
             continue

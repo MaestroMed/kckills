@@ -45,6 +45,7 @@ The v3 RECONCILE_STATUSES tuple is preserved. All v3 helpers
 
 from __future__ import annotations
 
+import asyncio
 import re
 from collections import Counter
 from datetime import datetime, timezone, timedelta
@@ -639,13 +640,21 @@ def parse_title_for_match(title: str, role: str | None = None) -> dict | None:
 
 # ─── Match candidate lookup ───────────────────────────────────────────
 
-def _matches_in_window(
+async def _matches_in_window(
     db,
     *,
     window_start: str | None,
     window_end: str | None,
 ) -> list[dict]:
-    """Fetch matches in an optional time window, embedded with team codes."""
+    """Fetch matches in an optional time window, embedded with team codes.
+
+    Wave 27.5 — converted to async + asyncio.to_thread. The sync
+    ``httpx.get`` call used to block the event loop for 100-500ms per
+    invocation while the reconciler waited on a PostgREST round-trip ;
+    that froze sentinel polling, livestats ingest, and clip processing
+    every time the reconciler hit a video. Offloading to a thread lets
+    the event loop keep firing while the network call is in flight.
+    """
     # PostgREST httpx tuple-list trick : a list of (key, value) tuples
     # serialises to multiple `key=value` query string entries — exactly
     # what's needed to AND `scheduled_at=gte.X` AND `scheduled_at=lte.Y`.
@@ -666,7 +675,8 @@ def _matches_in_window(
     if window_end:
         params.append(("scheduled_at", f"lte.{window_end}"))
 
-    r = httpx.get(
+    r = await asyncio.to_thread(
+        httpx.get,
         f"{db.base}/matches",
         headers=db.headers,
         params=params,
@@ -722,7 +732,7 @@ async def find_match_candidates(
         window_end = datetime(year, 12, 31, 23, 59, 59, tzinfo=timezone.utc).isoformat()
     # else: full history, no window
 
-    candidates = _matches_in_window(
+    candidates = await _matches_in_window(
         db,
         window_start=window_start,
         window_end=window_end,
@@ -801,7 +811,7 @@ async def _fuzzy_match_recent_kc(
     window_start = (pivot - timedelta(days=window_days)).isoformat()
     window_end = (pivot + timedelta(days=window_days)).isoformat()
 
-    candidates = _matches_in_window(
+    candidates = await _matches_in_window(
         db,
         window_start=window_start,
         window_end=window_end,
@@ -1105,7 +1115,11 @@ async def run() -> int:
         ("order", "created_at.desc"),
         ("limit", "200"),
     ]
-    r = httpx.get(
+    # Wave 27.5 — sync httpx.get offloaded to a thread so the
+    # reconciler's main loop doesn't freeze the event loop on the
+    # initial 200-row PostgREST fetch.
+    r = await asyncio.to_thread(
+        httpx.get,
         f"{db.base}/channel_videos",
         headers=db.headers,
         params=params,
