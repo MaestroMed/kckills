@@ -13,7 +13,7 @@
  * feature) — same surface the EditorialCard uses.
  */
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useTransition } from "react";
 import Image from "next/image";
 import { AdminBadge } from "@/components/admin/ui/AdminBadge";
 import { AdminBreadcrumbs } from "@/components/admin/ui/AdminBreadcrumbs";
@@ -26,6 +26,7 @@ import {
   type FeaturedCalendarKill,
   type FeaturedCalendarPin,
 } from "@/components/admin/featured/FeaturedCalendar";
+import { setFeaturedKill, removeFeaturedKill } from "./actions";
 
 interface KillLite {
   id: string;
@@ -63,6 +64,7 @@ export function FeaturedPicker({
   const [pickerSearch, setPickerSearch] = useState("");
   const [saving, setSaving] = useState(false);
   const [toasts, setToasts] = useState<ToastMsg[]>([]);
+  const [, startTransition] = useTransition();
 
   const pushToast = (text: string, tone: ToastMsg["tone"] = "success") => {
     const id = Date.now() + Math.random();
@@ -109,42 +111,42 @@ export function FeaturedPicker({
     return m;
   }, [featured, topKills]);
 
-  const setFeatured = async (date: string, killId: string) => {
+  const setFeatured = (date: string, killId: string) => {
     setSaving(true);
-    try {
-      const r = await fetch(`/api/admin/featured/${date}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ kill_id: killId }),
-      });
-      if (r.ok) {
-        pushToast(`Pin du ${date} enregistré.`);
-        setPickerForDate(null);
-        // Server-rendered list reflects this on next nav — refresh for now.
-        window.location.reload();
-      } else {
-        const data = await r.json().catch(() => ({}));
-        pushToast(`Erreur : ${data.error ?? `HTTP ${r.status}`}`, "error");
+    startTransition(async () => {
+      try {
+        const result = await setFeaturedKill(date, killId);
+        if (result.ok) {
+          pushToast(`Pin du ${date} enregistré.`);
+          setPickerForDate(null);
+          // revalidatePath in the action triggers an RSC refresh ; reload
+          // until the parent page picks it up via router.refresh().
+          window.location.reload();
+        } else {
+          pushToast(`Erreur : ${result.error ?? "Erreur inconnue"}`, "error");
+        }
+      } catch (e) {
+        pushToast(e instanceof Error ? e.message : "Erreur action", "error");
+      } finally {
+        setSaving(false);
       }
-    } catch (e) {
-      pushToast(e instanceof Error ? e.message : "Erreur réseau", "error");
-    } finally {
-      setSaving(false);
-    }
+    });
   };
 
-  const removeFeatured = async (date: string) => {
-    try {
-      const r = await fetch(`/api/admin/featured/${date}`, { method: "DELETE" });
-      if (r.ok) {
-        pushToast(`Pin du ${date} supprimé.`);
-        window.location.reload();
-      } else {
-        pushToast("Erreur lors de la suppression.", "error");
+  const removeFeatured = (date: string) => {
+    startTransition(async () => {
+      try {
+        const result = await removeFeaturedKill(date);
+        if (result.ok) {
+          pushToast(`Pin du ${date} supprimé.`);
+          window.location.reload();
+        } else {
+          pushToast(`Erreur : ${result.error ?? "suppression"}`, "error");
+        }
+      } catch (e) {
+        pushToast(e instanceof Error ? e.message : "Erreur action", "error");
       }
-    } catch (e) {
-      pushToast(e instanceof Error ? e.message : "Erreur réseau", "error");
-    }
+    });
   };
 
   const rangePin = async (windowKind: "hour" | "weekend") => {

@@ -15,7 +15,7 @@
  *   - Action header : Republish / Hide / Re-analyze / Re-clip / Set featured / Delete
  */
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { AdminBadge } from "@/components/admin/ui/AdminBadge";
 import { AdminBreadcrumbs } from "@/components/admin/ui/AdminBreadcrumbs";
@@ -23,6 +23,7 @@ import { AdminButton } from "@/components/admin/ui/AdminButton";
 import { AdminCard } from "@/components/admin/ui/AdminCard";
 import { AdminEmptyState } from "@/components/admin/ui/AdminEmptyState";
 import { AdminSection } from "@/components/admin/ui/AdminSection";
+import { patchClip } from "../actions";
 
 const FIGHT_TYPES = [
   { value: "solo_kill", label: "Solo Kill (vrai 1v1)" },
@@ -141,6 +142,7 @@ export function ClipDetailEditor({ clip }: Props) {
   const [reclipReason, setReclipReason] = useState(clip.reclip_reason ?? "");
   const [saving, setSaving] = useState(false);
   const [toasts, setToasts] = useState<ToastMsg[]>([]);
+  const [, startTransition] = useTransition();
 
   // Side data
   const [annotations, setAnnotations] = useState<AnnotationVersion[]>([]);
@@ -209,13 +211,11 @@ export function ClipDetailEditor({ clip }: Props) {
     };
   }, [clip.id]);
 
-  const save = async () => {
+  const save = () => {
     setSaving(true);
-    try {
-      const r = await fetch(`/api/admin/clips/${clip.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+    startTransition(async () => {
+      try {
+        const result = await patchClip(clip.id, {
           ai_description: desc,
           fight_type: fightType,
           ai_tags: tags,
@@ -223,19 +223,18 @@ export function ClipDetailEditor({ clip }: Props) {
           hidden,
           needs_reclip: needsReclip,
           reclip_reason: needsReclip ? reclipReason : null,
-        }),
-      });
-      if (r.ok) {
-        pushToast("Sauvegardé.");
-      } else {
-        const e = await r.json().catch(() => ({}));
-        pushToast(`Erreur : ${e.error ?? `HTTP ${r.status}`}`, "error");
+        });
+        if (result.ok) {
+          pushToast("Sauvegardé.");
+        } else {
+          pushToast(`Erreur : ${result.error ?? "inconnue"}`, "error");
+        }
+      } catch (e) {
+        pushToast(e instanceof Error ? e.message : "Erreur action", "error");
+      } finally {
+        setSaving(false);
       }
-    } catch (e) {
-      pushToast(e instanceof Error ? e.message : "Erreur réseau", "error");
-    } finally {
-      setSaving(false);
-    }
+    });
   };
 
   const headerAction = async (action: "republish" | "hide" | "reanalyze" | "reclip" | "feature" | "delete") => {

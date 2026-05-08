@@ -1,18 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerSupabase } from "@/lib/supabase/server";
-import { deriveActorRole, logAdminAction, requireAdmin } from "@/lib/admin/audit";
-
-const VALID_FIGHT_TYPES = [
-  "solo_kill", "pick", "gank", "skirmish_2v2", "skirmish_3v3",
-  "teamfight_4v4", "teamfight_5v5",
-];
-
-const VALID_TAGS = [
-  "outplay", "teamfight", "solo_kill", "tower_dive", "baron_fight",
-  "dragon_fight", "flash_predict", "1v2", "1v3", "clutch", "clean",
-  "mechanical", "shutdown", "comeback", "engage", "peel", "snipe",
-  "steal", "skirmish", "pick", "gank", "ace", "flank",
-];
+import { requireAdmin } from "@/lib/admin/audit";
+import { patchClip } from "@/app/admin/clips/actions";
 
 /** GET /api/admin/clips/[id] */
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -42,66 +31,22 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   return NextResponse.json(data);
 }
 
-/** PATCH /api/admin/clips/[id] — edit + audit */
+/** PATCH /api/admin/clips/[id] — Wave 18 thin proxy onto the server
+ *  action so external callers (Postman / scripts) keep working. The
+ *  admin clip-detail editor calls patchClip() directly via the server
+ *  action import — no HTTP round-trip. */
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const admin = await requireAdmin();
-  if (!admin.ok) return NextResponse.json({ error: admin.error }, { status: 403 });
-
   const { id } = await params;
-  const body = await req.json();
-  const sb = await createServerSupabase();
-
-  // Load current state for audit diff
-  const { data: before } = await sb
-    .from("kills")
-    .select("ai_description, fight_type, ai_tags, highlight_score, kill_visible, needs_reclip, reclip_reason")
-    .eq("id", id)
-    .single();
-
-  const patch: Record<string, unknown> = {};
-
-  if (typeof body.ai_description === "string" && body.ai_description.trim()) {
-    patch.ai_description = body.ai_description.trim();
+  let body: unknown;
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
-  if (typeof body.fight_type === "string" && VALID_FIGHT_TYPES.includes(body.fight_type)) {
-    patch.fight_type = body.fight_type;
+  const result = await patchClip(id, body as Record<string, never>);
+  if (!result.ok) {
+    const status = result.error?.includes("Forbidden") ? 403 : 400;
+    return NextResponse.json({ error: result.error }, { status });
   }
-  if (Array.isArray(body.ai_tags)) {
-    patch.ai_tags = body.ai_tags.filter((t: string) => VALID_TAGS.includes(t));
-  }
-  if (typeof body.highlight_score === "number" && body.highlight_score >= 1 && body.highlight_score <= 10) {
-    patch.highlight_score = Math.round(body.highlight_score * 10) / 10;
-  }
-  if (typeof body.hidden === "boolean") {
-    patch.kill_visible = !body.hidden;
-  } else if (typeof body.kill_visible === "boolean") {
-    patch.kill_visible = body.kill_visible;
-  }
-  if (typeof body.needs_reclip === "boolean") {
-    patch.needs_reclip = body.needs_reclip;
-    if (body.needs_reclip && typeof body.reclip_reason === "string") {
-      patch.reclip_reason = body.reclip_reason;
-    }
-  }
-
-  if (Object.keys(patch).length === 0) {
-    return NextResponse.json({ error: "No valid fields to update" }, { status: 400 });
-  }
-
-  patch.updated_at = new Date().toISOString();
-
-  const { error } = await sb.from("kills").update(patch).eq("id", id);
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-
-  await logAdminAction({
-    action: "kill.edit",
-    entityType: "kill",
-    entityId: id,
-    before,
-    after: patch,
-    actorRole: deriveActorRole(admin),
-    request: req,
-  });
-
-  return NextResponse.json({ ok: true, patched: Object.keys(patch) });
+  return NextResponse.json({ ok: true, patched: result.patched ?? [] });
 }
