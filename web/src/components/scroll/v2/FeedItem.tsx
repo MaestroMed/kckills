@@ -341,7 +341,7 @@ export function FeedItemVideo({
         shareTitle={`${item.killerChampion} kills ${item.victimChampion}`}
         shareText={item.aiDescription ?? undefined}
         initialLikeCount={item.ratingCount ?? 0}
-        initialCommentCount={0}
+        initialCommentCount={item.commentCount ?? 0}
         visible={isActive}
       />
 
@@ -676,7 +676,7 @@ export function FeedItemMoment({
         shareTitle={`${label} · ${item.killCount} kills`}
         shareText={item.aiDescription ?? undefined}
         initialLikeCount={item.ratingCount ?? 0}
-        initialCommentCount={0}
+        initialCommentCount={item.commentCount ?? 0}
         visible={isActive}
       />
 

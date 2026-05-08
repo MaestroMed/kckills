@@ -63,6 +63,11 @@ export interface VideoFeedItem {
   highlightScore: number | null;
   avgRating: number | null;
   ratingCount: number;
+  /** Approved-comment count for the kill, mirroring `kills.comment_count`
+   *  (kept fresh by the `fn_update_comment_count` trigger). Wave 20.8 —
+   *  was previously hardcoded to 0 in FeedSidebarV2 callers ; now wired
+   *  end-to-end from the SQL row through the FeedItem prop. */
+  commentCount: number;
   /** Legacy single-language field — keep populated for back-compat with
    *  any code path that hasn't migrated to the multi-lang variants. */
   aiDescription: string | null;
@@ -110,6 +115,9 @@ export interface MomentFeedItem {
   momentScore: number | null;
   avgRating: number | null;
   ratingCount: number;
+  /** Approved-comment count for the moment. Same shape as VideoFeedItem
+   *  for symmetry. Wave 20.8 — wired end-to-end from `moments.comment_count`. */
+  commentCount: number;
   aiDescription: string | null;
   // Multi-lang variants — moments are NOT translated by the worker yet
   // (they aggregate kill descriptions). Kept for type symmetry with

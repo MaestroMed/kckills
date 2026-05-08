@@ -119,6 +119,7 @@ function recommendationToFeedItem(row: RecommendedKillRow): VideoFeedItem | null
     highlightScore: k.highlight_score ?? null,
     avgRating: k.avg_rating ?? null,
     ratingCount: k.rating_count,
+    commentCount: k.comment_count ?? 0,
     aiDescription: k.ai_description ?? null,
     aiDescriptionFr: k.ai_description_fr ?? null,
     aiDescriptionEn: k.ai_description_en ?? null,

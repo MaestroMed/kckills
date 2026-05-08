@@ -262,6 +262,7 @@ export default async function ScrollV2Page({ searchParams }: ScrollPageProps) {
       highlightScore: k.highlight_score ?? null,
       avgRating: k.avg_rating ?? null,
       ratingCount: k.rating_count,
+      commentCount: k.comment_count ?? 0,
       aiDescription: k.ai_description ?? null,
       aiDescriptionFr: k.ai_description_fr ?? null,
       aiDescriptionEn: k.ai_description_en ?? null,
@@ -317,6 +318,7 @@ export default async function ScrollV2Page({ searchParams }: ScrollPageProps) {
         momentScore: m.moment_score,
         avgRating: m.avg_rating,
         ratingCount: m.rating_count,
+        commentCount: m.comment_count ?? 0,
         aiDescription: m.ai_description,
         // Moments don't yet carry per-language descriptions — use the
         // legacy single field. <Description> falls back to it when
