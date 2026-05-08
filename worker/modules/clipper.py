@@ -99,6 +99,23 @@ def _build_overlay_filter(
 VODS_DIR = LocalPaths.vods_dir()
 
 
+def _check_vod_cache(vod_path: str, youtube_id: str) -> bool:
+    """Sync helper — runs in a thread via asyncio.to_thread.
+    Returns True iff a cached VOD exists AND is at least 10 MB
+    (smaller files are presumed truncated downloads). Logs the hit
+    so the operator's daily report sees the cache reuse rate."""
+    if not os.path.exists(vod_path):
+        return False
+    try:
+        size_mb = os.path.getsize(vod_path) / (1024 * 1024)
+    except OSError:
+        return False
+    if size_mb <= 10:
+        return False
+    log.info("vod_cache_hit", youtube_id=youtube_id, size_mb=round(size_mb))
+    return True
+
+
 async def download_full_vod(youtube_id: str) -> str | None:
     """Download the full VOD once. Returns local path or None.
 
@@ -109,13 +126,24 @@ async def download_full_vod(youtube_id: str) -> str | None:
     os.makedirs(VODS_DIR, exist_ok=True)
     vod_path = os.path.join(VODS_DIR, f"{youtube_id}.mp4")
 
-    if os.path.exists(vod_path):
-        size_mb = os.path.getsize(vod_path) / (1024 * 1024)
-        if size_mb > 10:  # valid VOD, not a truncated file
-            log.info("vod_cache_hit", youtube_id=youtube_id, size_mb=round(size_mb))
-            return vod_path
+    # Wave 27.1 — both `os.path.exists` and `os.path.getsize` are
+    # syscalls ; on a slow disk they can take 50-200 ms each. Wrap
+    # them in `asyncio.to_thread` so the cache-hit fast path doesn't
+    # block the event loop.
+    cache_hit = await asyncio.to_thread(_check_vod_cache, vod_path, youtube_id)
+    if cache_hit:
+        return vod_path
 
-    can_dl = await scheduler.wait_for("ytdlp")
+    # Wave 27.1 — defensive timeout on the scheduler wait. If the
+    # scheduler hangs (DB outage during quota probe, lock contention,
+    # etc.), we'd wait forever and starve every other clipper worker
+    # blocked behind the global `ytdlp` semaphore. 60 s is well above
+    # the normal jitter (4 s delay) but bounds the worst case.
+    try:
+        can_dl = await asyncio.wait_for(scheduler.wait_for("ytdlp"), timeout=60)
+    except asyncio.TimeoutError:
+        log.warn("vod_download_scheduler_wait_timeout", youtube_id=youtube_id)
+        return None
     if not can_dl:
         return None
 
@@ -393,11 +421,14 @@ async def clip_kill(
         # SHA-256 dedups byte-identical re-encodes; pHash dedups visually
         # identical clips at different bitrates (community resubmissions).
         # Non-blocking: hash failures don't abort the upload.
-        c_hash = await asyncio.to_thread(content_hash, h_path)
-        p_hash = (
-            await asyncio.to_thread(perceptual_hash, thumb_path)
-            if os.path.exists(thumb_path)
-            else None
+        # Wave 27.1 — parallelised. SHA-256 on a 10 MB file is ~150 ms,
+        # pHash via Pillow DCT is ~80 ms ; serialised they cost ~230 ms
+        # per clip. asyncio.gather + to_thread runs them in parallel
+        # (~150 ms total) without burning the event loop.
+        thumb_exists = await asyncio.to_thread(os.path.exists, thumb_path)
+        c_hash, p_hash = await asyncio.gather(
+            asyncio.to_thread(content_hash, h_path),
+            asyncio.to_thread(perceptual_hash, thumb_path) if thumb_exists else asyncio.sleep(0, result=None),
         )
 
         # ─── 7. Determine version + archive prior assets ─────────────

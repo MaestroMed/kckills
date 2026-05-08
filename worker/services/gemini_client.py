@@ -10,6 +10,7 @@ support via `responseSchema` (used by the analyzer to retire the
 JSON-fence-stripping defensive layer).
 """
 
+import asyncio
 import json
 import os
 import time
@@ -49,8 +50,19 @@ def get_client():
     return _client
 
 
-def _wait_for_file_active(client, file_ref, timeout: int = 60) -> bool:
+async def _wait_for_file_active(client, file_ref, timeout: int = 60) -> bool:
     """Poll until an uploaded file reaches ACTIVE state.
+
+    Wave 27 (2026-05-08) — converted from sync `time.sleep(2)` to
+    async with exponential backoff. The previous impl blocked the
+    event loop for up to 60 s while waiting on Gemini's file ingest,
+    starving every other coroutine (other clipper workers, dispatcher,
+    heartbeat). Now it yields cleanly.
+
+    Backoff schedule : 0.5 s, 1 s, 2 s, 4 s, 8 s, capped at 8 s. The
+    typical small clip (~5 MB) goes ACTIVE in ~1.5 s, so the first
+    two probes catch ~95 % of cases ; longer waits are paid only on
+    bigger files / Gemini lag.
 
     Wave 13f migration : the first arg used to be the `genai` module
     (old SDK pattern with `genai.get_file(name)`). It's now a `Client`
@@ -60,8 +72,11 @@ def _wait_for_file_active(client, file_ref, timeout: int = 60) -> bool:
     will fail loudly rather than silently using the deprecated API.
     """
     deadline = time.monotonic() + timeout
+    backoff = 0.5
     while time.monotonic() < deadline:
-        f = client.files.get(name=file_ref.name)
+        # `client.files.get` is a sync HTTP call ; wrap in to_thread so
+        # we don't block the loop on the request itself.
+        f = await asyncio.to_thread(client.files.get, name=file_ref.name)
         state = getattr(f, "state", None)
         if state is None:
             return True  # older SDK without state tracking (defensive)
@@ -71,7 +86,8 @@ def _wait_for_file_active(client, file_ref, timeout: int = 60) -> bool:
         if state_name == "FAILED":
             log.warn("gemini_file_failed", name=file_ref.name)
             return False
-        time.sleep(2)
+        await asyncio.sleep(backoff)
+        backoff = min(backoff * 2, 8.0)
     log.warn("gemini_file_timeout", name=file_ref.name)
     return False
 
@@ -119,13 +135,14 @@ async def analyze(prompt: str, video_path: str | None = None) -> dict | None:
             # Wave 13f migration — `client.files.upload(file=...)` instead
             # of `genai.upload_file(path=...)`. Pass the mime type via
             # the typed config so the API picks the right decoder.
-            video_file = client.files.upload(
+            video_file = await asyncio.to_thread(
+                client.files.upload,
                 file=video_path,
                 config=types.UploadFileConfig(mime_type="video/mp4"),
             )
             # Wait for the file to become ACTIVE — Gemini processes uploads
             # asynchronously and returns 400 if we query before it's ready.
-            if not _wait_for_file_active(client, video_file):
+            if not await _wait_for_file_active(client, video_file):
                 return None
             contents = [prompt, video_file]
         else:

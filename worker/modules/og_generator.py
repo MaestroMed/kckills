@@ -144,26 +144,43 @@ def generate_og_image(
         return None
 
 
+# Wave 27.1 — module-level font cache. Pillow's `ImageFont.truetype()`
+# touches the disk on every call (3-6 syscalls per call to find the
+# .ttf file). At 50 OG generations/day × 3 fonts = 150-300 lookups/day
+# of pure overhead. Cache once at first call, reuse forever.
+_FONTS_CACHE: tuple | None = None
+
+
 def _load_fonts():
-    """Best-effort: try to load bundled fonts, fall back to Pillow default."""
+    """Best-effort: try to load bundled fonts, fall back to Pillow default.
+
+    Wave 27.1 — cached after first successful load. The cache is
+    process-local ; worker restart re-warms it on the first OG
+    generation."""
+    global _FONTS_CACHE
+    if _FONTS_CACHE is not None:
+        return _FONTS_CACHE
     try:
-        return (
+        _FONTS_CACHE = (
             ImageFont.truetype("Cinzel-Bold.ttf", 52),
             ImageFont.truetype("FiraSans-Regular.ttf", 28),
             ImageFont.truetype("FiraSans-Regular.ttf", 20),
         )
+        return _FONTS_CACHE
     except Exception:
         pass
     try:
         # DejaVu ships with most Linux distros and python:3.12-slim
-        return (
+        _FONTS_CACHE = (
             ImageFont.truetype("DejaVuSans-Bold.ttf", 52),
             ImageFont.truetype("DejaVuSans.ttf", 28),
             ImageFont.truetype("DejaVuSans.ttf", 20),
         )
+        return _FONTS_CACHE
     except Exception:
         default = ImageFont.load_default()
-        return default, default, default
+        _FONTS_CACHE = (default, default, default)
+        return _FONTS_CACHE
 
 
 # ─── Quality gate ──────────────────────────────────────────────────────
@@ -204,72 +221,136 @@ def _gate_reason(kill: dict) -> str | None:
 async def _process_kill(kill: dict, counters: dict, sem: asyncio.Semaphore) -> None:
     """Render, upload and persist the OG image for one kill. Acks the
     attached pipeline job (if any) on success/skip/fail.
+
+    Wave 27.1 hardening :
+      * A#22 — Pillow render runs OUTSIDE the semaphore. asyncio.to_thread
+        already offloads CPU work to the default executor, and Pillow
+        releases the GIL during compression. Holding `sem` across the
+        render serialised the I/O-bound R2 uploads behind unrelated CPU
+        work. Now `sem` protects ONLY the upload + DB write, which is
+        what we actually want to throttle.
+      * A#24 — defensive champion null guard right before the render. The
+        queue path already filters via _gate_reason, but the legacy
+        fallback's inline filter doesn't check champion fields. Without
+        this guard, a legacy-path row with NULL champion would render
+        "KC · ?" / "Opponent · ?" and look broken on Discord/Twitter
+        cards.
+      * A#25 — status='published' is set in the SAME PATCH as
+        og_image_url, and ONLY when R2 upload returned a URL. Previously
+        we flipped status even on upload failure, leaving the kill
+        visible in the feed with a NULL og_image_url (broken social
+        cards, no recovery without a manual re-enqueue).
+      * A#31 — finally-block cleanup of `local_path`. A render-then-crash
+        used to leak tempfiles into THUMBNAILS_DIR until the daily
+        cleanup task ran.
     """
     job = kill.get("_pipeline_job")
+    kid = kill["id"]
 
-    async with sem:
-        kid = kill["id"]
-
-        # Already-has-OG fast path — flip status and ack.
-        if kill.get("og_image_url"):
-            ok = safe_update("kills", {"status": "published"}, "id", kid)
-            counters["status_only"] += 1
-            # Wave 20.1 — log the skip so an operator running
-            # `live_dashboard.py` can see why the OG queue depth isn't
-            # producing new uploads. Silent skips were turning into
-            # invisible "publish hangs" when most kills already had
-            # og_image_url but the dashboard kept showing OG jobs as
-            # claimed.
-            log.info(
-                "og_skipped_already_uploaded",
-                kill_id=kid,
-                status_flip_ok=ok,
-            )
-            if job is not None:
-                if ok:
-                    await asyncio.to_thread(
-                        job_queue.succeed, job["id"],
-                        {"r2_path": kill.get("og_image_url"), "skipped": "already_uploaded"},
-                    )
-                else:
-                    await asyncio.to_thread(
-                        job_queue.fail, job["id"],
-                        "status_flip_failed", 600, "og_failed",
-                    )
-            return
-
-        # Pillow render runs CPU-bound; offload to a thread so the
-        # event loop can keep firing the other workers' R2 uploads.
-        local_path = await asyncio.to_thread(
-            generate_og_image,
+    # Already-has-OG fast path — flip status and ack. No render or upload,
+    # so this never needs the semaphore.
+    if kill.get("og_image_url"):
+        ok = safe_update("kills", {"status": "published"}, "id", kid)
+        counters["status_only"] += 1
+        # Wave 20.1 — log the skip so an operator running
+        # `live_dashboard.py` can see why the OG queue depth isn't
+        # producing new uploads. Silent skips were turning into
+        # invisible "publish hangs" when most kills already had
+        # og_image_url but the dashboard kept showing OG jobs as
+        # claimed.
+        log.info(
+            "og_skipped_already_uploaded",
             kill_id=kid,
-            killer_name=kill.get("killer_name") or "KC",
-            killer_champion=kill.get("killer_champion") or "?",
-            victim_name=kill.get("victim_name") or "Opponent",
-            victim_champion=kill.get("victim_champion") or "?",
-            description=kill.get("ai_description") or "",
-            rating=float(kill.get("avg_rating") or 0),
-            rating_count=int(kill.get("rating_count") or 0),
-            multi_kill=kill.get("multi_kill"),
+            status_flip_ok=ok,
         )
-        if not local_path:
-            counters["skipped"] += 1
-            if job is not None:
+        if job is not None:
+            if ok:
+                await asyncio.to_thread(
+                    job_queue.succeed, job["id"],
+                    {"r2_path": kill.get("og_image_url"), "skipped": "already_uploaded"},
+                )
+            else:
                 await asyncio.to_thread(
                     job_queue.fail, job["id"],
-                    "pillow_render_failed", 600, "og_failed",
+                    "status_flip_failed", 600, "og_failed",
                 )
-            return
+        return
 
-        og_url = await r2_client.upload_og(kid, local_path)
-        patch = {"status": "published"}
-        if og_url:
-            patch["og_image_url"] = og_url
-        ok = safe_update("kills", patch, "id", kid)
-        try:
-            os.remove(local_path)
-        except Exception:
-            pass
+    # A#24 — defensive champion null guard. The queue path's _gate_reason
+    # already covers this, but the legacy fallback path doesn't filter on
+    # champion fields. Catching it here keeps both paths consistent and
+    # avoids the "KC · ?" placeholder embarrassment on social cards.
+    killer_champ = (kill.get("killer_champion") or "").strip()
+    victim_champ = (kill.get("victim_champion") or "").strip()
+    if not killer_champ or not victim_champ:
+        counters["skipped"] += 1
+        log.info(
+            "og_skipped_missing_champion",
+            kill_id=kid,
+            killer=kill.get("killer_champion"),
+            victim=kill.get("victim_champion"),
+        )
+        if job is not None:
+            # Soft-skip via succeed() — the og_refresher will re-enqueue
+            # this row once the harvester / analyzer fills the missing
+            # field, and we don't want to burn retries in the meantime.
+            await asyncio.to_thread(
+                job_queue.succeed, job["id"], {"skipped": "missing_champion"},
+            )
+        return
+
+    # A#22 — Pillow render runs OUTSIDE the semaphore. asyncio.to_thread
+    # offloads to the default executor; Pillow releases the GIL during
+    # PNG compression, so we get true parallelism without the throttle.
+    local_path = await asyncio.to_thread(
+        generate_og_image,
+        kill_id=kid,
+        killer_name=kill.get("killer_name") or "KC",
+        killer_champion=killer_champ,
+        victim_name=kill.get("victim_name") or "Opponent",
+        victim_champion=victim_champ,
+        description=kill.get("ai_description") or "",
+        rating=float(kill.get("avg_rating") or 0),
+        rating_count=int(kill.get("rating_count") or 0),
+        multi_kill=kill.get("multi_kill"),
+    )
+    if not local_path:
+        counters["skipped"] += 1
+        if job is not None:
+            await asyncio.to_thread(
+                job_queue.fail, job["id"],
+                "pillow_render_failed", 600, "og_failed",
+            )
+        return
+
+    # A#31 — finally-block cleanup so a render-then-exception path doesn't
+    # leak tempfiles in THUMBNAILS_DIR. The semaphore wraps only the
+    # network-bound work (upload + DB write).
+    try:
+        async with sem:
+            og_url = await r2_client.upload_og(kid, local_path)
+
+            # A#25 — status flip is gated on a successful R2 upload. The
+            # previous code set status='published' even when og_url was
+            # None, leaving the kill in the feed with a NULL og_image_url
+            # — broken Discord/Twitter cards, and no automatic recovery
+            # because the kill was no longer in status='analyzed' for the
+            # next sweep to find.
+            if not og_url:
+                counters["skipped"] += 1
+                log.warn("og_upload_failed", kill_id=kid)
+                if job is not None:
+                    await asyncio.to_thread(
+                        job_queue.fail, job["id"],
+                        "r2_upload_failed", 600, "og_failed",
+                    )
+                return
+
+            ok = safe_update(
+                "kills",
+                {"status": "published", "og_image_url": og_url},
+                "id", kid,
+            )
 
         if not ok:
             counters["skipped"] += 1
@@ -282,18 +363,14 @@ async def _process_kill(kill: dict, counters: dict, sem: asyncio.Semaphore) -> N
 
         counters["generated"] += 1
         if job is not None:
-            if og_url:
-                await asyncio.to_thread(
-                    job_queue.succeed, job["id"], {"r2_path": og_url},
-                )
-            else:
-                # Status flipped but R2 upload failed — fail the job so
-                # we retry the upload later. Status will idempotently
-                # remain 'published' when the retry succeeds.
-                await asyncio.to_thread(
-                    job_queue.fail, job["id"],
-                    "r2_upload_failed", 600, "og_failed",
-                )
+            await asyncio.to_thread(
+                job_queue.succeed, job["id"], {"r2_path": og_url},
+            )
+    finally:
+        try:
+            os.remove(local_path)
+        except Exception:
+            pass
 
 
 # ─── Daemon loop ────────────────────────────────────────────────────────────
