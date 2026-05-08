@@ -327,8 +327,19 @@ async def clip_kill(
                 ])
                 if os.path.exists(cand_path) and os.path.getsize(cand_path) > 1000:
                     thumb_candidates.append(cand_path)
-            except Exception:
-                pass
+            except Exception as e:
+                # Wave 20.1 — was `pass`. A silent failure here means
+                # this kill ships with no thumbnail OG card. The full
+                # extraction can still succeed if other candidate
+                # offsets work, so we log + continue rather than fail
+                # the clip — but we WILL surface the issue now.
+                log.warn(
+                    "thumbnail_candidate_failed",
+                    kill_id=kill_id,
+                    offset_s=offset_s,
+                    suffix=suffix,
+                    error=str(e)[:160],
+                )
 
         chosen = await asyncio.to_thread(_pick_best_thumbnail, thumb_candidates)
         if chosen and chosen != thumb_path:
@@ -337,20 +348,46 @@ async def clip_kill(
                 if os.path.exists(thumb_path):
                     os.remove(thumb_path)
                 os.rename(chosen, thumb_path)
-            except OSError:
+            except OSError as e:
                 # Fall back to copy if rename fails (cross-device)
+                log.warn(
+                    "thumbnail_rename_failed",
+                    kill_id=kill_id,
+                    src=chosen,
+                    dst=thumb_path,
+                    error=str(e)[:160],
+                )
                 import shutil
                 try:
                     shutil.copy2(chosen, thumb_path)
-                except OSError:
-                    pass
+                except OSError as e2:
+                    # Both rename + copy failed — clip still has its
+                    # primary thumb at thumb_path (or doesn't, in
+                    # which case OG generation will skip). Log so the
+                    # operator can investigate disk-full / permission
+                    # issues before they cascade into broken OG cards.
+                    log.error(
+                        "thumbnail_copy_failed",
+                        kill_id=kill_id,
+                        src=chosen,
+                        dst=thumb_path,
+                        error=str(e2)[:160],
+                    )
         # Cleanup the losers
         for cand in thumb_candidates:
             if cand != thumb_path and os.path.exists(cand):
                 try:
                     os.remove(cand)
-                except OSError:
-                    pass
+                except OSError as e:
+                    # Disk-full / permission issue worth knowing about.
+                    # Doesn't fail the clip — leftover candidate files
+                    # accumulate until the disk-hygiene GC sweeps them.
+                    log.warn(
+                        "thumbnail_cleanup_failed",
+                        kill_id=kill_id,
+                        path=cand,
+                        error=str(e)[:160],
+                    )
 
         # ─── 6. Compute canonical hashes (Phase 1 foundation) ────────
         # SHA-256 dedups byte-identical re-encodes; pHash dedups visually

@@ -214,6 +214,17 @@ async def _process_kill(kill: dict, counters: dict, sem: asyncio.Semaphore) -> N
         if kill.get("og_image_url"):
             ok = safe_update("kills", {"status": "published"}, "id", kid)
             counters["status_only"] += 1
+            # Wave 20.1 — log the skip so an operator running
+            # `live_dashboard.py` can see why the OG queue depth isn't
+            # producing new uploads. Silent skips were turning into
+            # invisible "publish hangs" when most kills already had
+            # og_image_url but the dashboard kept showing OG jobs as
+            # claimed.
+            log.info(
+                "og_skipped_already_uploaded",
+                kill_id=kid,
+                status_flip_ok=ok,
+            )
             if job is not None:
                 if ok:
                     await asyncio.to_thread(

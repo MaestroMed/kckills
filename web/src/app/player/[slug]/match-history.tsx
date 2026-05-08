@@ -16,11 +16,20 @@ interface HistoryEntry {
   won: boolean;
 }
 
+// Wave 20.1 — paginated incrementally instead of toggling to "show all"
+// to keep the DOM bounded for alumni with 200+ matches (mobile OOM risk
+// surfaced by the post-19.7 audit). Initial render = 20 ; clicking
+// "Charger plus" extends by +30 ; capped at MAX_VISIBLE so a determined
+// user can't blow up their own browser by spamming the button.
+const INITIAL_VISIBLE = 20;
+const PAGE_SIZE = 30;
+const MAX_VISIBLE = 200;
+
 export function MatchHistory({ history }: { history: HistoryEntry[] }) {
   const [champFilter, setChampFilter] = useState("");
   const [resultFilter, setResultFilter] = useState<"" | "won" | "lost">("");
   const [yearFilter, setYearFilter] = useState("");
-  const [showAll, setShowAll] = useState(false);
+  const [visibleCount, setVisibleCount] = useState(INITIAL_VISIBLE);
 
   const champions = [...new Set(history.map((m) => m.champion))].sort();
   const years = [...new Set(history.map((m) => m.date.slice(0, 4)))].sort().reverse();
@@ -33,7 +42,9 @@ export function MatchHistory({ history }: { history: HistoryEntry[] }) {
     return true;
   });
 
-  const displayed = showAll ? filtered : filtered.slice(0, 20);
+  const cap = Math.min(MAX_VISIBLE, filtered.length);
+  const displayed = filtered.slice(0, Math.min(visibleCount, cap));
+  const hasMore = displayed.length < cap;
   const hasFilters = champFilter || resultFilter || yearFilter;
 
   return (
@@ -113,13 +124,19 @@ export function MatchHistory({ history }: { history: HistoryEntry[] }) {
         ))}
       </div>
 
-      {!showAll && filtered.length > 20 && (
+      {hasMore && (
         <button
-          onClick={() => setShowAll(true)}
+          onClick={() => setVisibleCount((n) => n + PAGE_SIZE)}
           className="mt-3 w-full rounded-lg border border-[var(--border-gold)] py-2 text-xs text-[var(--text-muted)] hover:border-[var(--gold)]/40 hover:text-[var(--gold)]"
         >
-          Afficher tout ({filtered.length} matchs)
+          Charger plus &middot; {displayed.length}/{filtered.length} affich&eacute;s
         </button>
+      )}
+      {!hasMore && filtered.length > MAX_VISIBLE && (
+        <p className="mt-3 text-center text-[10px] text-[var(--text-disabled)]">
+          {MAX_VISIBLE} matchs affich&eacute;s sur {filtered.length}.
+          Filtre par champion, r&eacute;sultat ou ann&eacute;e pour explorer le reste.
+        </p>
       )}
     </section>
   );

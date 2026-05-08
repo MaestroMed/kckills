@@ -66,18 +66,80 @@ DLQ_ALERT_TODAY_THRESHOLD = int(os.getenv("KCKILLS_ALERT_DLQ_TODAY", "20") or "2
 # Disk GC cadence — purge stale artefacts every N hours. None disables.
 DISK_GC_INTERVAL_HOURS = float(os.getenv("KCKILLS_DISK_GC_HOURS", "24") or "24")
 
-# In-memory cooldown state. Keyed by (alert_kind, utc_date).
-_alert_state: dict[tuple[str, str], bool] = {}
+# Wave 20.1 — alert cooldown state. Was in-memory only, which meant
+# every daemon restart re-fired same-day alerts (Discord noise + alarm
+# fatigue). Now backed by `worker/state/alert_cooldowns.json` so the
+# cooldown survives `systemctl restart kckills-worker` / supervisor
+# auto-restarts. Key shape : `{kind}|{utc_date}` → bool.
+#
+# Why a file and not the DB : zero migration, atomic rename pattern is
+# trivial, the file stays small (one entry per alert kind per day,
+# pruned to last 14 days on each write), and a Supabase outage
+# shouldn't double-fire alerts during the outage either (the DB is
+# what's down and we don't want to spam Discord with that).
+_ALERT_STATE_PATH = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+    "state",
+    "alert_cooldowns.json",
+)
+_alert_state: dict[str, bool] = {}
+_alert_state_loaded: bool = False
 _last_disk_gc_ts: float = 0.0
 
 
+def _load_alert_state() -> None:
+    """Hydrate `_alert_state` from disk on first call. Idempotent."""
+    global _alert_state, _alert_state_loaded
+    if _alert_state_loaded:
+        return
+    _alert_state_loaded = True
+    try:
+        if os.path.exists(_ALERT_STATE_PATH):
+            import json
+            with open(_ALERT_STATE_PATH, "r", encoding="utf-8") as f:
+                raw = json.load(f) or {}
+            if isinstance(raw, dict):
+                _alert_state = {str(k): bool(v) for k, v in raw.items()}
+    except Exception as e:
+        log.warn("alert_state_load_failed", error=str(e)[:160])
+        _alert_state = {}
+
+
+def _persist_alert_state() -> None:
+    """Atomic-write `_alert_state` to disk, pruning entries older than
+    14 days so the file stays tiny."""
+    try:
+        import json
+        os.makedirs(os.path.dirname(_ALERT_STATE_PATH), exist_ok=True)
+        # Prune : drop keys whose date suffix is > 14 days old.
+        from datetime import timedelta
+        cutoff = (datetime.now(timezone.utc) - timedelta(days=14)).strftime("%Y-%m-%d")
+        pruned = {
+            k: v for k, v in _alert_state.items()
+            if "|" in k and k.split("|", 1)[1] >= cutoff
+        }
+        tmp = _ALERT_STATE_PATH + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(pruned, f, separators=(",", ":"))
+        os.replace(tmp, _ALERT_STATE_PATH)
+    except Exception as e:
+        log.warn("alert_state_persist_failed", error=str(e)[:160])
+
+
 def _alerted_today(kind: str) -> bool:
-    """True if `kind` already fired today (UTC). Mutates state."""
+    """True if `kind` already fired today (UTC). Mutates + persists state.
+
+    Wave 20.1 : was in-memory only, now hydrates from disk on first
+    call and atomically persists each fire so a daemon restart inside
+    a UTC day doesn't re-fire alerts that already pinged Discord.
+    """
+    _load_alert_state()
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    key = (kind, today)
+    key = f"{kind}|{today}"
     if _alert_state.get(key):
         return True
     _alert_state[key] = True
+    _persist_alert_state()
     return False
 
 
