@@ -223,7 +223,18 @@ def stuck_kill_reset() -> dict[str, int]:
     counters = {"reset": 0, "skipped_active_job": 0, "skipped_recent": 0}
 
     for status, threshold_hours in STUCK_THRESHOLD_HOURS_BY_STATUS.items():
-        rows = safe_select("kills", "id, status, updated_at", status=status)
+        # Wave 27.4 — order by `updated_at.asc` so the oldest stuck
+        # rows surface first, regardless of PostgREST's row cap. The
+        # _limit is intentionally generous (5000) — we want to clear
+        # the whole backlog of stuck rows on each watchdog tick, and
+        # 5000 well exceeds the worst observed multi-day outage.
+        rows = safe_select(
+            "kills",
+            "id, status, updated_at",
+            status=status,
+            _limit=5000,
+            _order="updated_at.asc",
+        )
         active_job_types = STATUS_TO_ACTIVE_JOB_TYPE.get(status, [])
 
         for kill in rows:

@@ -64,11 +64,32 @@ class SupabaseRest:
         r.raise_for_status()
         return True
 
-    def select(self, table: str, columns: str = "*", filters: dict | None = None) -> list[dict]:
+    def select(
+        self,
+        table: str,
+        columns: str = "*",
+        filters: dict | None = None,
+        limit: int | None = None,
+        order: str | None = None,
+    ) -> list[dict]:
+        """PostgREST GET. Supports optional row limit + ORDER BY.
+
+        Wave 27.4 — added `limit` and `order` so per-cycle scans can
+        bound their work explicitly. PostgREST defaults to a max of
+        1000 rows ; without an explicit limit the modules silently
+        truncated their backlog at 1000 once it grew past that. With
+        `order='created_at.desc'` we can also drain the backlog
+        oldest-first via a server-side cursor instead of fetching the
+        full table.
+        """
         params = {"select": columns}
         if filters:
             for k, v in filters.items():
                 params[k] = f"eq.{v}"
+        if limit is not None:
+            params["limit"] = str(int(limit))
+        if order is not None:
+            params["order"] = order
         r = self._get_client().get(f"{self.base}/{table}", params=params)
         r.raise_for_status()
         return r.json() or []
@@ -168,13 +189,33 @@ def safe_update(table: str, data: dict, match_col: str, match_val: str) -> bool:
     return False
 
 
-def safe_select(table: str, columns: str = "*", **filters) -> list[dict]:
-    """Select with empty list on failure."""
+def safe_select(
+    table: str,
+    columns: str = "*",
+    *,
+    _limit: int | None = None,
+    _order: str | None = None,
+    **filters,
+) -> list[dict]:
+    """Select with empty list on failure.
+
+    Wave 27.4 — accepts ``_limit`` and ``_order`` (underscore-prefixed
+    so they don't collide with column-named filters). Per-cycle scans
+    that previously relied on PostgREST's implicit 1000-row cap should
+    pass an explicit ``_limit`` so the worker visibly bounds its work
+    instead of silently truncating once the backlog crosses 1000 rows.
+    """
     db = get_db()
     if not db:
         return []
     try:
-        return db.select(table, columns=columns, filters=filters)
+        return db.select(
+            table,
+            columns=columns,
+            filters=filters,
+            limit=_limit,
+            order=_order,
+        )
     except Exception as e:
         log.warn("supabase_select_failed", table=table, error=str(e))
         return []

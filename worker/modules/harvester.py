@@ -533,15 +533,33 @@ def _detect_multi_kill(delta_kills: int) -> str | None:
 
 # ─── Daemon loop ────────────────────────────────────────────────────────────
 
+GAMES_PER_CYCLE = 100
+
+
 @run_logged()
 async def run() -> int:
-    """Scan games whose kills haven't been extracted yet and fill them in."""
+    """Scan games whose kills haven't been extracted yet and fill them in.
+
+    Wave 27.4 hardening :
+      * Per-cycle bound (GAMES_PER_CYCLE) + oldest-first ordering. The
+        previous unbounded scan silently truncated at PostgREST's 1000-
+        row default once the backlog crossed it.
+      * kills_extracted is only flipped to True when EVERY KC kill row
+        was confirmed inserted in Supabase. A safe_insert that fell
+        back to local_cache (DB outage, transient HTTP error) returns
+        None ; we'd previously still flip the flag, so the cache replay
+        would land the rows in Supabase but the harvester would never
+        re-run on the same game. With explicit success tracking, a
+        partial-failure leaves the game extractable on the next cycle.
+    """
     log.info("harvester_scan_start")
 
     games = safe_select(
         "games",
         "id, external_id, kills_extracted, state",
         kills_extracted=False,
+        _limit=GAMES_PER_CYCLE,
+        _order="created_at.asc",
     )
 
     total_kills = 0
@@ -577,24 +595,40 @@ async def run() -> int:
         ]
         skipped = len(kills) - len(kc_kills)
 
+        # Wave 27.4 — track per-row insert outcome. safe_insert returns
+        # None when the DB write failed and the row was buffered to the
+        # local cache for replay. The replay will eventually land it,
+        # but we shouldn't claim "extracted" on a partial confirm — a
+        # crash before flush would silently drop the cached rows AND
+        # mask the game from the next harvester scan.
+        confirmed = 0
         for k in kc_kills:
-            safe_insert("kills", k.to_db_dict())
+            if safe_insert("kills", k.to_db_dict()) is not None:
+                confirmed += 1
             total_kills += 1
 
-        # CRITICAL : only mark as extracted when we ACTUALLY got kills.
-        # Marking unconditionally was the cause of the "108 games extracted
-        # but 103 empty" bug — those games then got skipped on every
-        # subsequent scan even though the data could be recovered later
-        # via gol.gg or a re-attempt of the live feed.
-        if kc_kills:
+        # CRITICAL : only mark as extracted when we got kills AND every
+        # row was confirmed in Supabase. Confirmed < kc_kills means at
+        # least one row is sitting in the local cache, so leave the
+        # flag False so the next cycle retries.
+        if kc_kills and confirmed == len(kc_kills):
             safe_update("games", {"kills_extracted": True}, "id", game["id"])
             if skipped:
                 log.info(
                     "harvester_filtered_non_kc",
                     game_id=game["id"][:8],
-                    inserted=len(kc_kills),
+                    inserted=confirmed,
                     skipped=skipped,
                 )
+        elif kc_kills and confirmed < len(kc_kills):
+            log.warn(
+                "harvester_partial_insert",
+                game_id=game["id"][:8],
+                external=game["external_id"],
+                inserted=confirmed,
+                attempted=len(kc_kills),
+                skipped_non_kc=skipped,
+            )
         else:
             log.warn(
                 "harvester_zero_kills",

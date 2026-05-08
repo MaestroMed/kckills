@@ -24,12 +24,27 @@ ORACLES_CSV_PATH = os.environ.get(
 )
 
 
+GAMES_PER_CYCLE = 100
+
+
 async def run():
-    """Check for games missing data and try fallback sources."""
+    """Check for games missing data and try fallback sources.
+
+    Wave 27.4 — bounded per-cycle scan oldest-first. The unbounded scan
+    silently truncated at PostgREST's 1000-row default once the backlog
+    crossed it, hiding the oldest games behind newer ones forever.
+    """
     log.info("data_fallback_start")
 
-    # Find games that were detected but have no kills extracted
-    games = safe_select("games", "id, external_id, kills_extracted, data_source", kills_extracted=False)
+    # Find games that were detected but have no kills extracted.
+    # Oldest-first so we drain the backlog in arrival order.
+    games = safe_select(
+        "games",
+        "id, external_id, kills_extracted, data_source",
+        kills_extracted=False,
+        _limit=GAMES_PER_CYCLE,
+        _order="created_at.asc",
+    )
     if not games:
         log.info("data_fallback_no_missing_games")
         return
