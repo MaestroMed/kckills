@@ -67,6 +67,21 @@ hero data, Gemini 3.1 Lite as default). Worker fully operational
 
 ### Mobile / scroll (added 2026-05-08)
 - **M1** ~~/scroll mobile renderer crash~~ — **✅ FIXED Wave 19.6 + 19.7** : SSR cap 500/300 → 150/80 + viewport virtualisation (5-item window). Production HTML 4.57 MB → 1.03 MB (-78 %). Mobile renderer no longer OOMs.
+- **M2** ~~/player/[slug] match-history OOM risk for alumni 200+ matches~~ — **✅ FIXED Wave 20.1** : binary `showAll` toggle replaced with bounded `Charger plus` pagination (initial 20, +30 per click, capped at 200). Filter-driven exploration covers the long tail.
+
+### Worker observability (Wave 20.1 — audit follow-ups)
+- **OBS-1** ~~Silent thumbnail extraction failures in clipper.py~~ — **✅ FIXED** : 3 swallowed `except` paths now log with kill_id + error context.
+- **OBS-2** ~~OG skip silently flips to published~~ — **✅ FIXED** : `og_skipped_already_uploaded` event with status_flip_ok.
+- **OBS-3** ~~Watchdog alert cooldown lost on restart~~ — **✅ FIXED** : file-backed `worker/state/alert_cooldowns.json` with atomic-write + 14-day prune.
+- **OBS-4** ~~Backfill quota runaway~~ — **✅ FIXED** : `KCKILLS_BACKFILL_GEMINI_FLOOR` (default 50) circuit-breaker stops the loop early with a clean log instead of accumulating silent failures.
+- **OBS-5** ~~Gemini quota log without context~~ — **✅ FIXED** : `gemini_quota_exhausted` event now carries `remaining` count + `reset_hour_utc=7`.
+- **OBS-6** ~~JSON parse error without kill context~~ — **✅ FIXED** : bumped warn → error, added killer/victim/decode_error.
+
+Deferred (medium severity, no immediate failure mode) :
+- Per-format R2 upload error logging
+- Translator migration probe on startup
+- Push subscription cooldown table
+- Heartbeat module-death detection
 
 ---
 
@@ -108,6 +123,9 @@ hero data, Gemini 3.1 Lite as default). Worker fully operational
 | **Wave 19** Migrations + audit follow-ups | W15, W18 | ✅ shipped 2026-05-08 |
 | **Wave 19.5** LiveBanner + Kameto stream | desktop menu fix + co-stream URL | ✅ shipped 2026-05-08 |
 | **Wave 19.6 / 19.7** Mobile /scroll OOM | M1 | ✅ shipped 2026-05-08 |
+| **Wave 19.8** /scroll cap restored + env-tunable | bonus | ✅ shipped 2026-05-08 |
+| **Wave 19.9** GeminiProvider.analyze_clip wired (router groundwork) | AI Router phase 2 (partial) | ✅ shipped 2026-05-08 |
+| **Wave 20.1** Audit follow-ups (3 batches) | observability + mobile yellow flag | ✅ shipped 2026-05-08 |
 
 **Open items**
 
