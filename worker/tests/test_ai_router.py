@@ -382,21 +382,85 @@ def test_cerebras_provider_no_vision():
 
 @pytest.mark.asyncio
 async def test_phase2_remaining_stub_providers_still_raise():
-    """Wave 11 status update : Anthropic + OpenAI are now real impls
-    (see test_ai_providers_real.py). Only Gemini and Cerebras remain
-    as phase-2 stubs ; their analyze_clip MUST still raise
-    ProviderUnavailable so the router cleanly falls back to a real
-    provider in production.
+    """Wave 19.9 status update : GeminiProvider is now a real impl
+    backed by services.gemini_client.analyze (see
+    test_gemini_provider_real). Anthropic + OpenAI were wired in
+    Wave 11. Only Cerebras remains as a phase-2 stub ; its
+    analyze_clip MUST still raise ProviderUnavailable so the router
+    cleanly falls back to a real provider in production.
 
     This test pins the contract for the unfinished stubs so the next
     wave doesn't accidentally claim "wired" without shipping the SDK
     integration. Drop the cls from this loop when its phase-2 wiring
     is committed.
     """
-    for cls in (GeminiProvider, CerebrasProvider):
+    for cls in (CerebrasProvider,):
         p = cls(api_key="fake")
         with pytest.raises(ProviderUnavailable, match="phase 2"):
             await p.analyze_clip(AITask(prompt="x", requires_vision=False))
+
+
+@pytest.mark.asyncio
+async def test_gemini_provider_passes_through_to_gemini_client(monkeypatch):
+    """Wave 19.9 — GeminiProvider.analyze_clip wraps gemini_client.analyze.
+
+    We monkey-patch the gemini_client.analyze function to return a
+    canned dict and verify the provider hands the payload back as a
+    well-formed AnalysisResult with usage tokens populated.
+    """
+    canned = {
+        "highlight_score": 7.5,
+        "tags": ["outplay", "clean"],
+        "description_fr": "Caliste outplay 1v2 dans la jungle",
+        "confidence_score": 0.93,
+        "_usage": {
+            "prompt_tokens": 412,
+            "candidates_tokens": 88,
+            "total_tokens": 500,
+        },
+        "_model": "gemini-3.1-flash-lite",
+    }
+
+    async def fake_analyze(prompt, video_path=None):
+        # The provider MUST forward both fields verbatim.
+        assert prompt == "test prompt"
+        assert video_path == "/tmp/clip.mp4"
+        return canned
+
+    from services import gemini_client  # noqa: F401  (ensures module load)
+
+    monkeypatch.setattr("services.gemini_client.analyze", fake_analyze)
+    p = GeminiProvider(api_key="fake")
+    result = await p.analyze_clip(
+        AITask(
+            prompt="test prompt",
+            clip_url="/tmp/clip.mp4",
+            requires_vision=True,
+        )
+    )
+    assert result.highlight_score == 7.5
+    assert result.tags == ["outplay", "clean"]
+    assert result.description == "Caliste outplay 1v2 dans la jungle"
+    assert result.confidence == 0.93
+    assert result.input_tokens == 412
+    assert result.output_tokens == 88
+    assert result.raw_response is canned
+
+
+@pytest.mark.asyncio
+async def test_gemini_provider_returns_unavailable_when_client_returns_none(monkeypatch):
+    """If gemini_client.analyze returns None (no SDK / quota / parse
+    error — gemini_client logs the specific cause itself), the provider
+    surfaces a uniform ProviderUnavailable so the router cleanly falls
+    back to the next candidate."""
+
+    async def fake_analyze(prompt, video_path=None):
+        return None
+
+    monkeypatch.setattr("services.gemini_client.analyze", fake_analyze)
+    p = GeminiProvider(api_key="fake")
+    with pytest.raises(ProviderUnavailable, match="returned None"):
+        await p.analyze_clip(AITask(prompt="x", requires_vision=False))
 
 
 @pytest.mark.asyncio

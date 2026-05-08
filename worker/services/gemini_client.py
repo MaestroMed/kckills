@@ -134,7 +134,27 @@ async def analyze(prompt: str, video_path: str | None = None) -> dict | None:
             text = text.split("```")[1]
             if text.startswith("json"):
                 text = text[4:]
-        return json.loads(text)
+        result = json.loads(text)
+        # Wave 19.9 — surface usage_metadata + model name on the returned
+        # dict so callers (notably services/ai_providers/gemini.py and
+        # any future cost-tracking dashboard) can compute spend without
+        # re-running the request. Mirrors the pattern in
+        # modules/analyzer.py — additive keys prefixed with "_" so
+        # existing consumers (qc.py reads "is_gameplay" / "timer") stay
+        # unaffected.
+        try:
+            um = getattr(response, "usage_metadata", None)
+            if um is not None and isinstance(result, dict):
+                result["_usage"] = {
+                    "prompt_tokens": getattr(um, "prompt_token_count", None),
+                    "candidates_tokens": getattr(um, "candidates_token_count", None),
+                    "total_tokens": getattr(um, "total_token_count", None),
+                }
+                result["_model"] = model_name
+        except Exception:
+            # Never let usage-extraction failure mask the actual result.
+            pass
+        return result
 
     except json.JSONDecodeError:
         log.warn("gemini_invalid_json")
