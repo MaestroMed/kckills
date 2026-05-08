@@ -54,6 +54,7 @@ When you add a new script :
 | `force_publish_stuck.py` | legacy — superseded by `auto_fix_loop` | One-shot : flip `analyzed → published` when `is_publishable=true`. |
 | `lab_generate_evaluations.py` | when blind-A/B benchmarking models | 5 clips × 4 models → `lab_evaluations`. |
 | `live_dashboard.py` | during incidents | 5 s-refresh terminal dashboard : published count, queue, DLQ. |
+| `production_rate.py` | "what's our throughput ?" | Single-shot snapshot : pub rate × time windows + detection rate + jobs/24h + status distribution + blocked-bucket diagnosis. Pure ASCII output (Windows-cp1252-safe). |
 | `quarantine_offset_zero.py` | one-shot after legacy ingestion | Nullify `vod_offset_seconds=0` + downgrade affected clips to `analyzed`. |
 | `queue_status.py` | quick triage | Single snapshot of `pipeline_jobs` counts per kind/status. |
 | `reanalyze_with_premium.py` | when re-running Pro tier on Lite output | Back-run Pro 2.5 over Flash-Lite descriptions. ~€37.50 budget per full run. |
