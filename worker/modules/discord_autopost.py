@@ -321,76 +321,80 @@ async def run() -> int:
     failed = 0
     rate_limited = False
 
-    async with httpx.AsyncClient() as client:
-        for kill in eligible:
-            if rate_limited:
-                # 429 hit earlier in the batch — bail until next cycle.
-                break
+    # Wave 27.11 — pooled client survives across daemon cycles, so the
+    # next autopost run lands on a warm socket. The per-batch context
+    # manager closed the connection every time the run() returned.
+    from services import http_pool
+    client = http_pool.get("discord_webhook", timeout=10)
+    for kill in eligible:
+        if rate_limited:
+            # 429 hit earlier in the batch — bail until next cycle.
+            break
 
-            # Scheduler enforces the 2.5s inter-call delay (see CLAUDE.md
-            # §3.9). Returns False if a daily quota would block — there's
-            # no daily quota for "discord" so this stays True.
-            await scheduler.wait_for("discord")
+        # Scheduler enforces the 2.5s inter-call delay (see CLAUDE.md
+        # §3.9). Returns False if a daily quota would block — there's
+        # no daily quota for "discord" so this stays True.
+        await scheduler.wait_for("discord")
 
-            embed = _build_embed(kill)
-            try:
-                status, retry_after = await _post_embed(client, webhook_url, embed)
-            except Exception as e:
-                log.warn(
-                    "discord_autopost_post_threw",
-                    kill_id=kill["id"][:8], error=str(e)[:160],
-                )
-                failed += 1
-                continue
+        embed = _build_embed(kill)
+        try:
+            status, retry_after = await _post_embed(client, webhook_url, embed)
+        except Exception as e:
+            log.warn(
+                "discord_autopost_post_threw",
+                kill_id=kill["id"][:8], error=str(e)[:160],
+            )
+            failed += 1
+            continue
 
-            if status in (200, 204):
-                ok = await asyncio.to_thread(_stamp_posted, kill["id"])
-                if ok:
-                    posted += 1
-                    log.info(
-                        "discord_autopost_posted",
-                        kill_id=kill["id"][:8],
-                        score=kill.get("highlight_score"),
-                        multi=kill.get("multi_kill"),
-                    )
-                else:
-                    # Webhook delivered but DB update failed — leave the
-                    # row unstamped so we retry next cycle. Discord may
-                    # see a duplicate but that's better than losing the
-                    # post permanently.
-                    failed += 1
-                    log.warn(
-                        "discord_autopost_stamp_failed",
-                        kill_id=kill["id"][:8],
-                    )
-            elif status == 429:
-                rate_limited = True
-                log.warn(
-                    "discord_autopost_rate_limited",
+        if status in (200, 204):
+            ok = await asyncio.to_thread(_stamp_posted, kill["id"])
+            if ok:
+                posted += 1
+                log.info(
+                    "discord_autopost_posted",
                     kill_id=kill["id"][:8],
-                    retry_after=retry_after,
+                    score=kill.get("highlight_score"),
+                    multi=kill.get("multi_kill"),
                 )
-                # Don't update the DB — the row stays unposted and will
-                # surface again next cycle (60s later, well past any
-                # reasonable Discord retry_after).
-            elif 500 <= status < 600:
+            else:
+                # Webhook delivered but DB update failed — leave the
+                # row unstamped so we retry next cycle. Discord may
+                # see a duplicate but that's better than losing the
+                # post permanently.
                 failed += 1
                 log.warn(
-                    "discord_autopost_5xx",
-                    kill_id=kill["id"][:8], status=status,
+                    "discord_autopost_stamp_failed",
+                    kill_id=kill["id"][:8],
                 )
-                # No DB update → retried next cycle. Don't bail the batch
-                # because 5xx can be transient and the next clip may
-                # land on a healthy Discord shard.
-            else:
-                # 4xx other than 429 — likely a malformed embed or a bad
-                # webhook URL. Log loudly but leave the row unstamped so
-                # the operator notices the backlog growing.
-                failed += 1
-                log.error(
-                    "discord_autopost_4xx",
-                    kill_id=kill["id"][:8], status=status,
-                )
+        elif status == 429:
+            rate_limited = True
+            log.warn(
+                "discord_autopost_rate_limited",
+                kill_id=kill["id"][:8],
+                retry_after=retry_after,
+            )
+            # Don't update the DB — the row stays unposted and will
+            # surface again next cycle (60s later, well past any
+            # reasonable Discord retry_after).
+        elif 500 <= status < 600:
+            failed += 1
+            log.warn(
+                "discord_autopost_5xx",
+                kill_id=kill["id"][:8], status=status,
+            )
+            # No DB update → retried next cycle. Don't bail the batch
+            # because 5xx can be transient and the next clip may
+            # land on a healthy Discord shard.
+        else:
+            # 4xx other than 429 — likely a malformed embed or a bad
+            # webhook URL. Log loudly but leave the row unstamped so
+            # the operator notices the backlog growing.
+            failed += 1
+            log.error(
+                "discord_autopost_4xx",
+                kill_id=kill["id"][:8], status=status,
+            )
 
     note(items_processed=posted, items_failed=failed)
     log.info(

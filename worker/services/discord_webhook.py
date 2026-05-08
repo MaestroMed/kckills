@@ -1,10 +1,17 @@
-"""Discord webhook notifications."""
+"""Discord webhook notifications.
 
-import httpx
+Wave 27.11 — uses :mod:`services.http_pool` so a single keep-alive
+client serves the whole worker session. A high-score kill cluster (e.g.
+match end with 4-5 published clips in a 10-second window) used to burn
+4-5 fresh TCP+TLS handshakes against discord.com ; now they share a
+warm socket.
+"""
+
 import structlog
 from datetime import datetime, timezone
 from config import config
 from scheduler import scheduler
+from services import http_pool
 
 log = structlog.get_logger()
 
@@ -16,6 +23,8 @@ async def send(content: str = "", embed: dict | None = None):
     a misconfigured webhook URL or Discord rate-limit shows up in the
     daemon logs instead of "why aren't I getting any notifications".
     Still NEVER re-raises — Discord must not block the worker.
+
+    Wave 27.11 — pooled httpx.AsyncClient.
     """
     if not config.DISCORD_WEBHOOK_URL:
         return
@@ -26,17 +35,17 @@ async def send(content: str = "", embed: dict | None = None):
     if embed:
         payload["embeds"] = [embed]
     try:
-        async with httpx.AsyncClient(timeout=10) as client:
-            r = await client.post(config.DISCORD_WEBHOOK_URL, json=payload)
-            # Discord returns 204 on success ; 4xx = bad webhook,
-            # 429 = rate-limited, 5xx = Discord's problem. All worth
-            # surfacing.
-            if r.status_code >= 400:
-                log.warn(
-                    "discord_webhook_non_2xx",
-                    status=r.status_code,
-                    body=(r.text or "")[:200],
-                )
+        client = http_pool.get("discord_webhook", timeout=10)
+        r = await client.post(config.DISCORD_WEBHOOK_URL, json=payload)
+        # Discord returns 204 on success ; 4xx = bad webhook,
+        # 429 = rate-limited, 5xx = Discord's problem. All worth
+        # surfacing.
+        if r.status_code >= 400:
+            log.warn(
+                "discord_webhook_non_2xx",
+                status=r.status_code,
+                body=(r.text or "")[:200],
+            )
     except Exception as e:
         log.warn(
             "discord_webhook_failed",

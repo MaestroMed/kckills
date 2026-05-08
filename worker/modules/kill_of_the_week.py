@@ -144,12 +144,17 @@ async def _post_discord(kill: dict, valid_from: datetime, valid_to: datetime) ->
         embed["thumbnail"] = {"url": kill["thumbnail_url"]}
 
     try:
-        async with httpx.AsyncClient(timeout=10) as client:
-            await client.post(
-                webhook,
-                json={"content": "@everyone Le **Kill of the Week** est tombé 🔥",
-                      "embeds": [embed]},
-            )
+        # Wave 27.11 — pooled discord client. Once-per-week call so the
+        # win is small, but the pool reuse means we benefit from the
+        # already-warm Discord socket if the daily/autopost paths fired
+        # in the same session.
+        from services import http_pool
+        client = http_pool.get("discord_webhook", timeout=10)
+        await client.post(
+            webhook,
+            json={"content": "@everyone Le **Kill of the Week** est tombé 🔥",
+                  "embeds": [embed]},
+        )
         log.info("kotw_discord_pushed", kill_id=kill["id"])
     except Exception as e:
         log.warn("kotw_discord_post_failed", error=str(e))
