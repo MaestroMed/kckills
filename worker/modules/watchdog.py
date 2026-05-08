@@ -511,6 +511,91 @@ def _kills_published_today(db) -> int:
         return 0
 
 
+def _supabase_count(
+    db,
+    table: str,
+    params: dict[str, str],
+    field: str = "watchdog_count",
+) -> int:
+    """Generic count helper for the daily-report metric block.
+
+    Wraps PostgREST's count=exact pattern with the same defensive logic
+    as `_kills_published_today` (handles HTTP 200 + 206, empty header,
+    `*` non-numeric total). Errors are logged + return 0 so the daily
+    report still ships with a partial picture rather than crashing.
+    """
+    if db is None:
+        return 0
+    try:
+        client = db._get_client()
+        r = client.get(
+            f"{db.base}/{table}",
+            params={**params, "select": "id", "limit": "1"},
+            headers={**db.headers, "Prefer": "count=exact"},
+        )
+        # Both 200 (full) and 206 (partial-content) are success — see
+        # the matching fix in scripts/production_rate.py for the same
+        # gotcha.
+        if r.status_code not in (200, 206):
+            log.warn(
+                "watchdog_count_unexpected_status",
+                field=field,
+                status=r.status_code,
+            )
+            return 0
+        cr = r.headers.get("content-range") or ""
+        if "/" not in cr:
+            return 0
+        tail = cr.rsplit("/", 1)[-1]
+        if not tail or tail == "*":
+            return 0
+        try:
+            return int(tail)
+        except ValueError:
+            return 0
+    except Exception as e:
+        log.warn(
+            "watchdog_count_failed",
+            field=field,
+            table=table,
+            error=str(e)[:160],
+        )
+        return 0
+
+
+def _kills_detected_today(db) -> int:
+    """Real count of kills created today (any status), measures
+    sentinel + harvester intake. Wave 20.7 — added to the daily
+    report so the operator can see "raw input" vs "real publish"
+    side by side."""
+    today_start = datetime.now(timezone.utc).replace(
+        hour=0, minute=0, second=0, microsecond=0
+    )
+    return _supabase_count(
+        db,
+        "kills",
+        {"created_at": f"gte.{today_start.isoformat()}"},
+        field="kills_detected_today",
+    )
+
+
+def _published_total(db) -> int:
+    """All-time count of kills currently published. Lets the operator
+    track catalog growth in the daily summary."""
+    return _supabase_count(
+        db,
+        "kills",
+        {"status": "eq.published"},
+        field="published_total",
+    )
+
+
+def _catalog_total(db) -> int:
+    """All-time total kills (any status). Combined with `published_total`
+    gives a coverage % the operator can sanity-check at a glance."""
+    return _supabase_count(db, "kills", {}, field="catalog_total")
+
+
 # ─── Wave 14 proactive alerts ─────────────────────────────────────────
 
 
@@ -708,6 +793,15 @@ def build_daily_report() -> dict:
         log.warn("watchdog_daily_disk_failed", error=str(e)[:160])
         disk = None
 
+    # Wave 20.7 — surface catalog totals + intake rate so the daily
+    # Discord embed answers "are we keeping up ?" at a glance, not just
+    # "how many published today".
+    pub_total = _published_total(db)
+    cat_total = _catalog_total(db)
+    coverage_pct = (
+        (pub_total / cat_total * 100) if cat_total > 0 else 0.0
+    )
+
     return {
         "scheduler": {
             "gemini_calls":   stats["daily_counts"].get("gemini", 0),
@@ -716,6 +810,10 @@ def build_daily_report() -> dict:
         },
         "cache_pending":      cache.pending_count(),
         "kills_published_today": _kills_published_today(db),
+        "kills_detected_today":  _kills_detected_today(db),
+        "published_total":    pub_total,
+        "catalog_total":      cat_total,
+        "coverage_pct":       round(coverage_pct, 1),
         "top_error_codes":    _top_error_codes(runs, n=5),
         "dlq_growth":         _dlq_growth(db),
         "per_module_latency": _per_module_latency(runs),
@@ -734,7 +832,19 @@ def _format_report_lines(report: dict) -> list[str]:
     lines: list[str] = []
 
     sched = report.get("scheduler") or {}
-    lines.append(f"**Kills published today** : {report.get('kills_published_today', 0)}")
+    pub_today = report.get("kills_published_today", 0)
+    detected_today = report.get("kills_detected_today", 0)
+    pub_total = report.get("published_total", 0)
+    cat_total = report.get("catalog_total", 0)
+    coverage = report.get("coverage_pct", 0.0)
+    lines.append(
+        f"**Pipeline today** : {pub_today} published / "
+        f"{detected_today} detected"
+    )
+    lines.append(
+        f"**Catalog** : {pub_total} live / {cat_total} total "
+        f"({coverage} %)"
+    )
     lines.append(
         f"**Gemini** : {sched.get('gemini_calls', 0)} calls, "
         f"{sched.get('gemini_remaining', 0)} left"
