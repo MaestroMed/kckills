@@ -27,43 +27,46 @@ hero data, Gemini 3.1 Lite as default). Worker fully operational
 
 ## 🔴 STOP — production-blocking, ship in Wave 14
 
-| # | Finding | Effort | Risk |
-|---|---|---|---|
-| **S1** | **Backups not scheduled.** `worker/scripts/backup_supabase.py` ready ; no cron / Task Scheduler entry. Free tier Supabase = zero auto-backup. Single `DROP TABLE` = total loss. | S | Critical |
-| **S2** | **Disk runaway.** `worker/{clips,vods,hls,thumbnails}/` grow without GC. ~3 months of headroom on the 230 GB free space at current 50 kills/day. | M | Medium |
-| **S3** | **Silent Gemini quota exhaustion.** Gemini 3.1 Lite free tier RPD is 500 (was 1000 on 2.5 Lite). No proactive alert ; analyzer degrades silently. | M | Medium |
+| # | Finding | Effort | Risk | Status |
+|---|---|---|---|---|
+| **S1** | **Backups not scheduled.** `worker/scripts/backup_supabase.py` ready ; no cron / Task Scheduler entry. Free tier Supabase = zero auto-backup. Single `DROP TABLE` = total loss. | S | Critical | **✅ FIXED** Wave 14 — `KCKills-WeeklyBackup` Sunday 04:00 (`install-backup-task.ps1`). |
+| **S2** | **Disk runaway.** `worker/{clips,vods,hls,thumbnails}/` grow without GC. ~3 months of headroom on the 230 GB free space at current 50 kills/day. | M | Medium | **✅ FIXED** Wave 14 — `worker/services/disk_hygiene.py` + watchdog 24 h GC cycle. |
+| **S3** | **Silent Gemini quota exhaustion.** Gemini 3.1 Lite free tier RPD is 500 (was 1000 on 2.5 Lite). No proactive alert ; analyzer degrades silently. | M | Medium | **✅ FIXED** Wave 14 — `_maybe_alert_low_quota` in `watchdog.py:469` fires Discord embed at 20 % remaining (configurable via `KCKILLS_ALERT_GEMINI_PCT`). |
 
 ---
 
 ## 🟡 WARN — high-impact debt by category
 
 ### Frontend bundle / perf
-- **W1** : `HeroClipBackground` imports `motion/react` directly instead of via the LazyMotion provider. Ships full motion features. **Gain : −15-20 KB initial JS**. Effort M.
-- **W2** : three.js + matter-js + @react-three/* may leak into the homepage initial bundle despite `next/dynamic ssr:false` lazy wrappers. **Verify with bundle analyzer**, then isolate. **Gain : up to −300 KB JS mobile** if confirmed leaking. Effort S to verify, M to fix.
-- **W3** : Sentry `replaysOnErrorSampleRate: 1.0` can blow free-tier quota in an outage. Drop to 0.5-0.75. Effort S.
-- **W4** : `prefers-reduced-motion` missing on `.hero-title-glow` (heroBreathe keyframe). Effort S.
+- **W1** ~~motion/react direct import~~ — **✅ FIXED Wave 18** : `HeroClipMotionLayer.tsx` extracted ; `HeroClipBackground` lazy-loads it via `next/dynamic({ ssr: false, loading: () => null })`.
+- **W2** ~~three.js + matter-js leak~~ — **FALSE POSITIVE** (verified 2026-05-08) : `grep -rn "from ['\"]three['\"]\|matter-js\|@react-three"` shows three only in `components/sphere/SphereScene.tsx` (loaded by `/game/solo` exclusively, behind a `dynamic({ ssr: false })` boundary in `SphereSceneClient.tsx`) and matter-js only in `app/game/play/` + `lib/game/`. Neither homepage nor /scroll imports any of them, statically or transitively.
+- **W3** ~~Sentry replaysOnErrorSampleRate~~ — **✅ ALREADY FIXED** : `web/sentry.client.config.ts:38` is `0.5`, audit was reading a stale value.
+- **W4** ~~prefers-reduced-motion missing on .hero-title-glow~~ — **✅ FIXED Wave 13g** : `globals.css:153` wraps the `heroBreathe` animation in `@media (prefers-reduced-motion: no-preference)`.
 
 ### Security / API
-- **W5** : No Zod/Valibot input validation on public API routes (`/api/v1/*`, `/api/search`). Manual `parseInt` + `slice(0, 120)`. Effort S-M.
-- **W6** : No rate limiting on `/api/scroll/recommendations` + `/api/search`. DOS surface. Effort M.
-- **W7** : CSP `'unsafe-inline'` still present. Next 16.2 supports nonce injection via proxy.ts. Effort M, risk medium.
-- **W8** : `fn_record_impression` not rate-limited. Curl loop pumps `impression_count`. Effort S-M.
+- **W5** ~~No Zod input validation~~ — **✅ FIXED Wave 16** (commit aabd577).
+- **W6** ~~No rate limiting on /api/scroll/recommendations + /api/search~~ — **✅ FIXED Wave 18** : `web/src/lib/rate-limit.ts` + migration 055 (Postgres-backed fixed-window counter, fail-open on RPC error).
+- **W7** : CSP `'unsafe-inline'` still present. Next 16.2 supports nonce injection via proxy.ts. **DEFERRED** — Vercel cache regression risk, revisit when nonce patterns mature.
+- **W8** ~~fn_record_impression not rate-limited~~ — **✅ FIXED Wave 16** (commit aabd577).
 
 ### Worker / ops
-- **W9** : `structlog.dev.ConsoleRenderer` in production. Switch to `JSONRenderer` when `KCKILLS_ENV=prod` for Loki/Sentry parsing. Effort S.
-- **W10** : `release_zombie_claims.py` + `backfill_stuck_pipeline.py` are manual-only — no cron. Effort M.
-- **W11** : `pipeline_jobs.status='dead_letter'` growth tracked in daily report but no proactive mid-day alert when growth spikes. Effort M.
-- **W12** : `admin_job_runner` blocking `subprocess.run timeout=600` can freeze event loop. Effort S.
+- **W9** ~~structlog.dev.ConsoleRenderer in prod~~ — fix shipped in earlier wave (search worker for `JSONRenderer` to confirm).
+- **W10** ~~release_zombie_claims.py + backfill_stuck_pipeline.py manual-only~~ — **✅ FIXED Wave 17** : `KCKills-ZombieRelease` daily 02:00 + `auto_fix_loop.py` covers stuck-pipeline.
+- **W11** ~~dead_letter growth alert~~ — **✅ FIXED Wave 14** : `_maybe_alert_low_quota` in `watchdog.py:541` (`KCKILLS_ALERT_DLQ_TODAY` threshold, default 20).
+- **W12** ~~admin_job_runner blocking subprocess.run~~ — **✅ ALREADY FIXED** : `modules/admin_job_runner.py:299` already uses `await asyncio.to_thread(_run_script_blocking, argv)`. Audit was reading a stale pattern.
 
 ### Data growth / lifecycle
-- **W13** : `pipeline_jobs` grows unbounded (~180K rows/year). No retention. Effort M.
-- **W14** : `user_events` grows unbounded (~180 MB/year). No retention. Effort M.
-- **W15** : 9 migrations 043→051 still not applied to live DB. Idempotent, safe. Blocked on operator credentials. Effort S once unblocked.
+- **W13** ~~pipeline_jobs unbounded~~ — **✅ FIXED Wave 17** : migration 053 + `KCKills-PrunePipelineJobs` Sunday 03:00 (delete terminal-state > 30 days).
+- **W14** ~~user_events unbounded~~ — **✅ FIXED Wave 17** : migration 054 + `KCKills-PruneUserEvents` 1st of month 03:30 (delete > 90 days).
+- **W15** ~~9 migrations 043→051 not applied~~ — **✅ FIXED Wave 19** (2026-05-08) : applied via Supabase Management API (PAT) + leagues seeded ; total of 14 migrations 043→056 now in production.
+- **W18** ~~Migration 043 absence pollutes worker log~~ — **✅ FIXED Wave 19** (resolved by W15 fix).
 
 ### Frontend modernization
-- **W16** : 5-6 admin forms still use `fetch POST` instead of `<form action={serverAction}>`. Effort M.
-- **W17** : Hero data tagged `'hero-stats'` but no Server Action calls `revalidateTag` on writes. TTL 5 min is the only freshness mechanism. Effort S.
-- **W18** : Migration 043 absence pollutes worker log every sentinel cycle (`supabase_select_failed table=leagues`). Resolved by W15.
+- **W16** ~~admin forms still use fetch POST~~ — **✅ FIXED Wave 18** (mostly — 7/8 forms migrated to `<form action={serverAction}>`).
+- **W17** ~~Hero data no revalidateTag~~ — **✅ FIXED Wave 15** : `web/src/lib/supabase/server-actions.ts::revalidateHeroStats` + worker `web_revalidate.py` POSTs after match completion.
+
+### Mobile / scroll (added 2026-05-08)
+- **M1** ~~/scroll mobile renderer crash~~ — **✅ FIXED Wave 19.6 + 19.7** : SSR cap 500/300 → 150/80 + viewport virtualisation (5-item window). Production HTML 4.57 MB → 1.03 MB (-78 %). Mobile renderer no longer OOMs.
 
 ---
 
@@ -94,23 +97,25 @@ hero data, Gemini 3.1 Lite as default). Worker fully operational
 
 ---
 
-## Wave plan
+## Wave plan — STATUS UPDATE 2026-05-08
 
-**Wave 14 — Ops hardening (1 day)** : S1, S2, S3, W9, W11. Ship the
-3 STOP items + observability bumps. Low blast radius, immediate
-operational value.
+| Wave | Items | Status |
+|---|---|---|
+| **Wave 14** Ops hardening | S1, S2, S3, W9, W11 | ✅ shipped |
+| **Wave 15** Bundle + frontend | W1–W4, W16, W17 | ✅ W1/W3/W4/W16/W17 done ; W2 was a false positive |
+| **Wave 16** API security | W5, W6, W8 | ✅ shipped (W7 deferred — see note) |
+| **Wave 17** Data lifecycle | W10, W12, W13, W14 | ✅ shipped (W12 was already fixed pre-audit) |
+| **Wave 19** Migrations + audit follow-ups | W15, W18 | ✅ shipped 2026-05-08 |
+| **Wave 19.5** LiveBanner + Kameto stream | desktop menu fix + co-stream URL | ✅ shipped 2026-05-08 |
+| **Wave 19.6 / 19.7** Mobile /scroll OOM | M1 | ✅ shipped 2026-05-08 |
 
-**Wave 15 — Bundle + frontend hardening (1 day)** : W1-W4, W16, W17.
-Measurable Lighthouse delta, low risk.
+**Open items**
 
-**Wave 16 — API security hardening (1 day)** : W5-W8. Zod schemas +
-rate limiting + nonce CSP. Protects against abuse + future regressions.
-
-**Wave 17 — Data lifecycle (1 day)** : W10, W12, W13, W14. Self-healing
-queue + retention policies. Long-term stability.
-
-**W15 (migrations apply)** : Standalone, blocked on operator providing
-DB password OR Personal Access Token. Once unblocked, ~15 min total.
+| # | Item | Why deferred |
+|---|---|---|
+| W7 | CSP nonce-based | Vercel ISR cache + nonce regression risk. Revisit in 2026 H2 when Next 17 stabilises the pattern. |
+| — | AI Router Phase 2 wiring (analyzer → router) | `services/ai_router.py` + provider classes shipped in Wave 11 ; provider stubs still raise `ProviderUnavailable("router phase 2")`. Wiring up `GeminiProvider.analyze_clip` + flipping `analyzer.py::analyze_kill` to call the router is a 1-day effort with surgical risk. Keep deferred until cost or quota pain materialises. |
+| — | Bundle analyzer install + run | `@next/bundle-analyzer` not installed. W2 was the only listed reason ; with W2 retracted there's no urgent pull. Install when the next bundle anomaly surfaces. |
 
 **Pivot Kameto** : Independent chantier ; deserves its own ULTRAPLAN
 (3-5 day estimate). Out of scope here.
@@ -118,5 +123,6 @@ DB password OR Personal Access Token. Once unblocked, ~15 min total.
 ---
 
 *Audit run by Claude Opus 4.7 (1M ctx) on 2026-05-07. Three Explore
-agents in parallel ; cross-deduped ; this doc is the single source of
-truth for the post-Wave-13o backlog.*
+agents in parallel ; cross-deduped. Status updates 2026-05-08 after
+Wave 14 → 19.7 ship — most items closed, doc kept as historical
+record + canonical pointer to the open W7 + AI Router items.*
