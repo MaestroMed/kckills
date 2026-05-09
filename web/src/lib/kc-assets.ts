@@ -7,12 +7,35 @@ export const KC_LOGO = "https://static.lolesports.com/teams/1704714951336_KC.png
 // Caliste capitalised). Always look up via `getPlayerPhoto()` below for a
 // case-insensitive read so /player/Kyeahoo (typed with capital K) gets the
 // same hero portrait as /player/kyeahoo (followed from a roster pill).
+//
+// 2026-05-09 — extended with the historical KC roster lineage so the
+// HomeRosterEraCarousel ("La Genèse" → "Le Renouveau") can show real
+// player portraits across 2021-2026 instead of falling back to champion
+// splash art. URLs sourced from :
+//   - Supabase players table image_url (Rekkles, Upset, Vladi already
+//     populated by an earlier worker enrichment pass)
+//   - lolesports.com active rosters (113, Adam, Targamas, Saken still
+//     play LEC / La Ligue Française elsewhere)
+// Still missing (retired or in non-tracked regions) :
+//   Cabochard, Cinkrof, Closer, Hantera, xMatty — fall through to
+//   the splash-art champion fallback.
 const PLAYER_PHOTOS_INTERNAL: Record<string, string> = {
+  // Current 2026 roster
   Canna: "https://static.lolesports.com/players/1774651372836_canna.png",
   Kyeahoo: "https://static.lolesports.com/players/1774652002153_kyeahoo.png",
   Busio: "https://static.lolesports.com/players/1774651329556_busio.png",
   Yike: "https://static.lolesports.com/players/1768550195190_Yike-01.png",
   Caliste: "https://static.lolesports.com/players/1774651348279_caliste.png",
+  // 2024 Pari Coréen
+  Vladi: "https://static.lolesports.com/players/1774652694212_vladi.png",
+  Upset: "https://static.lolesports.com/players/1774652671712_upset.png",
+  // 2022 L'Ère Rekkles
+  Rekkles: "https://static.lolesports.com/players/1768550499548_Rekkles-01.png",
+  "113": "https://static.lolesports.com/players/1737733765521_113.png",
+  // Multi-era (2021/2022/2023 KC core)
+  Adam: "https://static.lolesports.com/players/1754472615484_image6134.png",
+  Targamas: "https://static.lolesports.com/players/1754471520680_image6329.png",
+  Saken: "https://static.lolesports.com/players/1705026448862_saken.png",
 };
 
 /**
