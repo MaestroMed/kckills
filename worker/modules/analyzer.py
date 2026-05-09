@@ -392,11 +392,20 @@ async def analyze_kill(
         )
 
         if clip_path and os.path.exists(clip_path):
-            video_file = client.files.upload(
+            # Wave 27.1 made client.files.upload + _wait_for_file_active
+            # async (offloaded to a thread + exp-backoff polling). The
+            # upload here is still a sync SDK call ; offload it the same
+            # way so it doesn't freeze the event loop. The await on
+            # _wait_for_file_active was missing — without it the call
+            # returned a coroutine (truthy), the `not` check was always
+            # False, and the unawaited file ended up used pre-ACTIVE,
+            # triggering Gemini's FAILED_PRECONDITION.
+            video_file = await asyncio.to_thread(
+                client.files.upload,
                 file=clip_path,
                 config=types.UploadFileConfig(mime_type="video/mp4"),
             )
-            if not _wait_for_file_active(client, video_file):
+            if not await _wait_for_file_active(client, video_file):
                 log.warn("gemini_file_not_active", clip=clip_path)
                 response = client.models.generate_content(
                     model=model_name, contents=prompt, config=gen_config,
