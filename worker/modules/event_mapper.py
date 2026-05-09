@@ -191,9 +191,18 @@ def _kill_to_event_row(kill: dict) -> dict:
             kill.get("killer_champion") is not None
             and kill.get("victim_champion") is not None
         ),
+        # Wave 27.15 — threshold lowered from 80 to 50 chars to align
+        # with analyzer.MIN_DESCRIPTION_CHARS. The two were inconsistent :
+        # analyzer accepted >=50 char descriptions and published them via
+        # kills.status='published' (visible on /scroll), but the canonical
+        # map's qc_described still required >80 chars, so 219 of the 982
+        # currently-published kills had qc_described=FALSE and is_publishable
+        # =FALSE. Once the new event-publisher path takes over fully, those
+        # 219 would silently disappear from the feed. Aligning at 50 keeps
+        # them in.
         "qc_described": (
             kill.get("ai_description") is not None
-            and len(str(kill.get("ai_description") or "")) > 80
+            and len(str(kill.get("ai_description") or "")) >= 50
         ),
         "qc_visible": kill.get("kill_visible"),
         "detection_source": "auto_kill",
@@ -227,9 +236,10 @@ def _moment_to_event_row(moment: dict) -> dict:
             and moment.get("clip_url_vertical") is not None
         ),
         "qc_typed": True,            # classification already enforced by moments table CHECK
+        # Wave 27.15 — same threshold alignment as _kill_to_event_row.
         "qc_described": (
             moment.get("ai_description") is not None
-            and len(str(moment.get("ai_description") or "")) > 80
+            and len(str(moment.get("ai_description") or "")) >= 50
         ),
         "qc_visible": moment.get("kill_visible"),  # might be NULL
         "blue_team_gold": moment.get("blue_team_gold"),
