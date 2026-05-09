@@ -221,6 +221,7 @@ const KILL_SELECT = `
   game_minute_bucket,
   impression_count,
   comment_count,
+  best_thumbnail_seconds,
   created_at,
   data_source,
   status,
