@@ -45,6 +45,10 @@ const PLAYER_PHOTOS_INTERNAL: Record<string, string> = {
   Cinkrof: "https://static.wikia.nocookie.net/lolesports_gamepedia_en/images/c/c4/OG_Cinkrof_2017_Spring.png",
   Hantera: "https://static.wikia.nocookie.net/lolesports_gamepedia_en/images/6/60/SLY_Hantera_2020_Split_1.png",
   xMatty: "https://static.wikia.nocookie.net/lolesports_gamepedia_en/images/1/11/FNCA_xMatty_2019_Split_1.png",
+  // 2026-05-09 — Closer (Can Çelik), KC 2024 jungler. Liquipedia
+  // disambig page is Closer_(Can_Çelik) ; the 2024 jungler IGN was
+  // confused earlier with the Brazilian "Closer (Pedro de Paula)".
+  Closer: "https://static.wikia.nocookie.net/lolesports_gamepedia_en/images/e/e9/RBE_Closer_2018_Split_2.png",
 };
 
 /**
