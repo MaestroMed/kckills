@@ -28,6 +28,7 @@ Per-cycle budget : 5 games × ~5 candidate frames × 1 Gemini call =
 
 from __future__ import annotations
 
+import asyncio
 import os
 import re
 import subprocess
@@ -179,12 +180,20 @@ async def _read_timer_at(youtube_id: str, vod_seconds: int) -> Optional[int]:
         client = get_client()
         if client is None:
             return None
-        img = client.files.upload(
+        # Wave 27.13 — Wave 27.1 made client.files.upload + _wait_for_
+        # file_active async. Both call sites in this function were
+        # missing the await/offload, causing Gemini's FAILED_PRECONDITION
+        # on every timer-read attempt. Fixed alongside analyzer.py:399.
+        img = await asyncio.to_thread(
+            client.files.upload,
             file=frame_path,
             config=types.UploadFileConfig(mime_type="image/jpeg"),
         )
-        _wait_for_file_active(client, img, timeout=30)
-        resp = client.models.generate_content(
+        if not await _wait_for_file_active(client, img, timeout=30):
+            log.warn("vof2_gemini_file_not_active", yt=youtube_id)
+            return None
+        resp = await asyncio.to_thread(
+            client.models.generate_content,
             model=config.GEMINI_MODEL_OFFSET,
             contents=[
                 "Read the in-game League of Legends timer at the top center "

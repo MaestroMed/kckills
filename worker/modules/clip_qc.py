@@ -80,13 +80,20 @@ async def verify_clip_timing(
         if client is None:
             return False, 0
 
-        img = client.files.upload(
+        # Wave 27.14 — Wave 27.1 regression. _wait_for_file_active is now
+        # async ; the upload SDK is sync and was blocking the event loop.
+        # Both wrapped to match the canonical pattern.
+        img = await asyncio.to_thread(
+            client.files.upload,
             file=frame_path,
             config=types.UploadFileConfig(mime_type="image/jpeg"),
         )
-        _wait_for_file_active(client, img, timeout=30)
+        if not await _wait_for_file_active(client, img, timeout=30):
+            log.warn("clip_qc_gemini_file_not_active")
+            return False, 0
 
-        response = client.models.generate_content(
+        response = await asyncio.to_thread(
+            client.models.generate_content,
             model=config.GEMINI_MODEL_QC,
             contents=[
                 "Read the in-game League of Legends timer at the top center. "

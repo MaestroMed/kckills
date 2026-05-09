@@ -121,11 +121,14 @@ async def analyze_and_qc(kill: dict, kill_type: str, cluster_size: int,
         if client is None:
             return {"error": "gemini_sdk_missing"}
 
-        video_file = client.files.upload(
+        # Wave 27.14 — Wave 27.1 regression fix.
+        video_file = await asyncio.to_thread(
+            client.files.upload,
             file=local_path,
             config=types.UploadFileConfig(mime_type="video/mp4"),
         )
-        _wait_for_file_active(client, video_file, timeout=60)
+        if not await _wait_for_file_active(client, video_file, timeout=60):
+            return {"error": "gemini_file_not_active"}
 
         killer = kill.get("killer_champion", "?")
         victim = kill.get("victim_champion", "?")

@@ -73,13 +73,17 @@ async def read_timer_from_clip(clip_path: str, frame_at: int = 15) -> int | None
                 return None
 
             model_name = os.environ.get("GEMINI_MODEL", "gemini-3.1-flash-lite")
-            img = client.files.upload(
+            # Wave 27.14 — Wave 27.1 regression fix.
+            img = await asyncio.to_thread(
+                client.files.upload,
                 file=frame_path,
                 config=types.UploadFileConfig(mime_type="image/jpeg"),
             )
-            _wait_for_file_active(client, img, timeout=30)
+            if not await _wait_for_file_active(client, img, timeout=30):
+                continue
 
-            response = client.models.generate_content(
+            response = await asyncio.to_thread(
+                client.models.generate_content,
                 model=model_name,
                 contents=[
                     "Read the in-game League of Legends timer at the top center of the HUD. "

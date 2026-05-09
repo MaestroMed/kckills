@@ -26,6 +26,7 @@ Daemon-compatible : exposes `async def run() -> int`.
 
 from __future__ import annotations
 
+import asyncio
 import os
 import re
 import subprocess
@@ -255,12 +256,17 @@ async def _read_timer_at(youtube_id: str, vod_seconds: int) -> int | None:
         client = get_client()
         if client is None:
             return None
-        img = client.files.upload(
+        # Wave 27.14 — Wave 27.1 regression fix (await + offload).
+        img = await asyncio.to_thread(
+            client.files.upload,
             file=frame_path,
             config=types.UploadFileConfig(mime_type="image/jpeg"),
         )
-        _wait_for_file_active(client, img, timeout=30)
-        resp = client.models.generate_content(
+        if not await _wait_for_file_active(client, img, timeout=30):
+            log.warn("vof_gemini_file_not_active", yt=youtube_id)
+            return None
+        resp = await asyncio.to_thread(
+            client.models.generate_content,
             model=config.GEMINI_MODEL_OFFSET,
             contents=[
                 "Read the in-game League of Legends timer at the top center "
