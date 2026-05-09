@@ -235,6 +235,40 @@ async def package_clip(kill_id: str, mp4_url: str) -> str | None:
             err = (stderr or b"").decode("utf-8", "ignore")
             err_tail = err[-800:] if len(err) > 800 else err
             log.error("hls_encode_failed", kill_id=kill_id[:8], stderr_tail=err_tail)
+            # Wave 27.12 — detect permanent failures and flag the kill
+            # so we stop hammering the retry loop. Pattern signatures
+            # (audio-only input, missing stream specifier) come from the
+            # actual prod retry-loop bugs observed in the worker log :
+            #   * kill 97c5d3d3 retried 180×/2-day window because its
+            #     source MP4 was AAC-only — split-3 video filter has
+            #     nothing to operate on, ffmpeg returns rc=234.
+            # Setting needs_reclip=true plus a needs_reclip filter in
+            # the candidates query takes these out of rotation. They'll
+            # come back if/when an admin clears the flag (re-clipping
+            # from a different VOD offset is the real fix).
+            permanent_patterns = (
+                "matches no streams",        # filtergraph stream specifier miss
+                "Stream map ",                # stream not found in mapping
+                "Output file does not contain any stream",
+                "Invalid data found",         # corrupt MP4
+            )
+            if any(p in err_tail for p in permanent_patterns):
+                log.warn(
+                    "hls_encode_permanent_fail",
+                    kill_id=kill_id[:8],
+                    reason="audio_only_or_corrupt_input",
+                )
+                try:
+                    safe_update(
+                        "kills",
+                        {"needs_reclip": True},
+                        "id", kill_id,
+                    )
+                except Exception as e:
+                    log.warn(
+                        "hls_needs_reclip_flag_failed",
+                        kill_id=kill_id[:8], error=str(e)[:120],
+                    )
             return None
 
         # Upload all .m3u8 + .ts files to R2
@@ -275,16 +309,21 @@ async def run() -> int:
     # Get up to MAX_PER_RUN clips with MP4 but no HLS
     candidates = safe_select(
         "kills",
-        "id, clip_url_vertical, hls_master_url",
+        "id, clip_url_vertical, hls_master_url, needs_reclip",
         status="published",
         # hls_master_url IS NULL — Supabase REST doesn't support raw `is.null` via kwargs
         # Use a custom filter via httpx instead
     ) or []
 
     # Filter client-side to those without hls_master_url + with vertical clip
+    # + NOT marked needs_reclip (Wave 27.12 — kills that previously failed
+    # HLS encoding due to a permanent issue like audio-only source are
+    # flagged so we don't burn cycles retrying them every scan).
     pending = [
         k for k in candidates
-        if not k.get("hls_master_url") and k.get("clip_url_vertical")
+        if not k.get("hls_master_url")
+        and k.get("clip_url_vertical")
+        and not k.get("needs_reclip")
     ][:MAX_PER_RUN]
 
     if not pending:
