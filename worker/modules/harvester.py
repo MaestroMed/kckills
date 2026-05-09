@@ -554,13 +554,28 @@ async def run() -> int:
     """
     log.info("harvester_scan_start")
 
+    # Wave 27.16 — pull matches.scheduled_at via embed so we can skip
+    # games whose match hasn't started yet. Without this filter the
+    # harvester pounded the live-stats feed for every future-scheduled
+    # game on every cycle (sentinel inserts games as 'pending' the
+    # moment the match appears on the schedule, days before it airs)
+    # generating 70+ unhealthy_window warnings per hour for nothing.
     games = safe_select(
         "games",
-        "id, external_id, kills_extracted, state",
+        "id, external_id, kills_extracted, state, "
+        "matches!games_match_id_fkey(scheduled_at)",
         kills_extracted=False,
         _limit=GAMES_PER_CYCLE,
         _order="created_at.asc",
     )
+
+    # Skip games scheduled more than 30 minutes in the future. 30-minute
+    # buffer covers the common "early-arrived live feed" case where the
+    # broadcast preamble + draft are airing before scheduled_at.
+    from datetime import datetime, timezone
+    from datetime import timedelta as _td
+    now_plus_buffer = datetime.now(timezone.utc) + _td(minutes=30)
+    skipped_future = 0
 
     total_kills = 0
     for game in games:
@@ -570,6 +585,18 @@ async def run() -> int:
             continue
         if not game.get("external_id"):
             continue
+        # Future-match guard
+        match_meta = game.get("matches") or {}
+        sched = match_meta.get("scheduled_at") if isinstance(match_meta, dict) else None
+        if sched:
+            try:
+                sched_dt = datetime.fromisoformat(str(sched).replace("Z", "+00:00"))
+                if sched_dt > now_plus_buffer:
+                    skipped_future += 1
+                    continue
+            except (ValueError, TypeError):
+                # Don't gate on unparseable dates — fall through to extract.
+                pass
 
         kills = await extract_kills_from_game(
             external_game_id=game["external_id"],
@@ -637,5 +664,10 @@ async def run() -> int:
                 skipped_non_kc=skipped,
             )
 
-    log.info("harvester_scan_done", games_processed=len(games), kills_inserted=total_kills)
+    log.info(
+        "harvester_scan_done",
+        games_processed=len(games),
+        kills_inserted=total_kills,
+        skipped_future=skipped_future,
+    )
     return total_kills
