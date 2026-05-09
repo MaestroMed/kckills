@@ -103,6 +103,12 @@ class KillEvent:
     # the script's classify_fight() : solo_kill / pick / gank /
     # skirmish_2v2 / skirmish_3v3 / teamfight_4v4 / teamfight_5v5.
     fight_type: str | None = None
+    # Wave 27.19 — killer/victim player UUIDs computed at insertion via
+    # the deterministic uuid5(namespace, ign.lower()) scheme that
+    # backfill_player_ids.py uses. None when the IGN can't be resolved
+    # (e.g. opposing team without a roster snapshot).
+    killer_player_id: str | None = None
+    victim_player_id: str | None = None
 
     status: str = "raw"
     retry_count: int = 0
@@ -141,4 +147,11 @@ class KillEvent:
         # admin-set value.
         if self.fight_type is not None:
             d["fight_type"] = self.fight_type
+        # Wave 27.19 — same emit-only-when-set pattern for the player
+        # UUIDs so kills with unresolved IGNs don't overwrite an
+        # admin-set value.
+        if self.killer_player_id is not None:
+            d["killer_player_id"] = self.killer_player_id
+        if self.victim_player_id is not None:
+            d["victim_player_id"] = self.victim_player_id
         return d

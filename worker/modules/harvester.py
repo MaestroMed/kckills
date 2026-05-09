@@ -531,6 +531,35 @@ def _detect_multi_kill(delta_kills: int) -> str | None:
     return None
 
 
+# Wave 27.19 — same UUID namespace as scripts/backfill_player_ids.py so
+# the player UUIDs the harvester emits match what the offline backfill
+# would have produced. Don't change without coordinating with the
+# script ; players FK references would break otherwise.
+import uuid as _uuid
+_PLAYER_UUID_NAMESPACE = _uuid.UUID("8c4f6d6f-3f4d-4f8a-9e3b-9a6e6c2b4a10")
+
+
+def _player_uuid_from_ign(raw_ign: str | None) -> str | None:
+    """Compute the deterministic player UUID from a livestats summonerName.
+
+    Strips the team prefix ('KC Caliste' -> 'Caliste') the same way
+    backfill_player_ids.clean_player_name does, then derives uuid5.
+    Returns None for empty/Unknown input so the to_db_dict emit guard
+    correctly skips the column.
+    """
+    if not raw_ign:
+        return None
+    s = raw_ign.strip()
+    if not s or s.lower() == "unknown":
+        return None
+    # Strip leading team prefix (any uppercase 1-4 letters + space)
+    import re as _re
+    s = _re.sub(r"^[A-Z]{1,4}\s+", "", s).strip()
+    if not s:
+        return None
+    return str(_uuid.uuid5(_PLAYER_UUID_NAMESPACE, s.lower()))
+
+
 def _classify_fight_type(n_concurrent: int, n_assists: int, multi_kill: str | None) -> str:
     """Live classification of fight_type at insertion time.
 
@@ -669,6 +698,12 @@ async def run() -> int:
         # the backfill_assists.py 15s tolerance, but slightly tighter
         # for live precision. Falls back to NULL on edge cases ; the
         # post-hoc backfill catches anything missed.
+        #
+        # Wave 27.19 — also resolve killer/victim player UUIDs from
+        # IGNs in the same loop. uuid5(NAMESPACE, ign.lower()) matches
+        # the deterministic scheme in backfill_player_ids.py so the
+        # FKs land on the same player rows the offline backfill would
+        # have produced.
         for k in kc_kills:
             try:
                 # Concurrent = kills in same epoch window (±10s)
@@ -685,9 +720,19 @@ async def run() -> int:
                     multi_kill=k.multi_kill,
                 )
             except Exception as e:
-                # Non-fatal — leave fight_type=None for backfill to fix.
                 log.debug(
                     "harvester_fight_type_failed",
+                    kill_event_epoch=k.event_epoch,
+                    error=str(e)[:120],
+                )
+            # Wave 27.19 — resolve player UUIDs (independent try so a
+            # bad IGN doesn't poison the fight_type computation).
+            try:
+                k.killer_player_id = _player_uuid_from_ign(k.killer_name)
+                k.victim_player_id = _player_uuid_from_ign(k.victim_name)
+            except Exception as e:
+                log.debug(
+                    "harvester_player_uuid_failed",
                     kill_event_epoch=k.event_epoch,
                     error=str(e)[:120],
                 )
