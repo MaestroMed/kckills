@@ -36,6 +36,15 @@ const PLAYER_PHOTOS_INTERNAL: Record<string, string> = {
   Adam: "https://static.lolesports.com/players/1754472615484_image6134.png",
   Targamas: "https://static.lolesports.com/players/1754471520680_image6329.png",
   Saken: "https://static.lolesports.com/players/1705026448862_saken.png",
+  // 2026-05-09 — recovered from Liquipedia/Fandom CDN (lolesports.com
+  // dropped these portraits because the players retired from LEC).
+  // 4/5 of the previously-missing historical KC roster ; Closer (2024
+  // jungler) doesn't have a Liquipedia page image and falls through
+  // to the splash-art fallback.
+  Cabochard: "https://static.wikia.nocookie.net/lolesports_gamepedia_en/images/c/cc/GMB-Cabochard-2015spring.jpg",
+  Cinkrof: "https://static.wikia.nocookie.net/lolesports_gamepedia_en/images/c/c4/OG_Cinkrof_2017_Spring.png",
+  Hantera: "https://static.wikia.nocookie.net/lolesports_gamepedia_en/images/6/60/SLY_Hantera_2020_Split_1.png",
+  xMatty: "https://static.wikia.nocookie.net/lolesports_gamepedia_en/images/1/11/FNCA_xMatty_2019_Split_1.png",
 };
 
 /**

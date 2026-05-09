@@ -20,7 +20,7 @@ const securityHeaders = [
       "script-src 'self' 'unsafe-inline' https://vercel.live https://*.umami.is",
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
       "font-src 'self' https://fonts.gstatic.com",
-      "img-src 'self' data: blob: https://ddragon.leagueoflegends.com https://static.lolesports.com https://clips.kckills.com https://img.youtube.com https://i.ytimg.com https://*.r2.cloudflarestorage.com",
+      "img-src 'self' data: blob: https://ddragon.leagueoflegends.com https://static.lolesports.com https://static.wikia.nocookie.net https://clips.kckills.com https://img.youtube.com https://i.ytimg.com https://*.r2.cloudflarestorage.com",
       "media-src 'self' https://clips.kckills.com https://*.r2.cloudflarestorage.com",
       "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://clips.kckills.com https://fonts.googleapis.com https://fonts.gstatic.com https://ddragon.leagueoflegends.com https://static.lolesports.com https://esports-api.lolesports.com https://img.youtube.com https://vercel.live https://*.r2.cloudflarestorage.com https://*.umami.is",
       "frame-src 'self' https://www.youtube-nocookie.com https://www.youtube.com https://vercel.live",
@@ -90,6 +90,12 @@ const nextConfig: NextConfig = {
       // Image bloque le legacy http:// désormais, toutes les URLs
       // passent par https:// maintenant.
       { protocol: "https", hostname: "static.lolesports.com" },
+      // Liquipedia / Fandom static CDN — used as a fallback source for
+      // historical KC player portraits (Cabochard, Cinkrof, Hantera,
+      // xMatty) that lolesports.com no longer serves because the
+      // players retired or left the LEC. See PLAYER_PHOTOS in
+      // web/src/lib/kc-assets.ts.
+      { protocol: "https", hostname: "static.wikia.nocookie.net" },
     ],
     // Modern formats — Next.js 16 default but explicit for clarity.
     formats: ["image/avif", "image/webp"],
