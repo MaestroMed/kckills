@@ -534,30 +534,38 @@ export function FeedPlayerPool({
             backfaceVisibility: "hidden",
             WebkitBackfaceVisibility: "hidden",
           }}
-          onLoadedMetadata={(e) => {
-            // V42-V43 (Wave 25.2) — once the metadata is loaded
-            // (duration known), seek the video to the analyser-
-            // derived best frame so the FIRST decoded frame the user
-            // sees is the action moment, not a generic cover.
-            const v = e.currentTarget;
-            const itemIdx = slotItemIndex[slotIdx];
-            const item = items[itemIdx];
-            if (!item) return;
-            const seekTo = (item.bestThumbnailSeconds ?? null) ?? 0.5;
-            const dur = v.duration;
-            if (
-              Number.isFinite(seekTo) &&
-              seekTo > 0 &&
-              Number.isFinite(dur) &&
-              dur > 0 &&
-              seekTo < dur
-            ) {
-              try {
-                v.currentTime = seekTo;
-              } catch {
-                /* some browsers throw before metadata fully loaded */
-              }
-            }
+          onLoadedMetadata={() => {
+            // V42-V43 (Wave 25.2) — DISABLED 2026-05-09.
+            //
+            // The original intent was to seek the video to the
+            // analyser-derived "best frame" (kills.best_thumbnail_
+            // seconds, populated from Gemini's
+            // best_thumbnail_timestamp_in_clip_sec) so the first
+            // decoded frame would be the kill moment rather than the
+            // generic 0-sec cover.
+            //
+            // Bug : onLoadedMetadata fires AT LOAD TIME, before the
+            // slot becomes active and autoplay kicks in. The seek
+            // moves currentTime forward, but we never rewind on
+            // play — so when the user (or autoplay) hits play, the
+            // video plays FROM the seek offset to the end. Most
+            // clips have best_thumbnail_seconds in the 30-40 range
+            // (kill landing happens late in the 40s window), so the
+            // visible playback was 2-4 seconds of just the
+            // aftermath. User-facing : "all clips are 3 seconds".
+            //
+            // Fix : the existing <video poster={thumbnail_url}>
+            // already shows the action frame as cover (the worker
+            // extracts the poster.jpg at best_thumbnail_seconds via
+            // ffmpeg -ss), so the V42 video-seek dance was redundant
+            // anyway. Remove it ; the JPEG poster handles the
+            // before-play visual, and playback starts at 0 like
+            // every other VOD player on the planet.
+            //
+            // Re-enable strategy if we want the smooth poster→play
+            // transition back : seek on metadata-load, then rewind
+            // to 0 in an `onplay` handler before the first frame
+            // renders. Defer until V42 has a real spec + tests.
           }}
           onLoadedData={() => {
             // V7 (Wave 21.3) — first decoded frame for this slot's
