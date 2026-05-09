@@ -98,6 +98,11 @@ class KillEvent:
     is_first_blood: bool = False
     multi_kill: str | None = None  # double, triple, quadra, penta
     shutdown_bounty: int = 0
+    # Wave 27.18 — fight_type computed at insertion time (was previously
+    # only set by the post-hoc backfill_assists.py script). Values mirror
+    # the script's classify_fight() : solo_kill / pick / gank /
+    # skirmish_2v2 / skirmish_3v3 / teamfight_4v4 / teamfight_5v5.
+    fight_type: str | None = None
 
     status: str = "raw"
     retry_count: int = 0
@@ -114,7 +119,7 @@ class KillEvent:
         )
 
     def to_db_dict(self) -> dict:
-        return {
+        d = {
             "game_id": self.game_id,
             "event_epoch": self.event_epoch,
             "game_time_seconds": self.game_time_seconds,
@@ -130,3 +135,10 @@ class KillEvent:
             "status": self.status,
             "data_source": self.data_source,
         }
+        # Wave 27.18 — only emit fight_type when the harvester has
+        # computed it ; NULL falls through to the post-hoc
+        # backfill_assists.py classifier without overwriting a manual
+        # admin-set value.
+        if self.fight_type is not None:
+            d["fight_type"] = self.fight_type
+        return d

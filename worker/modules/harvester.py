@@ -531,6 +531,46 @@ def _detect_multi_kill(delta_kills: int) -> str | None:
     return None
 
 
+def _classify_fight_type(n_concurrent: int, n_assists: int, multi_kill: str | None) -> str:
+    """Live classification of fight_type at insertion time.
+
+    Wave 27.18 — mirrors the post-hoc classifier in backfill_assists.py
+    so new kills get fight_type set the moment they land in the DB
+    instead of waiting for an offline backfill pass to fix them.
+
+    Inputs :
+      * n_concurrent — number of OTHER kills detected in the SAME frame
+                       (excluding self). The frame is ~10s wide so this
+                       captures live teamfight clustering.
+      * n_assists    — len(kill.assistants).
+      * multi_kill   — None / 'double' / 'triple' / 'quadra' / 'penta'.
+
+    The 30-second sliding-window correction (which catches pentas
+    spread across consecutive frames) is left to backfill_assists.py
+    — the harvester only sees one frame at a time so it can't compute
+    that window cleanly.
+    """
+    if multi_kill:
+        mk = multi_kill.lower()
+        if mk in ("triple", "quadra"):
+            return "solo_kill"  # carry moment
+        if mk == "penta":
+            return "teamfight_5v5" if n_concurrent >= 5 else "solo_kill"
+    if n_concurrent <= 1:
+        if n_assists == 0:
+            return "solo_kill"
+        if n_assists == 1:
+            return "pick"
+        return "gank"
+    if n_concurrent == 2:
+        return "skirmish_2v2"
+    if n_concurrent == 3:
+        return "skirmish_3v3"
+    if n_concurrent <= 5:
+        return "teamfight_4v4"
+    return "teamfight_5v5"
+
+
 # ─── Daemon loop ────────────────────────────────────────────────────────────
 
 GAMES_PER_CYCLE = 100
@@ -621,6 +661,36 @@ async def run() -> int:
             k for k in kills if k.tracked_team_involvement is not None
         ]
         skipped = len(kills) - len(kc_kills)
+
+        # Wave 27.18 — compute fight_type per-kill using ALL kills in
+        # this game's batch (not just the KC subset) for the
+        # n_concurrent count, since teamfights involve both sides.
+        # Bucket kills by event_epoch within ±10s windows to mirror
+        # the backfill_assists.py 15s tolerance, but slightly tighter
+        # for live precision. Falls back to NULL on edge cases ; the
+        # post-hoc backfill catches anything missed.
+        for k in kc_kills:
+            try:
+                # Concurrent = kills in same epoch window (±10s)
+                window_min = k.event_epoch - 10_000
+                window_max = k.event_epoch + 10_000
+                n_concurrent = sum(
+                    1 for other in kills
+                    if other is not k
+                    and window_min <= other.event_epoch <= window_max
+                )
+                k.fight_type = _classify_fight_type(
+                    n_concurrent=n_concurrent,
+                    n_assists=len(k.assistants or []),
+                    multi_kill=k.multi_kill,
+                )
+            except Exception as e:
+                # Non-fatal — leave fight_type=None for backfill to fix.
+                log.debug(
+                    "harvester_fight_type_failed",
+                    kill_event_epoch=k.event_epoch,
+                    error=str(e)[:120],
+                )
 
         # Wave 27.4 — track per-row insert outcome. safe_insert returns
         # None when the DB write failed and the row was buffered to the
