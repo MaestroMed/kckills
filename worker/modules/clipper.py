@@ -47,7 +47,19 @@ from services.supabase_client import get_db, safe_select, safe_update
 log = structlog.get_logger()
 
 FFMPEG_TIMEOUT = 180  # seconds per ffmpeg invocation
-YTDLP_TIMEOUT = 180   # seconds for a single segment download
+# Wave 27.17 — bumped from 180 to 300s. Daemon log analysis shows
+# ALL clip_download failures are pure asyncio.wait_for timeouts (zero
+# ytdlp_throttled, zero ytdlp_nonzero, zero bot_blocked) on the LEC
+# full-match VODs (~7700s @ 1080p60, ~2.5 GB total). yt-dlp does
+# request only the --download-sections range, but parsing the
+# manifest + locating the right HLS chunks for a deep timestamp can
+# eat 60-90s before the 40-second segment download even starts. With
+# the old 180s ceiling, the chronic-timeout VODs (Fiz9AWzVzEA: 22
+# failures, bKj8k3dkEl0: 18 failures) used the entire budget on the
+# locate phase and timed out before downloading. 300s gives the
+# segment download enough headroom to finish on the slow VODs while
+# not meaningfully slowing the fast path.
+YTDLP_TIMEOUT = 300   # seconds for a single segment download
 
 
 def _build_overlay_filter(
