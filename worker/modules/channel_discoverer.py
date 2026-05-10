@@ -147,6 +147,43 @@ def classify_title(title: str, role: str) -> dict:
 
 # ─── yt-dlp wrapper ───────────────────────────────────────────────────
 
+async def _fetch_rss_dates(channel_uc_id: str) -> dict[str, str]:
+    """Fetch the last ~15 video published timestamps via YouTube RSS.
+
+    Wave 27.20 — yt-dlp's extract_flat mode (used by _fetch_recent_uploads
+    for speed) returns upload_date=None, leaving channel_videos.
+    published_at NULL and breaking the channel_reconciler's time-window
+    join with matches.scheduled_at. RSS is 200ms per channel and ships
+    full ISO timestamps in <published>tags, so we merge it in alongside
+    the yt-dlp flat fetch.
+
+    Returns {video_id: ISO timestamp} ; empty dict on any failure.
+    """
+    try:
+        import re as _re
+        from services import http_pool
+        url = f"https://www.youtube.com/feeds/videos.xml?channel_id={channel_uc_id}"
+        client = http_pool.get("youtube_rss", timeout=10)
+        r = await client.get(url)
+        if r.status_code != 200:
+            return {}
+        body = r.text
+        # Two patterns alternating in RSS feed entries — pair them by order.
+        # <yt:videoId>...</yt:videoId> precedes the corresponding
+        # <published>... </published> within each <entry>.
+        ids = _re.findall(r"<yt:videoId>([^<]+)</yt:videoId>", body)
+        dates = _re.findall(r"<published>([^<]+)</published>", body)
+        # The RSS feed has one outer <published> for the channel itself
+        # at the top, then per-entry <published>. The number of <published>
+        # is len(ids) + 1, so skip the first.
+        if len(dates) == len(ids) + 1:
+            dates = dates[1:]
+        return dict(zip(ids, dates))
+    except Exception as e:
+        log.warn("rss_fetch_failed", channel=channel_uc_id, error=str(e)[:160])
+        return {}
+
+
 async def _fetch_recent_uploads(channel_uc_id: str, limit: int = PLAYLIST_END) -> list[dict]:
     """List recent uploads for a channel via yt-dlp.
 
@@ -207,7 +244,12 @@ async def discover_channel(channel: dict) -> int:
     last_video_id = channel.get("last_video_id")
 
     log.info("channel_poll_start", channel=channel.get("display_name"))
-    entries = await _fetch_recent_uploads(cid)
+    # Wave 27.20 — fetch yt-dlp + RSS in parallel ; RSS gives us the
+    # published_at dates that yt-dlp's extract_flat strips.
+    entries, rss_dates = await asyncio.gather(
+        _fetch_recent_uploads(cid),
+        _fetch_rss_dates(cid),
+    )
     if not entries:
         log.info("channel_poll_empty", channel=channel.get("display_name"))
         # Still bump last_polled_at so we don't retry instantly
@@ -241,6 +283,28 @@ async def discover_channel(channel: dict) -> int:
         elif rel >= 0.3:
             status = "manual_review"
 
+        # Wave 27.20 — get published_at from RSS first (real ISO
+        # timestamp, blazing fast), then fall back to yt-dlp's
+        # upload_date if RSS missed this video. extract_flat=True
+        # strips upload_date so this fallback is rare in practice
+        # but kept for defensive coverage.
+        # Without this every row landed with published_at=NULL, which
+        # broke channel_reconciler's time-window match (it filters
+        # matches by scheduled_at within ±14 days of the video's
+        # published_at). 72 KC-related LEC highlights were stuck in
+        # 'discovered' status forever as a result.
+        published_at_iso: str | None = rss_dates.get(entry["id"])
+        if published_at_iso is None:
+            upload_date = entry.get("upload_date")  # 'YYYYMMDD'
+            if upload_date and len(upload_date) == 8 and upload_date.isdigit():
+                try:
+                    published_at_iso = (
+                        f"{upload_date[:4]}-{upload_date[4:6]}-{upload_date[6:8]}"
+                        "T00:00:00+00:00"
+                    )
+                except Exception:
+                    published_at_iso = None
+
         row = {
             "id": entry["id"],
             "channel_id": cid,
@@ -250,6 +314,8 @@ async def discover_channel(channel: dict) -> int:
             "video_type": classification.get("video_type"),
             "kc_relevance_score": rel,
         }
+        if published_at_iso is not None:
+            row["published_at"] = published_at_iso
         # Idempotent insert: rely on PRIMARY KEY (id) unique constraint —
         # if the row already exists, the INSERT silently no-ops at the
         # safe_insert layer (which translates 409 → log + skip).
