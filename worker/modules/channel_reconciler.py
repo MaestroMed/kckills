@@ -306,6 +306,37 @@ LFL_BRACKET_RE = re.compile(
     re.IGNORECASE,
 )
 
+# Wave 27.23 — Karmine Corp Replay channel format
+# Examples :
+#   "LEC Spring - Karmine Corp vs KOI - Group Stage"
+#   "LEC Versus - Karmine Corp vs G2 - Playoffs Finale"
+#   "LFL Spring 2022 - Karmine Corp vs Vitality.Bee - Week 5"
+#   "Worlds 2025 - Karmine Corp vs T1 - Group A"
+#   "Esports World Cup 2026 - Karmine Corp vs SK - Qualifier"
+#   "First Stand 2025 - Karmine Corp vs FlyQuest"
+#   "KARMINE CORP vs LDLC OL - LFL ... [Game 7]"
+#   "Karmine Corp vs Lille Esport (LFL Div2 Summer Split 2025)"
+# The format puts "<TIER> - <TEAM_A> vs <TEAM_B>" most of the time, but
+# the LFL legacy uploads sometimes lead with "KARMINE CORP vs <TEAM>".
+# We match BOTH directions using lookarounds. Team names allowed up to
+# 30 chars + spaces (Vitality.Bee, BDS Academy, Lille Esport, etc.).
+KC_REPLAY_RE = re.compile(
+    # Match "Karmine Corp vs <opponent>" or "<opponent> vs Karmine Corp"
+    # (case-insensitive). Captures team_a + team_b regardless of order.
+    r"(?:"
+    r"(?P<a1>Karmine\s*Corp)\s*v(?:s\.?)?\s+(?P<b1>[A-Za-z0-9.\- ]{2,40}?)"
+    r"|"
+    r"(?P<a2>[A-Za-z0-9.\- ]{2,40}?)\s+v(?:s\.?)?\s+(?P<b2>Karmine\s*Corp)"
+    r")(?=\s*(?:[\-–|(]|$|Game\s|Day\s|Week\s|Round\s|Quart|Half|Semi|Final|Group|Playoff|Stage|Bracket))",
+    re.IGNORECASE,
+)
+KC_REPLAY_GAME_N_RE = re.compile(
+    # Require word boundary + 'Game' or 'G ' (with explicit space) to
+    # avoid 'g' in 'Spring' or 'G2' team name matching as Game N.
+    r"\bGame\s*(\d+)\b|\[Game\s*(\d+)\]",
+    re.IGNORECASE,
+)
+
 # EU Masters — Riot uses "EU Masters", "EM", "EUM", "EMEA Masters"
 EUM_HIGHLIGHTS_RE = re.compile(
     r"(?:^|\b)([A-Z0-9.]{2,8})\s*vs\.?\s*([A-Z0-9.]{2,8})\s*"
@@ -505,17 +536,65 @@ def parse_title_for_match(title: str, role: str | None = None) -> dict | None:
     # 3. Match-coverage videos (LEC / LFL / EUM / Worlds / First Stand)
     out: dict = {}
 
-    # LEC piped Game-N (v4 — "KC vs. KOI | LEC | Game 2")
-    m = LEC_PIPED_GAME_RE.search(title)
+    # Wave 27.23 — Karmine Corp Replay channel format. Highest-priority
+    # parser since this is the unique source post-pivot. Format always
+    # contains "Karmine Corp" — regex captures the opponent + handles
+    # both orderings (KC vs X / X vs KC).
+    m = KC_REPLAY_RE.search(title)
     if m:
-        a, b = normalise_team(m.group(1)), normalise_team(m.group(2))
-        if a not in NON_TEAM_TOKENS and b not in NON_TEAM_TOKENS:
-            out["team_a"] = a
-            out["team_b"] = b
-            out["game_n"] = int(m.group(3))
-            out["league"] = "lec"
+        # Determine which capture group has the actual opponent
+        if m.group("a1") and m.group("b1"):
+            kc_token, opp_token = m.group("a1"), m.group("b1")
+        else:
+            kc_token, opp_token = m.group("b2"), m.group("a2")
+        # Normalise — "KC" canonical for the KC side
+        team_kc = "KC"
+        team_opp = normalise_team(opp_token.strip()) if opp_token else None
+        if team_opp and team_opp not in NON_TEAM_TOKENS and len(team_opp) >= 2:
+            out["team_a"] = team_kc
+            out["team_b"] = team_opp
+            # League detection from the rest of the title
+            tlow = title.lower()
+            if "lec versus" in tlow:
+                out["league"] = "lec"
+            elif "lec" in tlow:
+                out["league"] = "lec"
+            elif "lfl" in tlow:
+                out["league"] = "lfl"
+            elif "eu masters" in tlow or "eum" in tlow or "european masters" in tlow:
+                out["league"] = "eum"
+            elif "worlds" in tlow or "world championship" in tlow:
+                out["league"] = "worlds"
+            elif "esports world cup" in tlow or "ewc" in tlow:
+                out["league"] = "ewc"
+            elif "msi" in tlow:
+                out["league"] = "msi"
+            elif "first stand" in tlow:
+                out["league"] = "first_stand"
+            else:
+                out["league"] = "unknown"
+            # Game number if present
+            mg = KC_REPLAY_GAME_N_RE.search(title)
+            if mg:
+                try:
+                    out["game_n"] = int(mg.group(1) or mg.group(2))
+                except (ValueError, TypeError):
+                    pass
             out["video_type"] = "single_game"
             out["content_type"] = "single_game"
+
+    # LEC piped Game-N (v4 — "KC vs. KOI | LEC | Game 2")
+    if not out:
+        m = LEC_PIPED_GAME_RE.search(title)
+        if m:
+            a, b = normalise_team(m.group(1)), normalise_team(m.group(2))
+            if a not in NON_TEAM_TOKENS and b not in NON_TEAM_TOKENS:
+                out["team_a"] = a
+                out["team_b"] = b
+                out["game_n"] = int(m.group(3))
+                out["league"] = "lec"
+                out["video_type"] = "single_game"
+                out["content_type"] = "single_game"
 
     # LEC (v1 backward-compat first)
     if not out:
