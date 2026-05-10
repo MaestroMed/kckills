@@ -299,6 +299,17 @@ async def flush_cache():
                 '"23514"',          # CHECK constraint violation
                 '"23502"',          # NOT NULL violation (data shape bug)
                 '"23503"',          # FK violation (referenced row gone)
+                '"23505"',          # UNIQUE violation (another row already
+                                     #  claimed the value, e.g. byte-
+                                     #  identical re-encoded clip claiming
+                                     #  the same SHA-256 content_hash —
+                                     #  retry will never succeed)
+                '"22P02"',          # invalid input syntax (data-type
+                                     #  mismatch — typically a cached row
+                                     #  written before a column's casting
+                                     #  bug got fixed, e.g. "956.0" for an
+                                     #  INTEGER column). Cached rows
+                                     #  can't be fixed in-flight ; drop.
                 '"PGRST204"',       # column not in schema cache
                 '"PGRST205"',       # table not in schema cache
             )
