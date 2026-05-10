@@ -166,10 +166,16 @@ async def main():
         # (which has to re-run the locate phase every time). The VOD
         # cache in worker/vods/ is reused across games sharing a video.
         print(f"  Pre-downloading full VOD {yt}...", flush=True)
+        # No outer wait_for — clipper.download_full_vod() already enforces
+        # its own 1800 s ceiling (clipper.py). The previous outer 900 s
+        # wrapper here fired BEFORE the inner one finished merging audio +
+        # video for 3.5 GB casts, which surfaced as "timeout -> fall back
+        # to per-kill yt-dlp" while the subprocess kept downloading in the
+        # background and eventually completed the cache file.
         try:
-            local_vod = await asyncio.wait_for(download_full_vod(yt), timeout=900)
-        except asyncio.TimeoutError:
-            print(f"  VOD download timed out — falling back to per-kill yt-dlp")
+            local_vod = await download_full_vod(yt)
+        except Exception as e:
+            print(f"  VOD download failed: {str(e)[:60]} — falling back to per-kill yt-dlp")
             local_vod = None
         if local_vod:
             print(f"  VOD ready: {local_vod}", flush=True)
