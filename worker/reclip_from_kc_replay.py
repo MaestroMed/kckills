@@ -41,7 +41,7 @@ load_dotenv()
 
 import httpx
 
-from modules.clipper import clip_kill
+from modules.clipper import clip_kill, download_full_vod
 from services.supabase_client import safe_update
 
 import structlog
@@ -159,13 +159,22 @@ async def main():
         yt = g["alt_vod_youtube_id"]
         offset = int(g["vod_offset_seconds"])
         ext = g["external_id"]
-        print(f"\n=== Game {ext[:20]} (yt={yt}, offset={offset}s, {len(kills)} kills) ===")
-        # Optional: pre-download the full VOD to a tmp file so each kill
-        # extracts its segment locally (10-100x faster than per-kill yt-dlp).
-        local_vod = None  # Per-kill yt-dlp -ss download; full VOD pre-fetch
-                          # is a future optimisation that needs a writable
-                          # cache dir + cleanup. For now we accept the
-                          # ytdlp throttle.
+        print(f"\n=== Game {ext[:20]} (yt={yt}, offset={offset}s, {len(kills)} kills) ===", flush=True)
+        # Pre-download the full VOD once. Each kill below extracts its
+        # 40-second segment via ffmpeg from the local file — that's ~5s
+        # per kill versus ~60-300s per per-kill yt-dlp segment download
+        # (which has to re-run the locate phase every time). The VOD
+        # cache in worker/vods/ is reused across games sharing a video.
+        print(f"  Pre-downloading full VOD {yt}...", flush=True)
+        try:
+            local_vod = await asyncio.wait_for(download_full_vod(yt), timeout=900)
+        except asyncio.TimeoutError:
+            print(f"  VOD download timed out — falling back to per-kill yt-dlp")
+            local_vod = None
+        if local_vod:
+            print(f"  VOD ready: {local_vod}", flush=True)
+        else:
+            print(f"  VOD pre-download failed — falling back to per-kill yt-dlp", flush=True)
 
         for kill in kills:
             kid = kill["id"]
