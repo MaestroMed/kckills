@@ -170,7 +170,17 @@ async def download_full_vod(youtube_id: str) -> str | None:
         # available". deno is installed via winget, on PATH via main.py.
         "--js-runtimes", "deno",
         "--remote-components", "ejs:github",
-        "-f", "bestvideo[height<=1080]+bestaudio/best[height<=1080]",
+        # Wave 27.29 — force H.264 (avc1) over AV1. KC Replay's 1080p60
+        # AV1 stream is ~2x smaller than the H.264 equivalent, so the
+        # default "bestvideo" picks it — but ffmpeg 8.1 + libdav1d + the
+        # vertical drawtext+NVENC filter chain segfaults on AV1 input
+        # (rc=3221225477 = STATUS_ACCESS_VIOLATION on Windows). Preferring
+        # avc1 trades disk for stability ; KC Replay casts are 3-4 GB at
+        # H.264 1080p60 vs 2.5 GB AV1, which is still well within the
+        # D:/ Gen5 NVMe budget. Falls back to AV1 only if H.264 is
+        # missing (older YouTube uploads that never re-encoded).
+        "-f", "bestvideo[vcodec^=avc1][height<=1080]+bestaudio/"
+              "bestvideo[height<=1080]+bestaudio/best[height<=1080]",
         "--merge-output-format", "mp4",
         # Wave 13e (2026-04-29) yt-dlp perf bumps — see _run_ytdlp() below.
         "--concurrent-fragments", "8",
