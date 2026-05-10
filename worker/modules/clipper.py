@@ -187,7 +187,13 @@ async def download_full_vod(youtube_id: str) -> str | None:
             stderr=asyncio.subprocess.PIPE,
         )
         try:
-            _, stderr = await asyncio.wait_for(proc.communicate(), timeout=600)
+            # Wave 27.29 — bumped 600 -> 1800. KC Replay casts are 1-2 h
+            # long ; at YouTube's typical throttled ~5 MB/s a 2.5-3 GB
+            # 1080p VOD takes 9-12 min to download + ~60 s to merge
+            # video+audio. The 600 s ceiling failed on every cast in the
+            # smoke pass (Wave 27.28 reclip). 1800 s gives the merge
+            # phase generous headroom while still bounding a runaway.
+            _, stderr = await asyncio.wait_for(proc.communicate(), timeout=1800)
         except asyncio.TimeoutError:
             proc.kill()
             await proc.wait()
