@@ -66,9 +66,16 @@ DEFAULTS: Final[dict[str, dict[str, int]]] = {
     "discord_autopost":    {"parallel": 1, "interval":   60, "batch":  10, "lease":  120},
     # Packaging + reconciliation ------------------------------------------
     "hls_packager":        {"parallel": 4, "interval": 1800, "batch": 100, "lease":  300},
-    "channel_discoverer":  {"parallel": 1, "interval": 21600,"batch":  50, "lease":  600},
-    "channel_reconciler":  {"parallel": 1, "interval": 3600, "batch":  50, "lease":  600},
-    "vod_fallback_finder": {"parallel": 1, "interval": 1800, "batch":  50, "lease":  600},
+    # Wave 27.26 — Kameto-only pivot. With a single active channel
+    # (@KarmineCorpReplay), discovery should run more often than the
+    # legacy 6h cadence (which assumed 4+ channels each 6h-throttled).
+    # KC uploads 1-3 game replays per match day ; 30 min cycle catches
+    # them within an hour of upload. Reconciler bumped to 30 min so
+    # newly-discovered videos don't sit idle for an hour. Fallback
+    # finder to 15 min so promoted games hit the clipper queue fast.
+    "channel_discoverer":  {"parallel": 1, "interval": 1800, "batch":  50, "lease":  600},
+    "channel_reconciler":  {"parallel": 1, "interval": 1800, "batch":  50, "lease":  600},
+    "vod_fallback_finder": {"parallel": 1, "interval":  900, "batch":  50, "lease":  600},
     "match_planner":       {"parallel": 1, "interval": 3600, "batch":  50, "lease":  600},
     # QC + jobs -----------------------------------------------------------
     "qc_sampler":          {"parallel": 1, "interval": 21600,"batch":  50, "lease":  600},
