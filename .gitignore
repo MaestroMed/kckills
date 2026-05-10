@@ -59,3 +59,10 @@ worker/.scheduler_state.json
 .claude/worktrees/*/web/tsconfig.tsbuildinfo
 .quarantine-pre-*
 
+
+# Wave 27.27 — deep QC artefacts (downloaded mp4s, results JSON, run log)
+worker/deep_qc/qc_*.mp4
+worker/deep_qc/qc_global_in_progress.json
+worker/deep_qc/qc_global_run.log
+worker/deep_qc/qc_global_results_*.json
+worker/state/

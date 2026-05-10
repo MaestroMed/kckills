@@ -264,35 +264,55 @@ async def main():
     counts = {"GOOD": 0, "ACCEPTABLE": 0, "BAD": 0, "ERROR": 0}
     started = time.time()
 
-    for i, k in enumerate(kills):
-        result = await qc_one_clip(k["clip_url_vertical"], k)
-        results.append(result)
+    # Wave 27.27 — 4 parallel workers. Gemini calls still serialized via
+    # scheduler.wait_for("gemini") (4s delay = 15 RPM). Parallelism helps
+    # because most per-clip wall time is R2 download + Gemini upload + file
+    # active wait, NOT the generate_content call itself. With 4 workers
+    # interleaving, effective rate is ~bound by Gemini RPM (15/min) vs
+    # the ~1-2/min sequential rate.
+    sem = asyncio.Semaphore(4)
+    completed = 0
+    counts_lock = asyncio.Lock()
+    results_lock = asyncio.Lock()
+    progress_lock = asyncio.Lock()
+
+    async def _process(idx: int, kill: dict) -> None:
+        nonlocal completed, db_updates
+        async with sem:
+            result = await qc_one_clip(kill["clip_url_vertical"], kill)
+        # All bookkeeping after the slot is released so we don't hold it
         if "error" in result:
-            counts["ERROR"] += 1
             tag = "ERR "
             extra = result["error"][:60]
+            v = "ERROR"
         else:
             v = result.get("verdict", "?")
-            counts[v] = counts.get(v, 0) + 1
             tag = {"GOOD": "OK  ", "ACCEPTABLE": "MEH ", "BAD": "BAD "}.get(v, "??? ")
             extra = f"vis={result.get('kill_visible')} q={result.get('clip_quality')}"
 
-        # Write back
-        if not args.no_write:
-            if write_back_to_db(result):
-                db_updates += 1
+        async with counts_lock:
+            counts[v] = counts.get(v, 0) + 1
 
-        # Progress
-        elapsed = time.time() - started
-        rate = (i + 1) / elapsed if elapsed > 0 else 0
-        eta = (len(kills) - (i + 1)) / rate if rate > 0 else 0
-        if (i + 1) % 10 == 0 or (i + 1) == len(kills):
-            print(f"  [{i+1:4}/{len(kills)}] {tag} {result['id'][:8]} {(k.get('killer_champion') or '?'):>10} -> {(k.get('victim_champion') or '?'):>10} | {extra} | rate={rate:.1f}/s eta={eta/60:.0f}min")
+        async with results_lock:
+            results.append(result)
+            if not args.no_write:
+                if write_back_to_db(result):
+                    db_updates += 1
 
-        # Snapshot intermediate progress every 50 clips
-        if (i + 1) % 50 == 0:
-            with open(PROGRESS_FILE, "w", encoding="utf-8") as f:
-                json.dump(results, f, indent=2, ensure_ascii=False)
+        async with progress_lock:
+            completed += 1
+            elapsed = time.time() - started
+            rate = completed / elapsed if elapsed > 0 else 0
+            eta = (len(kills) - completed) / rate if rate > 0 else 0
+            if completed % 10 == 0 or completed == len(kills) or v == "BAD":
+                print(f"  [{completed:4}/{len(kills)}] {tag} {result['id'][:8]} {(kill.get('killer_champion') or '?'):>10} -> {(kill.get('victim_champion') or '?'):>10} | {extra} | rate={rate*60:.1f}/min eta={eta/60:.0f}min", flush=True)
+            # Snapshot every 25 clips (smaller window = less work lost on crash)
+            if completed % 25 == 0:
+                with open(PROGRESS_FILE, "w", encoding="utf-8") as f:
+                    json.dump(results, f, indent=2, ensure_ascii=False)
+
+    # Fan out
+    await asyncio.gather(*[_process(i, k) for i, k in enumerate(kills)])
 
     # Final save
     with open(RESULTS_FILE, "w", encoding="utf-8") as f:
