@@ -414,20 +414,13 @@ YEAR_RE = re.compile(r"\b(20[2-3]\d)\b")
 # teams.json, and (b) they preserve byte-identical normalisation
 # behaviour for the EtoStark demo.
 _LEGACY_TEAM_ALIAS: dict[str, str] = {
+    # ─── Karmine Corp variants ────────────────────────────────────
     "KARMINE": "KC", "KCORP": "KC", "KARMINECORP": "KC",
     "KCB": "KCB", "KARMINEB": "KCB",
-    "VITB": "VITB", "VITALITYBEE": "VITB", "BEE": "VITB",
-    "FNCR": "FNCR", "FNATICRISING": "FNCR",
-    "BDSA": "BDSA", "BDSACADEMY": "BDSA",
-    "MISFITSP": "MSFP", "MISFITSPREMIER": "MSFP",
-    "OTPLOL": "OPL",
-    "GW": "GMW", "GAMEWARD": "GMW",
-    "LDLCOL": "LDL",
-    "MCES": "MCE",
-    "BKR": "BKROG", "BK": "BKROG", "BKROG": "BKROG",
-    "SOLARY": "SLY",
+    # ─── LEC current/recent teams ─────────────────────────────────
     "G2ESPORTS": "G2",
     "FNATIC": "FNC",
+    "FNCR": "FNCR", "FNATICRISING": "FNCR",
     "MADLIONS": "MAD",
     "TEAMHERETICS": "TH", "HERETICS": "TH",
     "TEAMBDS": "BDS",
@@ -443,6 +436,36 @@ _LEGACY_TEAM_ALIAS: dict[str, str] = {
     "HANWHALIFE": "HLE",
     "TOPESPORTS": "TES",
     "CTBC": "CFO", "FLYINGOYSTER": "CFO",
+    # ─── LFL teams (Wave 27.25) ────────────────────────────────────
+    # KC Replay videos use full team names ; we normalise to whatever
+    # the gol_gg backfill stored in `teams.code`. Verified against
+    # actual DB rows on 2026-05-10.
+    "VITB": "VIT", "VITALITYBEE": "VIT", "BEE": "VIT",
+    "BDSA": "TBA", "BDSACADEMY": "TBA",
+    "MISFITSP": "MSFP", "MISFITSPREMIER": "MSFP",
+    "GW": "GAM", "GAMEWARD": "GAM", "GMW": "GAM",
+    "LDLCOL": "LO", "LDL": "LO", "LDLC": "LO",
+    "MCES": "MCE",
+    "BKR": "BKROG", "BK": "BKROG", "BKROG": "BKROG", "BKROGESPORTS": "BKROG",
+    "SOLARY": "SOL", "SLY": "SOL",
+    "AEGIS": "AEG",
+    "IZIDREAM": "ID", "IZIDR": "ID", "IZI": "ID",
+    "TEAMGO": "TG", "GO": "TG",
+    "GAMERSORIGIN": "GO",
+    "MACKO": "ME", "MACKOESPORTS": "ME",
+    "TEAMOPLON": "TO", "OPLON": "TO",
+    "TEAMMCES": "MCE",
+    "OTPLOL": "OPL",
+    # ─── LEC Versus 2026 + recent additions (Wave 27.25) ──────────
+    "LOSRATONES": "LR", "RATONES": "LR",
+    "SHIFTERS": "SHFT", "SHFT": "SHFT", "SHI": "SHFT",
+    "LILLEESPORT": "LE", "LILLE": "LE",
+    "GALIONS": "GAL",
+    "M8": "M8", "MAINEIGHT": "M8", "MAIN8": "M8",
+    "FUT": "FUT",
+    "BBL": "BBL", "BBLESPORTS": "BBL",
+    "TEAMLIQUID": "TL",
+    "ICIJAPON": "IJ",
 }
 
 
@@ -749,10 +772,30 @@ async def _matches_in_window(
         ("order", "scheduled_at.desc"),
         ("limit", "500"),
     ]
-    if window_start:
-        params.append(("scheduled_at", f"gte.{window_start}"))
-    if window_end:
-        params.append(("scheduled_at", f"lte.{window_end}"))
+    # Wave 27.25 — gol_gg-imported matches have scheduled_at=NULL (the
+    # legacy backfill never populated it). PostgREST filters drop NULL
+    # values from comparison queries, so without this guard our LFL
+    # 2021-2023 + First Stand 2025 + EWC 2025 matches were invisible
+    # to the reconciler. Use `or=(scheduled_at.gte.X,scheduled_at.is.null)`
+    # so NULL-dated matches are still considered candidates ; the
+    # downstream tournament-level year filter (via the `year` hint)
+    # handles cross-year disambiguation.
+    if window_start and window_end:
+        params.append((
+            "or",
+            f"(and(scheduled_at.gte.{window_start},scheduled_at.lte.{window_end}),"
+            f"scheduled_at.is.null)",
+        ))
+    elif window_start:
+        params.append((
+            "or",
+            f"(scheduled_at.gte.{window_start},scheduled_at.is.null)",
+        ))
+    elif window_end:
+        params.append((
+            "or",
+            f"(scheduled_at.lte.{window_end},scheduled_at.is.null)",
+        ))
 
     r = await asyncio.to_thread(
         httpx.get,
