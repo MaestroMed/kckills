@@ -76,6 +76,34 @@ To force the cycle :
 
 ETA ~5-10 minutes per game.
 
+## 4b. Known issue : yt-dlp merge step hangs on large casts (Windows)
+
+The smoke pass of `reclip_from_kc_replay.py --game 115548668059523726
+--limit 3` consistently failed in the VOD pre-download phase :
+
+* AV1 (Wave 27.29 fix shifted to H.264 to dodge a ffmpeg+NVENC segfault)
+* H.264 separate video + audio merge produced an audio-only output once
+* H.264 merge with HLS-prefer selector stalled with 0 bytes written
+  for 10+ seconds while ffmpeg.exe held the temp.mp4 handle
+
+The root cause is yt-dlp / ffmpeg on Windows handling 3.5 GB merges
+unreliably. Workarounds to try tomorrow morning :
+
+1. Pre-download VODs with `--no-part` to avoid `.temp.mp4` rename
+   contention.
+2. Try `-f 301` (HLS muxed format) explicitly per game — bypasses the
+   merge step entirely.
+3. Split the VOD into chunks via `--download-sections` for ONLY the
+   game's [offset, offset+game_duration] range — typically 30-50 min,
+   ~1 GB, no merge needed. Trades simplicity for less re-use across
+   the game's 30-50 kills.
+4. Run `reclip_from_kc_replay.py` under WSL2 / Linux container where
+   ffmpeg merge is more reliable, mount D:/kckills_worker as a volume.
+
+For tonight, the reclip pipeline is INSTALLED but NOT VALIDATED. The
+fix for the actual offset miscalibration (the root cause of the QC
+BAD verdicts) is still pending the smoke test landing.
+
 ## 5. Reclip eligible BAD kills
 
 Once steps 2 + 3 + 4 are done, `reclip_from_kc_replay.py` becomes the
