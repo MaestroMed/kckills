@@ -546,6 +546,17 @@ def _player_uuid_from_ign(raw_ign: str | None) -> str | None:
     backfill_player_ids.clean_player_name does, then derives uuid5.
     Returns None for empty/Unknown input so the to_db_dict emit guard
     correctly skips the column.
+
+    Wave 27.29 — only return UUIDs that actually exist in the `players`
+    table. The harvester emits one for every livestats name it sees
+    (KC + opponents + sometimes referees / coaches via odd participant
+    rows), but the `kills_killer_player_id_fkey` constraint REQUIRES the
+    row to pre-exist. Before this guard, every kill in a recently
+    harvested game returned attempted=N inserted=0 because non-KC
+    opponents weren't in the players table.
+
+    We cache the full set of valid UUIDs once per process — a few KB,
+    much cheaper than a SELECT per kill.
     """
     if not raw_ign:
         return None
@@ -557,7 +568,46 @@ def _player_uuid_from_ign(raw_ign: str | None) -> str | None:
     s = _re.sub(r"^[A-Z]{1,4}\s+", "", s).strip()
     if not s:
         return None
-    return str(_uuid.uuid5(_PLAYER_UUID_NAMESPACE, s.lower()))
+    cand = str(_uuid.uuid5(_PLAYER_UUID_NAMESPACE, s.lower()))
+    valid = _valid_player_uuids()
+    if valid is None:
+        # Cache load failed — return the UUID and let the FK error fire.
+        # Safer than silently dropping every player_id ; the operator
+        # sees the cache-load warning and can investigate.
+        return cand
+    return cand if cand in valid else None
+
+
+# Wave 27.29 — cache the set of valid player UUIDs once per process.
+# Refreshes are NOT automatic ; if a new player gets added to the DB
+# the harvester needs a restart to pick them up. That matches our
+# "restart-to-tune" contract for runtime_tuning.
+_VALID_PLAYER_UUIDS_CACHE: set[str] | None = None
+
+
+def _valid_player_uuids() -> set[str] | None:
+    """Return the set of UUIDs that exist in the players table.
+
+    On first call : SELECT id FROM players. On subsequent calls : the
+    cached frozen set. Returns None if the DB lookup failed (network
+    error, DB down) so callers can fall back to the optimistic path.
+    """
+    global _VALID_PLAYER_UUIDS_CACHE
+    if _VALID_PLAYER_UUIDS_CACHE is not None:
+        return _VALID_PLAYER_UUIDS_CACHE
+    try:
+        from services.supabase_client import safe_select
+        rows = safe_select("players", columns="id", _limit=10000)
+        if not rows:
+            log.warn("player_uuid_cache_empty")
+            _VALID_PLAYER_UUIDS_CACHE = set()
+            return _VALID_PLAYER_UUIDS_CACHE
+        _VALID_PLAYER_UUIDS_CACHE = {r["id"] for r in rows if r.get("id")}
+        log.info("player_uuid_cache_loaded", n=len(_VALID_PLAYER_UUIDS_CACHE))
+        return _VALID_PLAYER_UUIDS_CACHE
+    except Exception as e:
+        log.warn("player_uuid_cache_load_failed", error=str(e)[:160])
+        return None
 
 
 def _classify_fight_type(n_concurrent: int, n_assists: int, multi_kill: str | None) -> str:
