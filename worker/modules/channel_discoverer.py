@@ -305,11 +305,23 @@ async def discover_channel(channel: dict) -> int:
                 except Exception:
                     published_at_iso = None
 
+        # Wave 27.21 — duration comes back from yt-dlp as a float
+        # ("2083.0"). PostgREST rejects float values for the INT column
+        # `duration_seconds` with `22P02 invalid input syntax for type
+        # integer`. Cast defensively.
+        dur_raw = entry.get("duration")
+        try:
+            duration_int: int | None = (
+                int(round(float(dur_raw))) if dur_raw is not None else None
+            )
+        except (TypeError, ValueError):
+            duration_int = None
+
         row = {
             "id": entry["id"],
             "channel_id": cid,
             "title": title[:500],
-            "duration_seconds": entry.get("duration"),
+            "duration_seconds": duration_int,
             "status": status,
             "video_type": classification.get("video_type"),
             "kc_relevance_score": rel,
