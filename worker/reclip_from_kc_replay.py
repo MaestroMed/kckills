@@ -174,23 +174,38 @@ async def main():
         for kill in kills:
             kid = kill["id"]
             print(f"  -> {kid[:8]} {kill['killer_champion']:>10} -> {kill['victim_champion']:<10} gt={kill['game_time_seconds']}s ", end="", flush=True)
-            try:
-                result = await clip_kill(
-                    kill_id=kid,
-                    youtube_id=yt,
-                    vod_offset_seconds=offset,
-                    game_time_seconds=int(kill["game_time_seconds"] or 0),
-                    multi_kill=kill.get("multi_kill"),
-                    killer_champion=kill["killer_champion"],
-                    victim_champion=kill["victim_champion"],
-                    match_context=ext,
-                    local_vod_path=local_vod,
-                    game_id=gid,
-                )
-            except Exception as e:
-                print(f"EXC {str(e)[:60]}")
-                fail += 1
-                continue
+            # Wave 27.31 — yt-dlp's --download-sections occasionally produces
+            # a corrupted .mp4 (moov atom not found, ~3 % rate on the daemon).
+            # One retry is enough — the next download usually lands a clean
+            # file. The clipper's `finally:` block already cleaned the bad
+            # raw_*.mp4 from the failed first attempt.
+            result = None
+            for attempt in range(2):
+                try:
+                    result = await clip_kill(
+                        kill_id=kid,
+                        youtube_id=yt,
+                        vod_offset_seconds=offset,
+                        game_time_seconds=int(kill["game_time_seconds"] or 0),
+                        multi_kill=kill.get("multi_kill"),
+                        killer_champion=kill["killer_champion"],
+                        victim_champion=kill["victim_champion"],
+                        match_context=ext,
+                        local_vod_path=local_vod,
+                        game_id=gid,
+                    )
+                except Exception as e:
+                    if attempt == 0:
+                        print(f"EXC (retry)... ", end="", flush=True)
+                        continue
+                    print(f"EXC {str(e)[:60]}")
+                    fail += 1
+                    result = None
+                    break
+                if result:
+                    break
+                if attempt == 0:
+                    print(f"FAIL (retry)... ", end="", flush=True)
             if not result:
                 print("FAIL")
                 fail += 1
