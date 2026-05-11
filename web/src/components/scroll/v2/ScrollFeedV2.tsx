@@ -29,7 +29,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { motion } from "motion/react";
-import { BgmPlayer } from "../BgmPlayer";
+// Wave 30c (2026-05-11) — BgmPlayer removed. With the wolf-player CSP
+// fix landing in Wave 30a, the wolf player now auto-plays the "scroll"
+// playlist (via lib/audio/playlists.ts → playlistForRoute("/scroll"))
+// using the SAME YouTube IFrame API. Keeping BgmPlayer mounted here
+// caused two concurrent YT iframes on /scroll, both fighting for the
+// audio output. Symptom : the feed appeared to "freeze" / not respond.
+// import { BgmPlayer } from "../BgmPlayer";
 import {
   FeedItemVideo,
   FeedItemMoment,
@@ -677,7 +683,8 @@ export function ScrollFeedV2({
       // Touch-action: pan-y so the browser doesn't fight the drag.
       style={{ touchAction: "pan-y", overscrollBehavior: "contain" }}
     >
-      <BgmPlayer />
+      {/* BgmPlayer removed (Wave 30c) — the wolf player now handles
+          /scroll audio via lib/audio/playlists.ts. */}
       {/* Live mode banner — portaled to <body> so it escapes overflow:hidden.
           Tap → jump to index 0 (most recent kill). If the feed is empty,
           the banner falls back to a Link to /match/[external_id]. */}
