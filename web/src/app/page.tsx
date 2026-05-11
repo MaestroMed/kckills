@@ -40,6 +40,9 @@ import { HomeYouTubeShowcase } from "@/components/HomeYouTubeShowcase";
 import { KillOfTheWeek } from "@/components/KillOfTheWeek";
 import { HomeRecentClips } from "@/components/HomeRecentClips";
 import { HomeWeekendBestClips } from "@/components/HomeWeekendBestClips";
+// Wave 28 (2026-05-11) — "Ce jour-là dans l'histoire KC". Nostalgia
+// banner that surfaces past-year kills played on today's calendar date.
+import { OnThisDay } from "@/components/OnThisDay";
 import { HomeTimelineFeed } from "@/components/timeline/HomeTimelineFeed";
 // QuoteCard import removed — was unused since the QuoteRotator replaced it.
 import { QUOTES } from "@/lib/quotes";
@@ -352,6 +355,14 @@ export default async function HomePage() {
           de semaine). Re-ranke par score IA + boost multi-kill +
           boost communauté. Ne s'affiche pas si zéro clip dans le
           système (fresh deploy / worker pas encore tourné). */}
+      {/* ═══ ON THIS DAY — nostalgia banner ════════════════════════════
+          Surfaces kills played on today's calendar date in past years.
+          Wave 28 (2026-05-11). Renders nothing when no historical match
+          exists, so doesn't bloat the homepage on calendar holes. */}
+      <Suspense fallback={<SectionSkeleton size="md" label="Souvenirs du jour en cours de chargement" />}>
+        <OnThisDay />
+      </Suspense>
+
       <Suspense fallback={<SectionSkeleton size="lg" label="Meilleurs clips du week-end en cours de chargement" />}>
         <HomeWeekendBestClips />
       </Suspense>
