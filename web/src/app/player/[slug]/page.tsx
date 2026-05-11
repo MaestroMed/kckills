@@ -13,7 +13,6 @@ import {
 import { getAssetMetadata, pickAssetUrl } from "@/lib/kill-assets";
 import { JsonLd, breadcrumbLD } from "@/lib/seo/jsonld";
 import { WolfHowlOnEnter } from "@/components/player/WolfHowlOnEnter";
-import { AntreTrigger } from "@/components/AntreTrigger";
 import Image from "next/image";
 import Link from "next/link";
 import type { Metadata } from "next";
@@ -275,13 +274,6 @@ export default async function PlayerPage({ params }: Props) {
           pages, honors prefers-reduced-motion + the wolf player's mute
           flag. Renders nothing visually. Karmine = wolves. 🐺 */}
       <WolfHowlOnEnter />
-      {/* BCC easter egg — only on Bo's player page. Listens for the
-          B-C-C keyboard ritual and opens the Antre de la BCC fan cave
-          (migration 059). Lazy-loads the cave component so the
-          player-page chunk stays slim until the ritual fires.
-          Bo = jungler chinois 2024 (Zhu Yi-Long), ex-Vitality. The
-          slug match is case-insensitive on the URL-decoded name. */}
-      {name.toLowerCase() === "bo" && <AntreTrigger />}
       {/* ═══ HERO — full-screen cinematic with cube-portrait morph ═══ */}
       <section className="relative h-[90vh] min-h-[720px] w-full overflow-hidden bg-[var(--bg-primary)]">
         {/* Soft champion-art backdrop — heavily darkened so the dot-matrix

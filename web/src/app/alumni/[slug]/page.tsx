@@ -14,6 +14,7 @@ import { getAlumniBySlug, getAllAlumniSlugs, ALUMNI } from "@/lib/alumni";
 import { getEraById } from "@/lib/eras";
 import { championSplashUrl, championLoadingUrl } from "@/lib/constants";
 import { PortraitCubeMorph } from "@/components/PortraitCubeMorph";
+import { AntreTrigger } from "@/components/AntreTrigger";
 
 interface Props {
   params: Promise<{ slug: string }>;
@@ -110,6 +111,12 @@ export default async function AlumniDetailPage({ params }: Props) {
         marginRight: "-50vw",
       }}
     >
+      {/* BCC easter egg — only on Bo's alumni page. Listens for the B-C-C
+          keyboard ritual and opens the Antre de la BCC fan cave (migration
+          059 + 060). Lazy-loads the cave component so the alumni-page
+          chunk stays slim until the ritual fires. Bo = jungler chinois
+          2024 (Zhu Yi-Long), ex-Vitality, the BCC's adopted patron. */}
+      {alumni.slug === "bo" && <AntreTrigger />}
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(alumniJsonLd) }}
