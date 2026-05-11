@@ -291,6 +291,35 @@ async def _scan_league_schedule(league: league_config.TrackedLeague) -> int:
             }
             # Strip keys with None so we don't overwrite existing good data
             game_payload = {k: v for k, v in game_payload.items() if v is not None}
+
+            # Wave 27.31 — Kameto-only pivot. lolesports getEventDetails
+            # always returns the LEC official VOD for vod_youtube_id. Per
+            # the user's directive (only Kameto's KC Replay VODs), we
+            # never let sentinel CLOBBER an already-set vod_youtube_id.
+            # The reconciler / promote_misaligned set vod_youtube_id to
+            # the KC Replay video ; sentinel's 5-min upsert was reverting
+            # it on every cycle.
+            #
+            # Lookup-once-upsert pattern : check if a row exists. If yes,
+            # strip vod_youtube_id + vod_offset_seconds from the payload
+            # (let the existing values stand). If no, full upsert is fine
+            # (first sighting — sentinel-supplied LEC VOD is better than
+            # nothing while we wait for KC Replay).
+            existing = safe_select(
+                "games",
+                "id, vod_youtube_id, alt_vod_youtube_id",
+                external_id=game_ext_id,
+                _limit=1,
+            ) or []
+            if existing and existing[0].get("vod_youtube_id"):
+                # Row exists with a VOD already set — preserve it AND
+                # the state. Sentinel-derived state would force back to
+                # 'pending' when getEventDetails returned no VOD, which
+                # would un-promote a game that the reconciler already
+                # routed to KC Replay.
+                game_payload.pop("vod_youtube_id", None)
+                game_payload.pop("vod_offset_seconds", None)
+                game_payload.pop("state", None)
             safe_upsert("games", game_payload, on_conflict="external_id")
 
         if not already_seen:
