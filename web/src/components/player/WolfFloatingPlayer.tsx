@@ -29,6 +29,21 @@
  * pulse ring around the wolf hints "tap me". Once the user taps once,
  * we save `kc_audio_enabled = 1` and auto-resume on every subsequent
  * visit on the first user interaction (handled by the provider).
+ *
+ * 2026-05-11 BCC override visual treatment :
+ *   When the playlistOverride is set to "bcc" (the Antre de la BCC has
+ *   hijacked the player), the wolf head wears a subtle gold-red glow
+ *   ring (vs the normal blue-cyan) and the expanded title is prefixed
+ *   with "BCC PLAYLIST · ". A small "◆ BCC" tag appears next to the
+ *   track title. This signals "you're in the cave's audio context".
+ *
+ * 2026-05-11 root-cause fix for "click does nothing" :
+ *   The previous version polled `window.YT.Player` with setTimeout but
+ *   the YouTube IFrame API script was blocked by CSP (script-src didn't
+ *   include youtube.com). CSP fix in next.config.ts unblocks the script,
+ *   and this rewrite uses the canonical onYouTubeIframeAPIReady callback
+ *   instead of polling. Also adds a `pendingPlayRef` in the provider so
+ *   the first click is queued and drained when the player attaches.
  */
 
 import { useEffect, useRef, useState } from "react";
@@ -43,19 +58,26 @@ import { type PlaylistId } from "@/lib/audio/playlists";
 function WolfHead({
   isPlaying,
   reducedMotion,
+  bccActive = false,
   className = "",
 }: {
   isPlaying: boolean;
   reducedMotion: boolean;
+  bccActive?: boolean;
   className?: string;
 }) {
+  // BCC override : swap the shadow from gold to a hot gold-red so the
+  // wolf clearly looks like it's in the cave's audio context.
+  const shadowColor = bccActive
+    ? "rgba(232, 64, 87, 0.55)" // var(--red) ~ #E84057
+    : "rgba(200, 170, 110, 0.4)";
   return (
     <svg
       viewBox="0 0 64 64"
       className={className}
       role="img"
       aria-hidden="true"
-      style={{ filter: "drop-shadow(0 4px 12px rgba(200, 170, 110, 0.4))" }}
+      style={{ filter: `drop-shadow(0 4px 12px ${shadowColor})` }}
     >
       <defs>
         <linearGradient id="wolfFurGold" x1="0" y1="0" x2="0" y2="1">
@@ -68,8 +90,8 @@ function WolfHead({
           <stop offset="100%" stopColor="#0A1428" />
         </linearGradient>
         <radialGradient id="wolfEye" cx="0.5" cy="0.5">
-          <stop offset="0%" stopColor="#0AC8B9" />
-          <stop offset="50%" stopColor="#0057FF" />
+          <stop offset="0%" stopColor={bccActive ? "#E84057" : "#0AC8B9"} />
+          <stop offset="50%" stopColor={bccActive ? "#C8AA6E" : "#0057FF"} />
           <stop offset="100%" stopColor="#01081A" />
         </radialGradient>
       </defs>
@@ -120,7 +142,7 @@ function WolfHead({
         opacity="0.7"
       />
 
-      {/* Eyes — glowing cyan / blue (Hextech) */}
+      {/* Eyes — glowing cyan / blue (Hextech) or red/gold (BCC) */}
       <ellipse cx="22" cy="28" rx="3" ry="3.6" fill="url(#wolfEye)" />
       <ellipse cx="42" cy="28" rx="3" ry="3.6" fill="url(#wolfEye)" />
       {/* Eye shine — subtle, animated when playing */}
@@ -240,11 +262,78 @@ interface YTPlayerLocal {
   loadVideoById: (
     args: { videoId: string; startSeconds?: number } | string,
   ) => void;
+  destroy?: () => void;
 }
 
 function getWindowYT(): WindowYTLike | undefined {
   if (typeof window === "undefined") return undefined;
   return (window as unknown as { YT?: WindowYTLike }).YT;
+}
+
+/** Module-level coordination so /scroll's BgmPlayer + the wolf player
+ *  can share a SINGLE YT IFrame API load. Whichever mounts first kicks
+ *  off the script ; later mounts await the same readiness signal. */
+const YT_API_SRC = "https://www.youtube.com/iframe_api";
+let ytApiInjected = false;
+const ytApiWaiters: Array<() => void> = [];
+
+function whenYTReady(cb: () => void): void {
+  if (typeof window === "undefined") return;
+  if (getWindowYT()?.Player) {
+    cb();
+    return;
+  }
+  ytApiWaiters.push(cb);
+  if (ytApiInjected) return;
+  ytApiInjected = true;
+  // Inject the script only once across the whole app. We chain on top
+  // of any pre-existing onYouTubeIframeAPIReady (BgmPlayer's, for
+  // instance) instead of clobbering it — both consumers get notified.
+  const prevCb = (
+    window as unknown as { onYouTubeIframeAPIReady?: () => void }
+  ).onYouTubeIframeAPIReady;
+  (
+    window as unknown as { onYouTubeIframeAPIReady?: () => void }
+  ).onYouTubeIframeAPIReady = () => {
+    // eslint-disable-next-line no-console
+    console.debug("[wolf] onYouTubeIframeAPIReady fired");
+    try {
+      prevCb?.();
+    } catch {
+      /* don't let a sibling consumer's handler block us */
+    }
+    while (ytApiWaiters.length > 0) {
+      const fn = ytApiWaiters.shift();
+      try {
+        fn?.();
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.debug("[wolf] YT waiter threw", err);
+      }
+    }
+  };
+  // Re-use an existing script tag if one was injected elsewhere
+  const existing = document.querySelector<HTMLScriptElement>(
+    `script[src="${YT_API_SRC}"]`,
+  );
+  if (existing) {
+    // eslint-disable-next-line no-console
+    console.debug("[wolf] re-using existing iframe_api script tag");
+    return;
+  }
+  const tag = document.createElement("script");
+  tag.src = YT_API_SRC;
+  tag.async = true;
+  tag.onerror = () => {
+    // eslint-disable-next-line no-console
+    console.warn(
+      "[wolf] iframe_api script failed to load — wolf audio will not work. " +
+        "Check CSP script-src includes https://www.youtube.com.",
+    );
+  };
+  document.head.appendChild(tag);
+  // eslint-disable-next-line no-console
+  console.debug("[wolf] injected iframe_api script tag");
 }
 
 function HiddenAudioIframe() {
@@ -258,43 +347,55 @@ function HiddenAudioIframe() {
   } = useFloatingPlayerInternal();
   const containerRef = useRef<HTMLDivElement | null>(null);
   const playerRef = useRef<YTPlayerLocal | null>(null);
-  const initRef = useRef(false);
-  const trackIdRef = useRef<string | null>(null);
+  /** Did we ALREADY create a YT.Player on the target div? YT.Player
+   *  replaces the div with an iframe so a second `new YT.Player(divId)`
+   *  on the same id silently fails (the element is now an iframe). We
+   *  prefer loadVideoById on the existing player for track swaps. */
+  const playerCreatedRef = useRef(false);
+  const currentVideoIdRef = useRef<string | null>(null);
 
-  // Load YouTube IFrame API once
+  // (Re)create / update the player when the track changes. Uses the
+  // module-level whenYTReady() helper so /scroll's BgmPlayer and the
+  // wolf player share a single API load.
   useEffect(() => {
-    if (initRef.current) return;
-    initRef.current = true;
-    if (getWindowYT()?.Player) {
-      // Already loaded
+    if (typeof window === "undefined") return;
+    if (!currentTrack) {
+      // eslint-disable-next-line no-console
+      console.debug("[wolf] no currentTrack — skipping player init");
       return;
     }
-    const tag = document.createElement("script");
-    tag.src = "https://www.youtube.com/iframe_api";
-    tag.async = true;
-    document.head.appendChild(tag);
-  }, []);
+    if (currentVideoIdRef.current === currentTrack.youtubeId && playerCreatedRef.current) {
+      // Same track, player already up — nothing to do.
+      return;
+    }
 
-  // (Re)create the player when the track changes
-  useEffect(() => {
-    if (!currentTrack) return;
-    trackIdRef.current = currentTrack.youtubeId;
+    let cancelled = false;
+    // eslint-disable-next-line no-console
+    console.debug("[wolf] requesting YT API for track", {
+      youtubeId: currentTrack.youtubeId,
+      title: currentTrack.title,
+    });
 
-    const tryInit = () => {
+    whenYTReady(() => {
+      if (cancelled) return;
       const yt = getWindowYT();
       if (!yt?.Player) {
-        // API not ready yet — retry shortly
-        setTimeout(tryInit, 200);
+        // eslint-disable-next-line no-console
+        console.warn("[wolf] YT.Player still undefined after whenYTReady");
         return;
       }
-      if (playerRef.current) {
+
+      currentVideoIdRef.current = currentTrack.youtubeId;
+
+      // Fast path : player already created — just swap the track.
+      if (playerCreatedRef.current && playerRef.current) {
         try {
           playerRef.current.loadVideoById({
             videoId: currentTrack.youtubeId,
             startSeconds: 0,
           });
-          // Don't auto-play unless the user has opted in
           if (!isOptedIn) {
+            // Don't auto-play unless the user has opted in
             setTimeout(() => {
               try {
                 playerRef.current?.pauseVideo();
@@ -303,45 +404,88 @@ function HiddenAudioIframe() {
               }
             }, 100);
           }
-        } catch {
-          /* swallow */
+        } catch (err) {
+          // eslint-disable-next-line no-console
+          console.debug("[wolf] loadVideoById threw", err);
         }
         return;
       }
-      // First-time init
+
+      // Slow path : first-time init. The target div MUST exist in the
+      // DOM ; otherwise YT.Player silently fails.
       const el = containerRef.current?.querySelector(`#${iframeId}`);
-      if (!el) return;
-      playerRef.current = new yt.Player(iframeId, {
-        videoId: currentTrack.youtubeId,
-        playerVars: {
-          autoplay: 0,
-          controls: 0,
-          disablekb: 1,
-          fs: 0,
-          iv_load_policy: 3,
-          modestbranding: 1,
-          playsinline: 1,
-          rel: 0,
-        },
-        events: {
-          onReady: (e) => {
-            e.target.setVolume(Math.round(volume * 100));
-            _attachPlayer(e.target);
-            if (isOptedIn) {
+      if (!el) {
+        // eslint-disable-next-line no-console
+        console.warn("[wolf] iframe target div missing — aborting init");
+        return;
+      }
+
+      try {
+        const player = new yt.Player(iframeId, {
+          videoId: currentTrack.youtubeId,
+          playerVars: {
+            autoplay: 0,
+            controls: 0,
+            disablekb: 1,
+            fs: 0,
+            iv_load_policy: 3,
+            modestbranding: 1,
+            playsinline: 1,
+            rel: 0,
+            // origin is required for postMessage validation on some
+            // browsers / configurations. Without it the player can
+            // refuse commands.
+            origin:
+              typeof window !== "undefined" ? window.location.origin : "",
+          },
+          events: {
+            onReady: (e) => {
+              // eslint-disable-next-line no-console
+              console.debug("[wolf] YT.Player onReady", {
+                youtubeId: currentTrack.youtubeId,
+              });
               try {
-                e.target.playVideo();
+                e.target.setVolume(Math.round(volume * 100));
               } catch {
                 /* swallow */
               }
-            }
+              playerRef.current = e.target;
+              playerCreatedRef.current = true;
+              _attachPlayer(e.target);
+              // If the user opted in earlier, kick off playback now.
+              // (The provider's pendingPlayRef will also drain on
+              // _attachPlayer, so this is belt-and-braces.)
+              if (isOptedIn) {
+                try {
+                  e.target.playVideo();
+                } catch (err) {
+                  // eslint-disable-next-line no-console
+                  console.debug("[wolf] onReady playVideo() threw", err);
+                }
+              }
+            },
+            onStateChange: (e) => {
+              _onPlayerStateChange(e.data);
+            },
           },
-          onStateChange: (e) => _onPlayerStateChange(e.data),
-        },
-      });
+        });
+        // YT.Player returns the instance synchronously, but onReady
+        // fires later. We stash the instance early so the next track
+        // swap can use the fast path.
+        playerRef.current = player;
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.warn("[wolf] new YT.Player() threw", err);
+      }
+    });
+
+    return () => {
+      cancelled = true;
     };
-    tryInit();
+    // We only re-run when the actual video changes. isOptedIn / volume
+    // are read inside the closure ; they don't need to retrigger init.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentTrack?.youtubeId]);
+  }, [currentTrack?.youtubeId, iframeId]);
 
   return (
     <div
@@ -363,10 +507,11 @@ function HiddenAudioIframe() {
 
 // ─── Compact pill (always visible, bottom-right) ─────────────────
 function CompactPill({ onExpand }: { onExpand: () => void }) {
-  const { isPlaying, isOptedIn, toggle, currentTrack } =
+  const { isPlaying, isOptedIn, toggle, currentTrack, playlistOverride } =
     useFloatingPlayerInternal();
   const reducedMotion = useReducedMotion() ?? false;
   const showOptInPulse = !isOptedIn && !isPlaying;
+  const bccActive = playlistOverride === "bcc";
 
   return (
     <m.div
@@ -374,18 +519,23 @@ function CompactPill({ onExpand }: { onExpand: () => void }) {
       animate={{ opacity: 1, y: 0, scale: 1 }}
       exit={{ opacity: 0, y: 20, scale: 0.8 }}
       transition={{ type: "spring", stiffness: 320, damping: 28 }}
-      className="
+      className={`
         fixed bottom-4 right-4 z-[60]
         flex items-center gap-2
         rounded-full
         bg-black/70 backdrop-blur-xl
-        border border-[var(--gold)]/40
+        border
         shadow-2xl shadow-black/50
         pl-1.5 pr-3 py-1.5
         cursor-pointer
         select-none
-        transition-all hover:border-[var(--gold)] hover:shadow-[var(--gold)]/30
-      "
+        transition-all
+        ${
+          bccActive
+            ? "border-[var(--red)]/55 hover:border-[var(--red)] hover:shadow-[var(--red)]/30"
+            : "border-[var(--gold)]/40 hover:border-[var(--gold)] hover:shadow-[var(--gold)]/30"
+        }
+      `}
       style={{
         paddingBottom: "calc(0.375rem + env(safe-area-inset-bottom, 0px))",
       }}
@@ -396,9 +546,19 @@ function CompactPill({ onExpand }: { onExpand: () => void }) {
           : "Lancer la vibe KC"
       }
       onClick={(e) => {
-        // Tap on the wolf head = toggle play/pause
-        // Tap elsewhere on the pill = expand
+        // First-time visitors will tap the FAB *to start the audio*.
+        // We toggle play/pause on ANY tap of the pill in that state ;
+        // once playback is running, the wolf head is the play/pause
+        // toggle and the rest of the pill expands the panel. This was
+        // the silent UX bug : pre-2026-05-11 tapping the track-info
+        // half of the pill only ever expanded the panel without ever
+        // flipping the opt-in / play state, so a brand-new user could
+        // tap forever and hear nothing.
         const target = e.target as HTMLElement;
+        if (!isOptedIn) {
+          toggle();
+          return;
+        }
         if (target.closest("[data-wolf-toggle]")) {
           toggle();
         } else {
@@ -410,7 +570,9 @@ function CompactPill({ onExpand }: { onExpand: () => void }) {
       <div className="relative" data-wolf-toggle>
         {showOptInPulse && !reducedMotion && (
           <m.div
-            className="absolute inset-0 rounded-full border-2 border-[var(--gold)]"
+            className={`absolute inset-0 rounded-full border-2 ${
+              bccActive ? "border-[var(--red)]" : "border-[var(--gold)]"
+            }`}
             animate={{ scale: [1, 1.4, 1], opacity: [0.7, 0, 0.7] }}
             transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
           />
@@ -418,16 +580,21 @@ function CompactPill({ onExpand }: { onExpand: () => void }) {
         <WolfHead
           isPlaying={isPlaying}
           reducedMotion={reducedMotion}
+          bccActive={bccActive}
           className="w-10 h-10 relative"
         />
       </div>
 
       {/* Track info + waveform when playing */}
-      <div className="flex flex-col min-w-0 max-w-[140px]">
+      <div className="flex flex-col min-w-0 max-w-[160px]">
         {isPlaying && currentTrack ? (
           <>
-            <span className="font-data text-[10px] uppercase tracking-widest text-[var(--gold)]/60 leading-none">
-              Vibe
+            <span
+              className={`font-data text-[10px] uppercase tracking-widest leading-none ${
+                bccActive ? "text-[var(--red)]/80" : "text-[var(--gold)]/60"
+              }`}
+            >
+              {bccActive ? "◆ BCC" : "Vibe"}
             </span>
             <span className="text-[11px] text-[var(--gold-bright)] truncate font-medium">
               {currentTrack.title}
@@ -454,6 +621,7 @@ function ExpandedPanel({ onCollapse }: { onCollapse: () => void }) {
     position,
     volume,
     playlistId,
+    playlistOverride,
     toggle,
     next,
     prev,
@@ -461,6 +629,7 @@ function ExpandedPanel({ onCollapse }: { onCollapse: () => void }) {
     loadPlaylist,
   } = useFloatingPlayerInternal();
   const reducedMotion = useReducedMotion() ?? false;
+  const bccActive = playlistOverride === "bcc";
 
   const duration = currentTrack?.durationSeconds ?? 1;
   const progressPct = Math.min(100, (position / duration) * 100);
@@ -485,6 +654,10 @@ function ExpandedPanel({ onCollapse }: { onCollapse: () => void }) {
     return () => window.removeEventListener("keydown", handler);
   }, [toggle, next, prev, onCollapse]);
 
+  const headerKicker = bccActive
+    ? "BCC Playlist · Ahou Ahou"
+    : `Vibe KC · ${playlistId === "homepage" ? "Ambient" : "Hype"}`;
+
   return (
     <>
       {/* Backdrop tap-to-close */}
@@ -501,15 +674,16 @@ function ExpandedPanel({ onCollapse }: { onCollapse: () => void }) {
         animate={{ opacity: 1, y: 0, scale: 1 }}
         exit={{ opacity: 0, y: 40, scale: 0.92 }}
         transition={{ type: "spring", stiffness: 320, damping: 28 }}
-        className="
+        className={`
           fixed bottom-4 right-4 z-[80]
           w-[min(96vw,360px)]
           rounded-2xl
           bg-[var(--bg-elevated)]/85 backdrop-blur-2xl
-          border border-[var(--gold)]/40
+          border
           shadow-2xl shadow-black/60
           overflow-hidden
-        "
+          ${bccActive ? "border-[var(--red)]/55" : "border-[var(--gold)]/40"}
+        `}
         style={{
           paddingBottom: "env(safe-area-inset-bottom, 0px)",
         }}
@@ -523,16 +697,31 @@ function ExpandedPanel({ onCollapse }: { onCollapse: () => void }) {
             <WolfHead
               isPlaying={isPlaying}
               reducedMotion={reducedMotion}
+              bccActive={bccActive}
               className="w-14 h-14"
             />
           </div>
           <div className="flex-1 min-w-0">
-            <p className="font-data text-[9px] uppercase tracking-[0.25em] text-[var(--gold)]/60 mb-0.5">
-              Vibe KC · {playlistId === "homepage" ? "Ambient" : "Hype"}
+            <p
+              className={`font-data text-[9px] uppercase tracking-[0.25em] mb-0.5 ${
+                bccActive ? "text-[var(--red)]/80" : "text-[var(--gold)]/60"
+              }`}
+            >
+              {headerKicker}
             </p>
-            <p className="font-display text-base text-[var(--gold-bright)] truncate leading-tight">
-              {currentTrack?.title ?? "—"}
-            </p>
+            <div className="flex items-center gap-1.5 min-w-0">
+              <p className="font-display text-base text-[var(--gold-bright)] truncate leading-tight">
+                {currentTrack?.title ?? "—"}
+              </p>
+              {bccActive && (
+                <span
+                  className="shrink-0 font-data text-[9px] uppercase tracking-[0.2em] text-[var(--red)] border border-[var(--red)]/50 rounded-sm px-1 py-px"
+                  aria-label="Playlist BCC active"
+                >
+                  ◆ BCC
+                </span>
+              )}
+            </div>
             <p className="text-[11px] text-[var(--text-muted)] truncate">
               {currentTrack?.artist ?? "—"}
             </p>
@@ -557,7 +746,11 @@ function ExpandedPanel({ onCollapse }: { onCollapse: () => void }) {
         <div className="px-4 pb-2">
           <div className="relative h-1 bg-white/10 rounded-full overflow-hidden">
             <m.div
-              className="absolute inset-y-0 left-0 bg-gradient-to-r from-[var(--gold-dark)] via-[var(--gold)] to-[var(--gold-bright)]"
+              className={`absolute inset-y-0 left-0 ${
+                bccActive
+                  ? "bg-gradient-to-r from-[var(--red)] via-[var(--gold)] to-[var(--gold-bright)]"
+                  : "bg-gradient-to-r from-[var(--gold-dark)] via-[var(--gold)] to-[var(--gold-bright)]"
+              }`}
               style={{ width: `${progressPct}%` }}
             />
           </div>
@@ -586,7 +779,11 @@ function ExpandedPanel({ onCollapse }: { onCollapse: () => void }) {
           <button
             onClick={toggle}
             aria-label={isPlaying ? "Mettre en pause" : "Lancer la lecture"}
-            className="w-14 h-14 grid place-items-center rounded-full bg-[var(--gold)]/20 border border-[var(--gold)]/60 hover:bg-[var(--gold)]/30 hover:border-[var(--gold)] text-[var(--gold-bright)] transition-all hover:scale-105"
+            className={`w-14 h-14 grid place-items-center rounded-full border text-[var(--gold-bright)] transition-all hover:scale-105 ${
+              bccActive
+                ? "bg-[var(--red)]/20 border-[var(--red)]/60 hover:bg-[var(--red)]/30 hover:border-[var(--red)]"
+                : "bg-[var(--gold)]/20 border-[var(--gold)]/60 hover:bg-[var(--gold)]/30 hover:border-[var(--gold)]"
+            }`}
           >
             {isPlaying ? (
               <svg viewBox="0 0 24 24" className="w-6 h-6" aria-hidden="true">
@@ -650,30 +847,38 @@ function ExpandedPanel({ onCollapse }: { onCollapse: () => void }) {
           </span>
         </div>
 
-        {/* Playlist switcher */}
+        {/* Playlist switcher — disabled while a BCC override is active
+            (the cave owns the audio context until it releases). */}
         <div className="px-4 pb-4 pt-1 border-t border-white/5">
           <p className="font-data text-[9px] uppercase tracking-[0.25em] text-[var(--gold)]/60 mb-1.5">
             Playlist
           </p>
-          <div className="grid grid-cols-2 gap-2">
-            {(["homepage", "scroll"] as PlaylistId[]).map((id) => (
-              <button
-                key={id}
-                onClick={() => loadPlaylist(id, { autoplay: true })}
-                aria-pressed={playlistId === id}
-                className={`
-                  px-3 py-2 rounded-lg text-xs font-medium transition-all
-                  ${
-                    playlistId === id
-                      ? "bg-[var(--gold)]/25 border border-[var(--gold)] text-[var(--gold-bright)]"
-                      : "bg-white/5 border border-white/10 text-[var(--text-secondary)] hover:bg-white/10 hover:border-white/20"
-                  }
-                `}
-              >
-                {id === "homepage" ? "🌅 Ambient" : "🔥 Hype"}
-              </button>
-            ))}
-          </div>
+          {bccActive ? (
+            <div className="rounded-lg border border-[var(--red)]/40 bg-[var(--red)]/10 px-3 py-2 text-[11px] text-[var(--gold-bright)]/80">
+              Tu es dans l&apos;Antre de la BCC. Sors de la grotte pour
+              changer de vibe.
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 gap-2">
+              {(["homepage", "scroll"] as PlaylistId[]).map((id) => (
+                <button
+                  key={id}
+                  onClick={() => loadPlaylist(id, { autoplay: true })}
+                  aria-pressed={playlistId === id}
+                  className={`
+                    px-3 py-2 rounded-lg text-xs font-medium transition-all
+                    ${
+                      playlistId === id
+                        ? "bg-[var(--gold)]/25 border border-[var(--gold)] text-[var(--gold-bright)]"
+                        : "bg-white/5 border border-white/10 text-[var(--text-secondary)] hover:bg-white/10 hover:border-white/20"
+                    }
+                  `}
+                >
+                  {id === "homepage" ? "Ambient" : "Hype"}
+                </button>
+              ))}
+            </div>
+          )}
           <p className="mt-2 font-data text-[10px] text-[var(--text-disabled)] tabular-nums text-center">
             Piste {index + 1} / {queue.length}
           </p>
@@ -687,7 +892,7 @@ function ExpandedPanel({ onCollapse }: { onCollapse: () => void }) {
 export function WolfFloatingPlayer() {
   const { isExpanded, setExpanded } = useFloatingPlayerInternal();
 
-  // 🔴 2026-04-27 mobile crash mitigation : the wolf player loads the
+  // 2026-04-27 mobile crash mitigation : the wolf player loads the
   // YouTube IFrame API + creates a hidden Player on mount. Combined
   // with the HeroClipBackground's ALSO-loaded YouTube iframe AND the
   // multiple breathing-gradient animations on the homepage, this
@@ -700,6 +905,10 @@ export function WolfFloatingPlayer() {
   // during SSR (renders the player), then re-evaluates on mount and
   // hides the player if matchMedia matches. This avoids hydration
   // mismatch.
+  //
+  // 2026-05-11 — the HiddenAudioIframe is the bit that pulled the YT
+  // API in, so the entire mobile-disable is still the right call. We
+  // return null wholesale on mobile : no UI, no iframe, no audio.
   const isMobile = useIsMobileViewport();
   if (isMobile) return null;
 

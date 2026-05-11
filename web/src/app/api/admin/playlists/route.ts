@@ -50,6 +50,9 @@ function isValidTrack(t: unknown): t is BgmTrack {
   );
 }
 
+/** Validates the operator-editable subset (homepage + scroll). `bcc` is
+ *  patched in by savePlaylists() before disk write so it can't be edited
+ *  from this endpoint. */
 function isValidPlaylists(
   obj: unknown,
 ): obj is Record<PlaylistId, BgmTrack[]> {

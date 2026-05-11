@@ -22,6 +22,7 @@ import {
 import {
   DEFAULT_PLAYLISTS,
   type BgmTrack,
+  type EditablePlaylistId,
   type PlaylistId,
 } from "@/lib/audio/playlists";
 
@@ -47,14 +48,27 @@ function isValidTrack(t: unknown): t is BgmTrack {
   );
 }
 
-function isValidPlaylists(obj: unknown): obj is Record<PlaylistId, BgmTrack[]> {
+/**
+ * Validates ONLY the operator-editable playlists (homepage + scroll).
+ * The `bcc` key is added by savePlaylists() before writing to disk so
+ * the canonical OTT loop is never dropped by an admin save.
+ */
+function isValidEditablePlaylists(
+  obj: unknown,
+): obj is Record<EditablePlaylistId, BgmTrack[]> {
   if (!obj || typeof obj !== "object") return false;
   const o = obj as Record<string, unknown>;
-  for (const id of ["homepage", "scroll"] as PlaylistId[]) {
+  for (const id of ["homepage", "scroll"] as EditablePlaylistId[]) {
     if (!Array.isArray(o[id])) return false;
     if (!o[id].every(isValidTrack)) return false;
     if (o[id].length > 100) return false;
   }
+  return true;
+}
+
+function isValidPlaylists(obj: unknown): obj is Record<PlaylistId, BgmTrack[]> {
+  if (!isValidEditablePlaylists(obj)) return false;
+  // bcc is allowed but not required ; if absent we'll patch it in on save.
   return true;
 }
 
@@ -93,12 +107,14 @@ export interface SavePlaylistsResult {
 }
 
 export async function savePlaylists(
-  playlists: Record<PlaylistId, BgmTrack[]>,
+  playlists:
+    | Record<EditablePlaylistId, BgmTrack[]>
+    | Record<PlaylistId, BgmTrack[]>,
 ): Promise<SavePlaylistsResult> {
   const admin = await requireAdmin();
   if (!admin.ok) return { ok: false, error: admin.error };
 
-  if (!isValidPlaylists(playlists)) {
+  if (!isValidEditablePlaylists(playlists)) {
     return {
       ok: false,
       error:
@@ -107,8 +123,16 @@ export async function savePlaylists(
   }
 
   const before = await loadStored();
+  // Force the canonical `bcc` cave playlist back in — it's NOT operator-
+  // editable (it's the Antre's signature OTT loop) but the admin POST
+  // body only carries homepage + scroll. Without this, every admin save
+  // would silently drop the bcc key from disk.
   const next: StoredShape = {
-    playlists,
+    playlists: {
+      homepage: (playlists as Record<EditablePlaylistId, BgmTrack[]>).homepage,
+      scroll: (playlists as Record<EditablePlaylistId, BgmTrack[]>).scroll,
+      bcc: DEFAULT_PLAYLISTS.bcc,
+    },
     updatedAt: new Date().toISOString(),
   };
 

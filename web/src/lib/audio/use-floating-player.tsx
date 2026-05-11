@@ -20,11 +20,25 @@
  *     1st visit → silent until they tap. Subsequent visits → ambient
  *     music starts on first interaction with the page.
  *
+ * Playlist override (Wave 26 — Antre de la BCC) :
+ *   * The wolf player normally picks its playlist from the current route
+ *     (homepage / scroll). When a context like the Antre modal needs to
+ *     hijack the audio (looped OTT track), it calls
+ *     `setPlaylistOverride("bcc")`. The override has priority over the
+ *     route-derived playlist. Calling `setPlaylistOverride(null)` releases
+ *     control and the route-default resumes.
+ *
  * Persistence :
  *   * `kc_audio_enabled` (1 / 0) — has the user ever opted in
  *   * `kc_audio_volume` (0..1) — last volume
  *   * `kc_audio_track_id` — last playing track ID (resume on next visit)
  *   * `kc_audio_position_seconds` — saved every 5s (resume position)
+ *
+ * Diagnostic logging :
+ *   * All major state transitions print `console.debug("[wolf]", ...)`
+ *     so the user can `localStorage.kc_debug = 1` (or just open devtools)
+ *     and see exactly what's happening. Logging is unconditional — these
+ *     are debug-level messages, hidden by default in Chrome's filter.
  */
 
 import {
@@ -66,7 +80,7 @@ interface YTPlayerLike {
 }
 
 interface FloatingPlayerState {
-  /** Currently active playlist key. */
+  /** Currently active playlist key (effective — override OR route-derived). */
   playlistId: PlaylistId;
   /** Tracks queued for play (already shuffled). */
   queue: BgmTrack[];
@@ -82,6 +96,9 @@ interface FloatingPlayerState {
   position: number;
   /** Compact (just the wolf head) vs expanded (track info + controls). */
   isExpanded: boolean;
+  /** Active override (null = none, "bcc" = cave hijack, etc.). When set,
+   *  it bypasses the route-driven playlist selection. */
+  playlistOverride: PlaylistId | null;
 }
 
 interface FloatingPlayerActions {
@@ -96,11 +113,21 @@ interface FloatingPlayerActions {
   loadPlaylist: (id: PlaylistId, opts?: { autoplay?: boolean }) => void;
   /** Pick a specific track from the current queue. */
   jumpTo: (trackIdx: number) => void;
+  /**
+   * Override the active playlist. When non-null this takes priority over
+   * the route-derived playlist (used by the Antre de la BCC to hijack the
+   * wolf player). Pass `null` to release control. The opts.autoplay
+   * defaults to TRUE because callers want the music to start right away.
+   */
+  setPlaylistOverride: (
+    id: PlaylistId | null,
+    opts?: { autoplay?: boolean },
+  ) => void;
 }
 
 type FloatingPlayerCtx = FloatingPlayerState & FloatingPlayerActions & {
   currentTrack: BgmTrack | null;
-  /** Audio element ref — used internally + by the visualizer. */
+  /** ID of the inner <div> the YouTube IFrame API mounts onto. */
   iframeId: string;
 };
 
@@ -129,6 +156,13 @@ function writeLS(key: string, value: string) {
   }
 }
 
+/** Tiny tagged logger — collapses all wolf-player debug output to one
+ *  prefix so the user can filter by `[wolf]` in devtools. */
+function wlog(...args: unknown[]) {
+  // eslint-disable-next-line no-console
+  console.debug("[wolf]", ...args);
+}
+
 export function FloatingPlayerProvider({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const initialPlaylistId: PlaylistId = useMemo(
@@ -140,12 +174,15 @@ export function FloatingPlayerProvider({ children }: { children: ReactNode }) {
   );
 
   const [playlistId, setPlaylistId] = useState<PlaylistId>(initialPlaylistId);
+  const [playlistOverride, setPlaylistOverrideState] =
+    useState<PlaylistId | null>(null);
   const [allPlaylists, setAllPlaylists] = useState<Record<PlaylistId, BgmTrack[]>>(
     () => DEFAULT_PLAYLISTS,
   );
-  const [queue, setQueue] = useState<BgmTrack[]>(() =>
-    shufflePlaylist(DEFAULT_PLAYLISTS[initialPlaylistId]),
-  );
+  const [queue, setQueue] = useState<BgmTrack[]>(() => {
+    const base = DEFAULT_PLAYLISTS[initialPlaylistId];
+    return base.length > 0 ? shufflePlaylist(base) : [];
+  });
 
   // Hydrate operator-curated playlists from the public API. Falls back
   // to DEFAULT_PLAYLISTS if the fetch fails. Caches via the route's
@@ -156,22 +193,46 @@ export function FloatingPlayerProvider({ children }: { children: ReactNode }) {
       .then((r) => (r.ok ? r.json() : null))
       .then((data) => {
         if (cancelled || !data?.playlists) return;
-        const fetched = data.playlists as Record<PlaylistId, BgmTrack[]>;
-        setAllPlaylists(fetched);
+        const incoming = data.playlists as Partial<Record<PlaylistId, BgmTrack[]>>;
+        // ALWAYS merge with DEFAULT_PLAYLISTS so a missing/empty key
+        // (e.g. operator dropped the `bcc` field) doesn't blank out the
+        // queue. This was the silent "wolf does nothing on click" bug
+        // pre-2026-05-11 : a malformed /api/playlists response set
+        // queue → [], currentTrack → undefined, player never inits.
+        const merged: Record<PlaylistId, BgmTrack[]> = {
+          homepage:
+            Array.isArray(incoming.homepage) && incoming.homepage.length > 0
+              ? incoming.homepage
+              : DEFAULT_PLAYLISTS.homepage,
+          scroll:
+            Array.isArray(incoming.scroll) && incoming.scroll.length > 0
+              ? incoming.scroll
+              : DEFAULT_PLAYLISTS.scroll,
+          bcc: DEFAULT_PLAYLISTS.bcc,
+        };
+        wlog("playlists hydrated from /api/playlists", {
+          counts: {
+            homepage: merged.homepage.length,
+            scroll: merged.scroll.length,
+            bcc: merged.bcc.length,
+          },
+        });
+        setAllPlaylists(merged);
         // Re-shuffle the active playlist now that we have curated tracks
-        const fresh: BgmTrack[] = shufflePlaylist<BgmTrack>(
-          fetched[playlistId] ?? [],
-        );
-        setQueue(fresh);
+        const active = merged[playlistId] ?? merged.homepage;
+        if (active.length > 0) {
+          setQueue(shufflePlaylist<BgmTrack>(active));
+        }
       })
-      .catch(() => {
-        /* fall back to DEFAULT_PLAYLISTS already in state */
+      .catch((err) => {
+        wlog("playlists fetch failed — using DEFAULT_PLAYLISTS", err);
       });
     return () => {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
   const [index, setIndex] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isOptedIn, setIsOptedIn] = useState(false);
@@ -181,6 +242,12 @@ export function FloatingPlayerProvider({ children }: { children: ReactNode }) {
 
   const playerRef = useRef<YTPlayerLike | null>(null);
   const positionTimerRef = useRef<number | null>(null);
+  /** Queued play request — set when `play()` is called but the YT player
+   *  isn't attached yet. Drained by the player's onReady callback (or by
+   *  the attach effect when the player arrives later). Critical for the
+   *  "click immediately on first mount" UX — without it, the first click
+   *  is dropped because playerRef is still null. */
+  const pendingPlayRef = useRef<boolean>(false);
 
   const currentTrack = queue[index] ?? null;
 
@@ -190,6 +257,13 @@ export function FloatingPlayerProvider({ children }: { children: ReactNode }) {
     const lastVolume = parseFloat(readLS(LS_VOLUME) ?? "0.4");
     const lastTrackId = readLS(LS_TRACK);
     const lastPos = parseFloat(readLS(LS_POS) ?? "0");
+
+    wlog("hydrate from localStorage", {
+      optedIn,
+      lastVolume,
+      lastTrackId,
+      lastPos,
+    });
 
     setIsOptedIn(optedIn);
     setVolumeState(Number.isFinite(lastVolume) ? lastVolume : 0.4);
@@ -207,17 +281,25 @@ export function FloatingPlayerProvider({ children }: { children: ReactNode }) {
   // ─── Route-driven playlist swap ───────────────────────────────────
   // When user navigates to a different surface, swap to the matching
   // playlist UNLESS they're mid-track on the current one (don't yank
-  // their music out from under them on every navigation).
+  // their music out from under them on every navigation). If a
+  // `playlistOverride` is active (Antre de la BCC), route changes are
+  // ignored — the cave controls the player until it releases.
   useEffect(() => {
     if (!pathname) return;
+    if (playlistOverride) {
+      wlog("route change ignored — override active", { playlistOverride });
+      return;
+    }
     const next = playlistForRoute(pathname);
     if (next !== playlistId && !isPlaying) {
+      wlog("route-driven playlist swap", { from: playlistId, to: next });
       setPlaylistId(next);
-      setQueue(shufflePlaylist(allPlaylists[next]));
+      const target = allPlaylists[next];
+      setQueue(target && target.length > 0 ? shufflePlaylist(target) : []);
       setIndex(0);
       setPosition(0);
     }
-  }, [pathname, playlistId, isPlaying, allPlaylists]);
+  }, [pathname, playlistId, isPlaying, allPlaylists, playlistOverride]);
 
   // ─── First-interaction autoplay ──────────────────────────────────
   // After the user has opted-in once, we auto-resume on the next visit
@@ -231,12 +313,19 @@ export function FloatingPlayerProvider({ children }: { children: ReactNode }) {
       armed = false;
       window.removeEventListener("pointerdown", onFirstGesture);
       window.removeEventListener("keydown", onFirstGesture);
+      wlog("first-gesture autoplay fired");
       // Try to resume — if YT player isn't ready yet, set flag for the
       // onReady callback to pick up.
-      try {
-        playerRef.current?.playVideo();
-      } catch {
-        /* swallow — onReady will handle */
+      if (playerRef.current) {
+        try {
+          playerRef.current.playVideo();
+        } catch (err) {
+          wlog("first-gesture playVideo() threw", err);
+          pendingPlayRef.current = true;
+        }
+      } else {
+        wlog("first-gesture but no player yet — queueing playVideo()");
+        pendingPlayRef.current = true;
       }
     };
 
@@ -288,16 +377,33 @@ export function FloatingPlayerProvider({ children }: { children: ReactNode }) {
 
   // ─── Actions ─────────────────────────────────────────────────────
   const play = useCallback(() => {
+    wlog("play() invoked", {
+      hasPlayer: !!playerRef.current,
+      playlistId,
+      currentTrackId: currentTrack?.id,
+    });
     setIsOptedIn(true);
     writeLS(LS_OPTED, "1");
-    try {
-      playerRef.current?.playVideo();
-    } catch {
-      /* not ready yet */
+    if (playerRef.current) {
+      try {
+        playerRef.current.playVideo();
+      } catch (err) {
+        wlog("playVideo() threw — will retry on onReady", err);
+        pendingPlayRef.current = true;
+      }
+    } else {
+      // Player isn't attached yet — queue the play request so the
+      // attach effect / onReady callback can pick it up. This is the
+      // critical fix for "first click does nothing" : the YT IFrame API
+      // is async and the user beats it to the punch.
+      wlog("play() queued — YT player not attached yet");
+      pendingPlayRef.current = true;
     }
-  }, []);
+  }, [playlistId, currentTrack?.id]);
 
   const pause = useCallback(() => {
+    wlog("pause() invoked");
+    pendingPlayRef.current = false;
     try {
       playerRef.current?.pauseVideo();
     } catch {
@@ -306,19 +412,45 @@ export function FloatingPlayerProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const toggle = useCallback(() => {
+    wlog("toggle() invoked", { isPlaying });
     if (isPlaying) pause();
     else play();
   }, [isPlaying, play, pause]);
 
-  const next = useCallback(() => {
-    setIndex((i) => (i + 1) % Math.max(queue.length, 1));
-    setPosition(0);
-  }, [queue.length]);
+  // ─── Auto-advance helper — accounts for single-track loop (BCC) ──
+  // The Antre's cave playlist has exactly ONE track. Advancing modulo 1
+  // brings us back to index 0 → same track restarts. We re-issue
+  // loadVideoById so the YT player actually re-plays instead of
+  // stopping at the end. This implements the "loop indefinitely"
+  // requirement without needing a dedicated loop flag.
+  const advanceTrack = useCallback(
+    (direction: 1 | -1) => {
+      const len = queue.length;
+      if (len === 0) return;
+      wlog("advanceTrack", { direction, queueLen: len });
+      setIndex((i) => (i + direction + len) % len);
+      setPosition(0);
+      // Single-track playlist (e.g. bcc) : the modulo-1 advance leaves
+      // index at 0 → the (Re)create-player effect won't fire (deps
+      // unchanged), so we explicitly tell the YT player to rewind +
+      // play. For multi-track playlists the effect handles it because
+      // currentTrack?.youtubeId actually changes.
+      if (len === 1 && playerRef.current) {
+        try {
+          playerRef.current.loadVideoById({
+            videoId: queue[0].youtubeId,
+            startSeconds: 0,
+          });
+        } catch (err) {
+          wlog("loadVideoById (single-track loop) threw", err);
+        }
+      }
+    },
+    [queue],
+  );
 
-  const prev = useCallback(() => {
-    setIndex((i) => (i - 1 + queue.length) % Math.max(queue.length, 1));
-    setPosition(0);
-  }, [queue.length]);
+  const next = useCallback(() => advanceTrack(1), [advanceTrack]);
+  const prev = useCallback(() => advanceTrack(-1), [advanceTrack]);
 
   const setVolume = useCallback((v: number) => {
     const clamped = Math.max(0, Math.min(1, v));
@@ -334,8 +466,10 @@ export function FloatingPlayerProvider({ children }: { children: ReactNode }) {
 
   const loadPlaylist = useCallback(
     (id: PlaylistId, opts: { autoplay?: boolean } = {}) => {
+      wlog("loadPlaylist", { id, autoplay: opts.autoplay });
       setPlaylistId(id);
-      setQueue(shufflePlaylist(allPlaylists[id]));
+      const target = allPlaylists[id];
+      setQueue(target && target.length > 0 ? shufflePlaylist(target) : []);
       setIndex(0);
       setPosition(0);
       if (opts.autoplay) {
@@ -344,6 +478,45 @@ export function FloatingPlayerProvider({ children }: { children: ReactNode }) {
       }
     },
     [play, allPlaylists],
+  );
+
+  /** Hijack the player for a specific playlist. The override has
+   *  priority over the route-derived playlist (see the route-swap
+   *  effect above). Pass null to release. The BCC cave uses this. */
+  const setPlaylistOverride = useCallback(
+    (id: PlaylistId | null, opts: { autoplay?: boolean } = {}) => {
+      const autoplay = opts.autoplay ?? id !== null;
+      wlog("setPlaylistOverride", { id, autoplay });
+      setPlaylistOverrideState(id);
+      if (id === null) {
+        // Release : restore the route-default playlist. Don't autoplay
+        // unless the caller asked — the user may want silence after
+        // closing the cave.
+        const routeId = playlistForRoute(pathname || "/");
+        setPlaylistId(routeId);
+        const target = allPlaylists[routeId];
+        setQueue(target && target.length > 0 ? shufflePlaylist(target) : []);
+        setIndex(0);
+        setPosition(0);
+        // Stop the cave track from continuing under the hood — without
+        // this it'd keep playing OTT silently behind the homepage.
+        try {
+          playerRef.current?.pauseVideo();
+        } catch {
+          /* swallow */
+        }
+        if (autoplay) setTimeout(() => play(), 200);
+        return;
+      }
+      // Activate override : swap to the target playlist immediately.
+      setPlaylistId(id);
+      const target = allPlaylists[id];
+      setQueue(target && target.length > 0 ? shufflePlaylist(target) : []);
+      setIndex(0);
+      setPosition(0);
+      if (autoplay) setTimeout(() => play(), 200);
+    },
+    [allPlaylists, pathname, play],
   );
 
   const jumpTo = useCallback(
@@ -360,24 +533,37 @@ export function FloatingPlayerProvider({ children }: { children: ReactNode }) {
   // The actual <iframe> + YT IFrame API setup lives in the visual
   // wolf-player component. It registers its YT.Player via this method.
   const _attachPlayer = useCallback((p: YTPlayerLike | null) => {
+    wlog("_attachPlayer", { attached: !!p });
     playerRef.current = p;
+    if (p && pendingPlayRef.current) {
+      pendingPlayRef.current = false;
+      wlog("draining queued play()");
+      try {
+        p.playVideo();
+      } catch (err) {
+        wlog("queued playVideo() threw", err);
+      }
+    }
   }, []);
 
   const _onPlayerStateChange = useCallback((state: number) => {
     // YT.PlayerState.PLAYING = 1, PAUSED = 2, ENDED = 0
+    wlog("YT state change", { state });
     if (state === 1) setIsPlaying(true);
     else if (state === 2) setIsPlaying(false);
     else if (state === 0) {
       setIsPlaying(false);
-      // Auto-advance on track end
-      setIndex((i) => (i + 1) % Math.max(queue.length, 1));
-      setPosition(0);
+      // Auto-advance on track end. For single-track playlists (bcc),
+      // `next()` reloads the same track via loadVideoById, achieving
+      // the loop behaviour.
+      next();
     }
-  }, [queue.length]);
+  }, [next]);
 
   const value = useMemo<FloatingPlayerCtx & { _attachPlayer: typeof _attachPlayer; _onPlayerStateChange: typeof _onPlayerStateChange }>(
     () => ({
       playlistId,
+      playlistOverride,
       queue,
       index,
       isPlaying,
@@ -396,11 +582,13 @@ export function FloatingPlayerProvider({ children }: { children: ReactNode }) {
       setExpanded,
       loadPlaylist,
       jumpTo,
+      setPlaylistOverride,
       _attachPlayer,
       _onPlayerStateChange,
     }),
     [
       playlistId,
+      playlistOverride,
       queue,
       index,
       isPlaying,
@@ -418,6 +606,7 @@ export function FloatingPlayerProvider({ children }: { children: ReactNode }) {
       setExpanded,
       loadPlaylist,
       jumpTo,
+      setPlaylistOverride,
       _attachPlayer,
       _onPlayerStateChange,
     ],

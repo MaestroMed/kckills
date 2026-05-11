@@ -4,11 +4,17 @@ import { useEffect, useState, useTransition } from "react";
 import {
   DEFAULT_PLAYLISTS,
   type BgmTrack,
-  type PlaylistId,
+  type EditablePlaylistId,
 } from "@/lib/audio/playlists";
 import { savePlaylists } from "./actions";
 
-const PLAYLIST_LABELS: Record<PlaylistId, { label: string; subtitle: string; emoji: string }> = {
+// The admin editor only touches the operator-curated playlists
+// (`homepage`, `scroll`). The `bcc` cave loop is canonical and not
+// editable here — see DEFAULT_BCC_PLAYLIST in lib/audio/playlists.ts.
+const PLAYLIST_LABELS: Record<
+  EditablePlaylistId,
+  { label: string; subtitle: string; emoji: string }
+> = {
   homepage: {
     label: "Homepage",
     subtitle: "Vibe ambient / ramp-up sur la landing",
@@ -32,10 +38,7 @@ const GENRES: BgmTrack["genre"][] = [
   "anthemic",
 ];
 
-interface State {
-  homepage: BgmTrack[];
-  scroll: BgmTrack[];
-}
+type State = Record<EditablePlaylistId, BgmTrack[]>;
 
 function emptyTrack(): BgmTrack {
   return {
@@ -64,7 +67,7 @@ export function PlaylistsEditor() {
     homepage: DEFAULT_PLAYLISTS.homepage,
     scroll: DEFAULT_PLAYLISTS.scroll,
   });
-  const [activeId, setActiveId] = useState<PlaylistId>("homepage");
+  const [activeId, setActiveId] = useState<EditablePlaylistId>("homepage");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [savedAt, setSavedAt] = useState<number | null>(null);
@@ -159,7 +162,7 @@ export function PlaylistsEditor() {
     <div className="space-y-6">
       {/* ─── Tab switcher ──────────────────────────────────────── */}
       <div className="flex gap-2 border-b border-[var(--border-gold)]">
-        {(Object.keys(PLAYLIST_LABELS) as PlaylistId[]).map((id) => {
+        {(Object.keys(PLAYLIST_LABELS) as EditablePlaylistId[]).map((id) => {
           const meta = PLAYLIST_LABELS[id];
           const isActive = id === activeId;
           return (

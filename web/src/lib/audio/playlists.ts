@@ -1,16 +1,21 @@
 /**
  * Audio playlists for the floating wolf player.
  *
- * TWO contexts :
+ * THREE contexts :
  *   * `homepage` — BCC vibe : ambient, anthemic, ramp-up. Plays on the
  *     landing experience to set the mood (le scroll TikTok du LoL = il
  *     faut une atmosphère)
  *   * `scroll` — high-energy montage : trap, EDM, hype. Plays under the
  *     scroll feed to give clip energy (existing /scroll BGM pattern)
+ *   * `bcc` — the Antre de la BCC cave override. Single-track loop
+ *     of N'Seven7 "OTT". Activated via setPlaylistOverride("bcc") when
+ *     the Antre modal opens, cleared when it closes.
  *
- * Both are managed via /admin/playlists. The wolf player picks the
- * right playlist based on the current route (`/` → homepage, `/scroll*`
- * → scroll, anywhere else → user's last choice).
+ * `homepage` / `scroll` are managed via /admin/playlists. The wolf player
+ * picks the right playlist based on the current route. `bcc` is NEVER
+ * route-selected — only via explicit `setPlaylistOverride("bcc")`. This
+ * keeps the cave audio context decoupled from the URL (the Antre is a
+ * modal on /alumni/bo, not its own route).
  *
  * Tracks are YouTube video IDs (audio-only via hidden IFrame). Future
  * upgrade : host MP3s directly on R2 to enable Web Audio API real-time
@@ -40,7 +45,18 @@ export interface BgmTrack {
   coverUrl?: string;
 }
 
-export type PlaylistId = "homepage" | "scroll";
+export type PlaylistId = "homepage" | "scroll" | "bcc";
+
+/**
+ * Subset of PlaylistId that the operator can re-curate via /admin/playlists.
+ * The `bcc` playlist is intentionally NOT included — it's the cave's
+ * canonical signature loop and lives only in DEFAULT_PLAYLISTS.
+ */
+export type EditablePlaylistId = "homepage" | "scroll";
+export const EDITABLE_PLAYLIST_IDS: EditablePlaylistId[] = [
+  "homepage",
+  "scroll",
+];
 
 /**
  * Default homepage playlist — BCC vibe.
@@ -90,15 +106,44 @@ export const DEFAULT_SCROLL_PLAYLIST: BgmTrack[] = [
   },
 ];
 
+/**
+ * BCC cave playlist — the Antre's signature loop.
+ *
+ * Single track : N'Seven7 "OTT" (the "ahou ahou" anthem that gave its
+ * name to the Mur des Ahou Ahou). When the cave opens, we override the
+ * wolf player's playlist to this, set the player's auto-advance to
+ * loop back onto the same track (single-item queue + auto-advance
+ * modulo 1 = same track restarts), and force-play.
+ *
+ * Operator can NOT recurate this via /admin/playlists — it's the cave's
+ * canonical soundtrack. If we ever want a multi-track cave playlist,
+ * just append entries here.
+ */
+export const DEFAULT_BCC_PLAYLIST: BgmTrack[] = [
+  {
+    id: "ott-nseven7",
+    title: "OTT (Ahou Ahou)",
+    artist: "N'Seven7",
+    youtubeId: "YNzvHb92xqY",
+    durationSeconds: 212,
+    genre: "trap",
+  },
+];
+
 export const DEFAULT_PLAYLISTS: Record<PlaylistId, BgmTrack[]> = {
   homepage: DEFAULT_HOMEPAGE_PLAYLIST,
   scroll: DEFAULT_SCROLL_PLAYLIST,
+  bcc: DEFAULT_BCC_PLAYLIST,
 };
 
 /**
  * Pick the playlist for a given route.
  * `/` → homepage, `/scroll*` → scroll, `/kill/[id]` → scroll (cinematic),
- * everything else → user's last choice.
+ * everything else → homepage default.
+ *
+ * NOTE: this NEVER returns "bcc" — the cave playlist is opted into via
+ * `setPlaylistOverride("bcc")` from the AntreOfBCC component, not via
+ * route matching. The cave is a modal on /alumni/bo, not its own route.
  */
 export function playlistForRoute(pathname: string): PlaylistId {
   if (pathname === "/") return "homepage";

@@ -47,6 +47,17 @@ declare global {
 let ytApiLoaded = false;
 const ytApiCallbacks: (() => void)[] = [];
 
+/**
+ * Load the YouTube IFrame API. Coordinates with the global wolf player
+ * (web/src/components/player/WolfFloatingPlayer.tsx) — they share the
+ * same script tag and chain their onYouTubeIframeAPIReady handlers so
+ * whichever consumer arrives second doesn't clobber the first's callback.
+ *
+ * The wolf player ALWAYS mounts first (via Providers.tsx in the root
+ * layout) so by the time BgmPlayer initializes here, either:
+ *   1. YT.Player is already defined → both call their cb immediately, OR
+ *   2. The script tag is in flight → we chain onto the wolf's handler.
+ */
 function loadYouTubeApi(cb: () => void) {
   if (window.YT?.Player) {
     cb();
@@ -55,10 +66,26 @@ function loadYouTubeApi(cb: () => void) {
   ytApiCallbacks.push(cb);
   if (ytApiLoaded) return;
   ytApiLoaded = true;
-  const tag = document.createElement("script");
-  tag.src = "https://www.youtube.com/iframe_api";
-  document.head.appendChild(tag);
+  // Re-use an existing script tag if the wolf player (or another
+  // consumer) already injected one. Without this we'd race two
+  // parallel script loads and risk double-firing onYouTubeIframeAPIReady.
+  const existing = document.querySelector<HTMLScriptElement>(
+    'script[src="https://www.youtube.com/iframe_api"]',
+  );
+  if (!existing) {
+    const tag = document.createElement("script");
+    tag.src = "https://www.youtube.com/iframe_api";
+    document.head.appendChild(tag);
+  }
+  // Chain on top of any pre-existing handler (e.g. the wolf player's)
+  // instead of clobbering it. Both consumers get notified.
+  const prevCb = window.onYouTubeIframeAPIReady;
   window.onYouTubeIframeAPIReady = () => {
+    try {
+      prevCb?.();
+    } catch {
+      /* don't let a sibling handler break us */
+    }
     for (const fn of ytApiCallbacks) fn();
     ytApiCallbacks.length = 0;
   };

@@ -32,7 +32,14 @@ export async function GET() {
     const raw = await readFile(STORAGE_PATH, "utf-8");
     const parsed = JSON.parse(raw);
     if (parsed?.playlists?.homepage && parsed?.playlists?.scroll) {
-      playlists = parsed.playlists;
+      // Merge with defaults so curated edits to homepage/scroll don't drop
+      // the canonical `bcc` cave playlist (which is NOT operator-editable
+      // and lives only in the code-side DEFAULT_PLAYLISTS).
+      playlists = {
+        ...DEFAULT_PLAYLISTS,
+        ...parsed.playlists,
+        bcc: DEFAULT_PLAYLISTS.bcc,
+      };
     }
   } catch {
     // First-time load — defaults are fine

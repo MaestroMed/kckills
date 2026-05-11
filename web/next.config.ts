@@ -17,7 +17,14 @@ const securityHeaders = [
       // 'unsafe-inline' is required for Next 15's inline bootstrap script.
       // Nonce-based CSP would need middleware — out of scope for now.
       // 'unsafe-eval' removed — Next 15 does not need it in production.
-      "script-src 'self' 'unsafe-inline' https://vercel.live https://*.umami.is",
+      //
+      // www.youtube.com is needed for the IFrame API JS loaded by the
+      // wolf floating player + the /scroll BgmPlayer (audio-only YouTube
+      // embeds). Without it the script-src directive silently blocks
+      // https://www.youtube.com/iframe_api → window.YT never exists →
+      // wolf head clicks produce no audio. www.gstatic.com covers the
+      // www-widgetapi.js that the iframe_api loads as a follow-up.
+      "script-src 'self' 'unsafe-inline' https://vercel.live https://*.umami.is https://www.youtube.com https://www.gstatic.com",
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
       "font-src 'self' https://fonts.gstatic.com",
       "img-src 'self' data: blob: https://ddragon.leagueoflegends.com https://static.lolesports.com https://static.wikia.nocookie.net https://clips.kckills.com https://img.youtube.com https://i.ytimg.com https://*.r2.cloudflarestorage.com",
