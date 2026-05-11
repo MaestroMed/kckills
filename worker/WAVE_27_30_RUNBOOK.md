@@ -125,6 +125,37 @@ For tonight, the reclip pipeline is INSTALLED but NOT VALIDATED. The
 fix for the actual offset miscalibration (the root cause of the QC
 BAD verdicts) is still pending the smoke test landing.
 
+## 4c. Update : the daemon does the reclip — use `trigger_daemon_reclip.py`
+
+After spending the morning debugging four different reclip-script
+failure modes (AV1 segfault, moov atom corruption, NVENC access
+violation, audio-only merge), we pivoted to having the daemon do the
+reclip itself :
+
+```
+.venv/Scripts/python.exe trigger_daemon_reclip.py             # dry-run
+.venv/Scripts/python.exe trigger_daemon_reclip.py --apply --limit 50
+```
+
+The script flips `status = 'clip_error'` on every needs_reclip kill in
+an aligned + calibrated game. The daemon's clipper module then re-runs
+through its normal 5-min cycle, using the kill's parent-game
+`vod_youtube_id` (which after promote_misaligned is KC Replay). The
+daemon's built-in 8-worker semaphore + scheduler-managed yt-dlp
+spacing + clip_error retry logic handle all the transient failures
+that the bespoke script was running into.
+
+This supersedes the `reclip_from_kc_replay.py` direct approach. That
+script is still here for one-shot debugging but isn't the production
+path.
+
+Flip kills in batches of 50-100 so the daemon's queue stays
+manageable. After each batch, monitor :
+```
+.venv/Scripts/python.exe /tmp/daemon_reclip_progress.py   # if you've made it
+.venv/Scripts/python.exe -c "import os; from dotenv import load_dotenv; load_dotenv(); import httpx; r=httpx.get(os.environ['SUPABASE_URL']+'/rest/v1/kills', params={'select':'id','needs_reclip':'eq.true','status':'eq.clip_error','limit':'1'}, headers={'apikey':os.environ['SUPABASE_SERVICE_KEY'],'Authorization':f'Bearer '+os.environ['SUPABASE_SERVICE_KEY'],'Prefer':'count=exact'}, timeout=15); print('clip_error queue:', r.headers.get('content-range', '0/0'))"
+```
+
 ## 5. Reclip eligible BAD kills
 
 Once steps 2 + 3 + 4 are done, `reclip_from_kc_replay.py` becomes the
