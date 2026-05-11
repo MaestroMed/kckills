@@ -59,7 +59,14 @@ FFMPEG_TIMEOUT = 180  # seconds per ffmpeg invocation
 # locate phase and timed out before downloading. 300s gives the
 # segment download enough headroom to finish on the slow VODs while
 # not meaningfully slowing the fast path.
-YTDLP_TIMEOUT = 300   # seconds for a single segment download
+YTDLP_TIMEOUT = 600   # seconds for a single segment download
+# Wave 27.31 — 300 was enough for LEC casts but KC Replay casts are
+# 1-2 h long. Locating a deep timestamp (e.g. 1843s = 30 min into a
+# 90-min HLS manifest) eats 100-200 s of the budget, then the actual
+# 40 s segment download takes another 40-80 s, plus we're competing
+# with up to 8 concurrent daemon downloads on the same scheduler.
+# 300 s was failing on KC Replay reclips ; 600 s gives generous
+# headroom while still bounding a runaway.
 
 
 def _build_overlay_filter(
@@ -170,16 +177,19 @@ async def download_full_vod(youtube_id: str) -> str | None:
         # available". deno is installed via winget, on PATH via main.py.
         "--js-runtimes", "deno",
         "--remote-components", "ejs:github",
-        # Wave 27.29 — force H.264 (avc1) over AV1. KC Replay's 1080p60
-        # AV1 stream is ~2x smaller than the H.264 equivalent, so the
-        # default "bestvideo" picks it — but ffmpeg 8.1 + libdav1d + the
-        # vertical drawtext+NVENC filter chain segfaults on AV1 input
-        # (rc=3221225477 = STATUS_ACCESS_VIOLATION on Windows). Preferring
-        # avc1 trades disk for stability ; KC Replay casts are 3-4 GB at
-        # H.264 1080p60 vs 2.5 GB AV1, which is still well within the
-        # D:/ Gen5 NVMe budget. Falls back to AV1 only if H.264 is
-        # missing (older YouTube uploads that never re-encoded).
-        "-f", "bestvideo[vcodec^=avc1][height<=1080]+bestaudio/"
+        # Wave 27.30 — prefer the HLS muxed format (format 301 on a
+        # typical KC Replay cast : mp4 1920x1080 60 m3u8 avc1+mp4a). This
+        # is ONE single stream with audio embedded, so no merge step is
+        # needed. Avoids both :
+        #   - the AV1 segfault (Wave 27.29 H.264 fix) — HLS gives us avc1
+        #   - the 3.75 GB video + 130 MB audio mux step failing silently
+        #     and producing an audio-only output (yt-dlp / ffmpeg muxer
+        #     bug on Windows that we hit repeatedly on KC Replay casts)
+        # Fallback chain : muxed HLS -> separate avc1 video+audio merge
+        # -> any 1080p video+audio -> best single stream.
+        "-f", "best[protocol=m3u8_native][height<=1080][vcodec^=avc1]/"
+              "best[protocol=m3u8_native][height<=1080]/"
+              "bestvideo[vcodec^=avc1][height<=1080]+bestaudio/"
               "bestvideo[height<=1080]+bestaudio/best[height<=1080]",
         "--merge-output-format", "mp4",
         # Wave 13e (2026-04-29) yt-dlp perf bumps — see _run_ytdlp() below.
