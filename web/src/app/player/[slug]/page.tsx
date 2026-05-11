@@ -1,21 +1,18 @@
 import { notFound } from "next/navigation";
-import { loadRealData, getPlayerStats, type RealData } from "@/lib/real-data";
-import { championSplashUrl, championLoadingUrl, championIconUrl } from "@/lib/constants";
-import { PLAYER_PHOTOS } from "@/lib/kc-assets";
-import { PortraitCubeMorph } from "@/components/PortraitCubeMorph";
-import { ClipReel } from "@/components/ClipReel";
-import { getPlayerByIgn } from "@/lib/supabase/players";
-import { getPublicRiotStatsBySummoner } from "@/lib/supabase/riot_profile";
-import {
-  getKillsByKillerChampion,
-  type PublishedKillRow,
-} from "@/lib/supabase/kills";
-import { getAssetMetadata, pickAssetUrl } from "@/lib/kill-assets";
-import { JsonLd, breadcrumbLD } from "@/lib/seo/jsonld";
-import { WolfHowlOnEnter } from "@/components/player/WolfHowlOnEnter";
 import Image from "next/image";
 import Link from "next/link";
 import type { Metadata } from "next";
+
+import { loadRealData, getPlayerStats, getCurrentRoster } from "@/lib/real-data";
+import { championSplashUrl, championLoadingUrl, championIconUrl } from "@/lib/constants";
+import { PLAYER_PHOTOS } from "@/lib/kc-assets";
+import { ClipReel } from "@/components/ClipReel";
+import { getPlayerByIgn } from "@/lib/supabase/players";
+import { getPublicRiotStatsBySummoner } from "@/lib/supabase/riot_profile";
+import { getKillsByKillerChampion } from "@/lib/supabase/kills";
+import type { PublishedKillRow } from "@/lib/supabase/kills";
+import { JsonLd, breadcrumbLD } from "@/lib/seo/jsonld";
+import { WolfHowlOnEnter } from "@/components/player/WolfHowlOnEnter";
 import { MatchHistory } from "./match-history";
 import {
   PlayerRadar,
@@ -23,7 +20,14 @@ import {
   RecentFormChart,
 } from "@/components/PlayerChartsLazy";
 import { getQuotesByPlayer } from "@/lib/quotes";
-import { QuoteRow } from "@/components/QuoteCard";
+
+import { PlayerHero } from "@/components/player/PlayerHero";
+import { SignatureQuote } from "@/components/player/SignatureQuote";
+import { ChampionPoolHextech } from "@/components/player/ChampionPoolHextech";
+import { HonorsAndEras } from "@/components/player/HonorsAndEras";
+import { TeammatesGrid } from "@/components/player/TeammatesGrid";
+import { PrevNextNavCard } from "@/components/player/PrevNextNavCard";
+import { ERAS, type Era } from "@/lib/eras";
 
 // Wave 13d (2026-04-28) : 300 → 1800. Player stats are essentially
 // static between matches (one new game every 1-3 days for KC).
@@ -33,29 +37,60 @@ interface Props {
   params: Promise<{ slug: string }>;
 }
 
-/**
- * Fetch the real published kills that belong to this player.
- *
- * We don't have a `killer_player_id` FK populated on kills yet, so we use
- * a proxy: for each of the player's top champions, pull Supabase kills on
- * that champion, then filter to only keep rows where the match+game in our
- * static JSON shows THIS player playing THAT champion. This is tight enough
- * for KC players in 2025-2026 where each role rarely shares champions.
- */
+// ─── Jersey numbers by signing order ──────────────────────────────────────
+// Per blueprint :
+//   Canna 1, Yike 2, Kyeahoo 3, Caliste 4, Busio 5.
+// Falls back to a stable hash-based number for any other player.
+const JERSEY_NUMBERS: Record<string, number> = {
+  Canna: 1,
+  Yike: 2,
+  Kyeahoo: 3,
+  kyeahoo: 3,
+  Caliste: 4,
+  Busio: 5,
+};
+
+function jerseyFor(name: string): number {
+  const direct = JERSEY_NUMBERS[name];
+  if (direct) return direct;
+  // Stable hash → 1..99 — keeps numbers consistent across re-renders.
+  let h = 0;
+  for (let i = 0; i < name.length; i += 1) h = (h * 31 + name.charCodeAt(i)) >>> 0;
+  return (h % 89) + 10;
+}
+
+// ─── Achievement strip per player ─────────────────────────────────────────
+// Hand-curated honors tied to each current KC player. Pulled from CLAUDE.md
+// roster + research. Keeps the hero strip short — 3 lines max.
+const ACHIEVEMENTS: Record<string, string[]> = {
+  Canna: ["ARMÉE KC", "MVP LEC WINTER 2025", "EX-T1 · CHAMPION DU MONDE 2020"],
+  Yike: ["VOCAL LEADER", "EX-G2", "JUNGLER DU SACRE 2025"],
+  Kyeahoo: ["RECRUE 2026", "EX-DRX CHALLENGERS", "MID LANE KR"],
+  kyeahoo: ["RECRUE 2026", "EX-DRX CHALLENGERS", "MID LANE KR"],
+  Caliste: ["ARMÉE KC", "ROOKIE OF THE YEAR 2025", "ROYAL ROADER · LEC WINTER 2025"],
+  Busio: ["WORLDS 2024 · 2025", "EX-FLYQUEST", "RECRUE 2026"],
+};
+
+const ROLE_LABEL: Record<string, string> = {
+  top: "TOP",
+  jungle: "JGL",
+  mid: "MID",
+  bottom: "ADC",
+  adc: "ADC",
+  support: "SUP",
+};
+
+// ─── Real-kills proxy (legacy champion-based filter, kept as fallback) ───
 async function getRealKillsForPlayer(
   playerCleanName: string,
   topChampions: { name: string }[],
-  data: RealData,
+  data: ReturnType<typeof loadRealData>,
 ): Promise<PublishedKillRow[]> {
   if (topChampions.length === 0) return [];
-
-  // Pull candidate rows for each champion (max 5 champions to keep egress light)
   const championNames = topChampions.slice(0, 5).map((c) => c.name);
   const perChampion = await Promise.all(
     championNames.map((c) => getKillsByKillerChampion(c, 20)),
   );
-
-  // Dedupe by kill id
   const seen = new Set<string>();
   const candidates: PublishedKillRow[] = [];
   for (const batch of perChampion) {
@@ -65,8 +100,6 @@ async function getRealKillsForPlayer(
       candidates.push(k);
     }
   }
-
-  // Tight filter: same match + same game + same champion picked by this player
   return candidates.filter((k) => {
     const matchExtId = k.games?.matches?.external_id ?? "";
     if (!matchExtId) return false;
@@ -83,13 +116,6 @@ async function getRealKillsForPlayer(
   });
 }
 
-function formatGameTime(seconds: number | null): string {
-  if (seconds == null) return "??:??";
-  const mm = Math.floor(seconds / 60);
-  const ss = seconds % 60;
-  return `${mm.toString().padStart(2, "0")}:${ss.toString().padStart(2, "0")}`;
-}
-
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params;
   const name = decodeURIComponent(slug);
@@ -100,15 +126,15 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
   const description =
     stats.gamesPlayed > 0
-      ? `${name} \u2014 Karmine Corp \u00b7 ${stats.gamesPlayed} games, ${stats.kills} kills, KDA ${stats.kda}. Explore les meilleurs moments et stats du joueur sur KCKILLS.`
-      : `${name} \u2014 Profil Karmine Corp sur KCKILLS.`;
+      ? `${name} — Karmine Corp · ${stats.gamesPlayed} games, ${stats.kills} kills, KDA ${stats.kda}. Explore les meilleurs moments et stats du joueur sur KCKILLS.`
+      : `${name} — Profil Karmine Corp sur KCKILLS.`;
 
   return {
     title: name,
     description,
     alternates: { canonical: canonicalPath },
     openGraph: {
-      title: `${name} \u2014 KCKILLS`,
+      title: `${name} — KCKILLS`,
       description,
       type: "profile",
       url: canonicalPath,
@@ -120,7 +146,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     },
     twitter: {
       card: "summary_large_image",
-      title: `${name} \u2014 KCKILLS`,
+      title: `${name} — KCKILLS`,
       description,
       images: photo ? [photo] : undefined,
     },
@@ -137,11 +163,7 @@ export default async function PlayerPage({ params }: Props) {
 
   const photo = PLAYER_PHOTOS[name];
   const signatureChamp = stats.champions[0]?.name ?? "Jhin";
-  const topChampions = stats.champions.slice(0, 8);
 
-  // Cube-morph palette — the player's official KC photo (when known) gets
-  // top billing, then their top champion splashes morph behind. Falls back
-  // to splash-only when the photo is missing so the hero still feels alive.
   const playerPhoto = PLAYER_PHOTOS[name];
   const morphImages = [
     ...(playerPhoto ? [playerPhoto] : []),
@@ -149,54 +171,78 @@ export default async function PlayerPage({ params }: Props) {
   ];
   if (morphImages.length === 0) morphImages.push(championSplashUrl(signatureChamp));
 
-  // Real kills from Supabase pipeline (legacy champion-proxy path —
-  // still used as a fallback for the "champion pool" matrix below).
   const realKills = await getRealKillsForPlayer(name, stats.champions, data);
 
-  // Resolve the player's UUID once so the clip-centric ClipReel can fetch
-  // a clean slice via killer_player_id (the canonical filter, populated
-  // by worker/scripts/backfill_player_ids.py). Falls back to null if the
-  // backfill hasn't run yet — the reel then renders its empty state.
   const playerRow = await getPlayerByIgn(name);
   const playerId = playerRow?.id ?? null;
 
-  // Optional Riot link: when this KC player has connected their Riot
-  // account on kckills (via /settings), surface their rank + top
-  // champions in a sidebar. Lookup is best-effort + case-insensitive on
-  // riot_summoner_name — silently absent when no link exists.
   const riotStats = await getPublicRiotStatsBySummoner(name);
-
-  // Best clips = highest KDA games
-  const bestClips = [...stats.matchHistory]
-    .sort((a, b) => {
-      const kdaA = a.deaths > 0 ? (a.kills + a.assists) / a.deaths : (a.kills + a.assists) * 2;
-      const kdaB = b.deaths > 0 ? (b.kills + b.assists) / b.deaths : (b.kills + b.assists) * 2;
-      return kdaB - kdaA;
-    })
-    .slice(0, 6);
 
   const winRate = stats.matchHistory.length
     ? Math.round(
-        (stats.matchHistory.filter((m) => m.won).length / stats.matchHistory.length) * 100
+        (stats.matchHistory.filter((m) => m.won).length / stats.matchHistory.length) * 100,
       )
     : 0;
 
-  // Try to use a custom Hextech background for this player (generated with
-  // Gemini). Falls back to the champion loading art if no custom bg exists.
   const customBg = `/images/players/player-bg-${name.toLowerCase()}.jpg`;
 
-  // ─── JSON-LD: tells Google this is a competitive esports player.
-  //     Person + memberOf SportsTeam (KC) gives the entity the right
-  //     edge in knowledge-panel candidate signals. We tack on a
-  //     summary stat block via 'description' rather than
-  //     PerformanceRole because the latter requires Wikidata-grade
-  //     IDs we don't have. Photo + ItemList of clips so video
-  //     carousels can attribute hits to the right athlete.
-  //
-  //     Wrapped inside a ProfilePage envelope (Phase 4 SEO) so Google
-  //     understands this URL is the canonical profile for the
-  //     embedded Person — recommended by schema.org for athlete /
-  //     creator pages.
+  // ─── Year range from match history (first → last) ───────────────────────
+  const yearRange =
+    stats.matchHistory.length > 0
+      ? {
+          first: stats.matchHistory[stats.matchHistory.length - 1]?.date.slice(0, 4) ?? "",
+          last: stats.matchHistory[0]?.date.slice(0, 4) ?? "",
+        }
+      : undefined;
+
+  // ─── Eras this player has played through ───────────────────────────────
+  // We don't have a per-player era map yet — derive one by intersecting the
+  // dates in match history with the era windows. This catches everything from
+  // LEC Winter 2025 to LEC Spring 2026 for the current active roster.
+  const playerEras: Era[] = (() => {
+    if (stats.matchHistory.length === 0) return [];
+    const matchDates = new Set(stats.matchHistory.map((m) => m.date));
+    const found = new Set<string>();
+    for (const date of matchDates) {
+      for (const era of ERAS) {
+        if (date >= era.dateStart && date <= era.dateEnd) found.add(era.id);
+      }
+    }
+    return Array.from(found)
+      .map((id) => ERAS.find((e) => e.id === id))
+      .filter((e): e is Era => e !== undefined);
+  })();
+
+  // ─── Teammates (current 2026 KC roster excluding self) ─────────────────
+  const roster = getCurrentRoster(data);
+  const teammates = roster
+    .filter((p) => p.name.toLowerCase() !== name.toLowerCase())
+    .slice(0, 4)
+    .map((p) => ({
+      name: p.name,
+      role: p.role,
+      roleLabel: ROLE_LABEL[p.role] ?? p.role.toUpperCase(),
+      photoUrl: PLAYER_PHOTOS[p.name] ?? undefined,
+      signatureChampion: p.champions[0] ?? "Jhin",
+    }));
+
+  // ─── Prev / next player navigation (active roster only) ────────────────
+  const rosterNames = roster.map((p) => p.name);
+  const rosterIdx = rosterNames.findIndex(
+    (n) => n.toLowerCase() === name.toLowerCase(),
+  );
+  const prevPlayer =
+    rosterIdx > 0 ? { slug: rosterNames[rosterIdx - 1], name: rosterNames[rosterIdx - 1] } : undefined;
+  const nextPlayer =
+    rosterIdx >= 0 && rosterIdx < rosterNames.length - 1
+      ? { slug: rosterNames[rosterIdx + 1], name: rosterNames[rosterIdx + 1] }
+      : undefined;
+
+  // ─── Quote — first quote sourced for this player slug ─────────────────
+  const playerQuotes = getQuotesByPlayer(name);
+  const heroQuote = playerQuotes[0];
+
+  // ─── JSON-LD ──────────────────────────────────────────────────────────
   const personNode = {
     "@type": "Person",
     "@id": `https://kckills.com/player/${encodeURIComponent(name)}#person`,
@@ -205,8 +251,7 @@ export default async function PlayerPage({ params }: Props) {
     url: `https://kckills.com/player/${encodeURIComponent(name)}`,
     image: photo ? `https://kckills.com${photo}` : undefined,
     jobTitle: "Pro Player",
-    description:
-      `${name} — joueur Karmine Corp en LEC. ${stats.kills} kills, ${stats.deaths} deaths, ${stats.assists} assists sur ${stats.gamesPlayed} games.`,
+    description: `${name} — joueur Karmine Corp en LEC. ${stats.kills} kills, ${stats.deaths} deaths, ${stats.assists} assists sur ${stats.gamesPlayed} games.`,
     memberOf: {
       "@type": "SportsTeam",
       name: "Karmine Corp",
@@ -250,12 +295,6 @@ export default async function PlayerPage({ params }: Props) {
     <div
       className="-mt-6"
       style={{
-        // Full-bleed to escape the parent <main max-w-7xl> container.
-        // The parent `body` carries `overflow-x: clip` (globals.css)
-        // which absorbs the 100vw vs scrollbar-width discrepancy on
-        // Windows desktop (overlay-scrollbar OSes are unaffected).
-        // Keeping the `100vw + -50vw` hack is fine ; if it ever leaks
-        // again, swap to a parent wrapper with `overflow-x: clip`.
         width: "100vw",
         position: "relative",
         left: "50%",
@@ -269,208 +308,61 @@ export default async function PlayerPage({ params }: Props) {
         dangerouslySetInnerHTML={{ __html: JSON.stringify(playerJsonLd) }}
       />
       <JsonLd data={breadcrumbJsonLd} />
-      {/* Easter egg : brief distant wolf howl on first user gesture after
-          page entry. Subtle (28% volume max), 30s cooldown across player
-          pages, honors prefers-reduced-motion + the wolf player's mute
-          flag. Renders nothing visually. Karmine = wolves. 🐺 */}
       <WolfHowlOnEnter />
-      {/* ═══ HERO — full-screen cinematic with cube-portrait morph ═══ */}
-      <section className="relative h-[90vh] min-h-[720px] w-full overflow-hidden bg-[var(--bg-primary)]">
-        {/* Soft champion-art backdrop — heavily darkened so the dot-matrix
-            cubes paint themselves on top with full saturation. */}
-        <Image
-          src={championLoadingUrl(signatureChamp)}
-          alt=""
-          fill
-          priority
-          sizes="100vw"
-          className="object-cover scale-110"
-          style={{ filter: "brightness(0.22) saturate(1.15)" }}
-        />
-        {/* Optional Hextech Gemini accent — kept very subtle so it doesn't
-            fight the morph (renders as ambient depth, 404s silently). */}
-        <Image
-          src={customBg}
-          alt=""
-          fill
-          sizes="100vw"
-          className="object-cover scale-105 mix-blend-overlay"
-          style={{ filter: "brightness(0.7) saturate(1.05)", opacity: 0.55 }}
-        />
 
-        {/* Cube-portrait morph — cycles between the player's official photo
-            and their signature champion splashes, dot-matrix style. */}
-        <PortraitCubeMorph
-          images={morphImages}
-          accent="#C8AA6E"
-          cols={68}
-          aspect={9 / 16}
-          holdMs={5800}
-          morphMs={2100}
-          className="absolute inset-0 mix-blend-screen opacity-95"
-        />
+      {/* ═══ SECTION 1 — HERO ═══════════════════════════════════════════════ */}
+      <PlayerHero
+        name={name}
+        photo={photo ?? null}
+        signatureChampion={signatureChamp}
+        customBgUrl={customBg}
+        morphImages={morphImages}
+        jerseyNumber={jerseyFor(name)}
+        stats={{
+          kda: stats.kda,
+          gamesPlayed: stats.gamesPlayed,
+          avgKills: stats.avgKills,
+          avgDeaths: stats.avgDeaths,
+          avgAssists: stats.avgAssists,
+          winRate,
+        }}
+        achievements={ACHIEVEMENTS[name] ?? ["KARMINE CORP"]}
+        yearRange={yearRange}
+        prevPlayer={prevPlayer}
+        nextPlayer={nextPlayer}
+      />
 
-        {/* Dark vignettes */}
-        <div className="absolute inset-0 bg-gradient-to-t from-[var(--bg-primary)] via-[var(--bg-primary)]/40 to-transparent" />
-        <div className="absolute inset-0 bg-gradient-to-r from-[var(--bg-primary)] via-transparent to-[var(--bg-primary)]/70" />
+      {/* ═══ SECTION 2 — SIGNATURE QUOTE ════════════════════════════════════ */}
+      {heroQuote && (
+        <section
+          className="relative max-w-7xl mx-auto px-6"
+          aria-labelledby="player-signature-quote"
+        >
+          <h2 id="player-signature-quote" className="sr-only">
+            Citation signature
+          </h2>
+          <SignatureQuote
+            text={heroQuote.text}
+            author={heroQuote.author}
+            role={heroQuote.role}
+            source={heroQuote.source}
+            accent="var(--gold)"
+          />
+        </section>
+      )}
 
-        {/* Gold accent gradient */}
-        <div
-          className="absolute inset-0"
-          style={{
-            background:
-              "radial-gradient(ellipse 50% 60% at 20% 50%, rgba(200,170,110,0.15) 0%, transparent 60%)",
-          }}
-        />
+      {/* ═══ SECTION 3 — CHAMPION POOL HEXTECH ═════════════════════════════ */}
+      {stats.champions.length > 0 && (
+        <section className="relative max-w-7xl mx-auto px-6 py-16">
+          <SectionHeader kicker={`Champion pool · ${stats.champions.length} champions`} />
+          <ChampionPoolHextech champions={stats.champions} accent="var(--gold)" />
+        </section>
+      )}
 
-        {/* Scanlines */}
-        <div
-          className="absolute inset-0 opacity-15 mix-blend-overlay pointer-events-none"
-          style={{
-            backgroundImage:
-              "repeating-linear-gradient(180deg, transparent 0px, transparent 2px, rgba(200,170,110,0.1) 3px, transparent 4px)",
-          }}
-        />
-
-        {/* Breadcrumb */}
-        <nav className="absolute top-6 left-6 z-20 flex items-center gap-2 text-xs text-white/50">
-          <Link href="/" className="hover:text-[var(--gold)]">
-            Accueil
-          </Link>
-          <span className="text-[var(--gold)]/30">{"\u25C6"}</span>
-          <Link href="/players" className="hover:text-[var(--gold)]">
-            Joueurs
-          </Link>
-          <span className="text-[var(--gold)]/30">{"\u25C6"}</span>
-          <span className="text-[var(--gold)]">{name}</span>
-        </nav>
-
-        {/* Player photo — giant, right side */}
-        {photo && (
-          <div className="absolute bottom-0 right-0 h-[95%] w-[55%] md:w-[45%] lg:w-[40%] z-10 pointer-events-none">
-            <Image
-              src={photo}
-              alt={name}
-              fill
-              priority
-              sizes="(max-width: 768px) 55vw, (max-width: 1024px) 45vw, 40vw"
-              className="object-contain object-bottom"
-              style={{
-                filter: "drop-shadow(0 20px 80px rgba(200,170,110,0.25))",
-              }}
-            />
-            {/* Gold accent line behind player */}
-            <div
-              className="absolute bottom-0 left-1/2 -translate-x-1/2 w-[80%] h-2 rounded-full blur-2xl opacity-60"
-              style={{
-                background:
-                  "linear-gradient(90deg, transparent, var(--gold), transparent)",
-              }}
-            />
-          </div>
-        )}
-
-        {/* Content — left side */}
-        <div className="relative z-20 h-full max-w-7xl mx-auto flex flex-col justify-end px-6 pb-16">
-          {/* Team tag */}
-          <div className="flex items-center gap-3 mb-4 flex-wrap">
-            <span className="rounded-md px-3 py-1 font-data text-[11px] font-bold tracking-[0.2em] uppercase backdrop-blur-sm border border-[var(--gold)]/40 bg-[var(--gold)]/10 text-[var(--gold)]">
-              Karmine Corp
-            </span>
-            {stats.matchHistory.length > 0 && (
-              <span className="font-data text-xs text-white/50 tracking-[0.2em] uppercase">
-                {stats.matchHistory[stats.matchHistory.length - 1]?.date.slice(0, 4)} &mdash;{" "}
-                {stats.matchHistory[0]?.date.slice(0, 4)}
-              </span>
-            )}
-          </div>
-
-          {/* Massive name — `break-words` prevents future 9+ char IGNs
-              (e.g. roster change) from horizontally clipping the
-              `lg:text-[11rem]` ≈ 176 px font. */}
-          <h1
-            className="font-display font-black leading-[0.85] text-7xl md:text-9xl lg:text-[11rem] text-white break-words max-w-full"
-            style={{
-              textShadow:
-                "0 0 60px rgba(200,170,110,0.25), 0 6px 40px rgba(0,0,0,0.8)",
-            }}
-          >
-            {name.toUpperCase()}
-          </h1>
-
-          {/* Big KDA with label */}
-          <div className="flex items-end gap-8 mt-8 flex-wrap">
-            <div>
-              <p className="font-data text-[10px] uppercase tracking-[0.3em] text-white/40 mb-1">
-                KDA ratio
-              </p>
-              <p
-                className="font-data text-6xl md:text-7xl font-black leading-none"
-                style={{
-                  color: "var(--gold)",
-                  textShadow: "0 0 40px rgba(200,170,110,0.4)",
-                }}
-              >
-                {stats.kda}
-              </p>
-            </div>
-            <div className="h-16 w-px bg-white/10" />
-            <div>
-              <p className="font-data text-[10px] uppercase tracking-[0.3em] text-white/40 mb-1">
-                Games
-              </p>
-              <p className="font-data text-4xl md:text-5xl font-black text-white leading-none">
-                {stats.gamesPlayed}
-              </p>
-            </div>
-            <div className="h-16 w-px bg-white/10" />
-            <div>
-              <p className="font-data text-[10px] uppercase tracking-[0.3em] text-white/40 mb-1">
-                Winrate
-              </p>
-              <p
-                className="font-data text-4xl md:text-5xl font-black leading-none"
-                style={{ color: winRate >= 50 ? "var(--green)" : "var(--red)" }}
-              >
-                {winRate}%
-              </p>
-            </div>
-            <div className="h-16 w-px bg-white/10" />
-            <div>
-              <p className="font-data text-[10px] uppercase tracking-[0.3em] text-white/40 mb-1">
-                K / D / A moyens
-              </p>
-              <p className="font-data text-2xl md:text-3xl font-black leading-none">
-                <span className="text-[var(--green)]">{stats.avgKills}</span>
-                <span className="text-white/30 mx-1">/</span>
-                <span className="text-[var(--red)]">{stats.avgDeaths}</span>
-                <span className="text-white/30 mx-1">/</span>
-                <span className="text-white">{stats.avgAssists}</span>
-              </p>
-            </div>
-          </div>
-        </div>
-
-        {/* Scroll hint */}
-        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-20 flex flex-col items-center gap-2 text-white/30">
-          <span className="text-[10px] uppercase tracking-[0.3em]">Analytics</span>
-          <svg className="h-4 w-4 animate-bounce" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
-          </svg>
-        </div>
-      </section>
-
-      {/* ═══ ANALYTICS CHARTS ═══ */}
+      {/* ═══ SECTION 4 — ANALYTICS ════════════════════════════════════════ */}
       <section className="relative max-w-7xl mx-auto px-6 py-16">
-        <div className="flex items-center gap-3 mb-8">
-          <span className="h-px w-12 bg-[var(--gold)]" />
-          <span className="font-data text-[10px] uppercase tracking-[0.3em] font-bold text-[var(--gold)]">
-            Analytics
-          </span>
-        </div>
-
+        <SectionHeader kicker="Analytics" />
         <div className="grid gap-6 md:grid-cols-3">
-          {/* Radar — player strengths */}
           <div className="rounded-2xl border border-[var(--border-gold)] bg-[var(--bg-surface)] p-5">
             <h3 className="font-display text-sm font-bold mb-4 text-[var(--text-secondary)]">
               Profil de jeu
@@ -486,16 +378,12 @@ export default async function PlayerPage({ params }: Props) {
               />
             </div>
           </div>
-
-          {/* Champion performance */}
           <div className="rounded-2xl border border-[var(--border-gold)] bg-[var(--bg-surface)] p-5">
             <h3 className="font-display text-sm font-bold mb-4 text-[var(--text-secondary)]">
               Champions &middot; games jou&eacute;es
             </h3>
             <ChampionPerformanceChart champions={stats.champions} />
           </div>
-
-          {/* Recent form */}
           <div className="rounded-2xl border border-[var(--border-gold)] bg-[var(--bg-surface)] p-5">
             <h3 className="font-display text-sm font-bold mb-4 text-[var(--text-secondary)]">
               Forme r&eacute;cente &middot; KDA par match
@@ -505,20 +393,11 @@ export default async function PlayerPage({ params }: Props) {
         </div>
       </section>
 
-      {/* ═══ RIOT STATS — surfaced when the player linked their Riot acct ═══
-          Optional. Pulled from profiles where riot_summoner_name == player IGN.
-          Renders nothing when no link exists, so the page stays unchanged for
-          players who haven't connected. */}
+      {/* ─── Riot stats — surfaced when linked ──────────────────────────── */}
       {riotStats && (riotStats.rank || riotStats.topChampions.length > 0) && (
-        <section className="relative max-w-7xl mx-auto px-6 py-12">
-          <div className="flex items-center gap-3 mb-6">
-            <span className="h-px w-12 bg-[var(--gold)]" />
-            <span className="font-data text-[10px] uppercase tracking-[0.3em] font-bold text-[var(--gold)]">
-              Riot stats &middot; profil li&eacute;
-            </span>
-          </div>
+        <section className="relative max-w-7xl mx-auto px-6 py-10">
+          <SectionHeader kicker="Riot stats · profil lié" />
           <div className="grid gap-4 md:grid-cols-3">
-            {/* Summoner identity */}
             <div className="rounded-2xl border border-[var(--border-gold)] bg-[var(--bg-surface)] p-5 space-y-2">
               <p className="text-[10px] uppercase tracking-[0.3em] text-[var(--text-muted)]">
                 Compte Riot
@@ -533,7 +412,7 @@ export default async function PlayerPage({ params }: Props) {
               </p>
               {riotStats.linkedAt && (
                 <p className="text-[10px] text-[var(--text-muted)] opacity-70">
-                  Li&eacute; le{" "}
+                  Lié le{" "}
                   {new Date(riotStats.linkedAt).toLocaleDateString("fr-FR", {
                     day: "numeric",
                     month: "short",
@@ -542,8 +421,6 @@ export default async function PlayerPage({ params }: Props) {
                 </p>
               )}
             </div>
-
-            {/* Rank */}
             <div className="rounded-2xl border border-[var(--gold)]/30 bg-[var(--gold)]/5 p-5 space-y-2">
               <p className="text-[10px] uppercase tracking-[0.3em] text-[var(--text-muted)]">
                 Rank Solo/Duo
@@ -553,28 +430,22 @@ export default async function PlayerPage({ params }: Props) {
                   {riotStats.rank}
                 </p>
               ) : (
-                <p className="text-sm text-[var(--text-muted)]">
-                  Aucun rank Solo/Duo cette saison.
-                </p>
+                <p className="text-sm text-[var(--text-muted)]">Aucun rank Solo/Duo cette saison.</p>
               )}
             </div>
-
-            {/* Top champions */}
             <div className="rounded-2xl border border-[var(--border-gold)] bg-[var(--bg-surface)] p-5 space-y-3">
               <p className="text-[10px] uppercase tracking-[0.3em] text-[var(--text-muted)]">
                 Top {riotStats.topChampions.length} champions
               </p>
               {riotStats.topChampions.length === 0 ? (
-                <p className="text-sm text-[var(--text-muted)]">
-                  Pas de mastery enregistr&eacute;e.
-                </p>
+                <p className="text-sm text-[var(--text-muted)]">Pas de mastery enregistrée.</p>
               ) : (
                 <ul className="grid grid-cols-5 gap-2">
                   {riotStats.topChampions.map((c) => (
                     <li
                       key={c.champ_id}
                       className="flex flex-col items-center gap-1"
-                      title={`${c.name} \u2014 niveau ${c.level} \u00b7 ${c.points.toLocaleString("fr-FR")} pts`}
+                      title={`${c.name} — niveau ${c.level} · ${c.points.toLocaleString("fr-FR")} pts`}
                     >
                       <div className="relative h-10 w-10 rounded-full overflow-hidden border border-[var(--border-gold)] bg-[var(--bg-elevated)]">
                         <Image
@@ -585,9 +456,7 @@ export default async function PlayerPage({ params }: Props) {
                           className="object-cover"
                         />
                       </div>
-                      <span className="text-[9px] font-data text-[var(--text-muted)]">
-                        M{c.level}
-                      </span>
+                      <span className="text-[9px] font-data text-[var(--text-muted)]">M{c.level}</span>
                     </li>
                   ))}
                 </ul>
@@ -597,10 +466,9 @@ export default async function PlayerPage({ params }: Props) {
         </section>
       )}
 
-      {/* ═══ CLIP-CENTRIC REELS — driven by killer/victim_player_id ═══ */}
+      {/* ═══ SECTION 5 — CLIP REEL ═════════════════════════════════════════ */}
       {playerId && (
         <section className="relative max-w-7xl mx-auto px-6 py-16 space-y-12">
-          {/* Top kills BY this player */}
           <ClipReel
             kicker="Pipeline automatique"
             title={`Les meilleurs kills de ${name}`}
@@ -616,7 +484,6 @@ export default async function PlayerPage({ params }: Props) {
             emptyState={null}
           />
 
-          {/* Carry games — kills with first blood, multi-kill or 8+ score */}
           <ClipReel
             kicker="Carry mode"
             title="Clutch & multi-kills"
@@ -630,7 +497,6 @@ export default async function PlayerPage({ params }: Props) {
             emptyState={null}
           />
 
-          {/* Kills suffered — what got this player picked off */}
           <ClipReel
             kicker="L'envers du décor"
             title="Kills subis"
@@ -645,411 +511,150 @@ export default async function PlayerPage({ params }: Props) {
         </section>
       )}
 
-      {/* ═══ REAL KILL CLIPS (legacy champion-proxy fallback) ═══
-          Kept for backwards compatibility while the killer_player_id
-          backfill rolls out — drop once the new reels reach 100% coverage. */}
+      {/* Legacy champion-proxy fallback — kept until killer_player_id reaches 100% coverage. */}
       {!playerId && realKills.length > 0 && (
-        <section className="relative max-w-7xl mx-auto px-6 py-20">
+        <section className="relative max-w-7xl mx-auto px-6 py-16">
           <div className="flex items-center justify-between mb-8 flex-wrap gap-4">
             <div className="flex items-center gap-3">
               <span className="h-2 w-2 rounded-full bg-[var(--gold)] animate-pulse" />
               <span className="font-data text-[10px] uppercase tracking-[0.3em] font-bold text-[var(--gold)]">
-                {realKills.length} clips vid&eacute;o
+                {realKills.length} clips vidéo
               </span>
             </div>
             <p className="text-sm text-[var(--text-muted)]">
-              G&eacute;n&eacute;r&eacute;s par le pipeline automatique &middot; vrais highlights
+              Générés par le pipeline automatique · vrais highlights
             </p>
           </div>
-
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {realKills.slice(0, 6).map((k) => {
-              const isKcKill = k.tracked_team_involvement === "team_killer";
-              // Manifest-aware thumbnail (migration 026). Falls back
-              // to the legacy thumbnail_url column when the manifest
-              // hasn't been built yet for this row.
-              const thumbUrl = pickAssetUrl(k, "thumbnail");
-              const thumbMeta = getAssetMetadata(k, "thumbnail");
-              return (
-                <Link
-                  key={k.id}
-                  href={`/kill/${k.id}`}
-                  className="group relative overflow-hidden rounded-2xl border border-[var(--border-gold)] bg-black transition-all hover:border-[var(--gold)]/60 hover:scale-[1.02] hover:-translate-y-1 hover:shadow-2xl hover:shadow-[var(--gold)]/20"
-                  style={{ aspectRatio: "16/10" }}
-                >
-                  {thumbUrl ? (
-                    <Image
-                      src={thumbUrl}
-                      alt={`${k.killer_champion} vs ${k.victim_champion}`}
-                      fill
-                      // Sizes hint matches the responsive 1/2/3-col
-                      // grid above. When the manifest carries the real
-                      // pixel dims we widen the largest tier so the
-                      // CDN serves the highest-quality variant that
-                      // fits the column on desktop.
-                      sizes={
-                        thumbMeta?.width && thumbMeta.width >= 1280
-                          ? "(max-width: 768px) 100vw, (max-width: 1024px) 50vw, 480px"
-                          : "(max-width: 768px) 100vw, 33vw"
-                      }
-                      className="object-cover group-hover:scale-110 transition-transform duration-700"
-                    />
-                  ) : (
-                    <Image
-                      src={championSplashUrl(k.killer_champion ?? "Aatrox")}
-                      alt=""
-                      fill
-                      sizes="(max-width: 768px) 100vw, 33vw"
-                      className="object-cover opacity-40"
-                    />
-                  )}
-                  <div className="absolute inset-0 bg-gradient-to-t from-black via-black/30 to-transparent" />
-
-                  {/* Badges */}
-                  <div className="absolute top-3 left-3 z-10 flex items-center gap-2">
-                    {k.highlight_score != null && (
-                      <span className="rounded-md bg-[var(--gold)]/20 backdrop-blur-sm border border-[var(--gold)]/40 px-2 py-0.5 text-[10px] font-data font-bold text-[var(--gold)]">
-                        {k.highlight_score.toFixed(1)}/10
-                      </span>
-                    )}
-                    {k.is_first_blood && (
-                      <span className="rounded-md bg-[var(--red)]/20 border border-[var(--red)]/40 px-2 py-0.5 text-[10px] font-black text-[var(--red)]">
-                        FB
-                      </span>
-                    )}
-                    {k.multi_kill && (
-                      <span className="rounded-md bg-[var(--gold)]/20 border border-[var(--gold)]/40 px-2 py-0.5 text-[10px] font-black text-[var(--gold)] uppercase">
-                        {k.multi_kill}
-                      </span>
-                    )}
-                  </div>
-
-                  <div className="absolute bottom-0 left-0 right-0 p-4 z-10">
-                    <div className="flex items-center gap-2 mb-2">
-                      <Image
-                        src={championIconUrl(k.killer_champion ?? "Aatrox")}
-                        alt={k.killer_champion ?? "?"}
-                        width={28}
-                        height={28}
-                        className="rounded-full border border-[var(--gold)]/30"
-                      />
-                      <span className={`font-display text-lg font-black ${isKcKill ? "text-[var(--gold)]" : "text-white"}`}>
-                        {k.killer_champion}
-                      </span>
-                      <span className="text-[var(--gold)] text-sm">&rarr;</span>
-                      <Image
-                        src={championIconUrl(k.victim_champion ?? "Aatrox")}
-                        alt={k.victim_champion ?? "?"}
-                        width={28}
-                        height={28}
-                        className="rounded-full border border-[var(--red)]/30"
-                      />
-                      <span className="font-display text-lg font-black text-white/80">
-                        {k.victim_champion}
-                      </span>
-                    </div>
-                    {k.ai_description && (
-                      <p className="text-[11px] text-white/80 italic line-clamp-2">
-                        &laquo; {k.ai_description} &raquo;
-                      </p>
-                    )}
-                    <p className="text-[9px] text-[var(--text-muted)] mt-1.5">
-                      T+{formatGameTime(k.game_time_seconds)} &middot; Game {k.games?.game_number ?? "?"}
-                    </p>
-                  </div>
-
-                  {/* Hover play */}
-                  <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-all duration-300 pointer-events-none">
-                    <div className="h-14 w-14 rounded-full bg-[var(--gold)]/20 backdrop-blur-md border border-[var(--gold)]/50 flex items-center justify-center">
-                      <svg className="h-5 w-5 text-[var(--gold)] translate-x-0.5" fill="currentColor" viewBox="0 0 24 24">
-                        <path d="M8 5v14l11-7z" />
-                      </svg>
-                    </div>
-                  </div>
-                </Link>
-              );
-            })}
-          </div>
-
-          {realKills.length > 6 && (
-            <div className="text-center mt-6">
+            {realKills.slice(0, 6).map((k) => (
               <Link
-                href="/scroll"
-                className="inline-flex items-center gap-2 rounded-xl border border-[var(--gold)]/30 bg-[var(--gold)]/10 px-5 py-2.5 text-xs font-display font-bold uppercase tracking-widest text-[var(--gold)] hover:bg-[var(--gold)]/20 transition-colors"
+                key={k.id}
+                href={`/kill/${k.id}`}
+                className="group relative overflow-hidden rounded-2xl border border-[var(--border-gold)] bg-black transition-all hover:border-[var(--gold)]/60 hover:scale-[1.02] hover:-translate-y-1"
+                style={{ aspectRatio: "16/10" }}
               >
-                Voir les {realKills.length - 6} autres dans le scroll
-                <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M9 5l7 7-7 7" />
-                </svg>
-              </Link>
-            </div>
-          )}
-        </section>
-      )}
-
-      {/* ═══ BEST CLIPS — massive cinematic grid ═══ */}
-      {bestClips.length > 0 && (
-        <section className="relative max-w-7xl mx-auto px-6 py-20">
-          <div className="flex items-center justify-between mb-8 flex-wrap gap-4">
-            <div className="flex items-center gap-3">
-              <span className="h-px w-12 bg-[var(--gold)]" />
-              <span className="font-data text-[10px] uppercase tracking-[0.3em] font-bold text-[var(--gold)]">
-                Meilleurs moments
-              </span>
-            </div>
-            <p className="text-sm text-[var(--text-muted)]">
-              Tri&eacute;s par KDA &middot; clique pour voir le match
-            </p>
-          </div>
-
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {bestClips.map((m, i) => {
-              const kda =
-                m.deaths > 0
-                  ? ((m.kills + m.assists) / m.deaths).toFixed(1)
-                  : "Perfect";
-              return (
-                <Link
-                  key={`best-${m.matchId}-${i}`}
-                  href={`/match/${m.matchId}`}
-                  className="group relative overflow-hidden rounded-2xl border border-[var(--border-gold)] bg-[var(--bg-surface)] transition-all hover:border-[var(--gold)]/60 hover:scale-[1.02] hover:-translate-y-1 hover:shadow-2xl hover:shadow-[var(--gold)]/20"
-                  style={{ aspectRatio: "4/5" }}
-                >
-                  {/* Full champion splash */}
-                  <Image
-                    src={championLoadingUrl(m.champion)}
-                    alt={m.champion}
-                    fill
-                    sizes="(max-width: 768px) 100vw, 33vw"
-                    className="object-cover group-hover:scale-110 transition-transform duration-700"
-                  />
-                  {/* Gradient */}
-                  <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-transparent" />
-                  <div className="absolute inset-0 bg-gradient-to-br from-transparent via-transparent to-black/60" />
-
-                  {/* Rank badge top left */}
-                  {i < 3 && (
-                    <div className="absolute top-4 left-4 z-10">
-                      <div
-                        className="flex h-10 w-10 items-center justify-center rounded-full font-display text-lg font-black text-black"
-                        style={{
-                          background:
-                            i === 0
-                              ? "linear-gradient(135deg, #FFD700, #FFA500)"
-                              : i === 1
-                              ? "linear-gradient(135deg, #C0C0C0, #909090)"
-                              : "linear-gradient(135deg, #CD7F32, #8B4513)",
-                          boxShadow:
-                            i === 0
-                              ? "0 0 30px rgba(255,215,0,0.5)"
-                              : i === 1
-                              ? "0 0 20px rgba(192,192,192,0.4)"
-                              : "0 0 20px rgba(205,127,50,0.4)",
-                        }}
-                      >
-                        {i + 1}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* W/L badge top right */}
-                  <div className="absolute top-4 right-4 z-10">
-                    <span
-                      className={`rounded-md px-2.5 py-1 text-[10px] font-black uppercase tracking-widest backdrop-blur-sm border ${
-                        m.won
-                          ? "bg-[var(--green)]/20 border-[var(--green)]/40 text-[var(--green)]"
-                          : "bg-[var(--red)]/20 border-[var(--red)]/40 text-[var(--red)]"
-                      }`}
-                    >
-                      {m.won ? "W" : "L"}
-                    </span>
-                  </div>
-
-                  {/* Bottom content */}
-                  <div className="absolute bottom-0 left-0 right-0 p-5 z-10">
-                    {/* Champion name */}
-                    <p className="font-display text-3xl font-black text-white leading-none mb-1">
-                      {m.champion}
-                    </p>
-                    <p className="text-xs text-white/50 uppercase tracking-wider mb-4">
-                      vs {m.opponent} &middot;{" "}
-                      {new Date(m.date).toLocaleDateString("fr-FR", {
-                        day: "numeric",
-                        month: "short",
-                        year: "numeric",
-                      })}
-                    </p>
-
-                    {/* KDA row */}
-                    <div className="flex items-end justify-between">
-                      <div className="font-data">
-                        <span className="text-2xl font-black text-[var(--green)]">
-                          {m.kills}
-                        </span>
-                        <span className="text-white/30 mx-1">/</span>
-                        <span className="text-2xl font-black text-[var(--red)]">
-                          {m.deaths}
-                        </span>
-                        <span className="text-white/30 mx-1">/</span>
-                        <span className="text-2xl font-black text-white">
-                          {m.assists}
-                        </span>
-                      </div>
-                      <div
-                        className="font-data text-3xl font-black"
-                        style={{
-                          color: "var(--gold)",
-                          textShadow: "0 0 20px rgba(200,170,110,0.4)",
-                        }}
-                      >
-                        {kda}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Hover play indicator */}
-                  <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-all duration-300 pointer-events-none">
-                    <div className="h-16 w-16 rounded-full bg-[var(--gold)]/20 backdrop-blur-md border border-[var(--gold)]/50 flex items-center justify-center">
-                      <svg
-                        className="h-6 w-6 text-[var(--gold)] translate-x-0.5"
-                        fill="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path d="M8 5v14l11-7z" />
-                      </svg>
-                    </div>
-                  </div>
-                </Link>
-              );
-            })}
-          </div>
-        </section>
-      )}
-
-      {/* ═══ QUOTES ═══ */}
-      {(() => {
-        const quotes = getQuotesByPlayer(name);
-        if (quotes.length === 0) return null;
-        return (
-          <section className="relative max-w-7xl mx-auto px-6 py-16">
-            <div className="flex items-center gap-3 mb-6">
-              <span className="h-px w-12 bg-[var(--gold)]" />
-              <span className="font-data text-[10px] uppercase tracking-[0.3em] font-bold text-[var(--gold)]">
-                Citations
-              </span>
-            </div>
-            <QuoteRow quotes={quotes} />
-          </section>
-        );
-      })()}
-
-      {/* ═══ CHAMPION POOL — horizontal strip ═══ */}
-      {topChampions.length > 0 && (
-        <section className="relative max-w-7xl mx-auto px-6 py-16">
-          <div className="flex items-center gap-3 mb-6">
-            <span className="h-px w-12 bg-[var(--gold)]" />
-            <span className="font-data text-[10px] uppercase tracking-[0.3em] font-bold text-[var(--gold)]">
-              Champion pool &middot; {stats.champions.length} champions
-            </span>
-          </div>
-
-          <div className="grid gap-3 grid-cols-2 md:grid-cols-4 lg:grid-cols-8">
-            {topChampions.map((c) => {
-              const kda =
-                c.deaths > 0
-                  ? ((c.kills + c.assists) / c.deaths).toFixed(1)
-                  : "Perfect";
-              return (
-                <div
-                  key={c.name}
-                  className="group relative aspect-square overflow-hidden rounded-2xl border border-[var(--border-gold)] bg-[var(--bg-surface)] transition-all hover:border-[var(--gold)]/50 hover:scale-105"
-                >
-                  <Image
-                    src={championLoadingUrl(c.name)}
-                    alt={c.name}
-                    fill
-                    sizes="(max-width: 768px) 50vw, 12vw"
-                    className="object-cover group-hover:scale-110 transition-transform duration-500"
-                  />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-transparent" />
-
-                  {/* Games pill top right */}
-                  <div className="absolute top-2 right-2 z-10 rounded-md bg-black/60 backdrop-blur-sm px-2 py-0.5 border border-white/10">
-                    <span className="font-data text-[10px] font-bold text-white">
-                      {c.games}G
-                    </span>
-                  </div>
-
-                  {/* Bottom */}
-                  <div className="absolute bottom-0 left-0 right-0 p-3 z-10">
-                    <p className="font-display text-sm font-bold text-white leading-tight truncate">
-                      {c.name}
-                    </p>
-                    <div className="flex items-center justify-between mt-1">
-                      <span className="font-data text-[10px] text-white/60">
-                        {c.kills}/{c.deaths}/{c.assists}
-                      </span>
-                      <span className="font-data text-[11px] font-bold text-[var(--gold)]">
-                        {kda}
-                      </span>
-                    </div>
-                  </div>
+                <Image
+                  src={championSplashUrl(k.killer_champion ?? "Aatrox")}
+                  alt={`${k.killer_champion} vs ${k.victim_champion}`}
+                  fill
+                  sizes="(max-width: 768px) 100vw, 33vw"
+                  className="object-cover opacity-60 group-hover:opacity-80 transition-opacity"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-transparent" />
+                <div className="absolute bottom-0 inset-x-0 p-4 z-10">
+                  <p className="font-display text-lg font-black text-white">
+                    {k.killer_champion} → {k.victim_champion}
+                  </p>
                 </div>
-              );
-            })}
+              </Link>
+            ))}
           </div>
-
-          {stats.champions.length > 8 && (
-            <details className="mt-6">
-              <summary className="cursor-pointer text-center text-xs text-[var(--text-muted)] hover:text-[var(--gold)] uppercase tracking-[0.2em]">
-                Voir les {stats.champions.length - 8} autres champions
-              </summary>
-              <div className="mt-4 grid gap-2 md:grid-cols-2 lg:grid-cols-3">
-                {stats.champions.slice(8).map((c) => {
-                  const kda =
-                    c.deaths > 0
-                      ? ((c.kills + c.assists) / c.deaths).toFixed(1)
-                      : "Perfect";
-                  return (
-                    <div
-                      key={c.name}
-                      className="flex items-center gap-3 rounded-xl border border-[var(--border-gold)] bg-[var(--bg-surface)] p-3"
-                    >
-                      <Image
-                        src={championIconUrl(c.name)}
-                        alt={c.name}
-                        width={36}
-                        height={36}
-                        className="rounded-full border border-[var(--border-gold)]"
-                      />
-                      <div className="flex-1">
-                        <p className="font-medium text-sm">{c.name}</p>
-                        <p className="text-[10px] text-[var(--text-muted)]">
-                          {c.games} games
-                        </p>
-                      </div>
-                      <span className="font-data text-sm font-bold text-[var(--gold)]">
-                        {kda}
-                      </span>
-                    </div>
-                  );
-                })}
-              </div>
-            </details>
-          )}
         </section>
       )}
 
-      {/* ═══ MATCH HISTORY ═══ */}
+      {/* ═══ SECTION 6 — MATCH HISTORY ═════════════════════════════════════ */}
       <section className="relative max-w-7xl mx-auto px-6 py-16">
-        <div className="flex items-center gap-3 mb-6">
-          <span className="h-px w-12 bg-[var(--gold)]" />
-          <span className="font-data text-[10px] uppercase tracking-[0.3em] font-bold text-[var(--gold)]">
-            Historique complet
-          </span>
-        </div>
+        <SectionHeader kicker="Historique complet" />
         <MatchHistory history={stats.matchHistory} />
       </section>
+
+      {/* ═══ SECTION 7 — HONORS & ÉPOQUES KC ══════════════════════════════ */}
+      {playerEras.length > 0 && (
+        <section className="relative max-w-5xl mx-auto px-6 py-16">
+          <SectionHeader kicker={`Honors · ${playerEras.length} époques`} />
+          <HonorsAndEras eras={playerEras} accent="var(--gold)" />
+        </section>
+      )}
+
+      {/* ═══ SECTION 8 — COÉQUIPIERS ACTUELS + AUXILIAIRES ════════════════ */}
+      {teammates.length > 0 && (
+        <section className="relative max-w-7xl mx-auto px-6 py-16">
+          <SectionHeader kicker="Coéquipiers actuels" />
+          <TeammatesGrid teammates={teammates} accent="var(--gold)" />
+
+          {/* Auxiliary links — Leaguepedia + all kills */}
+          <div className="mt-10 grid gap-3 md:grid-cols-2">
+            <Link
+              href={`/scroll?killerPlayerId=${playerId ?? ""}`}
+              className="flex items-center justify-between rounded-xl border border-[var(--border-gold)] bg-[var(--bg-surface)] px-5 py-4 text-sm text-[var(--text-secondary)] transition-colors hover:border-[var(--gold)]/50 hover:text-[var(--gold)] focus-visible:outline-2 focus-visible:outline-[var(--gold)] focus-visible:outline-offset-2"
+              aria-label={`Voir tous les kills de ${name} dans le scroll`}
+            >
+              <span className="flex items-center gap-3">
+                <span className="font-data text-[10px] uppercase tracking-widest text-[var(--text-muted)]">
+                  scroll
+                </span>
+                <span>Tous les kills de {name}</span>
+              </span>
+              <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M9 5l7 7-7 7" />
+              </svg>
+            </Link>
+            <a
+              href={`https://lol.fandom.com/wiki/${encodeURIComponent(name)}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center justify-between rounded-xl border border-[var(--border-gold)] bg-[var(--bg-surface)] px-5 py-4 text-sm text-[var(--text-secondary)] transition-colors hover:border-[var(--gold)]/50 hover:text-[var(--gold)] focus-visible:outline-2 focus-visible:outline-[var(--gold)] focus-visible:outline-offset-2"
+            >
+              <span className="flex items-center gap-3">
+                <span className="font-data text-[10px] uppercase tracking-widest text-[var(--text-muted)]">
+                  wiki
+                </span>
+                <span>Leaguepedia — {name}</span>
+              </span>
+              <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-4M14 4h6m0 0v6m0-6L10 14" />
+              </svg>
+            </a>
+          </div>
+
+          {/* Prev / Next */}
+          {(prevPlayer || nextPlayer) && (
+            <div className="mt-12 grid gap-4 md:grid-cols-2">
+              {prevPlayer && (
+                <PrevNextNavCard
+                  direction="prev"
+                  variant="active"
+                  basePath="/player/"
+                  entity={{
+                    slug: prevPlayer.slug,
+                    name: prevPlayer.name,
+                    subtitle: "Karmine Corp",
+                    accentColor: "#C8AA6E",
+                  }}
+                />
+              )}
+              {nextPlayer && (
+                <PrevNextNavCard
+                  direction="next"
+                  variant="active"
+                  basePath="/player/"
+                  entity={{
+                    slug: nextPlayer.slug,
+                    name: nextPlayer.name,
+                    subtitle: "Karmine Corp",
+                    accentColor: "#C8AA6E",
+                  }}
+                />
+              )}
+            </div>
+          )}
+        </section>
+      )}
+    </div>
+  );
+}
+
+// ─── Local section-header helper ───────────────────────────────────────
+function SectionHeader({ kicker }: { kicker: string }) {
+  return (
+    <div className="flex items-center gap-3 mb-8">
+      <span className="h-px w-12 bg-[var(--gold)]" />
+      <span className="font-data text-[10px] uppercase tracking-[0.3em] font-bold text-[var(--gold)]">
+        {kicker}
+      </span>
+      <span className="text-[var(--gold)]/40 text-xs" aria-hidden>
+        ◆
+      </span>
     </div>
   );
 }
