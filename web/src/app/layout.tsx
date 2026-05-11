@@ -1,6 +1,13 @@
 import type { Metadata, Viewport } from "next";
 import Script from "next/script";
-import { Oswald, Inter_Tight, JetBrains_Mono } from "next/font/google";
+import {
+  Oswald,
+  Inter_Tight,
+  JetBrains_Mono,
+  Playfair_Display,
+  Cormorant_Garamond,
+  IM_Fell_English,
+} from "next/font/google";
 import { Analytics } from "@vercel/analytics/next";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import "./globals.css";
@@ -32,6 +39,35 @@ const jetbrainsMono = JetBrains_Mono({
   subsets: ["latin"],
   weight: ["400", "500", "700"],
   variable: "--font-jetbrains-mono",
+  display: "swap",
+});
+
+// Wave 26 (Antre de la BCC redesign) — vintage gentlemen's-club typography
+// for the cave. These fonts are loaded site-wide (self-hosted by next/font)
+// so the CSS variables resolve EVERYWHERE the cave is rendered. They sit
+// idle for the main site — the AntreOfBCC component is the only consumer.
+//   • Playfair Display — display serif for the brass plates + room titles
+//   • Cormorant Garamond — body serif for editorial prose (Stark Culture)
+//   • IM Fell English — 17th-century italic flavor for quotes / guestbook
+const playfairDisplay = Playfair_Display({
+  subsets: ["latin"],
+  weight: ["400", "600", "700", "900"],
+  style: ["normal", "italic"],
+  variable: "--font-playfair",
+  display: "swap",
+});
+const cormorantGaramond = Cormorant_Garamond({
+  subsets: ["latin"],
+  weight: ["300", "400", "500", "600", "700"],
+  style: ["normal", "italic"],
+  variable: "--font-cormorant",
+  display: "swap",
+});
+const imFellEnglish = IM_Fell_English({
+  subsets: ["latin"],
+  weight: ["400"],
+  style: ["normal", "italic"],
+  variable: "--font-im-fell",
   display: "swap",
 });
 
@@ -205,7 +241,7 @@ export default async function RootLayout({
   return (
     <html
       lang={htmlLang}
-      className={`${oswald.variable} ${interTight.variable} ${jetbrainsMono.variable}`}
+      className={`${oswald.variable} ${interTight.variable} ${jetbrainsMono.variable} ${playfairDisplay.variable} ${cormorantGaramond.variable} ${imFellEnglish.variable}`}
     >
       <head>
         <link rel="manifest" href="/manifest.json" />

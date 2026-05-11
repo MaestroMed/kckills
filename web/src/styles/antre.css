@@ -1,0 +1,807 @@
+/* ═══════════════════════════════════════════════════════════════════════
+   ANTRE DE LA BCC — Wave 26 redesign (vintage gentlemen's club × Ali Baba)
+   ───────────────────────────────────────────────────────────────────────
+   Replaces the hextech gold of the main site with warm mahogany wood,
+   tarnished brass, dark burgundy velvet, candlelight, and antique paper.
+
+   IMPORTANT — this file is imported ONLY from <AntreOfBCC>. All selectors
+   are namespaced under `.antre-root` so the global site styles remain
+   untouched. Nothing here leaks into the rest of the app.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+.antre-root {
+  /* ─── Palette tokens ──────────────────────────────────────────────── */
+  /* Wood / leather */
+  --antre-wood-dark:      #1a0e07;
+  --antre-wood:           #2a1a0c;
+  --antre-wood-mid:       #3d2616;
+  --antre-wood-light:     #5a3a20;
+  --antre-leather:        #4a2a16;
+
+  /* Velvet / fabric */
+  --antre-burgundy-deep:  #2c0a0e;
+  --antre-burgundy:       #4a0e1a;
+  --antre-burgundy-rich:  #6b1a26;
+  --antre-velvet:         #3a0815;
+  --antre-tassel:         #b8852a;
+
+  /* Brass — tarnished, antiqued, NOT hextech */
+  --antre-brass-dark:     #6b4a1c;
+  --antre-brass:          #a07533;
+  --antre-brass-bright:   #c89a4a;
+  --antre-brass-polish:   #e7c483;
+  --antre-brass-shadow:   #4a2e08;
+
+  /* Candle / oil-lamp light */
+  --antre-flame:          #f0c14a;
+  --antre-flame-bright:   #ffd86a;
+  --antre-flame-amber:    #d49a4a;
+  --antre-flame-deep:     #a85e2b;
+  --antre-glow:           rgba(240, 193, 74, 0.55);
+  --antre-glow-soft:      rgba(240, 193, 74, 0.18);
+
+  /* Paper / parchment */
+  --antre-parchment:      #f0e3c4;
+  --antre-parchment-warm: #e6d4a8;
+  --antre-parchment-aged: #d4ba80;
+  --antre-ink:            #2a1808;
+  --antre-ink-soft:       #4a2e10;
+  --antre-ink-faint:      #6b4628;
+
+  /* Smoke / haze (pipe tobacco) */
+  --antre-smoke:          rgba(230, 212, 168, 0.10);
+  --antre-smoke-warm:     rgba(212, 154, 74, 0.07);
+
+  /* Type — every consumer must explicitly opt into these (no globals) */
+  --antre-font-display: var(--font-playfair), "Playfair Display", "Cormorant Garamond", "Georgia", "Times New Roman", serif;
+  --antre-font-body:    var(--font-cormorant), "Cormorant Garamond", "Garamond", "Georgia", serif;
+  --antre-font-quill:   var(--font-im-fell), "IM Fell English", "Cormorant Garamond", "Georgia", serif;
+
+  font-family: var(--antre-font-body);
+  color: var(--antre-parchment);
+  letter-spacing: 0.005em;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ─── Root background — oak panelling + chandelier glow ─────────────── */
+
+.antre-root .antre-stage {
+  position: absolute;
+  inset: 0;
+  background:
+    /* candle/chandelier glow center-top */
+    radial-gradient(
+      ellipse 60% 40% at 50% 0%,
+      rgba(240, 193, 74, 0.22) 0%,
+      rgba(240, 193, 74, 0.08) 40%,
+      transparent 70%
+    ),
+    /* lower oil-lamp glow left + right */
+    radial-gradient(
+      ellipse 30% 30% at 8% 70%,
+      rgba(212, 154, 74, 0.15) 0%,
+      transparent 60%
+    ),
+    radial-gradient(
+      ellipse 30% 30% at 92% 75%,
+      rgba(212, 154, 74, 0.12) 0%,
+      transparent 60%
+    ),
+    /* dark vignette */
+    radial-gradient(
+      ellipse at 50% 50%,
+      #2a1a0c 0%,
+      #1a0e07 60%,
+      #08040a 100%
+    );
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+/* Oak vertical panelling — repeated vertical bands, very subtle */
+.antre-root .antre-stage::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image:
+    repeating-linear-gradient(
+      90deg,
+      transparent 0,
+      transparent 178px,
+      rgba(0, 0, 0, 0.45) 178px,
+      rgba(0, 0, 0, 0.45) 180px,
+      rgba(212, 154, 74, 0.06) 180px,
+      rgba(212, 154, 74, 0.06) 181px,
+      transparent 181px,
+      transparent 360px
+    );
+  pointer-events: none;
+  opacity: 0.7;
+  mix-blend-mode: overlay;
+}
+
+/* Wood grain noise — SVG turbulence baked in as data URI */
+.antre-root .antre-stage::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='220' height='220'><filter id='n'><feTurbulence baseFrequency='0.85' numOctaves='2' seed='7'/><feColorMatrix values='0 0 0 0 0.2  0 0 0 0 0.08  0 0 0 0 0.02  0 0 0 0.5 0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)' opacity='0.35'/></svg>");
+  opacity: 0.55;
+  mix-blend-mode: multiply;
+}
+
+/* ─── Brass plate — the room nameplates ──────────────────────────────── */
+
+.antre-brass-plate {
+  position: relative;
+  display: inline-block;
+  padding: 14px 36px;
+  background:
+    linear-gradient(180deg, #c89a4a 0%, #a07533 35%, #6b4a1c 70%, #8b6428 100%);
+  border: 1.5px solid #4a2e08;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 220, 150, 0.55),
+    inset 0 -2px 4px rgba(0, 0, 0, 0.5),
+    inset 0 0 30px rgba(0, 0, 0, 0.25),
+    0 8px 24px rgba(0, 0, 0, 0.6),
+    0 0 40px rgba(240, 193, 74, 0.15);
+  border-radius: 2px;
+  color: #2a1808;
+  text-align: center;
+  font-family: var(--antre-font-display);
+  font-weight: 700;
+  letter-spacing: 0.25em;
+  text-transform: uppercase;
+  text-shadow:
+    0 1px 0 rgba(255, 220, 150, 0.4),
+    0 -1px 0 rgba(0, 0, 0, 0.3);
+}
+/* Brass screw heads at the four corners */
+.antre-brass-plate::before,
+.antre-brass-plate::after {
+  content: "";
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 35% 35%, #e7c483 0%, #a07533 40%, #4a2e08 100%);
+  box-shadow:
+    inset 0 0 1px #000,
+    0 1px 1px rgba(0, 0, 0, 0.5);
+  top: 6px;
+}
+.antre-brass-plate::before { left: 8px; }
+.antre-brass-plate::after  { right: 8px; }
+
+.antre-brass-plate .antre-screws-bottom { position: absolute; left: 0; right: 0; bottom: 0; pointer-events: none; }
+
+/* ─── Brass corner ornaments on cards ────────────────────────────────── */
+
+.antre-brass-corners {
+  position: relative;
+}
+.antre-brass-corners::before,
+.antre-brass-corners::after {
+  content: "";
+  position: absolute;
+  width: 28px;
+  height: 28px;
+  background:
+    linear-gradient(135deg, #e7c483 0%, #a07533 50%, #4a2e08 100%);
+  pointer-events: none;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.6));
+}
+.antre-brass-corners::before {
+  top: -2px; left: -2px;
+  clip-path: polygon(0 0, 100% 0, 100% 18%, 18% 18%, 18% 100%, 0 100%);
+}
+.antre-brass-corners::after {
+  bottom: -2px; right: -2px;
+  clip-path: polygon(82% 0, 100% 0, 100% 100%, 0 100%, 0 82%, 82% 82%);
+}
+
+/* ─── Mahogany card surface (used by every room) ─────────────────────── */
+
+.antre-panel {
+  position: relative;
+  background:
+    /* darker grain rays */
+    repeating-linear-gradient(
+      82deg,
+      rgba(0, 0, 0, 0.0) 0,
+      rgba(0, 0, 0, 0.0) 6px,
+      rgba(0, 0, 0, 0.07) 6px,
+      rgba(0, 0, 0, 0.07) 7px,
+      rgba(120, 70, 30, 0.03) 7px,
+      rgba(120, 70, 30, 0.03) 12px
+    ),
+    linear-gradient(180deg, #3d2616 0%, #2a1a0c 50%, #1c0f07 100%);
+  border: 1px solid rgba(200, 150, 90, 0.25);
+  box-shadow:
+    inset 0 1px 0 rgba(200, 150, 90, 0.15),
+    inset 0 -4px 16px rgba(0, 0, 0, 0.45),
+    0 16px 40px rgba(0, 0, 0, 0.55),
+    0 0 60px rgba(240, 193, 74, 0.08);
+  border-radius: 6px;
+}
+
+.antre-panel-velvet {
+  background:
+    linear-gradient(180deg, #4a0e1a 0%, #2c0a0e 100%);
+  border: 1px solid rgba(184, 133, 42, 0.35);
+  box-shadow:
+    inset 0 1px 0 rgba(232, 178, 90, 0.18),
+    inset 0 -4px 16px rgba(0, 0, 0, 0.5),
+    0 16px 40px rgba(0, 0, 0, 0.6);
+  /* Subtle damask diamond pattern via SVG */
+  background-image:
+    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='40' height='40' viewBox='0 0 40 40'><g fill='none' stroke='%23b8852a' stroke-opacity='0.06' stroke-width='0.6'><path d='M20 0 L40 20 L20 40 L0 20 Z'/><path d='M20 8 L32 20 L20 32 L8 20 Z'/></g></svg>"),
+    linear-gradient(180deg, #4a0e1a 0%, #2c0a0e 100%);
+}
+
+.antre-parchment {
+  background:
+    /* deckled paper warm tone with a bit of grain */
+    radial-gradient(
+      ellipse at 50% 50%,
+      #f4e9cf 0%,
+      #e8d4a4 75%,
+      #d4b878 100%
+    );
+  color: var(--antre-ink);
+  border-radius: 4px;
+  box-shadow:
+    inset 0 0 30px rgba(120, 70, 20, 0.12),
+    inset 0 0 1px rgba(0, 0, 0, 0.25),
+    0 12px 30px rgba(0, 0, 0, 0.45);
+  position: relative;
+}
+.antre-parchment::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180'><filter id='p'><feTurbulence baseFrequency='1.6' numOctaves='2' seed='3'/><feColorMatrix values='0 0 0 0 0.4  0 0 0 0 0.25  0 0 0 0 0.05  0 0 0 0.4 0'/></filter><rect width='100%25' height='100%25' filter='url(%23p)' opacity='0.3'/></svg>");
+  mix-blend-mode: multiply;
+  opacity: 0.35;
+  border-radius: inherit;
+}
+
+/* ─── Engraved typography ─────────────────────────────────────────────── */
+
+.antre-engraved {
+  font-family: var(--antre-font-display);
+  font-weight: 700;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: #2a1808;
+  text-shadow:
+    0 1px 0 rgba(255, 220, 150, 0.55),
+    0 -1px 0 rgba(0, 0, 0, 0.35);
+}
+
+.antre-quill {
+  font-family: var(--antre-font-quill);
+  font-style: italic;
+  letter-spacing: 0.01em;
+}
+
+.antre-serif {
+  font-family: var(--antre-font-display);
+  letter-spacing: -0.005em;
+}
+
+.antre-body {
+  font-family: var(--antre-font-body);
+  font-weight: 400;
+  font-size: 17px;
+  line-height: 1.55;
+}
+
+.antre-dropcap::first-letter {
+  font-family: var(--antre-font-display);
+  font-weight: 900;
+  float: left;
+  font-size: 4.5em;
+  line-height: 0.85;
+  padding: 6px 12px 0 0;
+  color: #6b1a26;
+  text-shadow: 0 2px 0 rgba(184, 133, 42, 0.4);
+}
+
+/* ─── Persian rug pattern (used under cards) ──────────────────────────── */
+
+.antre-rug {
+  background-image:
+    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='80' height='80' viewBox='0 0 80 80'><g fill='none' stroke='%23b8852a' stroke-opacity='0.10' stroke-width='1'><path d='M40 4 L72 40 L40 76 L8 40 Z'/><path d='M40 16 L60 40 L40 64 L20 40 Z'/><circle cx='40' cy='40' r='4' stroke-opacity='0.18'/><path d='M40 28 L52 40 L40 52 L28 40 Z' stroke-opacity='0.18'/></g><g fill='%236b1a26' fill-opacity='0.05'><circle cx='4' cy='4' r='1.5'/><circle cx='76' cy='4' r='1.5'/><circle cx='4' cy='76' r='1.5'/><circle cx='76' cy='76' r='1.5'/></g></svg>");
+}
+
+/* ─── Ornate art-nouveau divider ──────────────────────────────────────── */
+
+.antre-divider {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  width: 100%;
+}
+.antre-divider::before,
+.antre-divider::after {
+  content: "";
+  flex: 1;
+  height: 2px;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(184, 133, 42, 0.6) 50%,
+    transparent 100%
+  );
+}
+.antre-divider .antre-divider-ornament {
+  font-family: var(--antre-font-quill);
+  color: var(--antre-brass-bright);
+  letter-spacing: 0.5em;
+  font-size: 1.2em;
+  text-shadow: 0 0 8px rgba(240, 193, 74, 0.4);
+}
+
+/* ─── Flicker / candle animations ─────────────────────────────────────── */
+
+@keyframes antreFlicker {
+  0%, 100% { opacity: 0.85; filter: brightness(1); }
+  18%      { opacity: 0.92; filter: brightness(1.08); }
+  22%      { opacity: 0.78; filter: brightness(0.92); }
+  47%      { opacity: 0.95; filter: brightness(1.12); }
+  62%      { opacity: 0.82; filter: brightness(0.96); }
+  84%      { opacity: 0.88; filter: brightness(1.05); }
+}
+
+.antre-candle-light {
+  animation: antreFlicker 3.7s ease-in-out infinite;
+}
+
+@keyframes antreEmberDrift {
+  0%   { transform: translate3d(0, 0, 0) scale(0.6); opacity: 0; }
+  10%  { opacity: 0.9; }
+  90%  { opacity: 0.6; }
+  100% { transform: translate3d(20px, -120vh, 0) scale(1.4); opacity: 0; }
+}
+
+@keyframes antreSmokeDrift {
+  0%   { transform: translate3d(0, 0, 0) scale(0.4); opacity: 0; }
+  20%  { opacity: 0.6; }
+  100% { transform: translate3d(-300px, -160px, 0) scale(2.2); opacity: 0; }
+}
+
+@keyframes antreDustFall {
+  0%   { transform: translate3d(0, -20px, 0); opacity: 0; }
+  15%  { opacity: 0.7; }
+  85%  { opacity: 0.5; }
+  100% { transform: translate3d(40px, 100vh, 0); opacity: 0; }
+}
+
+/* ─── Heavy velvet curtain (entry ceremony) ───────────────────────────── */
+
+.antre-curtain {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 52%;
+  background:
+    /* central rich-burgundy with darker folds */
+    repeating-linear-gradient(
+      90deg,
+      #2c0a0e 0px,
+      #4a0e1a 18px,
+      #6b1a26 28px,
+      #4a0e1a 38px,
+      #2c0a0e 56px,
+      #1f0408 72px,
+      #4a0e1a 88px,
+      #6b1a26 96px,
+      #2c0a0e 110px
+    );
+  box-shadow:
+    inset 0 0 80px rgba(0, 0, 0, 0.7),
+    inset 0 0 200px rgba(0, 0, 0, 0.5);
+}
+.antre-curtain-left  { left: 0;  background-position: 0 0;    transform-origin: left center; }
+.antre-curtain-right { right: 0; background-position: 100% 0; transform-origin: right center; }
+
+/* gilt fringe on inner edge */
+.antre-curtain-left::after,
+.antre-curtain-right::after {
+  content: "";
+  position: absolute;
+  top: 0; bottom: 0;
+  width: 28px;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(184, 133, 42, 0.0) 0%,
+      rgba(184, 133, 42, 0.5) 4%,
+      rgba(232, 178, 90, 0.8) 6%,
+      rgba(184, 133, 42, 0.5) 8%,
+      rgba(184, 133, 42, 0.6) 96%,
+      rgba(184, 133, 42, 0.0) 100%
+    ),
+    repeating-linear-gradient(
+      0deg,
+      transparent 0,
+      transparent 6px,
+      rgba(184, 133, 42, 0.7) 6px,
+      rgba(184, 133, 42, 0.7) 8px
+    );
+  filter: drop-shadow(0 0 4px rgba(240, 193, 74, 0.4));
+}
+.antre-curtain-left::after  { right: -8px; }
+.antre-curtain-right::after { left:  -8px; }
+
+/* tasseled bottom hem */
+.antre-curtain::before {
+  content: "";
+  position: absolute;
+  left: 0; right: 0; bottom: -14px;
+  height: 18px;
+  background-image:
+    radial-gradient(circle at 12px 0, #a07533 0, #a07533 4px, transparent 4px),
+    radial-gradient(circle at 36px 0, #a07533 0, #a07533 4px, transparent 4px);
+  background-size: 48px 18px, 48px 18px;
+  background-position: 0 0, 24px 6px;
+}
+
+/* ─── Keyhole (entry ceremony) ───────────────────────────────────────── */
+
+.antre-keyhole {
+  width: 64px;
+  height: 96px;
+  position: relative;
+  background:
+    radial-gradient(circle at 50% 28%, #f0c14a 0%, #d49a4a 50%, #a85e2b 75%, #4a2008 100%);
+  clip-path: path("M32 4 C18 4 8 14 8 28 C8 38 14 46 22 50 L18 92 L46 92 L42 50 C50 46 56 38 56 28 C56 14 46 4 32 4 Z");
+  filter:
+    drop-shadow(0 0 8px rgba(240, 193, 74, 0.7))
+    drop-shadow(0 0 24px rgba(240, 193, 74, 0.45));
+}
+
+/* Brass key-plate around the keyhole */
+.antre-keyplate {
+  position: absolute;
+  inset: -36px -28px;
+  background:
+    radial-gradient(ellipse at 50% 30%, #c89a4a 0%, #8b6428 40%, #4a2e08 80%, #2a1808 100%);
+  clip-path: ellipse(70% 60% at 50% 50%);
+  box-shadow:
+    inset 0 0 30px rgba(0, 0, 0, 0.7),
+    0 6px 24px rgba(0, 0, 0, 0.8);
+  opacity: 0.95;
+}
+.antre-keyplate::before,
+.antre-keyplate::after {
+  content: "";
+  position: absolute;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, #e7c483 0%, #6b4a1c 60%, #2a1808 100%);
+}
+.antre-keyplate::before { top: 12%; left: 12%; }
+.antre-keyplate::after  { top: 12%; right: 12%; }
+
+/* ─── Bucket of tomatoes ─────────────────────────────────────────────── */
+
+.antre-bucket {
+  width: 88px;
+  height: 96px;
+  position: relative;
+  background:
+    linear-gradient(180deg, #6b3a16 0%, #4a2410 50%, #2a1408 100%);
+  clip-path: polygon(15% 0, 85% 0, 100% 100%, 0 100%);
+  box-shadow:
+    inset -8px 0 16px rgba(0, 0, 0, 0.6),
+    inset 0 -6px 16px rgba(0, 0, 0, 0.7),
+    0 8px 16px rgba(0, 0, 0, 0.5);
+}
+.antre-bucket::before {
+  content: "";
+  position: absolute;
+  top: 14px;
+  left: 12%;
+  right: 12%;
+  height: 8px;
+  background: radial-gradient(ellipse at 50% 0, #2a1408 0%, #4a2410 100%);
+  border-radius: 50%;
+}
+.antre-bucket-rim {
+  position: absolute;
+  top: -4px;
+  left: -4%;
+  right: -4%;
+  height: 14px;
+  background: linear-gradient(180deg, #8b4a20 0%, #6b3a16 50%, #4a2410 100%);
+  border-radius: 50%;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+}
+
+/* ─── Typewriter key (the +1 punch button) ───────────────────────────── */
+
+.antre-typewriter-key {
+  position: relative;
+  width: 168px;
+  height: 168px;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 50% 32%, #f4e8d2 0%, #d4c098 35%, #a07533 65%, #4a2e08 100%);
+  box-shadow:
+    inset 0 -10px 18px rgba(0, 0, 0, 0.5),
+    inset 0 3px 4px rgba(255, 240, 200, 0.7),
+    0 18px 0 -2px #4a2e08,
+    0 22px 36px rgba(0, 0, 0, 0.65),
+    0 0 60px rgba(240, 193, 74, 0.25);
+  transition: transform 80ms cubic-bezier(0.4, 0.0, 0.2, 1),
+              box-shadow 80ms cubic-bezier(0.4, 0.0, 0.2, 1);
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+}
+.antre-typewriter-key:active {
+  transform: translateY(8px);
+  box-shadow:
+    inset 0 -4px 14px rgba(0, 0, 0, 0.5),
+    inset 0 3px 4px rgba(255, 240, 200, 0.6),
+    0 6px 0 -2px #4a2e08,
+    0 8px 14px rgba(0, 0, 0, 0.55),
+    0 0 30px rgba(240, 193, 74, 0.35);
+}
+.antre-typewriter-key:focus-visible {
+  outline: 3px solid var(--antre-flame);
+  outline-offset: 8px;
+}
+
+/* ─── Gilt picture frame ─────────────────────────────────────────────── */
+
+.antre-gilt-frame {
+  padding: 22px;
+  background:
+    /* outer dark wood */
+    linear-gradient(180deg, #3a1f0e 0%, #2a1408 100%);
+  border: 1px solid #1a0808;
+  box-shadow:
+    inset 0 0 0 1px rgba(232, 178, 90, 0.4),
+    inset 0 0 0 4px #6b4a1c,
+    inset 0 0 0 6px rgba(232, 178, 90, 0.85),
+    inset 0 0 0 8px #a07533,
+    inset 0 0 0 18px rgba(232, 178, 90, 0.95),
+    inset 0 0 0 20px #6b4a1c,
+    0 18px 40px rgba(0, 0, 0, 0.7),
+    0 0 80px rgba(240, 193, 74, 0.12);
+  position: relative;
+}
+.antre-gilt-frame::before {
+  content: "";
+  position: absolute;
+  inset: 4px;
+  pointer-events: none;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100' preserveAspectRatio='none'><g fill='none' stroke='%23e7c483' stroke-width='0.5' stroke-opacity='0.6'><path d='M2 2 Q12 6 18 2 M2 2 Q6 12 2 18'/><path d='M98 2 Q88 6 82 2 M98 2 Q94 12 98 18'/><path d='M2 98 Q12 94 18 98 M2 98 Q6 88 2 82'/><path d='M98 98 Q88 94 82 98 M98 98 Q94 88 98 82'/></g></svg>");
+  background-size: 100% 100%;
+  opacity: 0.7;
+}
+
+/* Brick wall behind the gilt frame */
+.antre-brick-wall {
+  background-image:
+    /* mortar */
+    linear-gradient(0deg, transparent 0, transparent 48px, rgba(0,0,0,0.55) 48px, rgba(0,0,0,0.55) 50px, transparent 50px),
+    /* bricks alt rows */
+    repeating-linear-gradient(
+      90deg,
+      #5a2a18 0px,
+      #6b3220 90px,
+      #5a2a18 92px,
+      #4a2010 94px,
+      transparent 94px,
+      transparent 96px
+    );
+  background-size: 100% 50px, 188px 50px;
+  background-position: 0 0, 0 0;
+  position: relative;
+}
+
+/* ─── Chandelier overhead (CSS-drawn) ────────────────────────────────── */
+
+.antre-chandelier {
+  position: absolute;
+  top: -20px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 220px;
+  height: 100px;
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* ─── Door handle / exit ─────────────────────────────────────────────── */
+
+.antre-door-handle {
+  width: 56px; height: 56px;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 35% 30%, #f0d488 0%, #c89a4a 40%, #8b6428 75%, #2a1808 100%);
+  box-shadow:
+    inset 0 0 0 2px #6b4a1c,
+    inset 0 -4px 12px rgba(0, 0, 0, 0.5),
+    inset 0 2px 6px rgba(255, 220, 150, 0.45),
+    0 4px 12px rgba(0, 0, 0, 0.7),
+    0 0 24px rgba(240, 193, 74, 0.4);
+  cursor: pointer;
+  transition: transform 200ms cubic-bezier(0.16, 1, 0.3, 1), box-shadow 200ms;
+}
+.antre-door-handle:hover {
+  transform: rotate(18deg) scale(1.05);
+  box-shadow:
+    inset 0 0 0 2px #6b4a1c,
+    inset 0 -4px 12px rgba(0, 0, 0, 0.5),
+    inset 0 2px 6px rgba(255, 220, 150, 0.55),
+    0 6px 16px rgba(0, 0, 0, 0.7),
+    0 0 36px rgba(240, 193, 74, 0.65);
+}
+.antre-door-handle:focus-visible {
+  outline: 3px solid var(--antre-flame);
+  outline-offset: 4px;
+}
+
+/* ─── Book spine (Stark Culture bibliothèque) ───────────────────────── */
+
+.antre-book-spine {
+  position: relative;
+  width: 36px;
+  height: 180px;
+  cursor: pointer;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(0,0,0,0.25) 0%,
+      transparent 12%,
+      transparent 88%,
+      rgba(0,0,0,0.35) 100%
+    ),
+    linear-gradient(180deg, #6b1a26 0%, #4a0e1a 50%, #2c0a0e 100%);
+  border-radius: 1px 1px 0 0;
+  box-shadow:
+    inset 0 1px 0 rgba(232, 178, 90, 0.25),
+    0 8px 12px rgba(0, 0, 0, 0.45);
+  transition: transform 280ms cubic-bezier(0.16, 1, 0.3, 1), filter 280ms;
+}
+.antre-book-spine:hover { transform: translateY(-12px); filter: brightness(1.15); }
+.antre-book-spine:focus-visible { outline: 2px solid var(--antre-flame); outline-offset: 4px; }
+.antre-book-spine.antre-book-green  { background: linear-gradient(90deg, rgba(0,0,0,0.25) 0%, transparent 12%, transparent 88%, rgba(0,0,0,0.35) 100%), linear-gradient(180deg, #2c4a1a 0%, #1a2c0e 100%); }
+.antre-book-spine.antre-book-blue   { background: linear-gradient(90deg, rgba(0,0,0,0.25) 0%, transparent 12%, transparent 88%, rgba(0,0,0,0.35) 100%), linear-gradient(180deg, #1a2a4a 0%, #0e162c 100%); }
+.antre-book-spine.antre-book-cream  { background: linear-gradient(90deg, rgba(0,0,0,0.25) 0%, transparent 12%, transparent 88%, rgba(0,0,0,0.35) 100%), linear-gradient(180deg, #d4ba80 0%, #a07533 100%); color: #2a1808; }
+.antre-book-spine.antre-book-black  { background: linear-gradient(90deg, rgba(0,0,0,0.25) 0%, transparent 12%, transparent 88%, rgba(0,0,0,0.35) 100%), linear-gradient(180deg, #2a1808 0%, #0a0402 100%); }
+
+/* gilt embossed title rotated 90 along the spine */
+.antre-book-spine .antre-book-label {
+  position: absolute;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%) rotate(-90deg);
+  white-space: nowrap;
+  font-family: var(--antre-font-display);
+  font-size: 9px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: rgba(232, 178, 90, 0.95);
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.55);
+  pointer-events: none;
+}
+
+/* ─── Chalkboard tally ───────────────────────────────────────────────── */
+
+.antre-chalkboard {
+  background:
+    radial-gradient(ellipse at 50% 50%, #1c2a1c 0%, #0e160e 100%);
+  border: 8px solid #4a2a14;
+  box-shadow:
+    inset 0 0 30px rgba(0, 0, 0, 0.8),
+    0 8px 20px rgba(0, 0, 0, 0.6);
+  font-family: "Caveat", "Marker Felt", "Comic Sans MS", cursive;
+  color: #f4e8d2;
+}
+
+/* ─── Ledger paper lines ─────────────────────────────────────────────── */
+
+.antre-ledger-lines {
+  background-image:
+    linear-gradient(180deg, transparent 28px, rgba(74, 46, 16, 0.35) 28px, rgba(74, 46, 16, 0.35) 29px, transparent 29px);
+  background-size: 100% 30px;
+  background-repeat: repeat-y;
+}
+
+/* ─── Guestbook (Registre des Membres) ───────────────────────────────── */
+
+.antre-guestbook {
+  background:
+    linear-gradient(180deg, #f4e9cf 0%, #e8d4a4 100%);
+  color: var(--antre-ink);
+  border-radius: 4px;
+  box-shadow:
+    inset 0 0 40px rgba(120, 70, 20, 0.18),
+    inset 0 0 1px rgba(0, 0, 0, 0.25),
+    0 24px 50px rgba(0, 0, 0, 0.7);
+  position: relative;
+  overflow: hidden;
+}
+.antre-guestbook::after {
+  /* center binding shadow */
+  content: "";
+  position: absolute;
+  top: 0; bottom: 0;
+  left: 50%; width: 28px; transform: translateX(-50%);
+  background:
+    linear-gradient(
+      90deg,
+      rgba(120, 70, 20, 0.0) 0%,
+      rgba(74, 46, 16, 0.45) 40%,
+      rgba(40, 16, 4, 0.55) 50%,
+      rgba(74, 46, 16, 0.45) 60%,
+      rgba(120, 70, 20, 0.0) 100%
+    );
+  pointer-events: none;
+}
+.antre-guestbook .antre-handwriting {
+  font-family: var(--antre-font-quill);
+  font-style: italic;
+  letter-spacing: 0.01em;
+  color: #2a1a4a;
+}
+
+/* ─── Quill ink stroke animation (Registre des Membres) ──────────────── */
+
+@keyframes antreQuillWrite {
+  0%   { clip-path: inset(0 100% 0 0); }
+  100% { clip-path: inset(0 0 0 0); }
+}
+.antre-quill-anim { animation: antreQuillWrite 1.4s cubic-bezier(0.5, 0, 0.2, 1) both; }
+
+/* ─── Old-world map (Scouting Lab background) ───────────────────────── */
+
+.antre-old-map {
+  background:
+    /* aged paper */
+    radial-gradient(ellipse at 30% 30%, #f0e3c4 0%, #d4b878 60%, #a07533 100%);
+  position: relative;
+}
+.antre-old-map::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  /* coffee-stain spots */
+  background-image:
+    radial-gradient(circle at 15% 20%, rgba(74, 46, 16, 0.18) 0%, transparent 8%),
+    radial-gradient(circle at 78% 60%, rgba(74, 46, 16, 0.22) 0%, transparent 10%),
+    radial-gradient(circle at 22% 80%, rgba(74, 46, 16, 0.15) 0%, transparent 7%),
+    radial-gradient(circle at 88% 18%, rgba(74, 46, 16, 0.12) 0%, transparent 6%);
+}
+
+/* ─── Reduced-motion overrides ───────────────────────────────────────── */
+
+@media (prefers-reduced-motion: reduce) {
+  .antre-root *,
+  .antre-root *::before,
+  .antre-root *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+/* ─── Mobile tuning ──────────────────────────────────────────────────── */
+
+@media (max-width: 640px) {
+  .antre-brass-plate {
+    padding: 9px 18px;
+    letter-spacing: 0.18em;
+    font-size: 12px;
+  }
+  .antre-typewriter-key { width: 130px; height: 130px; }
+  .antre-dropcap::first-letter { font-size: 3.2em; padding: 4px 8px 0 0; }
+}
