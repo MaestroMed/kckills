@@ -160,27 +160,16 @@ async def main():
         offset = int(g["vod_offset_seconds"])
         ext = g["external_id"]
         print(f"\n=== Game {ext[:20]} (yt={yt}, offset={offset}s, {len(kills)} kills) ===", flush=True)
-        # Pre-download the full VOD once. Each kill below extracts its
-        # 40-second segment via ffmpeg from the local file — that's ~5s
-        # per kill versus ~60-300s per per-kill yt-dlp segment download
-        # (which has to re-run the locate phase every time). The VOD
-        # cache in worker/vods/ is reused across games sharing a video.
-        print(f"  Pre-downloading full VOD {yt}...", flush=True)
-        # No outer wait_for — clipper.download_full_vod() already enforces
-        # its own 1800 s ceiling (clipper.py). The previous outer 900 s
-        # wrapper here fired BEFORE the inner one finished merging audio +
-        # video for 3.5 GB casts, which surfaced as "timeout -> fall back
-        # to per-kill yt-dlp" while the subprocess kept downloading in the
-        # background and eventually completed the cache file.
-        try:
-            local_vod = await download_full_vod(yt)
-        except Exception as e:
-            print(f"  VOD download failed: {str(e)[:60]} — falling back to per-kill yt-dlp")
-            local_vod = None
-        if local_vod:
-            print(f"  VOD ready: {local_vod}", flush=True)
-        else:
-            print(f"  VOD pre-download failed — falling back to per-kill yt-dlp", flush=True)
+        # Wave 27.31 — skip the full-VOD pre-download. yt-dlp's mux step
+        # on Windows produces corrupted moov atoms when stitching the
+        # video stream (3.5 GB H.264 .mp4) with the audio stream (130 MB
+        # .webm). Four smoke attempts all failed (some with audio-only
+        # output, some with truncated video). The daemon's clipper uses
+        # per-kill `--download-sections` against the HLS m3u8 manifest
+        # and that path WORKS reliably (clip_done version=3,4,5 visible
+        # in daemon.log on Wave 27.31 morning). We follow the same
+        # working pattern here.
+        local_vod = None
 
         for kill in kills:
             kid = kill["id"]
