@@ -1,6 +1,27 @@
-# Wave 27.27 → 27.30 — recovery runbook
+# Wave 27.27 → 27.31 — recovery runbook
 
-Last updated : 2026-05-10 evening.
+Last updated : 2026-05-11 morning. **Steps 1-4 are DONE.** Steps 5+
+are operator follow-ups.
+
+## What actually happened on 2026-05-11
+
+* Daemon restarted → Wave 27.30 loaded → harvester started inserting
+  kills with NULL player_id for non-KC opponents. **+149 kills**
+  ingested across 6 of the 10 reset games (the other 4 need another
+  harvester cycle).
+* QC resume launched → 30 clips QC'd before hitting Gemini FILE
+  STORAGE 20 GB quota (different from RPM). Cleanup script deleted
+  ~540 old files, QC resumed → at the time of this update, the
+  remaining ~387 clips are flowing through cleanly at ~10/min.
+* **NEW BUG FOUND : sentinel was clobbering vod_youtube_id every 5 min.**
+  promote_misaligned set vod_youtube_id = alt_vod (KC Replay), but
+  sentinel's safe_upsert blindly re-applied the LEC vod_youtube_id from
+  getEventDetails on the next cycle. Wave 27.31 (commit f6cb1ee) makes
+  sentinel preserve a row's existing vod_youtube_id. The 6 misaligned
+  games promoted yesterday are now STABLE on KC Replay.
+* Per-kill yt-dlp 300s timeout was too tight for KC Replay's deep
+  timestamps (100-200s in the locate phase alone). Bumped to 600s
+  (commit 563ca1e).
 
 This is the operator's sequence to recover the pipeline after Wave 27.30
 (critical FK regression fix). Run these in order tomorrow morning, after
