@@ -877,7 +877,15 @@ async def _run_ytdlp(url: str, output_path: str, start: float, end: float) -> bo
         "--remote-components", "ejs:github",
         "--download-sections", f"*{start}-{end}",
         "--force-keyframes-at-cuts",
-        "-f", "bestvideo[height<=1080]+bestaudio/best[height<=1080]",
+        # Wave 27.31 — prefer H.264 (avc1) over AV1 for the same reason
+        # as download_full_vod : the vertical filter chain (drawtext +
+        # h264_nvenc) segfaults on AV1 input on Windows. The HLS muxed
+        # format is the cleanest path (single stream, no merge needed).
+        # Fallback chain mirrors download_full_vod's selector.
+        "-f", "best[protocol=m3u8_native][height<=1080][vcodec^=avc1]/"
+              "best[protocol=m3u8_native][height<=1080]/"
+              "bestvideo[vcodec^=avc1][height<=1080]+bestaudio/"
+              "bestvideo[height<=1080]+bestaudio/best[height<=1080]",
         "--merge-output-format", "mp4",
         # Wave 13e (2026-04-29) yt-dlp perf bumps :
         # * --concurrent-fragments 8 : parallel HLS/DASH fragment download
