@@ -1,5 +1,12 @@
 // LoLTok Service Worker — PWA + Push Notifications
 //
+// Bumped to v6 (2026-05-13) for the LIVE flow : new `kind` values
+// `live_kill` and `live_match`, dedicated action buttons that deep-link
+// to /live, and a `vibrate` pattern that fires only on live notifs so
+// fans get a tactile cue mid-match. Older installs still running v5
+// will keep generic notifications working but will miss the new
+// live-specific actions until the new SW activates.
+//
 // Bumped to v5 (2026-04-24) for the action-button routing + the
 // `pushsubscriptionchange` re-subscription path. Older installs still
 // running v4 will keep their notifications but will miss the
@@ -11,8 +18,8 @@
 // installations cling to the previous CACHE_NAME until activate fires;
 // without it, returning users hit the stale handler from cache for days.
 
-const CACHE_NAME = "loltok-v5";
-const PRECACHE = ["/scroll", "/", "/manifest.json", "/offline.html"];
+const CACHE_NAME = "loltok-v6";
+const PRECACHE = ["/scroll", "/live", "/", "/manifest.json", "/offline.html"];
 
 // Install: precache shell
 self.addEventListener("install", (event) => {
@@ -110,6 +117,34 @@ self.addEventListener("push", (event) => {
   // rating. Showing useless buttons trains users to ignore them.
   const isKillNotif = kind === "kill" || kind === "kill_of_the_week";
 
+  // v6 (live flow) — `live_kill` is fired by the worker when a clip
+  // gets published mid-match. It deep-links to /kill/<id> AND offers a
+  // shortcut to the dedicated /live feed so the fan can pivot from
+  // single-clip view to the running match in one tap.
+  const isLiveKill = kind === "live_kill";
+  // `live_match` is fired when a KC match goes live. Short-lived
+  // notification — no rating possible (no kill yet) ; deep-links to
+  // /live so the fan lands on the cinematic header.
+  const isLiveStart = kind === "live_match";
+
+  let actions = [];
+  if (isLiveKill) {
+    actions = [
+      { action: "view", title: "Voir le clip" },
+      { action: "live", title: "Le live" },
+    ];
+  } else if (isLiveStart) {
+    actions = [
+      { action: "live", title: "Ouvrir le live" },
+      { action: "dismiss", title: "Plus tard" },
+    ];
+  } else if (isKillNotif) {
+    actions = [
+      { action: "view", title: "Voir le clip" },
+      { action: "rate", title: "Noter" },
+    ];
+  }
+
   const options = {
     body: data.body || "Nouveau kill KC !",
     icon: data.icon || "/icons/icon-192x192.png",
@@ -118,16 +153,17 @@ self.addEventListener("push", (event) => {
     tag: data.tag || kind || "kckills-default",
     renotify: true,
     requireInteraction: kind === "kill_of_the_week",
+    // Vibrate on live-flow notifs only so the rest of the system isn't
+    // intrusive. Pattern : short triple-pulse, totals ~600 ms.
+    vibrate: isLiveKill || isLiveStart ? [120, 60, 120, 60, 240] : undefined,
     data: {
-      url: data.url || "/scroll",
+      url: data.url || (isLiveStart || isLiveKill ? "/live" : "/scroll"),
+      // Carry the canonical /live URL so the "live" action button can
+      // navigate even when `url` already points at the kill detail.
+      liveUrl: data.liveUrl || "/live",
       kind,
     },
-    actions: isKillNotif
-      ? [
-          { action: "view", title: "Voir le clip" },
-          { action: "rate", title: "Noter" },
-        ]
-      : [],
+    actions,
   };
   event.waitUntil(self.registration.showNotification(title, options));
 });
@@ -147,10 +183,21 @@ self.addEventListener("push", (event) => {
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
   const baseUrl = event.notification.data?.url || "/scroll";
+  const liveUrl = event.notification.data?.liveUrl || "/live";
   const action = event.action || "view";
-  const targetUrl = action === "rate"
-    ? baseUrl + (baseUrl.includes("?") ? "&" : "?") + "action=rate"
-    : baseUrl;
+  // v6 — the `live` action button (live_kill / live_match notifs)
+  // always opens /live regardless of what data.url points at. The
+  // `dismiss` action just closes the notif without navigating.
+  let targetUrl;
+  if (action === "dismiss") {
+    return; // already closed above, nothing else to do
+  } else if (action === "live") {
+    targetUrl = liveUrl;
+  } else if (action === "rate") {
+    targetUrl = baseUrl + (baseUrl.includes("?") ? "&" : "?") + "action=rate";
+  } else {
+    targetUrl = baseUrl;
+  }
 
   event.waitUntil(
     self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clients) => {

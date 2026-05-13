@@ -11,6 +11,7 @@ import { AuthEventTracker } from "./analytics/AuthEventTracker";
 import { WebVitalsReporter } from "./analytics/WebVitalsReporter";
 import { FloatingPlayerProvider } from "@/lib/audio/use-floating-player";
 import { WolfFloatingPlayer } from "./player/WolfFloatingPlayer";
+import { LiveHotNow } from "./LiveHotNow";
 
 /**
  * App-wide providers.
@@ -48,6 +49,7 @@ export function Providers({
             <AuthEventTracker />
             <WebVitalsReporter />
             <WolfFloatingPlayer />
+            <LiveHotNow />
           </FloatingPlayerProvider>
         </ToastProvider>
       </LazyMotion>
