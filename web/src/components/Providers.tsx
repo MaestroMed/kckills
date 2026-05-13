@@ -12,6 +12,7 @@ import { WebVitalsReporter } from "./analytics/WebVitalsReporter";
 import { FloatingPlayerProvider } from "@/lib/audio/use-floating-player";
 import { WolfFloatingPlayer } from "./player/WolfFloatingPlayer";
 import { LiveHotNow } from "./LiveHotNow";
+import { AchievementToast } from "./AchievementToast";
 
 /**
  * App-wide providers.
@@ -50,6 +51,7 @@ export function Providers({
             <WebVitalsReporter />
             <WolfFloatingPlayer />
             <LiveHotNow />
+            <AchievementToast />
           </FloatingPlayerProvider>
         </ToastProvider>
       </LazyMotion>

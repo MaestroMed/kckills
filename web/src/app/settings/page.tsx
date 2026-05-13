@@ -6,6 +6,7 @@ import { BadgeRow } from "@/components/BadgeChip";
 import { NotificationSettings } from "@/components/settings/NotificationSettings";
 import { LanguageSettings } from "@/components/settings/LanguageSettings";
 import { RiotLinkCard, type RiotLinkProfile } from "@/components/settings/RiotLinkCard";
+import { SettingsAchievementsRow } from "@/components/settings/SettingsAchievementsRow";
 
 export default function SettingsPage() {
   const [exportStatus, setExportStatus] = useState<"idle" | "loading" | "done" | "error" | "auth">("idle");
@@ -146,6 +147,7 @@ export default function SettingsPage() {
                 <BadgeRow slugs={userBadges} />
               </div>
             )}
+            <SettingsAchievementsRow />
           </div>
         ) : (
           <p className="text-sm text-[var(--text-muted)]">
