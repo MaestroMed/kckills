@@ -61,6 +61,17 @@ DEFAULTS: Final[dict[str, dict[str, int]]] = {
     "og_generator":        {"parallel": 4, "interval":  900, "batch":  50, "lease":  120},
     "event_publisher":     {"parallel": 1, "interval":  300, "batch":  50, "lease":  300},
     "embedder":            {"parallel": 1, "interval": 1800, "batch":  50, "lease":   60},
+    # Wave 30f — AI Quote Extractor : transcribes caster shouts on each
+    # clip's audio track. Single Gemini call per kill, shares the 950 RPD
+    # budget with analyzer/embedder/offset-finder. 30-min cycle + 20-kill
+    # batch keeps the worst-case daily Gemini load at ~960 calls/day —
+    # under the free-tier ceiling.
+    "quote_extractor":     {"parallel": 1, "interval": 1800, "batch":  20, "lease":  600},
+    # Wave 31a — Achievements / Badge evaluator. One Supabase RPC per
+    # recently-active user ; cheap. 5-min cycle catches new unlocks fast
+    # without spamming push notifications. Batch capped at 500 so a
+    # surge in active users doesn't pin the worker for a whole cycle.
+    "achievement_evaluator": {"parallel": 1, "interval":  300, "batch": 500, "lease":  120},
     # Comms + moderation ---------------------------------------------------
     "moderator":           {"parallel": 1, "interval":  180, "batch":  25, "lease":  120},
     "discord_autopost":    {"parallel": 1, "interval":   60, "batch":  10, "lease":  120},

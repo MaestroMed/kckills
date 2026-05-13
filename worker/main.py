@@ -141,7 +141,9 @@ DAEMON_MODULES: list[tuple[str, int, str]] = [
     ("og_generator",      _get_interval("og_generator"),      "modules.og_generator"),           # default 900s   — 15 min
     ("event_publisher",   _get_interval("event_publisher"),   "modules.event_publisher"),        # default 300s   — bridge game_events.is_publishable -> kills.status (PR6-D)
     ("embedder",          _get_interval("embedder"),          "modules.embedder"),               # default 1800s  — Gemini embedding-001 -> kills.embedding (PR17)
+    ("quote_extractor",   _get_interval("quote_extractor"),   "modules.quote_extractor"),        # default 1800s  — Wave 30f : Gemini caster-shout extraction
     ("translator",        _get_interval("translator"),        "modules.translator"),             # default 1800s  — Wave 11 : DeepSeek FR->EN/KO/ES (gated KCKILLS_TRANSLATOR_ENABLED)
+    ("achievement_evaluator", _get_interval("achievement_evaluator"), "modules.achievement_evaluator"), # default 300s — Wave 31a : badge evaluation + push enqueue
     ("moderator",         _get_interval("moderator"),         "modules.moderator"),              # default 180s   — Haiku comment moderation
     ("discord_autopost",  _get_interval("discord_autopost"),  "modules.discord_autopost"),       # default 60s    — auto-share high-score kills (P2 Phase 3)
     ("hls_packager",      _get_interval("hls_packager"),      "modules.hls_packager"),           # default 1800s  — HLS adaptive bitrate

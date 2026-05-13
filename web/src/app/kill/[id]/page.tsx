@@ -8,6 +8,7 @@ import { getKillById, getKillsByMatchExternalId, getPublishedKills, type Publish
 import { KillInteractions } from "./interactions";
 import { KillCinematicView } from "@/components/kill/KillCinematicView";
 import { SimilarClipsCarousel } from "@/components/kill/SimilarClipsCarousel";
+import { KillQuotesPanel } from "@/components/quotes/KillQuotesPanel";
 import { getAssetMetadata, pickAssetUrl } from "@/lib/kill-assets";
 import { JsonLd, breadcrumbLD } from "@/lib/seo/jsonld";
 import type { Metadata } from "next";
@@ -347,6 +348,19 @@ export default async function KillDetailPage({ params }: Props) {
                 lives inside the cinematic shell so it's pinned in the
                 same column rhythm as everything else. */}
             <KillInteractions killId={id} />
+            {/* PHRASES panel — Wave 30f. Reads kill_quotes via fn_quotes_for_kill
+                and renders one card per extracted caster shout. Returns its own
+                "empty" placeholder when the worker hasn't reached this clip yet. */}
+            <div className="mt-10">
+              <KillQuotesPanel
+                killId={id}
+                clipUrl={kill.clip_url_vertical ?? kill.clip_url_horizontal ?? null}
+                killerChampion={kill.killer_champion}
+                victimChampion={kill.victim_champion}
+                multiKill={kill.multi_kill}
+                isFirstBlood={Boolean(kill.is_first_blood)}
+              />
+            </div>
           </KillCinematicView>
         </>
       );
