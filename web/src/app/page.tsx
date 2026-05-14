@@ -41,6 +41,7 @@ import { KillOfTheWeek } from "@/components/KillOfTheWeek";
 import { HomeRecentClips } from "@/components/HomeRecentClips";
 import { HomeWeekendBestClips } from "@/components/HomeWeekendBestClips";
 import { TrainVi } from "@/components/home/TrainVi";
+import { FormCalendar } from "@/components/home/FormCalendar";
 // Wave 28 (2026-05-11) — "Ce jour-là dans l'histoire KC". Nostalgia
 // banner that surfaces past-year kills played on today's calendar date.
 import { OnThisDay } from "@/components/OnThisDay";
@@ -379,6 +380,14 @@ export default async function HomePage() {
           The locomotive face shows the current consecutive streak so the
           user can read momentum at a glance. */}
       <TrainVi matches={allMatches.slice(0, 10)} />
+
+      {/* ═══ FORM CALENDAR — 84-day W/L heatmap (Wave 32) ════════════════
+          GitHub-contributions-style grid. Each cell is one day, coloured
+          by KC's outcome (gold = win day, red = loss day, dim = rest).
+          Hover/click any cell to drop the day's matchups into the side
+          panel. Pairs with TrainVi above : the train shows the streak
+          shape, the calendar shows the rhythm. */}
+      <FormCalendar matches={allMatches} days={84} />
 
       {/* ═══ KC TIMELINE + DEFAULT FEED ════════════════════════════════
           Per CLAUDE.md §6.2 : the timeline is a horizontal era strip
