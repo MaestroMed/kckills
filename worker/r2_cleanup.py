@@ -1,39 +1,40 @@
 """r2_cleanup — Wave 30o (2026-05-14)
 
-Audits + cleans up the kckills-clips R2 bucket. Currently sits at
-~440 GB vs free tier 10 GB. Major waste sources :
+Audits + cleans up the kckills-clips R2 bucket. Major waste sources :
   * clips/         377 GB — 35k mp4s
-  * hls/            61 GB — 103k segments (HLS adaptive — unused)
+  * hls/            61 GB — 103k segments (HLS adaptive — ACTIVELY USED)
   * thumbnails/      0.7 GB
   * og/              0.03 GB
   * moments/         0.7 GB
 
-Strategy (in order of impact, lowest risk first) :
+⚠️ WAVE 30o POST-MORTEM ⚠️
+The first run of this script (2026-05-14 ~02:00 UTC) deleted the entire
+hls/ prefix based on a wrong assumption that HLS was unused. It IS used
+by /scroll v2 (web/src/components/scroll/v2/hooks/useHlsPlayer.ts) for
+adaptive bitrate on mobile. The hls_packager daemon module had to re-
+encode all 35k clips over the following week to restore mobile UX.
+DO NOT re-enable the HLS purge mode — the option below is intentionally
+removed. If R2 storage becomes a real budget problem, the right answer
+is a Cloudflare Worker that serves MP4 with per-request quality, not
+pre-encoding HLS.
 
-  1. HLS purge — delete the `hls/` prefix entirely. The frontend pulls
-     `clip_url_vertical` MP4 directly via R2 ; HLS adaptive bitrate is
-     not active. Frees ~60 GB.
+Safe strategies :
 
-  2. Versioned-clip dedup — `clips/{game_id}/{kill_id}/v{N}/<file>`.
+  1. Versioned-clip dedup — `clips/{game_id}/{kill_id}/v{N}/<file>`.
      Keep ONLY the highest version per (game_id, kill_id). All older
      versions (v1, v2... when v3 exists) are stale re-clip output.
      Frees ~30-50 GB depending on how many re-clips happened.
 
-  3. Legacy flat clips — `clips/{kill_id}_h.mp4`, `_v.mp4`, `_v_low.mp4`,
+  2. Legacy flat clips — `clips/{kill_id}_h.mp4`, `_v.mp4`, `_v_low.mp4`,
      `_thumb.jpg`. These are kept for back-compat ; the kills.clip_url_*
      columns point at them. KEEP these — they're load-bearing.
 
-  4. Orphan thumbnails — thumbnails not referenced by any kill row.
-     Need DB access ; deferred until DB is back.
-
-This script uses ONLY R2 ; no DB required. So we can run it now while
-Supabase is unhealthy.
+  3. Orphan thumbnails — thumbnails not referenced by any kill row.
+     Need DB access ; deferred.
 
 Modes :
   python r2_cleanup.py                      # full audit, no deletes
-  python r2_cleanup.py --apply-hls          # delete hls/ prefix only
   python r2_cleanup.py --apply-versioned    # delete old versioned clips
-  python r2_cleanup.py --apply-all          # both
 """
 from __future__ import annotations
 
@@ -175,17 +176,14 @@ def bulk_delete(s3, keys: list[str], dry_run: bool = True, label: str = "delete"
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--apply-hls", action="store_true",
-                        help="DELETE all hls/* keys")
     parser.add_argument("--apply-versioned", action="store_true",
                         help="DELETE old versioned clip iterations (keep highest v per kill)")
-    parser.add_argument("--apply-all", action="store_true",
-                        help="Apply both hls + versioned cleanups")
     args = parser.parse_args()
 
-    apply_hls = args.apply_hls or args.apply_all
-    apply_ver = args.apply_versioned or args.apply_all
-    dry_run = not (apply_hls or apply_ver)
+    # HLS purge mode REMOVED — see post-mortem in module docstring.
+    apply_hls = False
+    apply_ver = args.apply_versioned
+    dry_run = not apply_ver
 
     print("=" * 72)
     print(f"  R2 CLEANUP — {datetime.now(timezone.utc).isoformat()[:19]} UTC")
@@ -217,27 +215,15 @@ def main():
         for vc, n in sorted(version_count_dist.items()):
             print(f"    {vc} version(s) : {n:,} kills")
 
+    hls_total_bytes = sum(s for _, s in audit_data['hls'])
     print(f"\nHLS segments : {len(audit_data['hls']):,} files, "
-          f"{fmt_gb(sum(s for _, s in audit_data['hls']))}")
+          f"{fmt_gb(hls_total_bytes)} (ACTIVELY USED by /scroll mobile)")
 
     # Plan the deletes
     print(f"\n{'=' * 72}\n  CLEANUP PLAN\n{'=' * 72}")
 
     s3 = _s3()
     total_freed = 0
-
-    if apply_hls or dry_run:
-        keys, bytes_freed = plan_hls_delete(audit_data)
-        print(f"\nHLS purge :")
-        print(f"  Keys to delete : {len(keys):,}")
-        print(f"  Bytes freed    : {fmt_gb(bytes_freed)}")
-        if apply_hls:
-            print(f"  EXECUTING delete...")
-            deleted, errors = bulk_delete(s3, keys, dry_run=False, label="hls")
-            print(f"  Deleted : {deleted:,}  Errors : {errors}")
-            total_freed += bytes_freed - errors  # approx
-        else:
-            print(f"  (dry run — pass --apply-hls to execute)")
 
     if apply_ver or dry_run:
         keys, bytes_freed = plan_versioned_dedup(audit_data)
@@ -260,16 +246,12 @@ def main():
         print(f"  Before : {fmt_gb(sum(o['size'] for o in objects))}")
         print(f"  After  : {fmt_gb(new_total)}  ({len(new_objects):,} objects)")
     else:
-        total_plan = sum([
-            plan_hls_delete(audit_data)[1] if (args.apply_hls or args.apply_all) else 0,
-            plan_versioned_dedup(audit_data)[1] if (args.apply_versioned or args.apply_all) else 0,
-        ])
-        if total_plan == 0:
-            # Show what would happen with --apply-all
-            hls_b = plan_hls_delete(audit_data)[1]
-            ver_b = plan_versioned_dedup(audit_data)[1]
-            print(f"\nIf --apply-all : would free {fmt_gb(hls_b + ver_b)} "
-                  f"(hls={fmt_gb(hls_b)} + versioned={fmt_gb(ver_b)})")
+        ver_b = plan_versioned_dedup(audit_data)[1]
+        if ver_b > 0:
+            print(f"\nIf --apply-versioned : would free {fmt_gb(ver_b)} "
+                  f"(versioned dedup only — HLS purge intentionally removed)")
+        else:
+            print(f"\nNothing to dedup. Bucket is clean.")
 
 
 if __name__ == "__main__":
