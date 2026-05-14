@@ -116,15 +116,14 @@ function WolfHead({
       {/* Inner right ear (dark) */}
       <path d="M 47 8 L 45 14 L 42 16 Z" fill="url(#wolfFurDark)" />
 
-      {/* Main head — pointed snout downward */}
+      {/* Main head — pointed snout downward.
+          Wave 32 : path d collapsed to a single line. The original
+          multi-line literal triggered a hydration mismatch because
+          server rendered the raw whitespace whereas the client normalised
+          it. SVG renderers don't care about path whitespace so this is
+          purely cosmetic. */}
       <path
-        d="M 14 14
-           Q 8 20 12 32
-           Q 14 44 32 56
-           Q 50 44 52 32
-           Q 56 20 50 14
-           Q 40 18 32 18
-           Q 24 18 14 14 Z"
+        d="M 14 14 Q 8 20 12 32 Q 14 44 32 56 Q 50 44 52 32 Q 56 20 50 14 Q 40 18 32 18 Q 24 18 14 14 Z"
         fill="url(#wolfFurDark)"
         stroke="#C8AA6E"
         strokeWidth="0.9"
