@@ -42,6 +42,7 @@ import { HomeRecentClips } from "@/components/HomeRecentClips";
 import { HomeWeekendBestClips } from "@/components/HomeWeekendBestClips";
 import { TrainVi } from "@/components/home/TrainVi";
 import { FormCalendar } from "@/components/home/FormCalendar";
+import { ChampionLadders } from "@/components/home/ChampionLadders";
 // Wave 28 (2026-05-11) — "Ce jour-là dans l'histoire KC". Nostalgia
 // banner that surfaces past-year kills played on today's calendar date.
 import { OnThisDay } from "@/components/OnThisDay";
@@ -388,6 +389,13 @@ export default async function HomePage() {
           panel. Pairs with TrainVi above : the train shows the streak
           shape, the calendar shows the rhythm. */}
       <FormCalendar matches={allMatches} days={84} />
+
+      {/* ═══ CHAMPION LADDERS — KC picks vs preferred victims (Wave 32) ══
+          Two side-by-side leaderboards : top 10 champions KC picks the
+          most (left, gold bars) and top 10 enemy champions that die the
+          most against KC (right, cyan bars). Each row deep-links into
+          /scroll with the right filter. */}
+      <ChampionLadders matches={allMatches} top={10} />
 
       {/* ═══ KC TIMELINE + DEFAULT FEED ════════════════════════════════
           Per CLAUDE.md §6.2 : the timeline is a horizontal era strip
