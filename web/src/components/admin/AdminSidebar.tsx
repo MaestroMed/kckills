@@ -66,6 +66,22 @@ const NAV: NavGroup[] = [
     ],
   },
   {
+    // Wave 31a — Community & Events hub for the Wave-30 features.
+    // Bracket tournaments, face-off duels, compilations, quote moderation,
+    // achievements, BCC interactions. The /admin/community page is a
+    // dashboard with stats + deep-links to per-table editors.
+    id: "community",
+    label: "Community & Events",
+    items: [
+      { href: "/admin/community", label: "Hub", icon: "✦" },
+      { href: "/admin/community/bracket", label: "Bracket", icon: "▦" },
+      { href: "/admin/community/face-off", label: "Face-off", icon: "⚔" },
+      { href: "/admin/community/compilations", label: "Compilations", icon: "▸" },
+      { href: "/admin/community/quotes", label: "Quotes", icon: "❝" },
+      { href: "/admin/community/achievements", label: "Achievements", icon: "🏆" },
+    ],
+  },
+  {
     id: "pipeline",
     label: "Pipeline",
     items: [
