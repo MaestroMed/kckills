@@ -48,6 +48,10 @@ const KC_ROLE_OPTIONS: { id: "team_killer" | "team_victim" | ""; label: string }
 
 const SCORE_STEPS = [0, 4, 6, 7, 8, 9];
 
+// Wave 31a — community min_rating filter. The kills table avg_rating is
+// 0..5 ; UI exposes whole-star steps so the dropdown stays simple.
+const RATING_STEPS = [0, 3, 3.5, 4, 4.5];
+
 // ─── Facet types ──────────────────────────────────────────────────────
 
 interface Facets {
@@ -134,6 +138,7 @@ function FilterChipsInner() {
       player: searchParams.get("player") ?? "",
       kcRole: searchParams.get("kc_role") ?? "",
       minScore: Number(searchParams.get("min_score") ?? "0"),
+      minRating: Number(searchParams.get("min_rating") ?? "0"),
     };
   }, [searchParams]);
 
@@ -144,7 +149,8 @@ function FilterChipsInner() {
     !!current.era ||
     !!current.player ||
     !!current.kcRole ||
-    current.minScore > 0;
+    current.minScore > 0 ||
+    current.minRating > 0;
 
   /**
    * Push a single param change to the URL. `null` removes the key.
@@ -261,9 +267,23 @@ function FilterChipsInner() {
 
         {/* Score slider (separate row on mobile to avoid horizontal-scroll slider weirdness) */}
         <div className="mt-2">
+          <p className="mb-1 text-[10px] uppercase tracking-[0.2em] text-[var(--text-muted)]">
+            Score IA min
+          </p>
           <ScoreSliderChips
             value={current.minScore}
             onChange={(v) => setParam("min_score", v > 0 ? String(v) : null)}
+          />
+        </div>
+
+        {/* Wave 31a — community rating filter, mobile row */}
+        <div className="mt-2">
+          <p className="mb-1 text-[10px] uppercase tracking-[0.2em] text-[var(--text-muted)]">
+            Note communauté min
+          </p>
+          <RatingSliderChips
+            value={current.minRating}
+            onChange={(v) => setParam("min_rating", v > 0 ? String(v) : null)}
           />
         </div>
 
@@ -398,6 +418,13 @@ function FilterChipsInner() {
           />
         </FilterSection>
 
+        <FilterSection title="Note communauté min">
+          <RatingSliderChips
+            value={current.minRating}
+            onChange={(v) => setParam("min_rating", v > 0 ? String(v) : null)}
+          />
+        </FilterSection>
+
         {hasAnyFilter && (
           <button
             type="button"
@@ -501,6 +528,47 @@ function ScoreSliderChips({
             type="button"
             onClick={() => onChange(step)}
             aria-pressed={active}
+            className={`rounded-md border px-2.5 py-1 text-xs font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--gold)] ${
+              active
+                ? "border-[var(--gold)] bg-[var(--gold)] text-[var(--bg-primary)]"
+                : "border-[var(--border-gold)] bg-[var(--bg-surface)] text-[var(--text-secondary)] hover:border-[var(--gold)]/40"
+            }`}
+          >
+            {label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+/** Community avg_rating slider (Wave 31a). Same shape as ScoreSliderChips
+ *  but uses the 0..5 rating scale + a star glyph. RATING_STEPS includes
+ *  half-stars (3.5, 4.5) since community ratings are computed averages. */
+function RatingSliderChips({
+  value,
+  onChange,
+}: {
+  value: number;
+  onChange: (v: number) => void;
+}) {
+  return (
+    <div className="flex flex-wrap items-center gap-1.5">
+      {RATING_STEPS.map((step) => {
+        const active = value === step;
+        const label =
+          step === 0 ? "Tous" : `${step.toString().replace(".", ",")}★+`;
+        return (
+          <button
+            key={step}
+            type="button"
+            onClick={() => onChange(step)}
+            aria-pressed={active}
+            aria-label={
+              step === 0
+                ? "Toutes notes"
+                : `Note minimum ${step} étoiles sur 5`
+            }
             className={`rounded-md border px-2.5 py-1 text-xs font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--gold)] ${
               active
                 ? "border-[var(--gold)] bg-[var(--gold)] text-[var(--bg-primary)]"

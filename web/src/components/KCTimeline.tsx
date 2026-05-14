@@ -28,6 +28,11 @@ export interface KCTimelineProps {
   /** Callback fired when the user clicks a card in `mode="filter"`. The
    *  argument is the new selection — `null` means "clear filter". */
   onEraSelect?: (eraId: string | null) => void;
+  /** Kill count per era id (Wave 31a). When provided, renders a small
+   *  "N kills" badge below the result chip on each card. Lets the parent
+   *  pre-fetch the counts in the SSR shell and pass them in — keeps the
+   *  client component pure with no extra network round-trip on mount. */
+  killCountByEra?: Record<string, number>;
 }
 
 /**
@@ -50,6 +55,7 @@ export function KCTimeline({
   mode = "navigate",
   selectedEraId = null,
   onEraSelect,
+  killCountByEra,
 }: KCTimelineProps = {}) {
   const router = useRouter();
   const [hovered, setHovered] = useState<string | null>(null);
@@ -520,6 +526,30 @@ export function KCTimeline({
                 >
                   {era.result}
                 </m.div>
+
+                {/* Wave 31a — kill count badge. Renders only when the
+                    parent server component passed counts; falls back to
+                    empty space otherwise (we don't want a flickering
+                    "0 kills" while the parent is still loading). */}
+                {killCountByEra && killCountByEra[era.id] !== undefined && (
+                  <m.div
+                    className="mt-2 inline-flex items-center gap-1.5 rounded-md px-2 py-1 font-data text-[10px] font-bold uppercase tracking-widest"
+                    style={{
+                      backgroundColor: "rgba(0,0,0,0.45)",
+                      border: `1px solid ${era.color}30`,
+                      color: "rgba(255,255,255,0.7)",
+                    }}
+                    animate={{ y: isHovered ? -4 : 0 }}
+                  >
+                    <span
+                      className="tabular-nums"
+                      style={{ color: era.color }}
+                    >
+                      {killCountByEra[era.id]!.toLocaleString("fr-FR")}
+                    </span>
+                    <span>kills</span>
+                  </m.div>
+                )}
 
                 <m.div
                   className="mt-4 flex items-center gap-2"

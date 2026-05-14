@@ -1,10 +1,39 @@
 "use client";
 
-import { useCallback, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { KCTimeline } from "@/components/KCTimeline";
 import { EraKillsFeed } from "@/components/timeline/EraKillsFeed";
 import { ERAS, getEraById } from "@/lib/eras";
 import { track } from "@/lib/analytics/track";
+
+// Wave 31a — cached at module scope so re-mounts in the same session
+// don't re-hit the network. Counts are public + slow-changing so this
+// is safe even across navigations.
+let eraCountsCache: Record<string, number> | null = null;
+let eraCountsPromise: Promise<Record<string, number>> | null = null;
+
+async function loadEraCounts(): Promise<Record<string, number>> {
+  if (eraCountsCache) return eraCountsCache;
+  if (eraCountsPromise) return eraCountsPromise;
+  eraCountsPromise = (async () => {
+    try {
+      const res = await fetch("/api/eras/counts", {
+        // The route is HTTP-cached for 5min ; client can use the cached
+        // copy too.
+        cache: "default",
+      });
+      if (!res.ok) return {};
+      const data = (await res.json()) as { counts?: Record<string, number> };
+      eraCountsCache = data.counts ?? {};
+      return eraCountsCache;
+    } catch {
+      return {};
+    } finally {
+      eraCountsPromise = null;
+    }
+  })();
+  return eraCountsPromise;
+}
 
 /**
  * HomeTimelineFeed — owns the era-selection state on the homepage.
@@ -37,6 +66,23 @@ export interface HomeTimelineFeedProps {
 export function HomeTimelineFeed({ children }: HomeTimelineFeedProps) {
   const [selectedEraId, setSelectedEraId] = useState<string | null>(null);
   const selectedEra = selectedEraId ? getEraById(selectedEraId) ?? null : null;
+  const [killCounts, setKillCounts] = useState<Record<string, number> | null>(
+    eraCountsCache,
+  );
+
+  // Wave 31a — hydrate kill counts asynchronously. The badges render
+  // only when killCounts has the key, so the timeline appears immediately
+  // and counts trickle in shortly after (single network round-trip).
+  useEffect(() => {
+    if (killCounts) return;
+    let cancelled = false;
+    loadEraCounts().then((counts) => {
+      if (!cancelled) setKillCounts(counts);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [killCounts]);
 
   const handleEraSelect = useCallback((nextEraId: string | null) => {
     setSelectedEraId(nextEraId);
@@ -62,6 +108,7 @@ export function HomeTimelineFeed({ children }: HomeTimelineFeedProps) {
         mode="filter"
         selectedEraId={selectedEraId}
         onEraSelect={handleEraSelect}
+        killCountByEra={killCounts ?? undefined}
       />
 
       {/* "Toutes les eres" clear button — only visible when a filter is

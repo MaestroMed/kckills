@@ -27,6 +27,7 @@ import { ChampionPoolHextech } from "@/components/player/ChampionPoolHextech";
 import { HonorsAndEras } from "@/components/player/HonorsAndEras";
 import { TeammatesGrid } from "@/components/player/TeammatesGrid";
 import { PrevNextNavCard } from "@/components/player/PrevNextNavCard";
+import { HeadToHead } from "@/components/player/HeadToHead";
 import { ERAS, type Era } from "@/lib/eras";
 
 // Wave 13d (2026-04-28) : 300 → 1800. Player stats are essentially
@@ -465,6 +466,12 @@ export default async function PlayerPage({ params }: Props) {
           </div>
         </section>
       )}
+
+      {/* ═══ SECTION 4.5 — HEAD-TO-HEAD ═══════════════════════════════════ */}
+      {/* Wave 31a — surface the player's biggest nemesis + favourite
+          victim with a deep-link into /face-off. Renders only if at least
+          one side has data (HeadToHead returns null otherwise). */}
+      <HeadToHead playerSlug={name} playerName={name} />
 
       {/* ═══ SECTION 5 — CLIP REEL ═════════════════════════════════════════ */}
       {playerId && (

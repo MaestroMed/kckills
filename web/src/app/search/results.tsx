@@ -14,14 +14,18 @@
  *   - Click "Charger plus" / scroll into the sentinel → fetch next page.
  *
  * Non-React-Query implementation per Wave 4 Agent Q discovery.
+ *
+ * Wave 31a — empty state now lists active filters as removable chips so
+ * users can iteratively widen their search without retyping the URL.
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import type { PublishedKillRow } from "@/lib/supabase/kills";
 import { championIconUrl } from "@/lib/constants";
+import { ERAS } from "@/lib/eras";
 
 interface Props {
   initialRows: PublishedKillRow[];
@@ -164,26 +168,7 @@ export function SearchResults({ initialRows, initialCursor }: Props) {
   }, [exhausted, loadMore]);
 
   if (rows.length === 0 && !loading) {
-    return (
-      <div className="flex flex-col items-center justify-center py-20 text-center">
-        <svg
-          className="h-12 w-12 text-[var(--text-muted)]/40"
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={1.5}
-            d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-          />
-        </svg>
-        <p className="mt-4 text-sm text-[var(--text-secondary)]">
-          Aucun kill trouve. Essaie un autre champion ou enleve un filtre.
-        </p>
-      </div>
-    );
+    return <EmptyResults searchParams={searchParams} />;
   }
 
   return (
@@ -310,5 +295,197 @@ function SearchResultCard({ kill }: { kill: PublishedKillRow }) {
         <p className="line-clamp-2 text-[11px] text-[var(--text-secondary)]">{description}</p>
       </div>
     </Link>
+  );
+}
+
+// ─── Smart empty state (Wave 31a) ─────────────────────────────────────
+//
+// Lists every active filter as a removable chip so the user can iterate
+// without going back to the URL bar. Falls back to a generic suggestion
+// when no filters are active (the search query itself is too narrow).
+
+interface ActiveFilter {
+  key: string;
+  label: string;
+}
+
+const FILTER_LABELS: Record<string, (value: string) => string> = {
+  multi: (v) => `Multi-kill : ${v}`,
+  fb: () => "First Blood",
+  tag: (v) => `Tag : ${v}`,
+  era: (v) => `Époque : ${labelForEraId(v)}`,
+  player: (v) => `Joueur : ${capitalizeWord(v)}`,
+  kc_role: (v) =>
+    v === "team_killer"
+      ? "KC kill"
+      : v === "team_victim"
+        ? "KC death"
+        : `KC : ${v}`,
+  min_score: (v) => `Score IA ≥ ${v}`,
+  min_rating: (v) => `Note ≥ ${v}★`,
+  match: (v) => `Match : ${v}`,
+};
+
+function labelForEraId(id: string): string {
+  const era = ERAS.find((e) => e.id === id);
+  return era ? era.label : id;
+}
+
+function capitalizeWord(s: string): string {
+  if (!s) return s;
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+function EmptyResults({ searchParams }: { searchParams: URLSearchParams }) {
+  const router = useRouter();
+
+  // Collect active filters in the order users typically apply them.
+  const active: ActiveFilter[] = [];
+  const filterKeys = [
+    "multi",
+    "fb",
+    "tag",
+    "era",
+    "player",
+    "kc_role",
+    "min_score",
+    "min_rating",
+    "match",
+  ];
+  for (const key of filterKeys) {
+    const raw = searchParams.get(key);
+    if (!raw || raw === "0") continue;
+    if (key === "fb" && raw !== "1" && raw !== "true") continue;
+    const labeller = FILTER_LABELS[key];
+    if (!labeller) continue;
+    active.push({ key, label: labeller(raw) });
+  }
+
+  const q = searchParams.get("q") ?? "";
+
+  const removeFilter = (key: string) => {
+    const next = new URLSearchParams(searchParams.toString());
+    next.delete(key);
+    next.delete("cursor");
+    const qs = next.toString();
+    router.push(qs ? `/search?${qs}` : "/search");
+  };
+
+  const clearAll = () => {
+    const next = new URLSearchParams();
+    if (q) next.set("q", q);
+    const qs = next.toString();
+    router.push(qs ? `/search?${qs}` : "/search");
+  };
+
+  const clearQuery = () => {
+    const next = new URLSearchParams(searchParams.toString());
+    next.delete("q");
+    next.delete("cursor");
+    const qs = next.toString();
+    router.push(qs ? `/search?${qs}` : "/search");
+  };
+
+  return (
+    <div className="flex flex-col items-center justify-center py-16 text-center px-4">
+      <svg
+        className="h-12 w-12 text-[var(--text-muted)]/40"
+        fill="none"
+        stroke="currentColor"
+        viewBox="0 0 24 24"
+      >
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeWidth={1.5}
+          d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+        />
+      </svg>
+
+      <p className="mt-4 max-w-md text-sm text-[var(--text-secondary)]">
+        {active.length > 0 || q
+          ? "Aucun kill ne matche cette combinaison."
+          : "Tape un nom de champion, un tag ou un joueur pour commencer."}
+      </p>
+
+      {(active.length > 0 || q) && (
+        <p className="mt-2 text-xs text-[var(--text-muted)]">
+          Essaie de retirer un filtre pour élargir la recherche.
+        </p>
+      )}
+
+      {/* Active filter chips — clickable to remove */}
+      {(active.length > 0 || q) && (
+        <div className="mt-6 flex flex-wrap items-center justify-center gap-2">
+          {q && (
+            <button
+              type="button"
+              onClick={clearQuery}
+              aria-label={`Retirer la recherche "${q}"`}
+              className="group inline-flex items-center gap-1.5 rounded-full border border-[var(--border-gold)] bg-[var(--bg-surface)] px-3 py-1.5 text-xs text-[var(--text-secondary)] transition-colors hover:border-[var(--red)]/40 hover:text-[var(--red)]"
+            >
+              <span className="font-data text-[10px] uppercase tracking-widest text-[var(--text-muted)] group-hover:text-[var(--red)]/70">
+                Mot-clé
+              </span>
+              <span className="text-[var(--text-primary)] group-hover:text-[var(--red)]">
+                {q}
+              </span>
+              <span aria-hidden className="text-sm leading-none">
+                ×
+              </span>
+            </button>
+          )}
+
+          {active.map((f) => (
+            <button
+              key={f.key}
+              type="button"
+              onClick={() => removeFilter(f.key)}
+              aria-label={`Retirer le filtre ${f.label}`}
+              className="inline-flex items-center gap-1.5 rounded-full border border-[var(--gold)]/40 bg-[var(--gold)]/10 px-3 py-1.5 text-xs text-[var(--gold)] transition-colors hover:border-[var(--red)]/40 hover:bg-[var(--red)]/10 hover:text-[var(--red)]"
+            >
+              <span>{f.label}</span>
+              <span aria-hidden className="text-sm leading-none">
+                ×
+              </span>
+            </button>
+          ))}
+
+          {(active.length + (q ? 1 : 0)) > 1 && (
+            <button
+              type="button"
+              onClick={clearAll}
+              className="inline-flex items-center gap-1.5 rounded-full border border-[var(--red)]/30 bg-[var(--red)]/5 px-3 py-1.5 text-xs text-[var(--red)] transition-colors hover:bg-[var(--red)]/15"
+            >
+              Tout retirer
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Discovery shortcuts when there's nothing to suggest removing */}
+      {active.length === 0 && !q && (
+        <div className="mt-8 flex flex-wrap items-center justify-center gap-2">
+          <Link
+            href="/scroll"
+            className="rounded-full border border-[var(--gold)]/40 bg-[var(--gold)]/10 px-4 py-2 text-xs text-[var(--gold)] hover:bg-[var(--gold)]/20"
+          >
+            Découvrir dans le scroll
+          </Link>
+          <Link
+            href="/top"
+            className="rounded-full border border-[var(--border-gold)] bg-[var(--bg-surface)] px-4 py-2 text-xs text-[var(--text-secondary)] hover:border-[var(--gold)]/40 hover:text-[var(--gold)]"
+          >
+            Top kills
+          </Link>
+          <Link
+            href="/face-off"
+            className="rounded-full border border-[var(--border-gold)] bg-[var(--bg-surface)] px-4 py-2 text-xs text-[var(--text-secondary)] hover:border-[var(--gold)]/40 hover:text-[var(--gold)]"
+          >
+            Face-off
+          </Link>
+        </div>
+      )}
+    </div>
   );
 }

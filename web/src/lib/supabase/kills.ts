@@ -1024,6 +1024,49 @@ export interface KillsByEraOpts {
  * Returns an empty array if no kills fall in the window (e.g. early LFL
  * eras where no clips have been backfilled yet) — never throws.
  */
+/**
+ * Count published kills that happened in a given date window. Wave 31a
+ * — feeds the KCTimeline kill-count badge. Uses a head-only request
+ * with `count=planned` so the call returns in ~100ms even on millions
+ * of rows. The planned count is a statistics-based estimate ; for the
+ * pure "X kills" badge that's plenty accurate.
+ */
+export const countKillsByEra = cache(async function countKillsByEra(
+  opts: {
+    startDate: string;
+    endDate: string;
+    buildTime?: boolean;
+  },
+): Promise<number> {
+  const startISO = `${opts.startDate}T00:00:00Z`;
+  const endISO = `${opts.endDate}T23:59:59Z`;
+  try {
+    const supabase = opts.buildTime
+      ? createAnonSupabase()
+      : await createServerSupabase();
+    const { count, error } = await supabase
+      .from("kills")
+      .select("id", { count: "planned", head: true })
+      .or(
+        "publication_status.eq.published," +
+          "and(publication_status.is.null,status.eq.published)",
+      )
+      .eq("kill_visible", true)
+      .not("clip_url_vertical", "is", null)
+      .gte("games.matches.scheduled_at", startISO)
+      .lte("games.matches.scheduled_at", endISO);
+    if (error) {
+      console.warn("[supabase/kills] countKillsByEra error:", error.message);
+      return 0;
+    }
+    return Math.max(0, count ?? 0);
+  } catch (err) {
+    rethrowIfDynamic(err);
+    console.warn("[supabase/kills] countKillsByEra threw:", err);
+    return 0;
+  }
+});
+
 export const getKillsByEra = cache(async function getKillsByEra(
   opts: KillsByEraOpts,
 ): Promise<PublishedKillRow[]> {
