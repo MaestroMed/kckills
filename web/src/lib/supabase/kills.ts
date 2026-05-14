@@ -229,10 +229,10 @@ const KILL_SELECT = `
   publication_status,
   qc_status,
   asset_status,
-  games!inner (
+  games (
     external_id,
     game_number,
-    matches!inner (
+    matches (
       id,
       external_id,
       scheduled_at,
@@ -241,6 +241,13 @@ const KILL_SELECT = `
     )
   )
 `.trim();
+// Wave 30l (2026-05-14) — !inner dropped on both joins. With ~1650
+// published rows and a default 250-limit on /scroll, the inner-join
+// was forcing PostgREST to materialise the cross-product before the
+// 8s anon statement_timeout and timing out. LEFT JOIN keeps every
+// kill in the result set even when its games/matches row is missing,
+// and lets the planner stream the LIMIT 250 batch directly off
+// idx_kills_scroll_feed without the join blocking.
 
 /**
  * Raw row shape returned by the SELECT clause above. Mirrors the
