@@ -43,6 +43,7 @@ import { HomeWeekendBestClips } from "@/components/HomeWeekendBestClips";
 import { TrainVi } from "@/components/home/TrainVi";
 import { FormCalendar } from "@/components/home/FormCalendar";
 import { ChampionLadders } from "@/components/home/ChampionLadders";
+import { PlayerSpotlight } from "@/components/home/PlayerSpotlight";
 // Wave 28 (2026-05-11) — "Ce jour-là dans l'histoire KC". Nostalgia
 // banner that surfaces past-year kills played on today's calendar date.
 import { OnThisDay } from "@/components/OnThisDay";
@@ -381,6 +382,12 @@ export default async function HomePage() {
           The locomotive face shows the current consecutive streak so the
           user can read momentum at a glance. */}
       <TrainVi matches={allMatches.slice(0, 10)} />
+
+      {/* ═══ PLAYER SPOTLIGHT — who's carrying right now (Wave 32) ══════
+          Picks the top KC performer over the last 5 series via a weighted
+          score (kills*2.5 + assists*1.2 - deaths*1.5 + winRate*15). Big
+          photo + 4 stat tiles with count-up animation. */}
+      <PlayerSpotlight matches={allMatches} windowSize={5} />
 
       {/* ═══ FORM CALENDAR — 84-day W/L heatmap (Wave 32) ════════════════
           GitHub-contributions-style grid. Each cell is one day, coloured
