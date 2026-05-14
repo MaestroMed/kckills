@@ -1028,8 +1028,13 @@ export interface KillsByEraOpts {
  * Count published kills that happened in a given date window. Wave 31a
  * — feeds the KCTimeline kill-count badge. Uses a head-only request
  * with `count=planned` so the call returns in ~100ms even on millions
- * of rows. The planned count is a statistics-based estimate ; for the
- * pure "X kills" badge that's plenty accurate.
+ * of rows.
+ *
+ * Wave 32 fix : filters on `kills.event_epoch` (millisecond UTC stamp of
+ * the actual kill on stage) instead of the nested `games.matches.scheduled_at`.
+ * The nested filter required an `!inner` join, which either timed out (slow
+ * count plan) or silently dropped to 0 (when the join wasn't materialised).
+ * event_epoch lives directly on the kills row, indexed, no join needed.
  */
 export const countKillsByEra = cache(async function countKillsByEra(
   opts: {
@@ -1038,23 +1043,31 @@ export const countKillsByEra = cache(async function countKillsByEra(
     buildTime?: boolean;
   },
 ): Promise<number> {
-  const startISO = `${opts.startDate}T00:00:00Z`;
-  const endISO = `${opts.endDate}T23:59:59Z`;
+  // Build the [start, end] window in milliseconds since epoch — matches
+  // the BIGINT shape of kills.event_epoch directly.
+  const startMs = Date.parse(`${opts.startDate}T00:00:00Z`);
+  const endMs = Date.parse(`${opts.endDate}T23:59:59Z`);
+  if (!Number.isFinite(startMs) || !Number.isFinite(endMs)) return 0;
   try {
     const supabase = opts.buildTime
       ? createAnonSupabase()
       : await createServerSupabase();
+    // count=exact rather than count=planned — Postgres' planner badly
+    // underestimates row counts with a multi-column AND chain (status +
+    // kill_visible + event_epoch range + clip_url_vertical NOT NULL),
+    // returning single-digit estimates when the real count is 200+.
+    // event_epoch is indexed so the exact scan is still ~150ms.
     const { count, error } = await supabase
       .from("kills")
-      .select("id", { count: "planned", head: true })
+      .select("id", { count: "exact", head: true })
       .or(
         "publication_status.eq.published," +
           "and(publication_status.is.null,status.eq.published)",
       )
       .eq("kill_visible", true)
       .not("clip_url_vertical", "is", null)
-      .gte("games.matches.scheduled_at", startISO)
-      .lte("games.matches.scheduled_at", endISO);
+      .gte("event_epoch", startMs)
+      .lte("event_epoch", endMs);
     if (error) {
       console.warn("[supabase/kills] countKillsByEra error:", error.message);
       return 0;

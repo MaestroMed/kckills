@@ -40,6 +40,7 @@ import { HomeYouTubeShowcase } from "@/components/HomeYouTubeShowcase";
 import { KillOfTheWeek } from "@/components/KillOfTheWeek";
 import { HomeRecentClips } from "@/components/HomeRecentClips";
 import { HomeWeekendBestClips } from "@/components/HomeWeekendBestClips";
+import { TrainVi } from "@/components/home/TrainVi";
 // Wave 28 (2026-05-11) — "Ce jour-là dans l'histoire KC". Nostalgia
 // banner that surfaces past-year kills played on today's calendar date.
 import { OnThisDay } from "@/components/OnThisDay";
@@ -371,6 +372,13 @@ export default async function HomePage() {
       <Suspense fallback={<SectionSkeleton size="md" label="Kill de la semaine en cours de chargement" />}>
         <KillOfTheWeek />
       </Suspense>
+
+      {/* ═══ LE TRAIN VI — momentum tracker (Wave 32) ═══════════════════
+          Visualises the last 10 KC matches as a Hextech train rolling out
+          of a Vi-themed locomotive. Wins glow gold, losses look derailed.
+          The locomotive face shows the current consecutive streak so the
+          user can read momentum at a glance. */}
+      <TrainVi matches={allMatches.slice(0, 10)} />
 
       {/* ═══ KC TIMELINE + DEFAULT FEED ════════════════════════════════
           Per CLAUDE.md §6.2 : the timeline is a horizontal era strip

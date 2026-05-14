@@ -101,7 +101,6 @@ function ClipCard({ kill, priority = false, rank }: ClipCardProps) {
           sizes="(max-width: 640px) 78vw, (max-width: 1024px) 30vw, 22vw"
           className="object-cover transition-transform duration-700 group-hover:scale-110"
           priority={priority}
-          {...(meta?.width && meta.height ? { width: meta.width, height: meta.height } : {})}
         />
       ) : (
         <div className="absolute inset-0 grid place-items-center bg-gradient-to-br from-[var(--bg-elevated)] to-[var(--bg-surface)]">
