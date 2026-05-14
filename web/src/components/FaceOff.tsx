@@ -41,7 +41,7 @@ import type {
   FaceOffTopKill,
   MostKilledOpponent,
   TopFaceOffDuel,
-} from "@/lib/supabase/face-off";
+} from "@/lib/supabase/face-off-types";
 
 // ════════════════════════════════════════════════════════════════════
 // Public props

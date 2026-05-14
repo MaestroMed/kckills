@@ -38,14 +38,14 @@ import type {
   BracketMatch,
   BracketTournament,
   PastWinner,
-} from "@/lib/supabase/bracket";
+} from "@/lib/supabase/bracket-types";
 import {
   currentRound,
   nextCloseAt,
   openMatchCount,
   roundLabel,
   roundsForSize,
-} from "@/lib/supabase/bracket";
+} from "@/lib/supabase/bracket-types";
 
 // ════════════════════════════════════════════════════════════════════
 // Session hash — mirrors vs / face-off / bcc patterns

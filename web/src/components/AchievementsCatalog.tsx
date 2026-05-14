@@ -36,7 +36,7 @@ import {
   RARITY_LABEL,
   computeProgressPercent,
   describeProgress,
-} from "@/lib/supabase/achievements";
+} from "@/lib/supabase/achievements-types";
 
 interface AchievementsCatalogProps {
   initialRows: AchievementRow[];

@@ -37,7 +37,7 @@ import {
   type AchievementUnlock,
   RARITY_COLOR,
   RARITY_LABEL,
-} from "@/lib/supabase/achievements";
+} from "@/lib/supabase/achievements-types";
 
 const LOCAL_STORAGE_KEY = "kckills_achievement_seen_v1";
 const POLL_INTERVAL_MS = 30_000;

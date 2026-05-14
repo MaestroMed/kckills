@@ -20,7 +20,7 @@ import {
   type AchievementRarity,
   type AchievementRow,
   RARITY_COLOR,
-} from "@/lib/supabase/achievements";
+} from "@/lib/supabase/achievements-types";
 
 export function SettingsAchievementsRow() {
   const [earned, setEarned] = useState<AchievementRow[] | null>(null);
