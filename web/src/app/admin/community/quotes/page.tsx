@@ -1,17 +1,20 @@
 /**
  * /admin/community/quotes — Caster quote moderation.
  *
- * Wave 31a — read-only list of the most-upvoted Gemini-extracted caster
- * quotes. Lets the operator scan for false-positive extractions or
- * extracted slurs / misheard words. Direct edit/delete via Supabase
- * dashboard for now ; a dedicated moderation queue is follow-up work.
+ * Wave 31d — full moderation surface : hide/show/edit/delete per row +
+ * memetic toggle. Reads the raw kill_quotes table (NOT the public
+ * fn_top_quotes RPC, which filters out hidden rows) so the operator
+ * sees every quote — visible or not. Includes a "hidden only" filter
+ * via ?hidden=1.
  */
 import type { Metadata } from "next";
 import Link from "next/link";
 
 import { AdminPage } from "@/components/admin/ui/AdminPage";
 import { AdminCard } from "@/components/admin/ui/AdminCard";
-import { getTopQuotes, getQuotesStats } from "@/lib/supabase/quotes";
+import { getQuotesStats } from "@/lib/supabase/quotes";
+import { QuoteRowActions } from "@/components/admin/quotes/QuoteRowActions";
+import { createServerSupabase } from "@/lib/supabase/server";
 
 export const metadata: Metadata = {
   title: "Quotes Admin — KCKILLS",
@@ -20,16 +23,80 @@ export const metadata: Metadata = {
 
 export const dynamic = "force-dynamic";
 
-export default async function QuotesAdminPage() {
-  const [quotes, stats] = await Promise.all([
-    getTopQuotes(40, 1),
-    getQuotesStats(),
-  ]);
+interface AdminQuoteRow {
+  id: string;
+  kill_id: string;
+  quote_text: string;
+  caster_name: string | null;
+  language: string | null;
+  energy_level: number | null;
+  is_memetic: boolean;
+  is_hidden: boolean;
+  upvotes: number;
+  reported_count: number;
+  extracted_at: string;
+  // Joined from kills
+  killer_champion?: string | null;
+  victim_champion?: string | null;
+}
+
+interface PageProps {
+  searchParams: Promise<{ filter?: string }>;
+}
+
+export default async function QuotesAdminPage({ searchParams }: PageProps) {
+  const { filter } = await searchParams;
+  const onlyHidden = filter === "hidden";
+  const onlyReported = filter === "reported";
+
+  const sb = await createServerSupabase();
+  let query = sb
+    .from("kill_quotes")
+    .select(
+      "id,kill_id,quote_text,caster_name,language,energy_level," +
+        "is_memetic,is_hidden,upvotes,reported_count,extracted_at," +
+        "kills(killer_champion,victim_champion)",
+    )
+    .order("upvotes", { ascending: false })
+    .order("extracted_at", { ascending: false })
+    .limit(60);
+
+  if (onlyHidden) query = query.eq("is_hidden", true);
+  if (onlyReported) query = query.gt("reported_count", 0);
+
+  const { data: raw } = await query;
+  const quotes: AdminQuoteRow[] = (raw ?? []).map((r) => {
+    const row = r as unknown as {
+      id: string; kill_id: string; quote_text: string;
+      caster_name: string | null; language: string | null;
+      energy_level: number | null; is_memetic: boolean;
+      is_hidden: boolean; upvotes: number; reported_count: number;
+      extracted_at: string;
+      kills: { killer_champion: string | null; victim_champion: string | null } | null;
+    };
+    return {
+      id: row.id,
+      kill_id: row.kill_id,
+      quote_text: row.quote_text,
+      caster_name: row.caster_name,
+      language: row.language,
+      energy_level: row.energy_level,
+      is_memetic: row.is_memetic,
+      is_hidden: row.is_hidden,
+      upvotes: row.upvotes,
+      reported_count: row.reported_count,
+      extracted_at: row.extracted_at,
+      killer_champion: row.kills?.killer_champion ?? null,
+      victim_champion: row.kills?.victim_champion ?? null,
+    };
+  });
+
+  const stats = await getQuotesStats();
 
   return (
     <AdminPage
       title="Quotes — Modération"
-      subtitle="Quotes extraites par Gemini sur l'audio des clips. Édition via Supabase pour l'instant."
+      subtitle="Hide / Show / Edit / Delete par quote — actions optimistes avec audit log."
       breadcrumbs={[
         { label: "Admin", href: "/admin" },
         { label: "Community", href: "/admin/community" },
@@ -42,6 +109,40 @@ export default async function QuotesAdminPage() {
         >
           Voir sur le site public →
         </Link>
+      }
+      toolbar={
+        <div className="flex flex-wrap gap-2 text-xs">
+          <Link
+            href="/admin/community/quotes"
+            className={`rounded-full border px-3 py-1.5 font-bold uppercase tracking-widest transition-colors ${
+              !onlyHidden && !onlyReported
+                ? "border-[var(--gold)] bg-[var(--gold)] text-[var(--bg-primary)]"
+                : "border-[var(--border-gold)] text-[var(--text-secondary)] hover:text-[var(--gold)]"
+            }`}
+          >
+            Toutes
+          </Link>
+          <Link
+            href="/admin/community/quotes?filter=hidden"
+            className={`rounded-full border px-3 py-1.5 font-bold uppercase tracking-widest transition-colors ${
+              onlyHidden
+                ? "border-[var(--orange)] bg-[var(--orange)] text-[var(--bg-primary)]"
+                : "border-[var(--border-gold)] text-[var(--text-secondary)] hover:text-[var(--orange)]"
+            }`}
+          >
+            Masquées
+          </Link>
+          <Link
+            href="/admin/community/quotes?filter=reported"
+            className={`rounded-full border px-3 py-1.5 font-bold uppercase tracking-widest transition-colors ${
+              onlyReported
+                ? "border-[var(--red)] bg-[var(--red)] text-[var(--bg-primary)]"
+                : "border-[var(--border-gold)] text-[var(--text-secondary)] hover:text-[var(--red)]"
+            }`}
+          >
+            Signalées
+          </Link>
+        </div>
       }
     >
       {/* KPIs */}
@@ -64,65 +165,70 @@ export default async function QuotesAdminPage() {
         />
       </div>
 
-      <AdminCard title={`Top quotes (${quotes.length})`}>
+      <AdminCard title={`${onlyHidden ? "Quotes masquées" : onlyReported ? "Quotes signalées" : "Quotes"} (${quotes.length})`}>
         {quotes.length === 0 ? (
           <p className="text-sm text-[var(--text-muted)] italic text-center py-8">
-            Aucune quote extraite pour l&apos;instant.
+            {onlyHidden
+              ? "Aucune quote masquée."
+              : onlyReported
+                ? "Aucune quote signalée."
+                : "Aucune quote extraite pour l'instant."}
           </p>
         ) : (
           <ul className="divide-y divide-[var(--border-subtle)]">
             {quotes.map((q) => (
-              <li key={q.id} className="py-3 first:pt-0 last:pb-0">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm text-[var(--text-primary)] italic">
-                      « {q.quote_text} »
-                    </p>
-                    <p className="text-[10px] text-[var(--text-muted)] mt-1 flex items-center gap-2 flex-wrap">
-                      {q.caster_name && (
-                        <span className="uppercase tracking-widest">
-                          {q.caster_name}
-                        </span>
-                      )}
-                      {q.is_memetic && (
-                        <span className="rounded bg-[var(--gold)]/20 text-[var(--gold)] px-1.5 py-0.5 font-bold uppercase tracking-widest text-[9px]">
-                          Memetic
-                        </span>
-                      )}
-                      {q.language && q.language !== "fr" && (
-                        <span className="rounded bg-[var(--cyan)]/20 text-[var(--cyan)] px-1 py-0.5 font-bold uppercase tracking-widest text-[9px]">
-                          {q.language}
-                        </span>
-                      )}
-                      {q.energy_level !== null && (
-                        <span>
-                          ⚡{q.energy_level}/5
-                        </span>
-                      )}
-                      <span>↑ {q.upvotes}</span>
-                      <span>
+              <li key={q.id} className="py-4 first:pt-0 last:pb-0">
+                <div className="flex items-start justify-between gap-3 mb-2">
+                  <p className="text-[10px] text-[var(--text-muted)] flex items-center gap-2 flex-wrap">
+                    {q.caster_name && (
+                      <span className="uppercase tracking-widest font-semibold">
+                        {q.caster_name}
+                      </span>
+                    )}
+                    {q.language && q.language !== "fr" && (
+                      <span className="rounded bg-[var(--cyan)]/20 text-[var(--cyan)] px-1 py-0.5 font-bold uppercase tracking-widest text-[9px]">
+                        {q.language}
+                      </span>
+                    )}
+                    {q.energy_level !== null && (
+                      <span>⚡{q.energy_level}/5</span>
+                    )}
+                    <span>↑ {q.upvotes}</span>
+                    {q.reported_count > 0 && (
+                      <span className="rounded bg-[var(--red)]/20 text-[var(--red)] px-1 py-0.5 font-bold tabular-nums">
+                        ⚠ {q.reported_count} reports
+                      </span>
+                    )}
+                    {q.killer_champion && q.victim_champion && (
+                      <span className="text-[var(--text-disabled)]">
                         {q.killer_champion} vs {q.victim_champion}
                       </span>
-                    </p>
-                  </div>
+                    )}
+                    <span className="text-[var(--text-disabled)]">
+                      {new Date(q.extracted_at).toLocaleDateString("fr-FR", {
+                        day: "numeric",
+                        month: "short",
+                      })}
+                    </span>
+                  </p>
                   <Link
                     href={`/kill/${q.kill_id}`}
-                    className="text-[10px] uppercase tracking-widest text-[var(--text-muted)] hover:text-[var(--gold)] shrink-0 mt-0.5"
+                    className="text-[10px] uppercase tracking-widest text-[var(--text-muted)] hover:text-[var(--gold)] shrink-0"
                   >
                     Clip →
                   </Link>
                 </div>
+                <QuoteRowActions
+                  quoteId={q.id}
+                  initialText={q.quote_text}
+                  initialHidden={q.is_hidden}
+                  initialMemetic={q.is_memetic}
+                />
               </li>
             ))}
           </ul>
         )}
       </AdminCard>
-
-      <p className="mt-4 text-[10px] text-[var(--text-disabled)] text-center">
-        Pour modifier ou supprimer une quote, utiliser la table{" "}
-        <code className="font-data">kill_quotes</code> dans Supabase. Un
-        éditeur dédié arrivera en Wave 31b.
-      </p>
     </AdminPage>
   );
 }

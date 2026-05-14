@@ -7,6 +7,19 @@ export interface ChampionPoolEntry {
   kills: number;
   deaths: number;
   assists: number;
+  /** Wave 31d — series wins on this champion (BO5 = 5 game wins). */
+  wins?: number;
+  /** Wave 31d — total gold earned across all games on this champion. */
+  gold?: number;
+  /** Wave 31d — total CS across all games on this champion. */
+  cs?: number;
+}
+
+/** Pick a green/yellow/red tone based on winrate percentage. */
+function wrTone(wr: number): string {
+  if (wr >= 65) return "var(--green)";
+  if (wr >= 50) return "var(--gold)";
+  return "var(--red)";
 }
 
 /**
@@ -34,10 +47,16 @@ export function ChampionPoolHextech({
       <div className="grid gap-3 grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4">
         {top.map((c) => {
           const kda = c.deaths > 0 ? ((c.kills + c.assists) / c.deaths).toFixed(1) : "Perfect";
+          // Wave 31d — real winrate when wins data is present, else the
+          // legacy kill-share proxy that the chip used to show.
           const total = c.kills + c.deaths + c.assists;
-          // Approximate WR proxy : a kill-heavy game is more likely a win.
-          // Real winrate requires per-game data ; this is a quick visual cue.
-          const wrHint = total > 0 ? Math.round(((c.kills + c.assists) / total) * 100) : 0;
+          const realWr =
+            c.wins !== undefined && c.games > 0
+              ? Math.round((c.wins / c.games) * 100)
+              : null;
+          const wrHint =
+            realWr ?? (total > 0 ? Math.round(((c.kills + c.assists) / total) * 100) : 0);
+          const wrColor = realWr !== null ? wrTone(realWr) : accent;
           return (
             <a
               key={c.name}
@@ -106,6 +125,23 @@ export function ChampionPoolHextech({
                 </span>
               </div>
 
+              {/* Wave 31d — winrate chip top-right (only when real wins
+                  data is available — old aggregated rows without `wins`
+                  fall back to the legacy KDA-only display). */}
+              {realWr !== null && (
+                <span
+                  aria-label={`Winrate ${realWr}% sur ${c.games} games (${c.wins ?? 0} wins)`}
+                  className="absolute top-2 right-2 z-10 font-data text-[9px] font-black px-1.5 py-0.5 rounded"
+                  style={{
+                    color: wrColor,
+                    background: `${wrColor}1A`,
+                    border: `1px solid ${wrColor}40`,
+                  }}
+                >
+                  {realWr}% WR
+                </span>
+              )}
+
               {/* Top-left rhombus ornament */}
               <span
                 className="absolute top-2 left-3 text-xs leading-none z-10 select-none"
@@ -132,6 +168,11 @@ export function ChampionPoolHextech({
             {rest.map((c) => {
               const kda =
                 c.deaths > 0 ? ((c.kills + c.assists) / c.deaths).toFixed(1) : "Perfect";
+              const wr =
+                c.wins !== undefined && c.games > 0
+                  ? Math.round((c.wins / c.games) * 100)
+                  : null;
+              const wrColor = wr !== null ? wrTone(wr) : null;
               return (
                 <div
                   key={c.name}
@@ -144,9 +185,17 @@ export function ChampionPoolHextech({
                     height={36}
                     className="rounded-full border border-[var(--border-gold)]"
                   />
-                  <div className="flex-1">
-                    <p className="font-medium text-sm">{c.name}</p>
-                    <p className="text-[10px] text-[var(--text-muted)]">{c.games} games</p>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium text-sm truncate">{c.name}</p>
+                    <p className="text-[10px] text-[var(--text-muted)]">
+                      {c.games} games
+                      {wr !== null && (
+                        <>
+                          <span className="text-[var(--text-disabled)] mx-1">·</span>
+                          <span style={{ color: wrColor ?? undefined }}>{wr}% WR</span>
+                        </>
+                      )}
+                    </p>
                   </div>
                   <span className="font-data text-sm font-bold text-[var(--gold)]">{kda}</span>
                 </div>

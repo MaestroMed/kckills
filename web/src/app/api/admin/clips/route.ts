@@ -37,6 +37,10 @@ export async function GET(req: NextRequest) {
   const clipContext = sp.get("clip_context");
   const sort = sp.get("sort") ?? "score_desc";
   const limit = Math.min(500, parseInt(sp.get("limit") ?? "100", 10));
+  // Wave 31d — offset-based pagination. Capped at 5000 to prevent
+  // someone walking the whole table 100 rows at a time. For deeper
+  // exploration the operator should use filters to narrow first.
+  const offset = Math.min(5000, Math.max(0, parseInt(sp.get("offset") ?? "0", 10)));
 
   const sb = await createServerSupabase();
   let query = sb
@@ -116,16 +120,31 @@ export async function GET(req: NextRequest) {
       break;
   }
 
-  query = query.limit(limit);
+  // Wave 31d — `.range(from, to)` covers both offset + limit in one go,
+  // which is what supabase-js wants for pagination. We still keep the
+  // explicit `.limit(limit)` because some sort paths benefit from the
+  // hint.
+  if (offset > 0) {
+    query = query.range(offset, offset + limit - 1);
+  } else {
+    query = query.limit(limit);
+  }
 
   const { data, error, count } = await query;
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
+  const items = data ?? [];
+  const total = count ?? 0;
+  const hasMore = offset + items.length < total;
+
   return NextResponse.json({
-    items: data ?? [],
-    total: count ?? 0,
+    items,
+    total,
     limit,
+    offset,
+    hasMore,
+    nextOffset: hasMore ? offset + items.length : null,
   });
 }

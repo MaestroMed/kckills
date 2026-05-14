@@ -20,6 +20,7 @@ import {
   roundsForSize,
   roundLabel,
 } from "@/lib/supabase/bracket";
+import { BracketAdminActions } from "@/components/admin/bracket/BracketAdminActions";
 
 export const metadata: Metadata = {
   title: "Bracket Admin — KCKILLS",
@@ -61,67 +62,73 @@ export default async function BracketAdminPage() {
         ) : null
       }
     >
-      {/* Active tournament status */}
-      <AdminCard title="Tournoi actif" className="mb-6">
-        {bracket.tournament ? (
-          <div className="space-y-4">
-            <div>
-              <p className="font-display text-2xl font-bold text-[var(--text-primary)]">
-                {bracket.tournament.name}
+      {/* Side-by-side : tournament status (left) + admin actions (right) */}
+      <div className="grid gap-6 md:grid-cols-[1fr_auto] mb-6">
+        <AdminCard title="Tournoi actif">
+          {bracket.tournament ? (
+            <div className="space-y-4">
+              <div>
+                <p className="font-display text-2xl font-bold text-[var(--text-primary)]">
+                  {bracket.tournament.name}
+                </p>
+                <p className="text-sm text-[var(--text-muted)] mt-1">
+                  Du {bracket.tournament.start_date} au {bracket.tournament.end_date} ·{" "}
+                  <span className="text-[var(--gold)]">{bracket.tournament.status}</span>
+                  {" · "}
+                  Bracket size {bracket.tournament.bracket_size} ({totalRounds} rounds)
+                </p>
+              </div>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 pt-3 border-t border-[var(--border-subtle)]">
+                <Stat
+                  label="Matchs total"
+                  value={String(bracket.matches.length)}
+                />
+                <Stat
+                  label="Round actif"
+                  value={
+                    activeRound !== null
+                      ? roundLabel(activeRound, totalRounds)
+                      : "Terminé"
+                  }
+                />
+                <Stat label="Matchs ouverts" value={String(openCount)} />
+                <Stat
+                  label="Prochaine fermeture"
+                  value={
+                    nextClose
+                      ? new Date(nextClose).toLocaleString("fr-FR", {
+                          day: "numeric",
+                          month: "short",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })
+                      : "—"
+                  }
+                />
+              </div>
+            </div>
+          ) : (
+            <div className="py-8 text-center">
+              <p className="text-sm text-[var(--text-muted)]">
+                Aucun tournoi actif.
               </p>
-              <p className="text-sm text-[var(--text-muted)] mt-1">
-                Du {bracket.tournament.start_date} au {bracket.tournament.end_date} ·{" "}
-                <span className="text-[var(--gold)]">{bracket.tournament.status}</span>
-                {" · "}
-                Bracket size {bracket.tournament.bracket_size} ({totalRounds} rounds)
+              <p className="text-xs text-[var(--text-disabled)] mt-2 max-w-md mx-auto">
+                Saisis un mois (YYYY-MM) dans le panneau de droite pour en créer
+                un. La RPC pioche les top kills publiés sur cette période.
               </p>
             </div>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 pt-3 border-t border-[var(--border-subtle)]">
-              <Stat
-                label="Matchs total"
-                value={String(bracket.matches.length)}
-              />
-              <Stat
-                label="Round actif"
-                value={
-                  activeRound !== null
-                    ? roundLabel(activeRound, totalRounds)
-                    : "Terminé"
-                }
-              />
-              <Stat label="Matchs ouverts" value={String(openCount)} />
-              <Stat
-                label="Prochaine fermeture"
-                value={
-                  nextClose
-                    ? new Date(nextClose).toLocaleString("fr-FR", {
-                        day: "numeric",
-                        month: "short",
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })
-                    : "—"
-                }
-              />
-            </div>
-          </div>
-        ) : (
-          <div className="py-8 text-center">
-            <p className="text-sm text-[var(--text-muted)]">Aucun tournoi actif.</p>
-            <p className="text-xs text-[var(--text-disabled)] mt-2 max-w-md mx-auto">
-              Création via SQL :{" "}
-              <code className="font-data bg-[var(--bg-elevated)] px-1 py-0.5 rounded">
-                INSERT INTO bracket_tournaments (slug, name, start_date, end_date, bracket_size, status)
-              </code>{" "}
-              puis seed les matches via{" "}
-              <code className="font-data bg-[var(--bg-elevated)] px-1 py-0.5 rounded">
-                fn_seed_bracket_matches(tournament_id, kill_ids[])
-              </code>
-              .
-            </p>
-          </div>
-        )}
-      </AdminCard>
+          )}
+        </AdminCard>
+
+        {/* Wave 31d — admin actions panel (client component). */}
+        <div className="md:w-[320px] shrink-0">
+          <BracketAdminActions
+            activeTournamentId={bracket.tournament?.id ?? null}
+            activeRound={activeRound}
+            totalRounds={totalRounds}
+          />
+        </div>
+      </div>
 
       {/* Matches list */}
       {bracket.matches.length > 0 && (

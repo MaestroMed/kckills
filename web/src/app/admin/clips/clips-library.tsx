@@ -101,6 +101,10 @@ export function ClipsLibrary() {
   const [clips, setClips] = useState<ClipRow[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
+  // Wave 31d — pagination state. `loadingMore` is separate from `loading`
+  // so the "Load more" button can spin without graying the existing rows.
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [nextOffset, setNextOffset] = useState<number | null>(null);
   const [filters, setFilters] = useState<ClipFilterValue>(DEFAULT_CLIP_FILTERS);
   const [qDebounced, setQDebounced] = useState("");
   const [sort, setSort] = useState("score_desc");
@@ -128,45 +132,82 @@ export function ClipsLibrary() {
     [],
   );
 
-  const fetchClips = useCallback(async () => {
-    setLoading(true);
-    const params = new URLSearchParams();
-    if (qDebounced) params.set("q", qDebounced);
-    filters.fightTypes.forEach((ft) => params.append("fight_type", ft));
-    if (filters.hidden) params.set("hidden", filters.hidden);
-    if (filters.hasDescription) params.set("has_description", filters.hasDescription);
-    if (filters.scoreMin > 1) params.set("min_score", String(filters.scoreMin));
-    if (filters.scoreMax < 10) params.set("max_score", String(filters.scoreMax));
-    if (filters.role !== "any") params.set("involvement", filters.role);
-    if (filters.status !== "all") params.set("status", filters.status);
-    if (filters.multiKill !== "any") params.set("multi_kill", filters.multiKill);
-    if (filters.dateFrom) params.set("from", filters.dateFrom);
-    if (filters.dateTo) params.set("to", filters.dateTo);
-    // Wave 12 anti-pollution filter — pass clip_context value if not "any".
-    if (filters.clipContext && filters.clipContext !== "any") {
-      params.set("clip_context", filters.clipContext);
-    }
-    params.set("sort", sort);
-    params.set("limit", String(limit));
-
-    try {
-      const r = await fetch(`/api/admin/clips?${params}`);
-      if (r.ok) {
-        const data = await r.json();
-        setClips(data.items ?? []);
-        setTotal(data.total ?? 0);
-      } else {
-        pushToast("Erreur de chargement des clips", "error");
+  // Wave 31d — single fetcher used by both initial-load and load-more.
+  // `offset=0` resets, `offset>0` appends. Server returns hasMore +
+  // nextOffset so the client doesn't have to re-derive pagination math.
+  const fetchClips = useCallback(
+    async (offset: number) => {
+      if (offset === 0) setLoading(true);
+      else setLoadingMore(true);
+      const params = new URLSearchParams();
+      if (qDebounced) params.set("q", qDebounced);
+      filters.fightTypes.forEach((ft) => params.append("fight_type", ft));
+      if (filters.hidden) params.set("hidden", filters.hidden);
+      if (filters.hasDescription) params.set("has_description", filters.hasDescription);
+      if (filters.scoreMin > 1) params.set("min_score", String(filters.scoreMin));
+      if (filters.scoreMax < 10) params.set("max_score", String(filters.scoreMax));
+      if (filters.role !== "any") params.set("involvement", filters.role);
+      if (filters.status !== "all") params.set("status", filters.status);
+      if (filters.multiKill !== "any") params.set("multi_kill", filters.multiKill);
+      if (filters.dateFrom) params.set("from", filters.dateFrom);
+      if (filters.dateTo) params.set("to", filters.dateTo);
+      // Wave 12 anti-pollution filter — pass clip_context value if not "any".
+      if (filters.clipContext && filters.clipContext !== "any") {
+        params.set("clip_context", filters.clipContext);
       }
-    } catch {
-      pushToast("Erreur réseau", "error");
-    } finally {
-      setLoading(false);
-    }
-  }, [qDebounced, filters, sort, limit, pushToast]);
+      params.set("sort", sort);
+      params.set("limit", String(limit));
+      params.set("offset", String(offset));
 
+      try {
+        const r = await fetch(`/api/admin/clips?${params}`);
+        if (r.ok) {
+          const data = await r.json();
+          const items: ClipRow[] = data.items ?? [];
+          if (offset === 0) {
+            setClips(items);
+          } else {
+            // Append — but dedup on id in case a fast-changing dataset
+            // re-pages the same row (e.g. score sort with new clip
+            // landing mid-pagination).
+            setClips((prev) => {
+              const seen = new Set(prev.map((c) => c.id));
+              const merged = [...prev];
+              for (const it of items) {
+                if (!seen.has(it.id)) merged.push(it);
+              }
+              return merged;
+            });
+          }
+          setTotal(data.total ?? 0);
+          setNextOffset(data.nextOffset ?? null);
+        } else {
+          pushToast("Erreur de chargement des clips", "error");
+        }
+      } catch {
+        pushToast("Erreur réseau", "error");
+      } finally {
+        if (offset === 0) setLoading(false);
+        else setLoadingMore(false);
+      }
+    },
+    [qDebounced, filters, sort, limit, pushToast],
+  );
+
+  // Backward-compat shim — existing callers do `fetchClips()` after bulk
+  // actions, which should reset to page 1.
+  const reloadFromStart = useCallback(() => {
+    void fetchClips(0);
+  }, [fetchClips]);
+
+  const loadMore = useCallback(() => {
+    if (nextOffset === null) return;
+    void fetchClips(nextOffset);
+  }, [nextOffset, fetchClips]);
+
+  // Reset to page 1 whenever the filter/sort/limit/query changes.
   useEffect(() => {
-    void fetchClips();
+    void fetchClips(0);
   }, [fetchClips]);
 
   const toggleSelect = (id: string) => {
@@ -208,7 +249,7 @@ export function ClipsLibrary() {
         if (r.ok) {
           pushToast(`${action} appliqué à ${selected.size} clip(s).`, "success");
           clearSelection();
-          void fetchClips();
+          reloadFromStart();
           return { ok: true };
         }
         const err = await r.json().catch(() => ({}));
@@ -219,7 +260,7 @@ export function ClipsLibrary() {
         return { ok: false };
       }
     },
-    [selected, pushToast, fetchClips],
+    [selected, pushToast, reloadFromStart],
   );
 
   const visibleSelection = useMemo(
@@ -429,10 +470,34 @@ export function ClipsLibrary() {
         )}
       </AdminSection>
 
+      {/* Wave 31d — Load more pagination */}
+      {!loading && clips.length > 0 && nextOffset !== null && (
+        <div className="flex justify-center pt-2">
+          <AdminButton
+            variant="secondary"
+            size="md"
+            onClick={loadMore}
+            disabled={loadingMore}
+            aria-label={`Charger les clips suivants (${total - clips.length} restants)`}
+          >
+            {loadingMore
+              ? "Chargement…"
+              : `Charger plus (${(total - clips.length).toLocaleString("fr-FR")} restants)`}
+          </AdminButton>
+        </div>
+      )}
+
+      {!loading && clips.length > 0 && nextOffset === null && clips.length >= 200 && (
+        <p className="text-center text-[10px] text-[var(--text-muted)] pt-2">
+          Fin du catalogue · {clips.length.toLocaleString("fr-FR")} clip
+          {clips.length > 1 ? "s" : ""} affiché{clips.length > 1 ? "s" : ""}
+        </p>
+      )}
+
       <ClipDetailDrawer
         clipId={openClipId}
         onClose={() => setOpenClipId(null)}
-        onSaved={() => fetchClips()}
+        onSaved={() => reloadFromStart()}
         onPrev={() => {
           if (!openClipId) return;
           const idx = clips.findIndex((c) => c.id === openClipId);

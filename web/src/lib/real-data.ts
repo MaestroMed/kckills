@@ -168,7 +168,20 @@ export function getCurrentRoster(data: RealData): RosterPlayer[] {
 
 export function getPlayerStats(data: RealData, playerName: string) {
   let kills = 0, deaths = 0, assists = 0, gamesPlayed = 0, totalGold = 0, totalCS = 0;
-  const champions: Record<string, { games: number; kills: number; deaths: number; assists: number }> = {};
+  let wins = 0;
+  // Wave 31d — track wins/gold/cs per champion so the pool can display
+  // per-champion winrate + farming metrics. We aggregate on the game
+  // boundary so a BO5 contributes 1-5 games per champion, mirroring the
+  // top-level totals.
+  const champions: Record<string, {
+    games: number;
+    kills: number;
+    deaths: number;
+    assists: number;
+    wins: number;
+    gold: number;
+    cs: number;
+  }> = {};
   const matchHistory: { matchId: string; date: string; opponent: string; champion: string; kills: number; deaths: number; assists: number; won: boolean }[] = [];
 
   // 🐛 2026-04-28 fix : the source data is inconsistent on player-name
@@ -196,12 +209,27 @@ export function getPlayerStats(data: RealData, playerName: string) {
       assists += p.assists;
       totalGold += p.gold;
       totalCS += p.cs;
+      if (match.kc_won) wins += 1;
 
-      if (!champions[p.champion]) champions[p.champion] = { games: 0, kills: 0, deaths: 0, assists: 0 };
-      champions[p.champion].games++;
-      champions[p.champion].kills += p.kills;
-      champions[p.champion].deaths += p.deaths;
-      champions[p.champion].assists += p.assists;
+      if (!champions[p.champion]) {
+        champions[p.champion] = {
+          games: 0, kills: 0, deaths: 0, assists: 0,
+          wins: 0, gold: 0, cs: 0,
+        };
+      }
+      const champ = champions[p.champion]!;
+      champ.games++;
+      champ.kills += p.kills;
+      champ.deaths += p.deaths;
+      champ.assists += p.assists;
+      champ.gold += p.gold;
+      champ.cs += p.cs;
+      // Series-level wins : a BO5 game-by-game W/L isn't in the static
+      // data, so we use match.kc_won for every game of the series. Means
+      // a 3-2 win counts as 5 wins, which inflates raw win counts but
+      // keeps the winrate proxy honest (champion only "got there" if the
+      // series ended in a win).
+      if (match.kc_won) champ.wins += 1;
 
       matchHistory.push({
         matchId: match.id,
@@ -222,12 +250,18 @@ export function getPlayerStats(data: RealData, playerName: string) {
     deaths,
     assists,
     gamesPlayed,
+    wins,
     totalGold,
     totalCS,
     kda: deaths > 0 ? ((kills + assists) / deaths).toFixed(1) : "Perfect",
     avgKills: gamesPlayed > 0 ? (kills / gamesPlayed).toFixed(1) : "0",
     avgDeaths: gamesPlayed > 0 ? (deaths / gamesPlayed).toFixed(1) : "0",
     avgAssists: gamesPlayed > 0 ? (assists / gamesPlayed).toFixed(1) : "0",
+    // Wave 31d — Gold + CS per-game averages. Per-minute would need
+    // game duration which isn't in the static log ; per-game is honest
+    // and still informative (LEC averages ~33min so /min ≈ /game / 33).
+    avgGold: gamesPlayed > 0 ? Math.round(totalGold / gamesPlayed) : 0,
+    avgCS: gamesPlayed > 0 ? Math.round(totalCS / gamesPlayed) : 0,
     champions: Object.entries(champions)
       .map(([name, s]) => ({ name, ...s }))
       .sort((a, b) => b.games - a.games),

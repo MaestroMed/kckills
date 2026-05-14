@@ -10,6 +10,7 @@ import { EraClipsSection } from "./era-clips";
 import { getQuotesByEra } from "@/lib/quotes";
 import { QuoteRow } from "@/components/QuoteCard";
 import { PortraitCubeMorph } from "@/components/PortraitCubeMorph";
+import { countKillsByEra } from "@/lib/supabase/kills";
 
 export const revalidate = 3600;
 
@@ -92,6 +93,16 @@ export default async function EraPage({ params }: Props) {
     0
   );
   const { prev, next } = getNavigation(era.id);
+
+  // Wave 31d — count of published clips for this era. Separate from
+  // `totalKills` above which is the data-only KC-side kill count from
+  // the static match log. `publishedClips` reflects how many actual
+  // video clips ship on the site for this era.
+  const publishedClips = await countKillsByEra({
+    startDate: era.dateStart,
+    endDate: era.dateEnd,
+    buildTime: true,
+  });
 
   // Build the cube-morph palette: top distinct KC champions for this era,
   // ordered by usage frequency, capped at 6 to keep the morph cycle snappy.
@@ -271,6 +282,23 @@ export default async function EraPage({ params }: Props) {
                   <p className="font-data text-xl font-black text-[var(--gold)]">{totalKills}</p>
                 </div>
               </>
+            )}
+            {publishedClips > 0 && (
+              <Link
+                href={`/scroll?era=${era.id}`}
+                className="rounded-xl border border-white/10 bg-black/30 backdrop-blur-sm px-4 py-3 hover:bg-black/50 hover:border-white/30 transition-all focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--gold)]"
+                aria-label={`Voir les ${publishedClips} clips de l'époque ${era.label} dans le scroll`}
+              >
+                <p className="font-data text-xs text-white/40 uppercase tracking-wider">
+                  Clips publiés
+                </p>
+                <p
+                  className="font-data text-xl font-black tabular-nums"
+                  style={{ color: era.color }}
+                >
+                  {publishedClips.toLocaleString("fr-FR")}
+                </p>
+              </Link>
             )}
             {era.viewership && (
               <div className="rounded-xl border border-white/10 bg-black/30 backdrop-blur-sm px-4 py-3">

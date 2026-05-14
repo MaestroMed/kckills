@@ -392,6 +392,66 @@ export default async function PlayerPage({ params }: Props) {
             <RecentFormChart history={stats.matchHistory} />
           </div>
         </div>
+
+        {/* Wave 31d — farming + economy card. Per-game averages because
+            per-minute would need game duration which the static log
+            doesn't carry. LEC averages ~33min so /min ≈ /game / 33. */}
+        {stats.gamesPlayed > 0 && (
+          <div className="mt-6 grid gap-6 md:grid-cols-3">
+            <div className="rounded-2xl border border-[var(--border-gold)] bg-[var(--bg-surface)] p-5">
+              <p className="text-[10px] uppercase tracking-[0.25em] text-[var(--text-muted)]">
+                CS par game
+              </p>
+              <p className="font-data text-4xl font-black tabular-nums text-[var(--gold)] mt-2">
+                {stats.avgCS.toLocaleString("fr-FR")}
+              </p>
+              <p className="text-[10px] text-[var(--text-muted)] mt-1">
+                ≈{" "}
+                <span className="text-[var(--text-secondary)] font-data">
+                  {(stats.avgCS / 33.5).toFixed(1)}
+                </span>{" "}
+                CS/min (game moyenne LEC 33:30)
+              </p>
+            </div>
+            <div className="rounded-2xl border border-[var(--border-gold)] bg-[var(--bg-surface)] p-5">
+              <p className="text-[10px] uppercase tracking-[0.25em] text-[var(--text-muted)]">
+                Gold par game
+              </p>
+              <p className="font-data text-4xl font-black tabular-nums text-[var(--gold)] mt-2">
+                {stats.avgGold.toLocaleString("fr-FR")}
+              </p>
+              <p className="text-[10px] text-[var(--text-muted)] mt-1">
+                ≈{" "}
+                <span className="text-[var(--text-secondary)] font-data">
+                  {Math.round(stats.avgGold / 33.5).toLocaleString("fr-FR")}
+                </span>{" "}
+                gold/min
+              </p>
+            </div>
+            <div className="rounded-2xl border border-[var(--border-gold)] bg-[var(--bg-surface)] p-5">
+              <p className="text-[10px] uppercase tracking-[0.25em] text-[var(--text-muted)]">
+                Series winrate
+              </p>
+              <p
+                className="font-data text-4xl font-black tabular-nums mt-2"
+                style={{
+                  color:
+                    winRate >= 65
+                      ? "var(--green)"
+                      : winRate >= 50
+                        ? "var(--gold)"
+                        : "var(--red)",
+                }}
+              >
+                {winRate}%
+              </p>
+              <p className="text-[10px] text-[var(--text-muted)] mt-1">
+                {stats.wins ?? 0} wins sur{" "}
+                {stats.matchHistory.length} séries (game-level)
+              </p>
+            </div>
+          </div>
+        )}
       </section>
 
       {/* ─── Riot stats — surfaced when linked ──────────────────────────── */}
