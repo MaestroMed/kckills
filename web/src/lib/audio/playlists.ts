@@ -83,18 +83,75 @@ export const DEFAULT_HOMEPAGE_PLAYLIST: BgmTrack[] = [
 ];
 
 /**
- * Default scroll playlist — high-energy montage.
- * Trap / EDM / hype tracks that match the TikTok-style clip pacing.
- * Carries over from the original /scroll BGM pattern.
+ * Default scroll playlist — high-energy LoL anthems.
+ *
+ * Wave 30m (2026-05-14) — replaced the generic NCS "Phoenix" (was
+ * youtubeId p7ZsBPK656s : Netrum & Halvorsen) with the OFFICIAL Riot
+ * Worlds 2019 anthem by Cailin Russo + Chrissy Costanza. The user
+ * caught it ("c pas le bon son phoenix mdrrr") — for a LoL fan site
+ * the Phoenix track is non-negotiably the Worlds 2019 banger.
+ *
+ * Added the full Worlds-anthem pack (Rise 2018, Phoenix 2019, Take
+ * Over 2020, Burn It All Down 2021, Star Walkin' 2022, Heavy Is The
+ * Crown 2023, Gods 2024) + K/DA Pop/Stars + Edge of the Universe
+ * 2024. These are THE LoL fan anthems — same vibe as the scroll feed.
  */
 export const DEFAULT_SCROLL_PLAYLIST: BgmTrack[] = [
   {
-    id: "phoenix",
-    title: "Phoenix",
-    artist: "Netrum & Halvorsen",
-    youtubeId: "p7ZsBPK656s",
-    durationSeconds: 186,
-    genre: "synthwave",
+    id: "phoenix-worlds-2019",
+    title: "Phoenix (Worlds 2019)",
+    artist: "Cailin Russo & Chrissy Costanza",
+    youtubeId: "i1IKnWDecwA",
+    durationSeconds: 222,
+    genre: "anthemic",
+  },
+  {
+    id: "rise-worlds-2018",
+    title: "RISE (Worlds 2018)",
+    artist: "The Glitch Mob, Mako & The Word Alive",
+    youtubeId: "fB8TyLTD7EE",
+    durationSeconds: 175,
+    genre: "anthemic",
+  },
+  {
+    id: "take-over-worlds-2020",
+    title: "Take Over (Worlds 2020)",
+    artist: "Jeremy McKinnon, MAX, Henry",
+    youtubeId: "1NJrIRow9rk",
+    durationSeconds: 210,
+    genre: "anthemic",
+  },
+  {
+    id: "burn-it-all-down-worlds-2021",
+    title: "Burn It All Down (Worlds 2021)",
+    artist: "PVRIS",
+    youtubeId: "wRl1f1MK1Yg",
+    durationSeconds: 226,
+    genre: "anthemic",
+  },
+  {
+    id: "star-walkin-worlds-2022",
+    title: "Star Walkin' (Worlds 2022)",
+    artist: "Lil Nas X",
+    youtubeId: "Op55c1XQfxo",
+    durationSeconds: 217,
+    genre: "hype",
+  },
+  {
+    id: "heavy-is-the-crown-worlds-2023",
+    title: "Heavy Is The Crown (Worlds 2023)",
+    artist: "Linkin Park",
+    youtubeId: "qskaA0DCmJg",
+    durationSeconds: 187,
+    genre: "anthemic",
+  },
+  {
+    id: "kda-pop-stars",
+    title: "POP/STARS",
+    artist: "K/DA (Madison Beer, (G)I-DLE, Jaira Burns)",
+    youtubeId: "UOxkGD8qRB4",
+    durationSeconds: 196,
+    genre: "edm",
   },
   {
     id: "royalty",
