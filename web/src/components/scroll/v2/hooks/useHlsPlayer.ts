@@ -236,7 +236,13 @@ export function useHlsPlayer(): UseHlsPlayerApi {
         // this listener, hls.js silently destroys the MSE source buffer
         // on a fatal error but the <video> element keeps the dead
         // sourceObject attached, freezing playback indefinitely.
-        instance.on("hlsError", (_event, data) => {
+        //
+        // Type note (Wave 32 fix) : hls.js' `.on()` requires the typed
+        // enum constant `Hls.Events.ERROR` (which equals "hlsError" at
+        // runtime). Passing the bare string literal compiled in dev mode
+        // but failed strict TypeScript checks in `next build`. Using the
+        // constant resolves the typecheck without runtime impact.
+        instance.on(Hls.Events.ERROR, (_event, data) => {
           if (!data?.fatal) return;
           // Fatal error : destroy the instance + revert to MP4 if we
           // have one. Otherwise pop the src so the browser's `error`
