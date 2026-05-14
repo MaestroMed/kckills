@@ -111,6 +111,22 @@ export type EventType =
   // hit too often (e.g. CDN issues with the .m3u8 manifest). Whitelisted
   // in migration 047 alongside the user_events CHECK extend.
   | "clip.delivery"
+  // Wave 30q — fatal hls.js error (manifest 404, parse error, exhausted
+  // fragLoadError retries). Fired by useHlsPlayer.ts when the HLS path
+  // is destroyed and the MP4 fallback is reassigned. Lets the RUM
+  // dashboard track the impact of the R2 HLS repackage catch-up :
+  // counts should spike when segments are missing and decay as the
+  // worker re-encodes the backlog. metadata contract :
+  //   { fatal: true,
+  //     type: string,              // hls.js Hls.ErrorTypes (NETWORK_ERROR / MEDIA_ERROR / OTHER_ERROR)
+  //     details: string,           // hls.js Hls.ErrorDetails (manifestLoadError / fragLoadError / ...)
+  //     statusCode: number|null,   // HTTP code when the error came from a fetch
+  //     hadFallback: boolean       // whether useHlsPlayer had an MP4 to switch to
+  //   }
+  // DB CHECK constraint hasn't been extended yet — until a follow-up
+  // migration whitelists this value, inserts are dropped by Postgres
+  // (best-effort tracker). The API gate accepts the event regardless.
+  | "clip.hls.error"
   // Wave 11 — Recommendation engine (Agent DI). Fired by
   // useRecommendationFeed once per recommended clip surfaced into the
   // scroll feed. Carries the cosine similarity (0..1) the recommender

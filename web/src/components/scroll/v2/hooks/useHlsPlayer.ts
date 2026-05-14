@@ -57,6 +57,7 @@
 
 import { useCallback, useRef } from "react";
 import { getHls, isMseSupported } from "@/lib/hls-loader";
+import { track } from "@/lib/analytics/track";
 
 interface AttachedHls {
   /** Opaque hls.js Hls instance — typed loosely to keep the lazy import
@@ -65,8 +66,26 @@ interface AttachedHls {
     destroy(): void;
     loadSource(url: string): void;
     attachMedia(v: HTMLVideoElement): void;
+    on(event: string, handler: (event: string, data: HlsErrorData) => void): void;
   };
   url: string;
+  /** MP4 URL to revert to if the HLS manifest 404s or fails fatally.
+   *  Wave 30q : without this, a fatal hls.js error left the <video> stuck
+   *  with no playable source (MSE listener swallowed the native error
+   *  event). Now the error handler destroys the instance + writes the
+   *  fallback src directly. */
+  fallbackMp4: string | null;
+}
+
+/** Minimal shape of the `data` payload emitted by Hls.Events.ERROR. The
+ *  hls.js types live behind the lazy import, so we redeclare just the
+ *  fields the handler actually inspects to keep the module surface
+ *  light. */
+interface HlsErrorData {
+  fatal: boolean;
+  type: string;
+  details: string;
+  response?: { code?: number };
 }
 
 /** Detect Safari (which has built-in HLS) without UA-sniffing pitfalls.
@@ -92,10 +111,23 @@ export interface UseHlsPlayerApi {
    * Async because the hls.js module is dynamically imported on first use.
    * Fire-and-forget callers should `void attach(...)` — the poster frame
    * covers the gap between attach and the first decoded frame.
+   *
+   * `fallbackMp4` (Wave 30q) : MP4 URL to revert to if hls.js fires a
+   * FATAL error (manifest 404, parse error, fragLoadError that exceeds
+   * retries, etc). When provided, the hook destroys the Hls instance,
+   * writes `video.src = fallbackMp4`, and fires a `clip.hls.error`
+   * analytics event. Without this, a fatal HLS error leaves the <video>
+   * stuck with no playable source (the MSE listener swallows the
+   * native error event before the browser can fall back).
+   *
+   * Safari native path : `fallbackMp4` is ignored because Safari's
+   * native HLS player surfaces the error event directly to the <video>
+   * element and the caller's standard `onerror` handler can react.
    */
   attach: (
     video: HTMLVideoElement,
     url: string | null,
+    fallbackMp4?: string | null,
   ) => Promise<"hls" | "mp4" | "none">;
 
   /**
@@ -132,6 +164,7 @@ export function useHlsPlayer(): UseHlsPlayerApi {
     async (
       video: HTMLVideoElement,
       url: string | null,
+      fallbackMp4: string | null = null,
     ): Promise<"hls" | "mp4" | "none"> => {
       // Null URL → tear down + signal detached.
       if (!url) {
@@ -168,8 +201,11 @@ export function useHlsPlayer(): UseHlsPlayerApi {
         const existing = attachedRef.current.get(video);
 
         // Same URL on the same element → no-op (avoids a free re-fetch
-        // on the master playlist).
-        if (existing && existing.url === url) return "hls";
+        // on the master playlist). Update fallback in case it changed.
+        if (existing && existing.url === url) {
+          existing.fallbackMp4 = fallbackMp4;
+          return "hls";
+        }
 
         // Different URL on the same element → swap source without
         // destroying the instance. ~80ms cheaper than a full recreate.
@@ -178,6 +214,7 @@ export function useHlsPlayer(): UseHlsPlayerApi {
           attachedRef.current.set(video, {
             instance: existing.instance,
             url,
+            fallbackMp4,
           });
           return "hls";
         }
@@ -194,9 +231,71 @@ export function useHlsPlayer(): UseHlsPlayerApi {
           maxMaxBufferLength: 30,
           enableWorker: true,
         });
+
+        // Wave 30q — wire the fatal-error → MP4 fallback path. Without
+        // this listener, hls.js silently destroys the MSE source buffer
+        // on a fatal error but the <video> element keeps the dead
+        // sourceObject attached, freezing playback indefinitely.
+        instance.on("hlsError", (_event, data) => {
+          if (!data?.fatal) return;
+          // Fatal error : destroy the instance + revert to MP4 if we
+          // have one. Otherwise pop the src so the browser's `error`
+          // event can fire and the caller's <video onError> kicks in.
+          const wasUrl = url;
+          const fallback = attachedRef.current.get(video)?.fallbackMp4 ?? fallbackMp4;
+          try {
+            instance.destroy();
+          } catch {
+            /* swallow — destroy() on a half-torn-down instance can throw */
+          }
+          attachedRef.current.delete(video);
+
+          // Report exactly once per (video, url) so the dashboard sees
+          // how often this happens. Errors during the R2 HLS repackage
+          // catch-up will show as a spike that decays as segments
+          // come back online.
+          try {
+            track("clip.hls.error", {
+              entityType: "clip",
+              entityId: wasUrl,
+              metadata: {
+                fatal: true,
+                type: data.type ?? "unknown",
+                details: data.details ?? "unknown",
+                statusCode: data.response?.code ?? null,
+                hadFallback: Boolean(fallback),
+              },
+            });
+          } catch {
+            /* analytics is silent on failure by design */
+          }
+
+          if (fallback) {
+            // Reassign the MP4 fallback. The browser's `load()` is
+            // implicit on src write — no need to call it explicitly.
+            video.src = fallback;
+            // Best-effort resume from the same position the HLS attempt
+            // would have started from. currentTime stays 0 by default.
+            video.play().catch(() => {
+              /* autoplay can be blocked — that's fine, the pool's
+                 priority-driven play() retries next frame */
+            });
+          } else {
+            // No fallback : strip src so the browser fires `error`/
+            // `emptied` and the caller's <video onError> handler can
+            // render an error card.
+            video.removeAttribute("src");
+            try {
+              video.load();
+            } catch {
+              /* ignore */
+            }
+          }
+        });
+
         instance.loadSource(url);
         instance.attachMedia(video);
-        attachedRef.current.set(video, { instance, url });
+        attachedRef.current.set(video, { instance, url, fallbackMp4 });
         return "hls";
       } catch {
         // hls.js failed to load (offline, CSP, ad blocker?). Fall back to

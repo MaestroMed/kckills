@@ -389,7 +389,11 @@ export function FeedPlayerPool({
         // resolves on the next tick.
         const capturedItemId = item.id;
         const capturedSlot = s;
-        void attachHls(v, hlsUrl).then((delivery) => {
+        // Wave 30q — pass fallbackMp4 so useHlsPlayer can auto-revert on
+        // fatal HLS errors (manifest 404, parse error, etc). Critical
+        // during the R2 HLS repackage catch-up when most legacy clips
+        // have hls_master_url pointing at deleted segments.
+        void attachHls(v, hlsUrl, fallbackMp4 ?? null).then((delivery) => {
           // "none" means the attach was called with null URL — that's
           // the MP4-only path. The actual delivery channel is "mp4".
           const channel: "hls" | "mp4" = delivery === "hls" ? "hls" : "mp4";
