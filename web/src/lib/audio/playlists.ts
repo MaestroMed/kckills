@@ -106,6 +106,14 @@ export const DEFAULT_SCROLL_PLAYLIST: BgmTrack[] = [
     genre: "anthemic",
   },
   {
+    id: "phoenix-ncs",
+    title: "Phoenix [NCS]",
+    artist: "Netrum & Halvorsen",
+    youtubeId: "p7ZsBPK656s",
+    durationSeconds: 186,
+    genre: "synthwave",
+  },
+  {
     id: "rise-worlds-2018",
     title: "RISE (Worlds 2018)",
     artist: "The Glitch Mob, Mako & The Word Alive",
