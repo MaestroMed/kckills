@@ -73,12 +73,31 @@ class LoLTokScheduler:
         "youtube_search": 95,  # margin on 100
     }
 
+    # Wave 33 — daily $-cost cap (USD). Belt-and-suspenders alongside the
+    # RPD count cap, mostly to bound damage if a code change accidentally
+    # routes a 3.5-flash high-output call in a tight loop. Set to None to
+    # disable ; default is intentionally loose (~$10/day = $300/month
+    # ceiling) so the steady-state ~$50/mois budget has plenty of headroom
+    # and we don't paper-cut the operator on a Pro one-shot run.
+    #
+    # Reset window aligns with DAILY_QUOTAS (07:00 UTC).
+    DAILY_COST_CAPS_USD: dict[str, float | None] = {
+        "gemini": (
+            float(os.environ.get("KCKILLS_GEMINI_DAILY_COST_CAP_USD", "10.0"))
+            if os.environ.get("KCKILLS_GEMINI_DAILY_COST_CAP_USD", "10.0")
+            else None
+        ),
+    }
+
     # Reset at 07:00 UTC (midnight Pacific = 09:00 Paris)
     QUOTA_RESET_HOUR_UTC = 7
 
     def __init__(self):
         self._last_call: dict[str, float] = {}
         self._daily_counts: dict[str, int] = {}
+        # Wave 33 — running USD spend per service per day. Reset alongside
+        # `_daily_counts` at the 07:00 UTC rollover.
+        self._daily_cost_usd: dict[str, float] = {}
         self._daily_reset_date: str = ""
         self._locks: dict[str, asyncio.Lock] = {}
         # Wave 27.3 — sync lock around the daily-reset bookkeeping.
@@ -126,16 +145,33 @@ class LoLTokScheduler:
             if today > self._daily_reset_date:
                 self._daily_reset_date = today
                 self._daily_counts = {k: 0 for k in self.DAILY_QUOTAS}
+                # Wave 33 — also reset the cost ledger.
+                self._daily_cost_usd = {k: 0.0 for k in self.DAILY_COST_CAPS_USD}
 
     async def wait_for(self, service: str) -> bool:
-        """Wait until it's safe to call the service. Returns False if daily quota exceeded."""
+        """Wait until it's safe to call the service. Returns False if a
+        daily quota (RPD count OR USD cost cap) is exceeded.
+
+        Wave 33 — cost-cap path : when `DAILY_COST_CAPS_USD[service]` is
+        set and the cumulative spend for the day has already crossed it,
+        we short-circuit before sleeping. Callers (analyzer / quote
+        extractor) report cost back via `record_cost()` after each
+        response so the ledger stays current.
+        """
         async with self._get_lock(service):
             self._reset_daily_if_needed()
 
-            # Check daily quota
+            # Check daily quota (RPD)
             if service in self.DAILY_QUOTAS:
                 count = self._daily_counts.get(service, 0)
                 if count >= self.DAILY_QUOTAS[service]:
+                    return False
+
+            # Wave 33 — check daily USD cost cap.
+            cost_cap = self.DAILY_COST_CAPS_USD.get(service)
+            if cost_cap is not None:
+                spent = self._daily_cost_usd.get(service, 0.0)
+                if spent >= cost_cap:
                     return False
 
             # Enforce minimum delay
@@ -152,6 +188,30 @@ class LoLTokScheduler:
 
             return True
 
+    def record_cost(self, service: str, usd: float) -> None:
+        """Add `usd` to the running day-spend ledger for `service`.
+
+        Wave 33 — called by the analyzer + quote extractor + any other
+        caller that computes a per-call cost via
+        `services.ai_pricing.compute_gemini_cost`. Safe to call from any
+        thread / coroutine — the underlying dict ops are atomic in
+        CPython and the cap check inside wait_for() uses the same
+        scheduler lock.
+
+        Silently no-ops on bad input so callers don't need a try/except
+        wrapper.
+        """
+        try:
+            v = float(usd)
+        except (TypeError, ValueError):
+            return
+        if v <= 0:
+            return
+        self._reset_daily_if_needed()
+        self._daily_cost_usd[service] = (
+            self._daily_cost_usd.get(service, 0.0) + v
+        )
+
     def get_remaining(self, service: str) -> int | None:
         """Get remaining daily quota for a service. None if no quota."""
         if service not in self.DAILY_QUOTAS:
@@ -160,13 +220,18 @@ class LoLTokScheduler:
         return self.DAILY_QUOTAS[service] - self._daily_counts.get(service, 0)
 
     def get_stats(self) -> dict:
-        """Return current scheduler stats."""
+        """Return current scheduler stats. Includes Wave 33 cost ledger."""
         self._reset_daily_if_needed()
         return {
             "daily_counts": dict(self._daily_counts),
             "daily_remaining": {
                 k: self.DAILY_QUOTAS[k] - self._daily_counts.get(k, 0)
                 for k in self.DAILY_QUOTAS
+            },
+            "daily_cost_usd": dict(self._daily_cost_usd),
+            "daily_cost_remaining_usd": {
+                k: (cap - self._daily_cost_usd.get(k, 0.0)) if cap is not None else None
+                for k, cap in self.DAILY_COST_CAPS_USD.items()
             },
             "reset_date": self._daily_reset_date,
         }

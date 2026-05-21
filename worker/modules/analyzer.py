@@ -495,6 +495,25 @@ async def analyze_kill(
         result["_raw_text"] = text
         if thinking_budget:
             result["_thinking_budget"] = thinking_budget
+        # Wave 33 — stamp cost + record it on the scheduler so the
+        # daily $-cap can short-circuit before the RPD cap is hit.
+        try:
+            from services.ai_pricing import compute_gemini_cost
+            usage = result.get("_usage") or {}
+            cost = compute_gemini_cost(
+                model_name,
+                usage.get("prompt_tokens"),
+                usage.get("candidates_tokens"),
+                cached_input_tokens=usage.get("cached_content_tokens"),
+            )
+            if cost is not None:
+                result["_cost_usd"] = cost
+                try:
+                    scheduler.record_cost("gemini", cost)
+                except Exception:
+                    pass
+        except Exception:
+            pass
         return result
     except json.JSONDecodeError as e:
         # Wave 20.1 — was warn ; bumped to error since this means the

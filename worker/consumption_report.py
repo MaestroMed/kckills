@@ -153,12 +153,42 @@ try:
 except Exception as e:
     print(f"  Couldn't parse daemon log : {e}")
 
-# From QC results files, estimate
-print("\n  Coût estimé (Gemini 3.1 Flash-Lite paid balanced):")
-print("    - Tarif input  : $0.10/M tokens")
-print("    - Tarif output : $0.40/M tokens")
-print("    - Par clip QC  : ~2K input + 200 output = ~$0.0003")
-print("    - Par analyzer : ~3K input + 300 output = ~$0.0004")
+# Wave 33 — real cost breakdown from ai_annotations table (per-model
+# spend). Group by `model_name`, sum `_cost` returned by analyzer.
+# Falls back to estimated rates when DB unreachable.
+print("\n  Breakdown réel par modèle (ai_annotations, 30 derniers jours) :")
+try:
+    sql = """
+        SELECT model_name,
+               COUNT(*) AS calls,
+               COALESCE(SUM(cost_usd), 0) AS total_usd,
+               COALESCE(AVG(cost_usd), 0) AS avg_usd
+        FROM ai_annotations
+        WHERE created_at > now() - interval '30 days'
+        GROUP BY model_name
+        ORDER BY total_usd DESC NULLS LAST
+        LIMIT 10;
+    """
+    rows = query(sql, timeout=20) if PAT else None
+    if rows:
+        print(f"    {'Model':<32} {'Calls':>8} {'Total $':>10} {'Avg $':>10}")
+        grand = 0.0
+        for r in rows:
+            m = (r.get('model_name') or '?')[:32]
+            n = int(r.get('calls') or 0)
+            t = float(r.get('total_usd') or 0)
+            a = float(r.get('avg_usd') or 0)
+            grand += t
+            print(f"    {m:<32} {n:>8,} {t:>10.3f} {a:>10.5f}")
+        print(f"    {'-'*32} {'-'*8} {'-'*10}")
+        print(f"    {'TOTAL':<32} {'':>8} {grand:>10.3f}")
+    else:
+        print("    (DB unreachable or no rows — falling back to estimates)")
+        print("    - Gemini 3.1 Flash-Lite : $0.10 in / $0.40 out per 1M tokens")
+        print("    - Gemini 3.5 Flash      : $1.50 in / $9.00 out per 1M tokens")
+        print("    - Per-clip analyzer at lite : ~$0.0004 ; at 3.5-flash : ~$0.045")
+except Exception as e:
+    print(f"    ERROR : {str(e)[:200]}")
 
 # Count QC artifacts
 from pathlib import Path
@@ -170,8 +200,7 @@ for f in qc_files:
         total_qc_runs += len(data)
     except: pass
 print(f"\n  Total QC runs (deep_qc/*.json) : {total_qc_runs:,}")
-estimated_cost = total_qc_runs * 0.0003
-print(f"  Coût QC estimé : ~${estimated_cost:.2f}")
+print(f"  (Coût détaillé visible dans le breakdown ai_annotations ci-dessus)")
 
 # Try Gemini billing via API
 print("\n  Pour le détail facturation, vérifier :")
