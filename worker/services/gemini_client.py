@@ -92,7 +92,55 @@ async def _wait_for_file_active(client, file_ref, timeout: int = 60) -> bool:
     return False
 
 
-async def analyze(prompt: str, video_path: str | None = None) -> dict | None:
+def _build_thinking_config(types_mod, model_name: str, budget: str | None):
+    """Build a ThinkingConfig if the model + SDK support it. Returns None
+    otherwise so the caller skips the kwarg entirely.
+
+    Wave 33 — Gemini 3.5 Flash (GA 2026-05-19) introduced a string-enum
+    thinking budget API : minimal | low | medium (default) | high. The
+    google-genai SDK has shipped two signatures :
+
+      types.ThinkingConfig(thinking_budget="medium")        # new (>= 0.x)
+      types.ThinkingConfig(thinking_budget=1024)            # legacy int
+
+    We try the string form first, fall back to a coarse int mapping, and
+    finally return None (no thinking kwarg) so older SDK builds still
+    work. Older models (3.1, 3-flash, 2.5-*) silently ignore the kwarg
+    in the new SDK but raise on the old one — guard them out explicitly.
+    """
+    if not budget:
+        return None
+    # Only thinking-aware models benefit. Keep the allowlist tight so we
+    # don't accidentally bill a 3.1-flash-lite call for a budget that
+    # would inflate output tokens.
+    THINKING_AWARE = ("gemini-3.5-",)
+    if not any(model_name.startswith(p) for p in THINKING_AWARE):
+        return None
+    ThinkingConfig = getattr(types_mod, "ThinkingConfig", None)
+    if ThinkingConfig is None:
+        return None
+    # 1) Try the new string-enum API.
+    try:
+        return ThinkingConfig(thinking_budget=budget)
+    except Exception:
+        pass
+    # 2) Fall back to the legacy int budget. Map the four levels onto
+    #    sensible token counts ; values picked from Google's pre-3.5
+    #    "dynamic" recommendations.
+    INT_MAP = {"minimal": 0, "low": 512, "medium": 1024, "high": 4096}
+    try:
+        return ThinkingConfig(thinking_budget=INT_MAP.get(budget, 1024))
+    except Exception:
+        return None
+
+
+async def analyze(
+    prompt: str,
+    video_path: str | None = None,
+    *,
+    model: str | None = None,
+    thinking_budget: str | None = None,
+) -> dict | None:
     """Send prompt to Gemini. Returns parsed JSON or None.
 
     Wave 13f migration : the public surface is unchanged — callers
@@ -101,6 +149,16 @@ async def analyze(prompt: str, video_path: str | None = None) -> dict | None:
     we don't need the old code-fence stripping path. We still
     json.loads() defensively in case the model returns malformed
     JSON despite the MIME hint (rare but observed on flash-lite).
+
+    Wave 33 additions :
+      * `model` keyword — explicit model override. When None, falls back
+        to the legacy `GEMINI_MODEL` env var (kept for back-compat).
+        Per-stage callers should pass `config.GEMINI_MODEL_QC` /
+        `_QUOTES` / `_OFFSET` / `_ANALYZER` explicitly so the resolved
+        model is logged + costed correctly.
+      * `thinking_budget` keyword — minimal | low | medium | high. Only
+        applied to thinking-aware models (currently 3.5-flash). Older
+        models receive no thinking config (the SDK ignores it on >=0.x).
     """
     if not config.GEMINI_API_KEY:
         return None
@@ -129,7 +187,15 @@ async def analyze(prompt: str, video_path: str | None = None) -> dict | None:
 
     try:
         from google.genai import types  # type: ignore
-        model_name = os.environ.get("GEMINI_MODEL", "gemini-3.1-flash-lite")
+        # Wave 33 — explicit `model` kwarg wins over the legacy env var
+        # so per-stage callers can route premium tasks (analyzer for
+        # high-score clips) to 3.5-flash without leaking that choice
+        # into other concurrent calls via process-wide GEMINI_MODEL.
+        model_name = (
+            model
+            or os.environ.get("GEMINI_MODEL")
+            or "gemini-3.1-flash-lite"
+        )
 
         if video_path:
             # Wave 13f migration — `client.files.upload(file=...)` instead
@@ -148,12 +214,20 @@ async def analyze(prompt: str, video_path: str | None = None) -> dict | None:
         else:
             contents = prompt
 
+        # Wave 33 — build the generate_content config. Thinking budget
+        # only attaches when the model supports it ; older models keep
+        # the lean config they always had.
+        gen_config_kwargs: dict = {
+            "response_mime_type": "application/json",
+        }
+        thinking_cfg = _build_thinking_config(types, model_name, thinking_budget)
+        if thinking_cfg is not None:
+            gen_config_kwargs["thinking_config"] = thinking_cfg
+
         response = client.models.generate_content(
             model=model_name,
             contents=contents,
-            config=types.GenerateContentConfig(
-                response_mime_type="application/json",
-            ),
+            config=types.GenerateContentConfig(**gen_config_kwargs),
         )
 
         text = (response.text or "").strip()
@@ -203,8 +277,25 @@ async def analyze(prompt: str, video_path: str | None = None) -> dict | None:
                         "total_token_count",
                         "total_tokens",
                     ),
+                    # Wave 33 — cached input tokens (3.5 Flash exposes
+                    # this when the implicit cache kicks in, 10× cheaper
+                    # billing). Older models leave it at None.
+                    "cached_content_tokens": _first(
+                        "cached_content_token_count",
+                        "cached_input_token_count",
+                        "cached_tokens",
+                    ),
+                    # Tokens spent reasoning before producing the final
+                    # answer — only populated on 3.5 Flash with a
+                    # thinking_config set. Useful for tuning the budget.
+                    "thoughts_tokens": _first(
+                        "thoughts_token_count",
+                        "reasoning_token_count",
+                    ),
                 }
                 result["_model"] = model_name
+                if thinking_budget:
+                    result["_thinking_budget"] = thinking_budget
         except Exception:
             # Never let usage-extraction failure mask the actual result.
             pass

@@ -40,9 +40,19 @@ log = structlog.get_logger()
 
 
 class GeminiProvider:
-    """Implements AIProvider for Google Gemini Flash-Lite via gemini_client."""
+    """Implements AIProvider for Google Gemini Flash-Lite via gemini_client.
+
+    Wave 33 — model_name is now read from `config.GEMINI_MODEL_QC` at
+    __init__ so the operator's tier selection drives the router default,
+    rather than hard-coding to flash-lite. Callers that want a specific
+    model should construct GeminiProvider(model_name=...) explicitly
+    (e.g. lab generator, GeminiPremiumProvider for 3.5-flash).
+    """
 
     name: str = "gemini"
+    # Default is overridden at __init__ from config. Kept as class attr
+    # so tests / introspection that read GeminiProvider.model_name before
+    # instantiation still see a value.
     model_name: str = "gemini-3.1-flash-lite"
     # USD per 1M tokens — see ai_pricing.GEMINI_PRICES (single source of truth).
     cost_per_m_input: float = 0.10
@@ -61,9 +71,33 @@ class GeminiProvider:
     DEFAULT_DAILY_CAP: int = 950  # 5% margin under the 1000 RPD limit
 
     def __init__(self, api_key: str | None = None,
-                 daily_cap: int | None = None):
+                 daily_cap: int | None = None,
+                 model_name: str | None = None):
         self.api_key = api_key or os.environ.get("GEMINI_API_KEY") or ""
         self.daily_cap = daily_cap if daily_cap is not None else self.DEFAULT_DAILY_CAP
+        # Wave 33 — resolve model + pricing from config when caller didn't
+        # pin a model. Falls back to the class attr (kept = lite) when the
+        # config import fails. Updates cost_per_m_* live so router cost
+        # estimates match the actual model used.
+        if model_name:
+            self.model_name = model_name
+        else:
+            try:
+                from config import config as _cfg
+                resolved = getattr(_cfg, "GEMINI_MODEL_QC", None)
+                if resolved:
+                    self.model_name = resolved
+            except Exception:
+                pass
+        # Re-price the instance based on the resolved model so the router
+        # rank-by-cost reflects reality.
+        try:
+            from services.ai_pricing import GEMINI_PRICES, DEFAULT_PRICE
+            in_p, out_p = GEMINI_PRICES.get(self.model_name, DEFAULT_PRICE)
+            self.cost_per_m_input = in_p
+            self.cost_per_m_output = out_p
+        except Exception:
+            pass
 
     async def analyze_clip(self, task: AITask) -> AnalysisResult:
         """Run the task through gemini_client.analyze.

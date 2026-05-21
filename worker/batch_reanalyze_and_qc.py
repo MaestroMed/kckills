@@ -183,8 +183,16 @@ REGLES CRITIQUES:
 - JSON VALIDE uniquement
 """
 
+        # Wave 33 — combined reanalyze + QC call uses the analyzer
+        # config because the result populates ai_description (visible
+        # to users). Honours premium tier when set.
+        try:
+            from config import config as _cfg
+            _model = getattr(_cfg, "GEMINI_MODEL_ANALYZER", None) or "gemini-3.1-flash-lite"
+        except Exception:
+            _model = "gemini-3.1-flash-lite"
         response = client.models.generate_content(
-            model="gemini-3.1-flash-lite",
+            model=_model,
             contents=[prompt, video_file],
         )
         text = (response.text or "").strip()

@@ -99,8 +99,14 @@ Critères:
 - verdict: GOOD (publishable as-is), ACCEPTABLE (watchable but not ideal), BAD (needs fix or removal)
 """
 
+        # Wave 33 — route through config.GEMINI_MODEL_QC.
+        try:
+            from config import config as _cfg
+            _qc_model = getattr(_cfg, "GEMINI_MODEL_QC", None) or "gemini-3.1-flash-lite"
+        except Exception:
+            _qc_model = "gemini-3.1-flash-lite"
         response = client.models.generate_content(
-            model="gemini-3.1-flash-lite",
+            model=_qc_model,
             contents=[prompt, video_file],
         )
         text = (response.text or "").strip()

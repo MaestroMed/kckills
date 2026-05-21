@@ -315,6 +315,7 @@ async def analyze_kill(
     context: str = "",
     clip_path: str | None = None,
     model_override: str | None = None,
+    thinking_budget: str | None = None,
 ) -> dict | None:
     """Analyze a kill with Gemini. Returns parsed JSON dict or None.
 
@@ -325,6 +326,11 @@ async def analyze_kill(
     Returned dict carries internal _model / _usage / _latency_ms /
     _raw_text keys that the caller (analyze_kill_row → _process_one)
     forwards into the ai_annotations row for provenance tracking.
+
+    Wave 33 — `thinking_budget` (minimal|low|medium|high) only applies
+    when `model_override` resolves to a thinking-aware model (3.5-flash
+    family). The flag is ignored silently otherwise — older Gemini
+    versions don't expose the API.
     """
     if not config.GEMINI_API_KEY:
         log.warn("gemini_no_api_key")
@@ -386,10 +392,25 @@ async def analyze_kill(
         # video / text-only). `response_mime_type` + `response_schema`
         # tell Gemini to return JSON matching the analyzer schema,
         # so we don't need fence stripping or JSON-shape defenses.
-        gen_config = types.GenerateContentConfig(
-            response_mime_type="application/json",
-            response_schema=ANALYSIS_RESPONSE_SCHEMA,
-        )
+        #
+        # Wave 33 — optional thinking budget for 3.5-flash. We thread it
+        # through the same helper the gemini_client wrapper uses so the
+        # gating logic stays in ONE place (model allowlist + SDK signature
+        # fallback). Older models get no thinking config and behave as
+        # before.
+        gen_config_kwargs: dict = {
+            "response_mime_type": "application/json",
+            "response_schema": ANALYSIS_RESPONSE_SCHEMA,
+        }
+        try:
+            from services.gemini_client import _build_thinking_config
+            tcfg = _build_thinking_config(types, model_name, thinking_budget)
+            if tcfg is not None:
+                gen_config_kwargs["thinking_config"] = tcfg
+        except Exception:
+            # Helper unavailable / SDK version mismatch — silently skip.
+            pass
+        gen_config = types.GenerateContentConfig(**gen_config_kwargs)
 
         if clip_path and os.path.exists(clip_path):
             # Wave 27.1 made client.files.upload + _wait_for_file_active
@@ -433,19 +454,47 @@ async def analyze_kill(
                  score=result.get("highlight_score"),
                  latency_ms=elapsed_ms)
         # Surface usage_metadata for lab cost accounting + ai_annotations
+        # Wave 33 — added `cached_content_tokens` + `thoughts_tokens`
+        # which 3.5-flash exposes for cost-aware accounting (10× cheaper
+        # cached input, and reasoning-token billing visibility).
         try:
             um = getattr(response, "usage_metadata", None)
             if um is not None:
+                def _first(*names):
+                    for n in names:
+                        v = getattr(um, n, None)
+                        if v is not None:
+                            return v
+                    return None
                 result["_usage"] = {
-                    "prompt_tokens": getattr(um, "prompt_token_count", None),
-                    "candidates_tokens": getattr(um, "candidates_token_count", None),
-                    "total_tokens": getattr(um, "total_token_count", None),
+                    "prompt_tokens": _first(
+                        "prompt_token_count", "input_token_count",
+                        "prompt_tokens", "input_tokens",
+                    ),
+                    "candidates_tokens": _first(
+                        "candidates_token_count", "output_token_count",
+                        "candidates_tokens", "output_tokens",
+                    ),
+                    "total_tokens": _first(
+                        "total_token_count", "total_tokens",
+                    ),
+                    "cached_content_tokens": _first(
+                        "cached_content_token_count",
+                        "cached_input_token_count",
+                        "cached_tokens",
+                    ),
+                    "thoughts_tokens": _first(
+                        "thoughts_token_count",
+                        "reasoning_token_count",
+                    ),
                 }
         except Exception:
             pass
         result["_model"] = model_name
         result["_latency_ms"] = elapsed_ms
         result["_raw_text"] = text
+        if thinking_budget:
+            result["_thinking_budget"] = thinking_budget
         return result
     except json.JSONDecodeError as e:
         # Wave 20.1 — was warn ; bumped to error since this means the
@@ -539,15 +588,72 @@ async def analyze_kill_row(kill: dict, clip_path: str | None = None) -> dict | N
             "NE PAS affirmer le kill, decrire le setup uniquement)"
         )
 
-    return await analyze_kill(
+    # Wave 33 — auto-upgrade rule. The cheap default tier (free →
+    # 3.1-flash-lite) is good enough for routine clips, but multi-kills,
+    # first bloods and clips that already crossed the score threshold
+    # deserve the premium tier (3.5-flash by default). The bump is
+    # bounded by the % of clips that qualify (~10-15%), so the monthly
+    # bill stays in the same ballpark while editorial quality jumps
+    # exactly where it counts.
+    #
+    # Caller-provided `_model_override` still wins — the lab generator
+    # and reanalyze scripts pass their own model explicitly.
+    auto_upgraded = False
+    base_override = kill.get("_model_override")
+    resolved_model = base_override
+    if not base_override:
+        try:
+            threshold = config.GEMINI_AUTO_UPGRADE_SCORE_THRESHOLD
+        except Exception:
+            threshold = None
+        existing_score = kill.get("highlight_score")
+        should_upgrade = False
+        # Signal 1 : already scored above the threshold on a previous
+        # analysis (reanalysis path — we know this one matters).
+        if (
+            threshold is not None
+            and isinstance(existing_score, (int, float))
+            and existing_score >= threshold
+        ):
+            should_upgrade = True
+        # Signal 2 : the harvester pre-flagged a multi-kill — penta /
+        # quadra / triple are always editorial moments worth the bump.
+        mk = kill.get("multi_kill")
+        if mk and str(mk).lower() in {"triple", "quadra", "penta"}:
+            should_upgrade = True
+        # Signal 3 : first blood — narrative anchor for the match story.
+        if kill.get("is_first_blood"):
+            should_upgrade = True
+        if should_upgrade:
+            try:
+                resolved_model = config.GEMINI_AUTO_UPGRADE_MODEL
+                auto_upgraded = True
+            except Exception:
+                resolved_model = None
+
+    # Thinking budget — only matters on 3.5-flash family. We unconditionally
+    # forward the configured value ; analyze_kill / gemini_client gate it
+    # by model name. Cheap to thread through, harmless on older models.
+    try:
+        thinking_budget = config.GEMINI_THINKING_BUDGET
+    except Exception:
+        thinking_budget = None
+
+    result = await analyze_kill(
         killer_name=kill.get("_killer_name_hint") or kill.get("killer_name") or "KC player",
         killer_champion=kill.get("killer_champion") or "?",
         victim_name=kill.get("_victim_name_hint") or kill.get("victim_name") or "opponent",
         victim_champion=kill.get("victim_champion") or "?",
         context=". ".join(parts),
         clip_path=clip_path,
-        model_override=kill.get("_model_override"),
+        model_override=resolved_model,
+        thinking_budget=thinking_budget,
     )
+    # Stamp the upgrade decision on the result so the ai_annotations row
+    # can show WHY this call landed on the premium tier in the dashboard.
+    if isinstance(result, dict) and auto_upgraded:
+        result["_auto_upgraded"] = True
+    return result
 
 
 # ─── Daemon loop ────────────────────────────────────────────────────────

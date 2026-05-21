@@ -55,8 +55,15 @@ async def main():
         )
 
         await scheduler.wait_for("gemini")
+        # Wave 33 — text-only re-description routes through the analyzer
+        # config (this script literally rewrites ai_description fields).
+        try:
+            from config import config as _cfg
+            _model = getattr(_cfg, "GEMINI_MODEL_ANALYZER", None) or "gemini-3.1-flash-lite"
+        except Exception:
+            _model = "gemini-3.1-flash-lite"
         resp = client.models.generate_content(
-            model="gemini-3.1-flash-lite",
+            model=_model,
             contents=prompt,
         )
         new_desc = (resp.text or "").strip().strip('"')

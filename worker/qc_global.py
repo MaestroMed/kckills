@@ -137,9 +137,18 @@ Criteres :
   * BAD = a re-clipper ou retirer (kill invisible, mauvaise scene, replay menu, etc.)
 """
 
+        # Wave 33 — route through config.GEMINI_MODEL_QC so this script
+        # honours the operator's tier choice (free→lite, premium→3.5-flash).
+        # Falls back to the legacy literal when config import isn't on
+        # the path (one-shot run from an odd working directory).
+        try:
+            from config import config as _cfg
+            _qc_model = getattr(_cfg, "GEMINI_MODEL_QC", None) or "gemini-3.1-flash-lite"
+        except Exception:
+            _qc_model = "gemini-3.1-flash-lite"
         response = await asyncio.to_thread(
             client.models.generate_content,
-            model="gemini-3.1-flash-lite",
+            model=_qc_model,
             contents=[prompt, video_file],
         )
         text = (response.text or "").strip()

@@ -254,14 +254,28 @@ Donne: frames ~10s avec KDA cumulé par joueur + timestamps RFC3339
 Poll pendant match live: 1 req/10s
 ```
 
-## 3.3 Gemini 2.5 Flash-Lite
+## 3.3 Gemini — tier-aware routing (Wave 33, mai 2026)
 
 ```
-⚠️ GEMINI 2.0 FLASH EST MORT (déprécié mars 2026). Utiliser 2.5 Flash-Lite.
-Free tier: 15 RPM, 1000 RPD, 250K TPM
-Délai min entre appels: 4 secondes
+⚠️ Free tier = Google peut utiliser les prompts → JAMAIS de données users
+Délai min entre appels: 4s (scheduler partagé, 950 RPD plafond)
 Reset quotidien: 07:00 UTC (09:00 Paris = minuit Pacific)
-⚠️ Free tier = Google peut utiliser les prompts → NE JAMAIS envoyer de données users
+
+Tiers via KCKILLS_GEMINI_TIER :
+  free        → 3.1 Flash-Lite    $0.10/$0.40 par M   RPD 500
+  balanced    → 3 Flash            $0.30/$2.50 par M
+  premium     → 3.5 Flash (NEW)    $1.50/$9.00 ($0.15 cached input)
+                Beats 3.1 Pro on agentic, 4x plus rapide. GA 2026-05-19.
+                Thinking budget: minimal | low | medium | high.
+  pro-legacy  → 2.5 Pro            $1.25/$10.00 (budgeted one-shots only)
+  experimental → 3.1 Pro Preview   $3.50/$15.00 (shutdown risk)
+
+Auto-upgrade rule : multi_kill (triple/quadra/penta) OU is_first_blood
+OU score >= GEMINI_AUTO_UPGRADE_SCORE_THRESHOLD → bump auto au premium.
+~10-15% des clips éligibles → bill steady, quality lift où ça compte.
+
+Per-stage overrides : GEMINI_MODEL_{ANALYZER,QC,OFFSET,QUOTES}.
+Source de vérité prix : worker/services/ai_pricing.py (Wave 33).
 ```
 
 ## 3.4 Claude Haiku 4.5

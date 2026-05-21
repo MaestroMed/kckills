@@ -291,8 +291,14 @@ async def _extract_with_gemini(kill: dict, clip_path: str) -> list[dict] | None:
         log.warn("quote_extractor_sdk_missing")
         return None
 
-    model_name = getattr(config, "GEMINI_MODEL_QC", None) or os.environ.get(
-        "GEMINI_MODEL", "gemini-3.1-flash-lite",
+    # Wave 33 — `GEMINI_MODEL_QUOTES` is now the dedicated stage var
+    # (defaults to the `quotes` tier preset : 3-flash on `balanced`+
+    # `premium`, lite on `free`). Falls back to QC for callers that
+    # haven't picked up the new config yet.
+    model_name = (
+        getattr(config, "GEMINI_MODEL_QUOTES", None)
+        or getattr(config, "GEMINI_MODEL_QC", None)
+        or os.environ.get("GEMINI_MODEL", "gemini-3.1-flash-lite")
     )
 
     started_at = time.monotonic()

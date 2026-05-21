@@ -63,59 +63,76 @@ class Config:
     #   "0"    : force libx264 (debug or non-GPU machines)
     USE_NVENC = os.getenv("KCKILLS_USE_NVENC", "auto")
 
-    # ─── Gemini model selection (PR12 — premium quality, April 2026) ─
+    # ─── Gemini model selection (Wave 33 — May 2026, Gemini 3.5 Flash) ─
     # Per-stage model selection.
     #
-    # April 2026 state of play (research-confirmed) :
-    #   * Gemini 3.1 Pro Preview : SOTA video (87.6% Video-MMMU) — but
-    #     PREVIEW = shutdown risk (Gemini 3 Pro got killed Mar 9, 2026
-    #     with no migration). NOT recommended for backfill work that
-    #     must persist.
-    #   * Gemini 2.5 Pro        : GA, paid-only since Apr 1, 2026.
-    #     $1.25/$10 per M tokens. 87%+ video benchmarks. SAFE choice.
-    #   * Gemini 3 Flash        : GA, frontier-class at $0.30/$2.50.
-    #   * Gemini 3.1 Flash-Lite : GA, $0.25/$1.50. Better than 2.5
-    #     Flash-Lite at same price tier. Default for QC / cheap reads.
+    # May 2026 state of play (research-confirmed) :
+    #   * Gemini 3.5 Flash       : GA 2026-05-19. NEW SOTA mid-tier —
+    #     beats 3.1 Pro on coding/agentic, 4× faster, $1.50/$9 per M
+    #     tokens. New thinking-budget API (enum minimal|low|medium|high).
+    #     Implicit cache discount $0.15/M for reused prompt prefix.
+    #     → New default for `premium` tier.
+    #   * Gemini 2.5 Pro         : GA, paid-only since Apr 1, 2026.
+    #     $1.25/$10 per M tokens. SAFE legacy choice — moved to the new
+    #     `pro-legacy` tier for budgeted one-shot backfills.
+    #   * Gemini 3.1 Pro Preview : PREVIEW = shutdown risk (Gemini 3 Pro
+    #     got killed Mar 9, 2026). Kept in `experimental` only.
+    #   * Gemini 3 Flash         : GA, frontier-class at $0.30/$2.50.
+    #     Sweet-spot for mid-stakes (quote extraction, captions).
+    #   * Gemini 3.1 Flash-Lite  : GA, $0.10/$0.40. Default for QC / OCR.
     #
-    # Recommended €45 KC-catalog backfill config (1 line in .env):
-    #   GEMINI_TIER=premium
-    # (Equivalent to:
-    #   GEMINI_MODEL_ANALYZER=gemini-2.5-pro
-    #   GEMINI_MODEL_QC=gemini-3.1-flash-lite
-    #   GEMINI_MODEL_OFFSET=gemini-3.1-flash-lite
-    # )
+    # Recommended configs :
+    #   GEMINI_TIER=free                              → all flash-lite
+    #   GEMINI_TIER=balanced                          → 3-flash analyzer
+    #   GEMINI_TIER=premium                           → 3.5-flash analyzer
+    #   GEMINI_TIER=pro-legacy                        → 2.5-pro analyzer
     #
-    # Free-tier-only fallback (KCKILLS_GEMINI_TIER not set):
-    #   All three = gemini-3.1-flash-lite (the safe, free, default).
+    # Score-based auto-upgrade :
+    #   GEMINI_AUTO_UPGRADE_SCORE_THRESHOLD=8.0
+    #     If a predicted/measured score crosses this threshold, the
+    #     analyzer bumps to the `premium` tier (3.5-flash) regardless
+    #     of the base tier. Cheap-by-default, premium-when-it-counts.
+    #
+    # Per-stage env vars (GEMINI_MODEL_ANALYZER / _QC / _OFFSET / _QUOTES)
+    # override the tier preset and the auto-upgrade rule.
 
     _GEMINI_TIER = (os.getenv("KCKILLS_GEMINI_TIER", "free") or "free").lower()
     _TIER_DEFAULTS = {
         "free": {  # default — Gemini 3.1 Flash-Lite (GA 2026-05-07).
-            # Replaced 2.5 Flash-Lite at the same $0.25/$1.50 price tier,
+            # Replaced 2.5 Flash-Lite at the same $0.10/$0.40 price tier,
             # with 64 % faster throughput, 2.5× faster TTFT, +62 %
-            # Intelligence Index, and matching-or-beating 2.5 Flash on
-            # most benchmarks. Strict upgrade. Free tier RPD dropped
-            # from 1000 (2.5 Lite) → 500 (3.1 Lite) — fall back to
-            # GEMINI_MODEL_ANALYZER=gemini-2.5-flash-lite if the worker
-            # consistently exhausts the 500 RPD daily quota.
+            # Intelligence Index. Free tier RPD = 500 (was 1000 on 2.5).
             "analyzer": "gemini-3.1-flash-lite",
             "qc":       "gemini-3.1-flash-lite",
             "offset":   "gemini-3.1-flash-lite",
+            "quotes":   "gemini-3.1-flash-lite",
         },
-        "balanced": {  # paid Flash 3 for descriptions, 3.1 Lite for QC
+        "balanced": {  # 3 Flash for descriptions, 3.1 Lite for QC
             "analyzer": "gemini-3-flash",
             "qc":       "gemini-3.1-flash-lite",
             "offset":   "gemini-3.1-flash-lite",
+            "quotes":   "gemini-3-flash",
         },
-        "premium": {  # Pro 2.5 for descriptions (the €45 KC config)
+        "premium": {  # Wave 33 — UPGRADED : 3.5-flash for analyzer.
+            # Was 2.5-pro pre-Wave-33. 3.5 Flash beats 3.1 Pro on agentic,
+            # 4× faster, similar price band. Use `pro-legacy` if you
+            # really want 2.5-pro for backward compat.
+            "analyzer": "gemini-3.5-flash",
+            "qc":       "gemini-3.1-flash-lite",
+            "offset":   "gemini-3.1-flash-lite",
+            "quotes":   "gemini-3-flash",
+        },
+        "pro-legacy": {  # Kept for budgeted one-shots that pre-budgeted 2.5-pro
             "analyzer": "gemini-2.5-pro",
             "qc":       "gemini-3.1-flash-lite",
             "offset":   "gemini-3.1-flash-lite",
+            "quotes":   "gemini-3-flash",
         },
         "experimental": {  # Pro 3.1 Preview (shutdown risk!)
             "analyzer": "gemini-3.1-pro-preview",
             "qc":       "gemini-3.1-flash-lite",
             "offset":   "gemini-3.1-flash-lite",
+            "quotes":   "gemini-3.1-pro-preview",
         },
     }
     _TIER = _TIER_DEFAULTS.get(_GEMINI_TIER, _TIER_DEFAULTS["free"])
@@ -133,11 +150,73 @@ class Config:
         "GEMINI_MODEL_OFFSET",
         os.getenv("GEMINI_MODEL", _TIER["offset"]),
     )
+    # Wave 33 — added `quotes` stage. Was hardcoded `gemini-3.1-flash-lite`
+    # inside quote_extractor.py via `config.GEMINI_MODEL_QC`. Now has its
+    # own override so it can sit at the standard tier without dragging the
+    # OCR / QC tasks up with it.
+    GEMINI_MODEL_QUOTES = os.getenv(
+        "GEMINI_MODEL_QUOTES",
+        os.getenv("GEMINI_MODEL", _TIER["quotes"]),
+    )
+
+    # Wave 33 — auto-upgrade rule. When a kill's predicted/measured
+    # highlight_score crosses this threshold, the analyzer routes that
+    # single call to the premium tier (gemini-3.5-flash) regardless of
+    # KCKILLS_GEMINI_TIER. Leave empty / 0 to disable.
+    # Recommended : 8.0 = top 5-10% of clips, where editorial quality
+    # matters most. Cost impact bounded by the % of clips that cross it.
+    @property
+    def GEMINI_AUTO_UPGRADE_SCORE_THRESHOLD(self) -> float | None:
+        raw = os.getenv("GEMINI_AUTO_UPGRADE_SCORE_THRESHOLD", "").strip()
+        if not raw:
+            return None
+        try:
+            v = float(raw)
+            return v if v > 0 else None
+        except ValueError:
+            return None
+
+    # The model used when the auto-upgrade rule fires. Defaults to the
+    # `premium` tier's analyzer choice (3.5-flash post-Wave-33) but can
+    # be overridden if you want to land somewhere else (e.g. 2.5-pro for
+    # an editorial backfill).
+    GEMINI_AUTO_UPGRADE_MODEL = os.getenv(
+        "GEMINI_AUTO_UPGRADE_MODEL",
+        _TIER_DEFAULTS["premium"]["analyzer"],
+    )
+
+    # Wave 33 — Gemini 3.5 Flash thinking budget (string enum, NEW API).
+    # Values : minimal, low, medium (default), high. Higher = better
+    # quality on multi-step tasks but more output tokens (= more $).
+    # Only applied to models that support thinking budget — currently
+    # 3.5-flash. Older models ignore this and use their own defaults.
+    GEMINI_THINKING_BUDGET = (
+        os.getenv("KCKILLS_GEMINI_THINKING", "medium") or "medium"
+    ).lower()
 
     # Video token resolution. "default" = 300 tokens/sec (best quality),
     # "low" = 100 tokens/sec (3x cheaper, good enough for short clips).
     # Set to "low" if you want to halve cost on Pro 2.5 / Pro 3.1.
     GEMINI_MEDIA_RESOLUTION = os.getenv("KCKILLS_GEMINI_MEDIA_RES", "default")
+
+    # Wave 33 — exposed for the auto-upgrade selector + dashboard cost
+    # calc. Bare-bones helper so callers don't have to redo the tier
+    # lookup themselves.
+    @classmethod
+    def gemini_model_for_stage(cls, stage: str) -> str:
+        """Resolve the configured model for a stage name.
+
+        Stages : "analyzer" | "qc" | "offset" | "quotes".
+        Falls back to GEMINI_MODEL_QC for unknown stages so a typo never
+        sends a free-tier task to the premium model by surprise.
+        """
+        mapping = {
+            "analyzer": cls.GEMINI_MODEL_ANALYZER,
+            "qc":       cls.GEMINI_MODEL_QC,
+            "offset":   cls.GEMINI_MODEL_OFFSET,
+            "quotes":   cls.GEMINI_MODEL_QUOTES,
+        }
+        return mapping.get(stage, cls.GEMINI_MODEL_QC)
 
     # ─── Discord ─────────────────────────────────────────────
     DISCORD_WEBHOOK_URL: str = os.getenv("DISCORD_WEBHOOK_URL", "")
