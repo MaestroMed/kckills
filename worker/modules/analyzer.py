@@ -450,9 +450,18 @@ async def analyze_kill(
         # rather log + retry than crash the producer.
         result = json.loads(text)
         elapsed_ms = int((time.monotonic() - started_at) * 1000)
-        log.info("gemini_analysis_done",
-                 score=result.get("highlight_score"),
-                 latency_ms=elapsed_ms)
+        # Wave 33b — surface model + thinking budget dans la ligne de log
+        # done. Avant : on devait crawler ai_annotations pour vérifier
+        # quel tier avait analysé chaque kill. Maintenant un seul
+        # `grep gemini_analysis_done | grep model=gemini-3.5-flash` montre
+        # combien de calls premium sont partis.
+        log.info(
+            "gemini_analysis_done",
+            score=result.get("highlight_score"),
+            latency_ms=elapsed_ms,
+            model=model_name,
+            thinking_budget=thinking_budget or None,
+        )
         # Surface usage_metadata for lab cost accounting + ai_annotations
         # Wave 33 — added `cached_content_tokens` + `thoughts_tokens`
         # which 3.5-flash exposes for cost-aware accounting (10× cheaper
@@ -672,6 +681,21 @@ async def analyze_kill_row(kill: dict, clip_path: str | None = None) -> dict | N
     # can show WHY this call landed on the premium tier in the dashboard.
     if isinstance(result, dict) and auto_upgraded:
         result["_auto_upgraded"] = True
+        # Wave 33b — observability : surface the trigger reason in logs
+        # so we can grep `auto_upgrade_fired` to confirm the rule is
+        # working in prod. Without this the only signal was the
+        # ai_annotations row's model_name, which required a DB query.
+        try:
+            log.info(
+                "analyzer_auto_upgrade_fired",
+                kill_id=(kill.get("id") or "?")[:8],
+                model=resolved_model,
+                multi_kill=kill.get("multi_kill"),
+                is_first_blood=bool(kill.get("is_first_blood")),
+                existing_score=kill.get("highlight_score"),
+            )
+        except Exception:
+            pass
     return result
 
 
