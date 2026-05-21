@@ -56,8 +56,20 @@ export default async function AnalyticsPage() {
   const sb = await createServerSupabase();
 
   // ── Existing legacy data (preserved) ─────────────────────────────
+  // Wave 34 T2.2 — trim 500 → 300.
+  // The legacy section feeds top-10 lists (top impressions, top rated,
+  // top commented) and a "kills published per day" bar chart over the
+  // last 14 days. Top-10 lists need a wide sample to surface low-score
+  // but high-engagement clips that aren't at the top of the
+  // highlight_score sort; the 14-day daily-publish bar chart only uses
+  // created_at slices. 300 covers ~60-100 days of publishing history
+  // (3-5/day cadence) — enough for top-10 surfacing without false
+  // negatives on a high-engagement low-score outlier. The newer
+  // analytics sections (engagement KPIs, trending, funnel) pull from
+  // Supabase views directly and are unaffected. Admin, force-dynamic,
+  // low traffic.
   const [kills, ratingsRaw, commentsRaw] = await Promise.all([
-    getPublishedKills(500),
+    getPublishedKills(300),
     sb.from("ratings").select("score,kill_id,created_at"),
     sb.from("comments").select("kill_id,created_at,is_deleted,moderation_status"),
   ]);

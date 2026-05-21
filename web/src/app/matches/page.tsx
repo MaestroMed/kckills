@@ -24,9 +24,17 @@ export const metadata: Metadata = {
 
 export default async function MatchesPage() {
   const sb = await createAnonSupabase();
+  // Wave 34 T2.2 — trim 500 → 300.
+  // The list iterates `allClips` only to compute `clipsByMatch.size`
+  // counters and a single total `allClips.length` for the header chip.
+  // With ~80 matches in the history and ~1650 published rows, 300 covers
+  // the published catalogue ranked by highlight_score DESC (the top 300
+  // span virtually every match that has at least one notable clip).
+  // Could be swapped for a HEAD count + group-by RPC later, but trimming
+  // saves ~400KB egress per cache miss in the meantime.
   const [data, allClips, dbMatchesRes, dbTeamsRes] = await Promise.all([
     Promise.resolve(loadRealData()),
-    getPublishedKills(500),
+    getPublishedKills(300),
     sb.from("matches").select("external_id,scheduled_at,stage,format,team_blue_id,team_red_id,winner_team_id"),
     sb.from("teams").select("id,code,name"),
   ]);

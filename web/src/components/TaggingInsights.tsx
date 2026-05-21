@@ -38,7 +38,15 @@ const CLASS_LABELS: Record<string, string> = {
 };
 
 export async function TaggingInsights() {
-  const kills = await getPublishedKills(500);
+  // Wave 34 T2.2 — trim 500 → 300.
+  // This component computes distribution stats (game_minute_bucket,
+  // fight_type, champion_class) — bigger sample = smoother bars, but
+  // marginal utility flattens fast past ~250 rows. 300 keeps the
+  // chart shapes statistically meaningful while shaving ~400 KB
+  // egress per cache miss. Lives on the homepage so it shares the
+  // React `cache()` dedup with the other homepage callers (same
+  // (limit, buildTime) tuple = single network hit).
+  const kills = await getPublishedKills(300);
   const kc = kills.filter((k) => k.tracked_team_involvement === "team_killer");
   if (kc.length === 0) return null;
 

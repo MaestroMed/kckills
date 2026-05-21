@@ -132,6 +132,14 @@ const CATEGORIES: Category[] = [
 const PER_CATEGORY = 3;
 
 export default async function RecordsPage() {
+  // Wave 34 T2.2 — kept at 500 (with justification).
+  // This page aggregates 6 hall-of-fame categories across ALL-TIME KC
+  // history. Some are rare (pentakills/quadras, snipes) and need the
+  // wider pool to surface even 3 entries. With ~1650 published rows in
+  // DB, 500 caps the egress at ~1MB per cache miss while still pulling
+  // the full top-by-highlight_score slice. Revalidate=3600 keeps this
+  // pre-rendered for 99%+ of traffic, so the egress hit is amortised
+  // across thousands of pageviews.
   const all = await getPublishedKills(500);
   const scored = all.filter((k) => k.kill_visible !== false);
 

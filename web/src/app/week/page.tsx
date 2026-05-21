@@ -71,7 +71,15 @@ export default async function WeekPage() {
   const now = Date.now();
   const since = now - WEEK_MS;
 
-  const all = await getPublishedKills(500);
+  // Wave 34 T2.2 — trim 500 → 200.
+  // The page renders at most 20 cards (top3 + 17). Filter is "last 7 days
+  // AND team_killer AND visible AND has clip". Worker produces 5-15
+  // KC-killer clips per day → ~35-100 per week. 200 row sample gives a
+  // 2-5× safety margin for high-volume weeks (international event runs,
+  // pentakill spurts) while sorting by highlight_score DESC means the
+  // best of the week is always in the slice. Cuts cache-miss egress
+  // ~3× vs the previous 500.
+  const all = await getPublishedKills(200);
   const data = loadRealData();
 
   // Filter: visible KC-killer clips from last 7 days

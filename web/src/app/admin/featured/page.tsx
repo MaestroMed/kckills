@@ -25,7 +25,17 @@ export default async function FeaturedPage() {
       .gte("feature_date", from.toISOString().slice(0, 10))
       .lte("feature_date", to.toISOString().slice(0, 10))
       .order("feature_date", { ascending: false }),
-    getPublishedKills(500),
+    // Wave 34 T2.2 — trim 500 → 300.
+    // The picker uses `topKills` = first 50 with highlight_score ≥7,
+    // guaranteed to live in the top of the response (sorted DESC).
+    // killMap also hydrates already-featured pins in the 14d past +
+    // 7d future window (~21 pins max at 3-5 clips/day). A featured pin
+    // whose kill falls outside the 300-row sample renders as
+    // `kill: null` and is silently filtered out by the picker. 300
+    // gives enough margin to cover every plausibly-featured historical
+    // clip while saving ~400KB egress per cache miss vs 500. Admin
+    // page, low traffic, dynamic=force-dynamic so no ISR amortisation.
+    getPublishedKills(300),
   ]);
 
   // Build kill lookup
