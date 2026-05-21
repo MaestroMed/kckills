@@ -1,6 +1,7 @@
 import "server-only";
 import { createHash, randomUUID } from "crypto";
 import { createServerSupabase } from "@/lib/supabase/server";
+import { verifyAdminCookie } from "@/lib/admin/session";
 
 /**
  * Result of `requireAdmin()` augmented with the auth path that succeeded.
@@ -154,7 +155,8 @@ export async function logAdminAction(params: {
  */
 /**
  * Admin gate. Two acceptance paths:
- *   1. Cookie `kc_admin` matches `KCKILLS_ADMIN_TOKEN` env var
+ *   1. Cookie `kc_admin` carries a valid HS256 JWT signed with
+ *      KCKILLS_ADMIN_JWT_SECRET (issued by POST /api/admin/login)
  *   2. Discord OAuth user is in the `KCKILLS_ADMIN_DISCORD_IDS` allowlist
  *
  * Fail-closed in production : if NEITHER env var is configured in a
@@ -195,12 +197,17 @@ export async function requireAdmin(): Promise<AdminCheckResult> {
     return { ok: true, role: "unknown" };
   }
 
-  // Path 1: cookie token match
+  // Path 1: JWT cookie. Wave 34 T1.2 moved the cookie payload from
+  // "raw KCKILLS_ADMIN_TOKEN" to "HS256 JWT signed with
+  // KCKILLS_ADMIN_JWT_SECRET". We still gate this path on
+  // KCKILLS_ADMIN_TOKEN being set (it's the only thing that can issue
+  // a JWT via /api/admin/login), but the comparison is now sig-verify.
   if (expectedToken) {
     try {
       const { cookies } = await import("next/headers");
       const c = await cookies();
-      if (c.get("kc_admin")?.value === expectedToken) return { ok: true, role: "token" };
+      const cookieValue = c.get("kc_admin")?.value;
+      if (await verifyAdminCookie(cookieValue)) return { ok: true, role: "token" };
     } catch {
       /* cookies() can throw outside RSC */
     }

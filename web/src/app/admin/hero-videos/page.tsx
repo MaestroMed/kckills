@@ -17,6 +17,7 @@
 
 import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
+import { verifyAdminCookie } from "@/lib/admin/session";
 import { HeroVideosEditor } from "./hero-editor";
 
 export const metadata = {
@@ -25,8 +26,9 @@ export const metadata = {
 
 export default async function HeroVideosAdminPage() {
   const cookieStore = await cookies();
-  const adminCookie = cookieStore.get("kc_admin");
-  if (!adminCookie?.value) {
+  const adminCookie = cookieStore.get("kc_admin")?.value;
+  // Wave 34 T1.2 — verify JWT signature, not just presence.
+  if (!(await verifyAdminCookie(adminCookie))) {
     redirect("/admin/login?next=/admin/hero-videos");
   }
 

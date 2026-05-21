@@ -49,12 +49,24 @@ const jetbrainsMono = JetBrains_Mono({
 //   • Playfair Display — display serif for the brass plates + room titles
 //   • Cormorant Garamond — body serif for editorial prose (Stark Culture)
 //   • IM Fell English — 17th-century italic flavor for quotes / guestbook
+//
+// Wave 34 T2.3 (2026-05-21) — `preload: false` sur les 3 fonts BCC.
+// Avant : 3 woff2 (~80-120 KB cumulé) pré-chargés via <link rel=preload>
+// sur CHAQUE page du site, alors qu'elles ne servent qu'à AntreOfBCC
+// (modal sur /alumni/bo). preload:false → next/font écrit toujours le
+// CSS @font-face mais ne déclenche le download que quand un élément
+// visible utilise --font-playfair / --font-cormorant / --font-im-fell.
+// Bundle initial gain : ~80-120 KB woff2 sur la home, plus de blocking
+// font requests sur le critical path. La cave reste pixel-perfect quand
+// le user clique le wolf player → l'Antre charge ses fonts juste-à-temps.
+// Réduit le LCP cold-visit estimé de ~150-300ms sur mobile mid-range.
 const playfairDisplay = Playfair_Display({
   subsets: ["latin"],
   weight: ["400", "600", "700", "900"],
   style: ["normal", "italic"],
   variable: "--font-playfair",
   display: "swap",
+  preload: false,
 });
 const cormorantGaramond = Cormorant_Garamond({
   subsets: ["latin"],
@@ -62,6 +74,7 @@ const cormorantGaramond = Cormorant_Garamond({
   style: ["normal", "italic"],
   variable: "--font-cormorant",
   display: "swap",
+  preload: false,
 });
 const imFellEnglish = IM_Fell_English({
   subsets: ["latin"],
@@ -69,6 +82,7 @@ const imFellEnglish = IM_Fell_English({
   style: ["normal", "italic"],
   variable: "--font-im-fell",
   display: "swap",
+  preload: false,
 });
 
 const UMAMI_SRC = process.env.NEXT_PUBLIC_UMAMI_SRC;

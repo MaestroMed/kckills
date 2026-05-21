@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { verifyAdminCookie } from "@/lib/admin/session";
 
 /**
  * Proxy — protects /admin/* and /api/admin/* (admin auth gate).
@@ -8,7 +9,8 @@ import { NextRequest, NextResponse } from "next/server";
  * changed per https://nextjs.org/docs/messages/middleware-to-proxy.
  *
  * Two acceptance paths for admin:
- *   1. Cookie `kc_admin` matches `KCKILLS_ADMIN_TOKEN` env var
+ *   1. Cookie `kc_admin` carries a valid HS256 JWT signed with
+ *      KCKILLS_ADMIN_JWT_SECRET (Wave 34 T1.2 — was raw master token)
  *   2. (Server-side checked via requireAdmin() in route handlers)
  *      Discord OAuth user in KCKILLS_ADMIN_DISCORD_IDS allowlist
  *
@@ -29,11 +31,14 @@ import { NextRequest, NextResponse } from "next/server";
  *     the ~5x Vercel cost reduction.
  *
  * To get an admin cookie:
- *   - Visit /admin/login?token=<KCKILLS_ADMIN_TOKEN>
- *   - The login route sets the kc_admin cookie (httpOnly, secure)
+ *   - POST /api/admin/login with body { token: <KCKILLS_ADMIN_TOKEN> }
+ *   - The login route verifies the token in constant time, then sets
+ *     a signed HS256 JWT in the kc_admin cookie (httpOnly, secure).
+ *   - Rotation : bump KCKILLS_ADMIN_JWT_SECRET to invalidate every
+ *     issued cookie at once without rotating the master token.
  */
 
-export function proxy(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   // The matcher (see config below) ONLY routes /admin/*, /api/admin/*,
@@ -95,10 +100,14 @@ export function proxy(request: NextRequest) {
     return NextResponse.next({ request: { headers: passthroughHeaders } });
   }
 
-  // Cookie token check — if the env is set and matches, allow.
+  // JWT cookie check — verify the HS256 signature against
+  // KCKILLS_ADMIN_JWT_SECRET. `verifyAdminCookie` is edge-safe (uses
+  // `jose`, no Node crypto) and returns false on any failure (missing
+  // secret, expired, bad sig, malformed). Wave 34 T1.2 replaced the
+  // previous plaintext-equality check.
   if (expectedToken) {
     const cookie = request.cookies.get("kc_admin")?.value;
-    if (cookie === expectedToken) {
+    if (await verifyAdminCookie(cookie)) {
       return noStore(NextResponse.next({ request: { headers: passthroughHeaders } }));
     }
   }
