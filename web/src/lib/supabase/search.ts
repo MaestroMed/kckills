@@ -375,16 +375,31 @@ export async function searchKills(
 
     // Resolve era → date window. Unknown era id = no results (don't
     // silently ignore an invalid filter).
-    let dateRange: { startISO: string; endISO: string } | null = null;
+    // Wave 34 T1.3 + T2.1 — date range uses both ISO (for legacy callers)
+    // AND ms-since-epoch (for `kills.event_epoch` filter, which is the
+    // indexed column post-migration 071). The legacy `.gte("games.matches.
+    // scheduled_at", ...)` filter is silently dropped without `!inner` →
+    // returned kills outside the era window. Switched to event_epoch
+    // direct, same fix as getKillsByEra.
+    let dateRange: {
+      startISO: string;
+      endISO: string;
+      startMs: number;
+      endMs: number;
+    } | null = null;
     if (filters.eraId) {
       const era = getEraById(filters.eraId);
       if (!era) {
         return { rows: [], nextCursor: null };
       }
-      dateRange = {
-        startISO: `${era.dateStart}T00:00:00Z`,
-        endISO: `${era.dateEnd}T23:59:59Z`,
-      };
+      const startISO = `${era.dateStart}T00:00:00Z`;
+      const endISO = `${era.dateEnd}T23:59:59Z`;
+      const startMs = Date.parse(startISO);
+      const endMs = Date.parse(endISO);
+      if (!Number.isFinite(startMs) || !Number.isFinite(endMs)) {
+        return { rows: [], nextCursor: null };
+      }
+      dateRange = { startISO, endISO, startMs, endMs };
     }
 
     // Build the base query. We always join games!inner+matches!inner
@@ -444,9 +459,10 @@ export async function searchKills(
       q = q.eq("tracked_team_involvement", filters.trackedTeam);
     }
     if (dateRange) {
-      q = q
-        .gte("games.matches.scheduled_at", dateRange.startISO)
-        .lte("games.matches.scheduled_at", dateRange.endISO);
+      // Wave 34 T1.3 — event_epoch is the indexed column (migration 071).
+      // Nested filter on games.matches.scheduled_at without !inner was
+      // silently dropped → returned kills outside the era window.
+      q = q.gte("event_epoch", dateRange.startMs).lte("event_epoch", dateRange.endMs);
     }
 
     // ── Cursor pagination ──────────────────────────────────────────
@@ -538,7 +554,10 @@ async function searchKillsIlikeFallback(
   trimmedQ: string,
   filters: SearchFilters,
   resolvedKillerId: string | null,
-  dateRange: { startISO: string; endISO: string } | null,
+  // Wave 34 T1.3 — extended shape : startMs/endMs for the indexed
+  // event_epoch filter (migration 071). ISO kept for back-compat /
+  // logging context. See main `search()` for the construction.
+  dateRange: { startISO: string; endISO: string; startMs: number; endMs: number } | null,
   opts: SearchOpts,
   limit: number,
   fetchLimit: number,
@@ -578,9 +597,9 @@ async function searchKillsIlikeFallback(
   }
   if (filters.trackedTeam) q = q.eq("tracked_team_involvement", filters.trackedTeam);
   if (dateRange) {
-    q = q
-      .gte("games.matches.scheduled_at", dateRange.startISO)
-      .lte("games.matches.scheduled_at", dateRange.endISO);
+    // Wave 34 T1.3 — see getKillsByEra. Filter on indexed event_epoch
+    // instead of nested games.matches.scheduled_at (silent LEFT JOIN drop).
+    q = q.gte("event_epoch", dateRange.startMs).lte("event_epoch", dateRange.endMs);
   }
   if (opts.cursor) {
     const decoded = decodeCursor(opts.cursor);
