@@ -1272,105 +1272,116 @@ async def run() -> int:
     counters = {"ok": 0, "fail": 0, "yt_blocked": 0}
 
     async def _process_one(kill: dict, job: dict | None):
-        async with sem:
-            # Fetch parent game to find the VOD info
-            games = safe_select(
-                "games",
-                "vod_youtube_id, vod_offset_seconds",
-                id=kill.get("game_id", ""),
-            )
-            if not games:
-                if job is not None:
-                    await asyncio.to_thread(
-                        job_queue.fail, job["id"],
-                        "parent game missing", 3600, "game_missing",
-                    )
-                return
-            game = games[0]
-            yt_id = game.get("vod_youtube_id")
-            offset = int(game.get("vod_offset_seconds") or 0)
-            if not yt_id:
-                # No VOD yet — surface as retry, the vod_offset_finder
-                # will fill it in. 30 min retry lets that module run.
-                if job is not None:
-                    await asyncio.to_thread(
-                        job_queue.fail, job["id"],
-                        "vod_youtube_id null on game", 1800, "no_vod",
-                    )
-                return
-
-            # PR10-A : batched_safe_update collapses the N status='clipping'
-            # writes per cycle into ONE PATCH (id=in.(uuid1,uuid2,...)) — same
-            # for the status='clipped' writes once they all flush together.
-            await batched_safe_update("kills", {"status": "clipping"}, "id", kill["id"])
-
-            try:
-                urls = await clip_kill(
-                    kill_id=kill["id"],
-                    youtube_id=yt_id,
-                    vod_offset_seconds=offset,
-                    game_time_seconds=int(kill.get("game_time_seconds") or 0),
-                    game_id=kill.get("game_id") or None,
+        # Wave 34 T3.2 — bind kill_id + game_id to the contextvars so every
+        # log line emitted from inside this clip pass (including the deep
+        # clip_kill() / ffmpeg / r2_client.upload_clip helpers) carries the
+        # trace identifier. Use bound_contextvars as a context manager so
+        # the binding is automatically torn down when the worker returns,
+        # even on exception — otherwise the next kill picked up by the
+        # same sem-protected slot would inherit the previous one's trace.
+        with structlog.contextvars.bound_contextvars(
+            kill_id=kill["id"],
+            game_id=kill.get("game_id"),
+        ):
+            async with sem:
+                # Fetch parent game to find the VOD info
+                games = safe_select(
+                    "games",
+                    "vod_youtube_id, vod_offset_seconds",
+                    id=kill.get("game_id", ""),
                 )
-            except YouTubeBotBlockedError:
-                # YouTube is anti-bot-blocking the entire process. Don't
-                # bump retry_count (it's not the kill's fault) and DON'T
-                # leave the kill in 'clipping' (would never recover).
-                # For queue jobs : 10 min retry so the queue naturally
-                # rate-limits during the outage.
-                prior = "clip_error" if kill.get("status") == "clip_error" else "vod_found"
-                await batched_safe_update("kills", {"status": prior}, "id", kill["id"])
-                if job is not None:
-                    await asyncio.to_thread(
-                        job_queue.fail, job["id"],
-                        "youtube_bot_blocked", 600, "ytdlp_bot_blocked",
-                    )
-                counters["yt_blocked"] += 1
-                # Re-raise so the gather sees it and the batch-level log fires.
-                raise
+                if not games:
+                    if job is not None:
+                        await asyncio.to_thread(
+                            job_queue.fail, job["id"],
+                            "parent game missing", 3600, "game_missing",
+                        )
+                    return
+                game = games[0]
+                yt_id = game.get("vod_youtube_id")
+                offset = int(game.get("vod_offset_seconds") or 0)
+                if not yt_id:
+                    # No VOD yet — surface as retry, the vod_offset_finder
+                    # will fill it in. 30 min retry lets that module run.
+                    if job is not None:
+                        await asyncio.to_thread(
+                            job_queue.fail, job["id"],
+                            "vod_youtube_id null on game", 1800, "no_vod",
+                        )
+                    return
 
-            if urls and urls.get("clip_url_horizontal"):
-                payload = {**urls, "status": "clipped"}
-                payload.pop("_local_h_path", None)
-                await batched_safe_update("kills", payload, "id", kill["id"])
+                # PR10-A : batched_safe_update collapses the N status='clipping'
+                # writes per cycle into ONE PATCH (id=in.(uuid1,uuid2,...)) — same
+                # for the status='clipped' writes once they all flush together.
+                await batched_safe_update("kills", {"status": "clipping"}, "id", kill["id"])
+
                 try:
-                    from services.event_qc import tick_qc_clip_produced
-                    tick_qc_clip_produced(kill["id"])
-                except Exception as _e:
-                    log.warn("event_qc_tick_failed", kill_id=kill["id"][:8], stage="clip_produced", error=str(_e)[:120])
+                    urls = await clip_kill(
+                        kill_id=kill["id"],
+                        youtube_id=yt_id,
+                        vod_offset_seconds=offset,
+                        game_time_seconds=int(kill.get("game_time_seconds") or 0),
+                        game_id=kill.get("game_id") or None,
+                    )
+                except YouTubeBotBlockedError:
+                    # YouTube is anti-bot-blocking the entire process. Don't
+                    # bump retry_count (it's not the kill's fault) and DON'T
+                    # leave the kill in 'clipping' (would never recover).
+                    # For queue jobs : 10 min retry so the queue naturally
+                    # rate-limits during the outage.
+                    prior = "clip_error" if kill.get("status") == "clip_error" else "vod_found"
+                    await batched_safe_update("kills", {"status": prior}, "id", kill["id"])
+                    if job is not None:
+                        await asyncio.to_thread(
+                            job_queue.fail, job["id"],
+                            "youtube_bot_blocked", 600, "ytdlp_bot_blocked",
+                        )
+                    counters["yt_blocked"] += 1
+                    # Re-raise so the gather sees it and the batch-level log fires.
+                    raise
 
-                # Mark queue success + enqueue downstream analyze.
-                # Inherit priority bracket from the parent job so editorial /
-                # live work keeps its lane through the pipeline.
-                priority = 50
-                if job is not None:
+                if urls and urls.get("clip_url_horizontal"):
+                    payload = {**urls, "status": "clipped"}
+                    payload.pop("_local_h_path", None)
+                    await batched_safe_update("kills", payload, "id", kill["id"])
                     try:
-                        priority = 70 if int(job.get("priority") or 50) >= 70 else 50
-                    except Exception:
-                        priority = 50
+                        from services.event_qc import tick_qc_clip_produced
+                        tick_qc_clip_produced(kill["id"])
+                    except Exception as _e:
+                        log.warn("event_qc_tick_failed", kill_id=kill["id"][:8], stage="clip_produced", error=str(_e)[:120])
+
+                    # Mark queue success + enqueue downstream analyze.
+                    # Inherit priority bracket from the parent job so editorial /
+                    # live work keeps its lane through the pipeline.
+                    priority = 50
+                    if job is not None:
+                        try:
+                            priority = 70 if int(job.get("priority") or 50) >= 70 else 50
+                        except Exception:
+                            priority = 50
+                        await asyncio.to_thread(
+                            job_queue.succeed, job["id"],
+                            {"clip_url_horizontal": urls.get("clip_url_horizontal")},
+                        )
                     await asyncio.to_thread(
-                        job_queue.succeed, job["id"],
-                        {"clip_url_horizontal": urls.get("clip_url_horizontal")},
+                        job_queue.enqueue,
+                        "clip.analyze", "kill", kill["id"],
+                        None, priority, None, 3,
                     )
-                await asyncio.to_thread(
-                    job_queue.enqueue,
-                    "clip.analyze", "kill", kill["id"],
-                    None, priority, None, 3,
-                )
-                counters["ok"] += 1
-            else:
-                await batched_safe_update(
-                    "kills",
-                    {"status": "clip_error", "retry_count": int(kill.get("retry_count") or 0) + 1},
-                    "id",
-                    kill["id"],
-                )
-                if job is not None:
-                    await asyncio.to_thread(
-                        job_queue.fail, job["id"],
-                        "clip_kill returned no urls", 300, "clip_failed",
+                    counters["ok"] += 1
+                else:
+                    await batched_safe_update(
+                        "kills",
+                        {"status": "clip_error", "retry_count": int(kill.get("retry_count") or 0) + 1},
+                        "id",
+                        kill["id"],
                     )
-                counters["fail"] += 1
+                    if job is not None:
+                        await asyncio.to_thread(
+                            job_queue.fail, job["id"],
+                            "clip_kill returned no urls", 300, "clip_failed",
+                        )
+                    counters["fail"] += 1
 
     # Start the background flusher BEFORE the worker fan-out so writes
     # batch as they happen, not all at the end.

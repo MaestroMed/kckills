@@ -892,132 +892,142 @@ async def _process_one(kill: dict, clip_path: str | None,
     job_queue.claim), we ack it on success and fail it on rejection.
     Downstream jobs (og.generate, embedding.compute, event.map) are
     enqueued only on success.
+
+    Wave 34 T3.2 — kill_id + game_id are bound to structlog contextvars
+    so the Gemini upload / inference / annotation-insert chain all
+    carry the same trace identifier. `grep kill_id=abc1234 daemon.log`
+    then surfaces every step the kill traversed, across clipper +
+    analyzer + og_generator modules.
     """
-    job = kill.get("_pipeline_job")  # may be None for legacy fallback path
-    result = await analyze_kill_row(kill, clip_path=clip_path)
-    _cleanup_clip(clip_path)
+    with structlog.contextvars.bound_contextvars(
+        kill_id=kill["id"],
+        game_id=kill.get("game_id"),
+    ):
+        job = kill.get("_pipeline_job")  # may be None for legacy fallback path
+        result = await analyze_kill_row(kill, clip_path=clip_path)
+        _cleanup_clip(clip_path)
 
-    if not result:
-        if job is not None:
-            await asyncio.to_thread(
-                job_queue.fail, job["id"],
-                "gemini returned no result", 300, "gemini_empty",
+        if not result:
+            if job is not None:
+                await asyncio.to_thread(
+                    job_queue.fail, job["id"],
+                    "gemini returned no result", 300, "gemini_empty",
+                )
+            return
+
+        desc = result.get("description_fr")
+        ok, reason = validate_description(desc)
+        if not ok:
+            log.warn(
+                "analyzer_desc_rejected",
+                kill_id=kill.get("id"),
+                reason=reason,
+                desc_preview=(desc or "")[:80],
             )
-        return
-
-    desc = result.get("description_fr")
-    ok, reason = validate_description(desc)
-    if not ok:
-        log.warn(
-            "analyzer_desc_rejected",
-            kill_id=kill.get("id"),
-            reason=reason,
-            desc_preview=(desc or "")[:80],
-        )
-        counters["rejected"] += 1
-        current_retries = int(kill.get("retry_count") or 0)
-        if current_retries >= 3:
-            log.warn("analyzer_giving_up",
-                     kill_id=kill.get("id"), retries=current_retries)
-            safe_update(
-                "kills",
-                {"status": "manual_review", "retry_count": current_retries + 1},
-                "id", kill["id"],
-            )
-        else:
-            safe_update(
-                "kills", {"retry_count": current_retries + 1},
-                "id", kill["id"],
-            )
-        if job is not None:
-            await asyncio.to_thread(
-                job_queue.fail, job["id"],
-                f"description_rejected: {reason}", 600, "desc_rejected",
-            )
-        return
-
-    # Build the patch (legacy kills.* fields still need direct update for
-    # the columns NOT mirrored by the trigger : status, kill_visible,
-    # qc fields, pipeline version). The denormalised description /
-    # tags / score columns are populated by the trigger from the
-    # ai_annotations row we insert below.
-    patch = _build_analysis_patch(result, kill)
-    needs_reclip_due_to_drift = bool(patch.get("needs_reclip"))
-    kill_visible_flag = bool(patch.get("kill_visible", True))
-    qc_drift_sec = patch.get("ai_qc_drift_sec")
-
-    if needs_reclip_due_to_drift:
-        log.warn(
-            "analyzer_qc_drift_detected",
-            kill_id=kill["id"][:8],
-            expected=int(kill.get("game_time_seconds") or 0),
-            actual=patch.get("ai_qc_timer_sec"),
-            drift=qc_drift_sec,
-        )
-
-    # ─── Write to ai_annotations (PR23-arch) ─────────────────────────
-    # 1. archive any previous current row for this kill
-    # 2. insert the new row with full provenance + cost + confidence
-    # The DB trigger then back-fills kills.ai_description_*, ai_tags,
-    # highlight_score, ai_thumbnail_timestamp_sec.
-    _archive_previous_annotation(kill["id"])
-    _insert_ai_annotation(kill, result, patch)
-
-    # ─── Update the rest of the kills row directly ──────────────────
-    # Strip fields that the trigger now writes — we still own status,
-    # qc, pipeline version, kill_visible, caster_hype_level.
-    trigger_owned = {
-        "highlight_score", "ai_tags", "ai_description", "ai_description_fr",
-        "ai_description_en", "ai_description_ko", "ai_description_es",
-        "ai_thumbnail_timestamp_sec",
-    }
-    direct_patch = {k: v for k, v in patch.items() if k not in trigger_owned}
-    if direct_patch:
-        safe_update("kills", direct_patch, "id", kill["id"])
-
-    try:
-        from services.event_qc import (
-            tick_qc_described, tick_qc_visible,
-            tick_qc_clip_validated, fail_qc_clip_validated,
-        )
-        tick_qc_described(kill["id"])
-        tick_qc_visible(kill["id"], kill_visible_flag)
-        # PR14 : per-clip QC tick from the same Gemini call (no extra cost)
-        if qc_drift_sec is not None:
-            if needs_reclip_due_to_drift:
-                fail_qc_clip_validated(kill["id"], reason=f"drift={qc_drift_sec}s")
+            counters["rejected"] += 1
+            current_retries = int(kill.get("retry_count") or 0)
+            if current_retries >= 3:
+                log.warn("analyzer_giving_up",
+                         kill_id=kill.get("id"), retries=current_retries)
+                safe_update(
+                    "kills",
+                    {"status": "manual_review", "retry_count": current_retries + 1},
+                    "id", kill["id"],
+                )
             else:
-                tick_qc_clip_validated(kill["id"])
-    except Exception as _e:
-        log.warn("event_qc_tick_failed",
-                 kill_id=kill["id"][:8], stage="analyzed", error=str(_e)[:120])
+                safe_update(
+                    "kills", {"retry_count": current_retries + 1},
+                    "id", kill["id"],
+                )
+            if job is not None:
+                await asyncio.to_thread(
+                    job_queue.fail, job["id"],
+                    f"description_rejected: {reason}", 600, "desc_rejected",
+                )
+            return
 
-    # ─── Queue handoff : ack + enqueue downstream jobs ─────────────
-    # Inherit priority bracket from parent job so editorial / live work
-    # keeps its lane through og + embedding + event.map.
-    priority = 50
-    if job is not None:
+        # Build the patch (legacy kills.* fields still need direct update for
+        # the columns NOT mirrored by the trigger : status, kill_visible,
+        # qc fields, pipeline version). The denormalised description /
+        # tags / score columns are populated by the trigger from the
+        # ai_annotations row we insert below.
+        patch = _build_analysis_patch(result, kill)
+        needs_reclip_due_to_drift = bool(patch.get("needs_reclip"))
+        kill_visible_flag = bool(patch.get("kill_visible", True))
+        qc_drift_sec = patch.get("ai_qc_drift_sec")
+
+        if needs_reclip_due_to_drift:
+            log.warn(
+                "analyzer_qc_drift_detected",
+                kill_id=kill["id"][:8],
+                expected=int(kill.get("game_time_seconds") or 0),
+                actual=patch.get("ai_qc_timer_sec"),
+                drift=qc_drift_sec,
+            )
+
+        # ─── Write to ai_annotations (PR23-arch) ─────────────────────────
+        # 1. archive any previous current row for this kill
+        # 2. insert the new row with full provenance + cost + confidence
+        # The DB trigger then back-fills kills.ai_description_*, ai_tags,
+        # highlight_score, ai_thumbnail_timestamp_sec.
+        _archive_previous_annotation(kill["id"])
+        _insert_ai_annotation(kill, result, patch)
+
+        # ─── Update the rest of the kills row directly ──────────────────
+        # Strip fields that the trigger now writes — we still own status,
+        # qc, pipeline version, kill_visible, caster_hype_level.
+        trigger_owned = {
+            "highlight_score", "ai_tags", "ai_description", "ai_description_fr",
+            "ai_description_en", "ai_description_ko", "ai_description_es",
+            "ai_thumbnail_timestamp_sec",
+        }
+        direct_patch = {k: v for k, v in patch.items() if k not in trigger_owned}
+        if direct_patch:
+            safe_update("kills", direct_patch, "id", kill["id"])
+
         try:
-            priority = 70 if int(job.get("priority") or 50) >= 70 else 50
-        except Exception:
-            priority = 50
-        await asyncio.to_thread(
-            job_queue.succeed, job["id"],
-            {"highlight_score": patch.get("highlight_score")},
-        )
+            from services.event_qc import (
+                tick_qc_described, tick_qc_visible,
+                tick_qc_clip_validated, fail_qc_clip_validated,
+            )
+            tick_qc_described(kill["id"])
+            tick_qc_visible(kill["id"], kill_visible_flag)
+            # PR14 : per-clip QC tick from the same Gemini call (no extra cost)
+            if qc_drift_sec is not None:
+                if needs_reclip_due_to_drift:
+                    fail_qc_clip_validated(kill["id"], reason=f"drift={qc_drift_sec}s")
+                else:
+                    tick_qc_clip_validated(kill["id"])
+        except Exception as _e:
+            log.warn("event_qc_tick_failed",
+                     kill_id=kill["id"][:8], stage="analyzed", error=str(_e)[:120])
 
-    # Always enqueue downstream — these modules are queue-driven now.
-    # If the kill needs re-clip due to drift, we still enqueue these
-    # since the OG/embedding work doesn't change with a re-clip and
-    # the publisher will hold the kill back via needs_reclip.
-    for next_type in ("og.generate", "embedding.compute", "event.map"):
-        await asyncio.to_thread(
-            job_queue.enqueue,
-            next_type, "kill", kill["id"],
-            None, priority, None, 3,
-        )
+        # ─── Queue handoff : ack + enqueue downstream jobs ─────────────
+        # Inherit priority bracket from parent job so editorial / live work
+        # keeps its lane through og + embedding + event.map.
+        priority = 50
+        if job is not None:
+            try:
+                priority = 70 if int(job.get("priority") or 50) >= 70 else 50
+            except Exception:
+                priority = 50
+            await asyncio.to_thread(
+                job_queue.succeed, job["id"],
+                {"highlight_score": patch.get("highlight_score")},
+            )
 
-    counters["analysed"] += 1
+        # Always enqueue downstream — these modules are queue-driven now.
+        # If the kill needs re-clip due to drift, we still enqueue these
+        # since the OG/embedding work doesn't change with a re-clip and
+        # the publisher will hold the kill back via needs_reclip.
+        for next_type in ("og.generate", "embedding.compute", "event.map"):
+            await asyncio.to_thread(
+                job_queue.enqueue,
+                next_type, "kill", kill["id"],
+                None, priority, None, 3,
+            )
+
+        counters["analysed"] += 1
 
 
 async def _gemini_consumer(out_q: "asyncio.Queue", n_producers: int,

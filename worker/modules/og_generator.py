@@ -243,7 +243,25 @@ async def _process_kill(kill: dict, counters: dict, sem: asyncio.Semaphore) -> N
       * A#31 — finally-block cleanup of `local_path`. A render-then-crash
         used to leak tempfiles into THUMBNAILS_DIR until the daily
         cleanup task ran.
+
+    Wave 34 T3.2 — kill_id + game_id are bound to structlog contextvars
+    so the entire render → upload → DB-write trace carries the same
+    identifier as the upstream clipper + analyzer passes. Lets
+    `grep kill_id=abc1234 daemon.log` show the full lifecycle from
+    detection to published OG card.
     """
+    with structlog.contextvars.bound_contextvars(
+        kill_id=kill["id"],
+        game_id=kill.get("game_id"),
+    ):
+        await _process_kill_body(kill, counters, sem)
+
+
+async def _process_kill_body(kill: dict, counters: dict, sem: asyncio.Semaphore) -> None:
+    """Inner body of _process_kill — extracted so the contextvars
+    binding stays at the entry-point boundary without re-indenting the
+    full implementation. All log lines emitted from here (and from any
+    helper this calls) inherit kill_id / game_id from the parent."""
     job = kill.get("_pipeline_job")
     kid = kill["id"]
 

@@ -23,6 +23,7 @@ from __future__ import annotations
 import asyncio
 import io
 import os
+import signal
 import sys
 import time
 import traceback
@@ -108,6 +109,13 @@ _renderer = (
 )
 structlog.configure(
     processors=[
+        # Wave 34 T3.2 — merge_contextvars must run FIRST so kill_id /
+        # game_id bound via structlog.contextvars.bind_contextvars(...)
+        # in module _process_one bodies actually land in the rendered
+        # log line. Without this processor the contextvars are stored
+        # but never merged into the event dict, so `grep kill_id=abc`
+        # would find nothing across modules.
+        structlog.contextvars.merge_contextvars,
         structlog.processors.TimeStamper(fmt="iso"),
         structlog.processors.add_log_level,
         _renderer,
@@ -192,10 +200,50 @@ async def supervised_task(name: str, interval: int, run_func):
 
 
 async def run_daemon():
-    """Start every module as an independent supervised asyncio task."""
+    """Start every module as an independent supervised asyncio task.
+
+    Wave 34 T3.2 — graceful shutdown on SIGTERM / SIGINT. Before this
+    fix, `docker stop` / `systemctl kill` would kill the daemon process
+    mid-stream while ffmpeg was encoding a clip, leaving R2 with a
+    corrupted file. Now we install signal handlers that set an
+    asyncio.Event, then race the gather() against the event. On
+    shutdown : cancel module tasks, drain in-flight work with a 5 s
+    budget, then close pooled clients cleanly.
+
+    Mirrors orchestrator.run_child() (orchestrator.py:192-206) so both
+    entry points behave identically under container orchestrators.
+    """
     log.info("daemon_start", modules=[m[0] for m in DAEMON_MODULES])
 
     import importlib
+
+    # ─── Graceful shutdown plumbing ────────────────────────────────
+    stop_event = asyncio.Event()
+    loop = asyncio.get_running_loop()
+
+    def _on_signal(sig: signal.Signals) -> None:
+        # Idempotent : a second SIGTERM/SIGINT after we've already set
+        # the event is a no-op (drain() handles a hard-kill follow-up).
+        if not stop_event.is_set():
+            log.info("daemon_signal_received", signal=sig.name)
+            stop_event.set()
+
+    for sig in (signal.SIGTERM, signal.SIGINT):
+        try:
+            # POSIX path : asyncio loop handles the signal directly,
+            # no thread bouncing, no race with the signal-while-blocked-
+            # in-syscall problem.
+            loop.add_signal_handler(sig, _on_signal, sig)
+        except NotImplementedError:
+            # Windows : add_signal_handler is not supported on Proactor
+            # loops. Fall back to the stdlib signal.signal() hook.
+            # That handler runs on the main thread between bytecodes,
+            # so calling stop_event.set() from it is safe (the Event's
+            # _waiters list mutation is GIL-protected at the C level).
+            signal.signal(
+                sig,
+                lambda s, _f: _on_signal(signal.Signals(s)),
+            )
 
     tasks: list[asyncio.Task] = []
     for name, interval, dotted in DAEMON_MODULES:
@@ -237,9 +285,45 @@ async def run_daemon():
     # is the OPPOSITE of the crash-isolation guarantee the daemon provides.
     # Keep gather() so a freak crash in one module's supervisor wrapper
     # cannot take down sentinel/harvester/clipper/analyzer with it.
+    #
+    # Wave 34 T3.2 — gather() now races against stop_event. On signal,
+    # we cancel the module tasks and let asyncio.wait_for drain them
+    # with a 5 s budget. Anything still running after 5 s gets force-
+    # cancelled in the cleanup pass — at that point we've already
+    # given the in-flight ffmpeg encodes a fair shot.
+    gather_task: asyncio.Future = asyncio.gather(*tasks, return_exceptions=True)
+    stop_wait_task = asyncio.create_task(stop_event.wait(), name="daemon_stop_wait")
+
     try:
-        await asyncio.gather(*tasks)
+        done, _pending = await asyncio.wait(
+            {gather_task, stop_wait_task},
+            return_when=asyncio.FIRST_COMPLETED,
+        )
+
+        if stop_wait_task in done:
+            # Graceful path : signal received. Cancel module tasks,
+            # then drain them with a 5 s budget so in-flight encodes
+            # / uploads can finish before exit.
+            log.info("daemon_draining", task_count=len(tasks))
+            for t in tasks:
+                t.cancel()
+            try:
+                await asyncio.wait_for(
+                    asyncio.gather(*tasks, return_exceptions=True),
+                    timeout=5.0,
+                )
+                log.info("daemon_drained_clean")
+            except asyncio.TimeoutError:
+                log.warn("daemon_drain_timeout", budget_s=5.0)
+        else:
+            # gather() returned on its own (shouldn't happen in normal
+            # operation since supervised_task loops forever, but possible
+            # if every module failed to import). Cancel the stop waiter.
+            stop_wait_task.cancel()
     except KeyboardInterrupt:
+        # KeyboardInterrupt CAN still arrive on Windows even with the
+        # signal handler installed (different process group, raw Ctrl+C
+        # from the spawning shell). Treat the same as a signal.
         log.info("daemon_stopped_by_user")
     except asyncio.CancelledError:
         log.info("daemon_cancelled")

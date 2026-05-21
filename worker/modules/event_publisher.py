@@ -339,31 +339,43 @@ async def run() -> int:
     )
     published_count = 0
     for job in claimed:
-        try:
-            ok = await asyncio.to_thread(_process_publish_check, job)
-        except Exception as e:
-            log.error(
-                "event_publish_error",
-                job_id=job.get("id", "")[:8],
-                event_id=(job.get("entity_id") or "")[:8],
-                error=str(e)[:200],
-            )
-            await asyncio.to_thread(
-                job_queue.fail, job["id"],
-                f"publish_check_exception: {type(e).__name__}",
-                300, "publish_exception",
-            )
-            continue
-        if ok:
-            published_count += 1
-            await asyncio.to_thread(
-                job_queue.succeed, job["id"], {"event_id": job.get("entity_id")},
-            )
-        else:
-            await asyncio.to_thread(
-                job_queue.fail, job["id"],
-                "publish_check returned false", 300, "publish_failed",
-            )
+        # Wave 34 T3.2 — bind event_id (and kill_id when known up-front
+        # from the job payload) so the publish.check trace lines up with
+        # the upstream analyzer / og_generator lines for the same kill.
+        # We don't have kill_id at claim time — _process_publish_check
+        # re-fetches the event row to validate is_publishable — but the
+        # event_id alone is enough to correlate the publish stage to the
+        # event.map step that produced it.
+        ctx_kwargs = {"event_id": (job.get("entity_id") or None)}
+        kill_id_hint = (job.get("payload") or {}).get("kill_id") if isinstance(job.get("payload"), dict) else None
+        if kill_id_hint:
+            ctx_kwargs["kill_id"] = kill_id_hint
+        with structlog.contextvars.bound_contextvars(**ctx_kwargs):
+            try:
+                ok = await asyncio.to_thread(_process_publish_check, job)
+            except Exception as e:
+                log.error(
+                    "event_publish_error",
+                    job_id=job.get("id", "")[:8],
+                    event_id=(job.get("entity_id") or "")[:8],
+                    error=str(e)[:200],
+                )
+                await asyncio.to_thread(
+                    job_queue.fail, job["id"],
+                    f"publish_check_exception: {type(e).__name__}",
+                    300, "publish_exception",
+                )
+                continue
+            if ok:
+                published_count += 1
+                await asyncio.to_thread(
+                    job_queue.succeed, job["id"], {"event_id": job.get("entity_id")},
+                )
+            else:
+                await asyncio.to_thread(
+                    job_queue.fail, job["id"],
+                    "publish_check returned false", 300, "publish_failed",
+                )
 
     # ─── Retract phase (direct, not queue-driven) ───────────────────
     retractable = await _fetch_retractable(db)
