@@ -332,6 +332,29 @@ async def _extract_with_gemini(kill: dict, clip_path: str) -> list[dict] | None:
             return None
 
         elapsed_ms = int((time.monotonic() - started_at) * 1000)
+        # Wave 33 — record cost so the daily $-cap (shared with the
+        # analyzer) reflects ALL Gemini spend, not just analyzer's.
+        try:
+            from services.ai_pricing import compute_gemini_cost
+            from scheduler import scheduler as _sched
+            um = getattr(response, "usage_metadata", None)
+            if um is not None:
+                in_tok = getattr(um, "prompt_token_count", None) or getattr(um, "input_token_count", None)
+                out_tok = getattr(um, "candidates_token_count", None) or getattr(um, "output_token_count", None)
+                cached_tok = (
+                    getattr(um, "cached_content_token_count", None)
+                    or getattr(um, "cached_input_token_count", None)
+                )
+                cost = compute_gemini_cost(
+                    model_name, in_tok, out_tok, cached_input_tokens=cached_tok,
+                )
+                if cost is not None:
+                    try:
+                        _sched.record_cost("gemini", cost)
+                    except Exception:
+                        pass
+        except Exception:
+            pass
         log.info(
             "quote_extractor_gemini_done",
             kill_id=kill["id"][:8],
