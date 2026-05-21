@@ -1005,26 +1005,6 @@ export interface KillsByEraOpts {
 }
 
 /**
- * Get published kill clips that happened during the given KC era.
- *
- * Filters by the MATCH date (`games.matches.scheduled_at`) — that's the
- * actual day the kill happened on the Riot stage, not when our worker
- * imported the row. Without this, freshly-backfilled gol.gg historical
- * kills (scraped in 2026) would always slot into the 2026 eras.
- *
- * Same selection criteria as getPublishedKills :
- *   * publication_status='published' (with PR23 legacy fallback on `status`)
- *   * kill_visible=true (Gemini QC has confirmed the kill is in-frame)
- *   * clip_url_vertical NOT NULL + thumbnail_url NOT NULL (real R2 asset)
- *
- * Sorted by highlight_score DESC NULLS LAST, then created_at DESC — same
- * ordering as the homepage feed so eras with high-quality clips bubble
- * the best plays to the top of the strip.
- *
- * Returns an empty array if no kills fall in the window (e.g. early LFL
- * eras where no clips have been backfilled yet) — never throws.
- */
-/**
  * Count published kills that happened in a given date window. Wave 31a
  * — feeds the KCTimeline kill-count badge. Uses a head-only request
  * with `count=planned` so the call returns in ~100ms even on millions
@@ -1034,7 +1014,9 @@ export interface KillsByEraOpts {
  * the actual kill on stage) instead of the nested `games.matches.scheduled_at`.
  * The nested filter required an `!inner` join, which either timed out (slow
  * count plan) or silently dropped to 0 (when the join wasn't materialised).
- * event_epoch lives directly on the kills row, indexed, no join needed.
+ * event_epoch lives directly on the kills row and is now backed by the
+ * partial index `idx_kills_event_epoch_published` (see migration 071,
+ * Wave 34 T1.3) — no join needed.
  */
 export const countKillsByEra = cache(async function countKillsByEra(
   opts: {
@@ -1056,7 +1038,9 @@ export const countKillsByEra = cache(async function countKillsByEra(
     // underestimates row counts with a multi-column AND chain (status +
     // kill_visible + event_epoch range + clip_url_vertical NOT NULL),
     // returning single-digit estimates when the real count is 200+.
-    // event_epoch is indexed so the exact scan is still ~150ms.
+    // event_epoch is backed by `idx_kills_event_epoch_published` (partial
+    // index on status='published' AND kill_visible=true — migration 071,
+    // Wave 34 T1.3) so the exact scan is still ~150ms.
     const { count, error } = await supabase
       .from("kills")
       .select("id", { count: "exact", head: true })
@@ -1080,16 +1064,43 @@ export const countKillsByEra = cache(async function countKillsByEra(
   }
 });
 
+/**
+ * Get published kill clips that happened during the given KC era.
+ *
+ * Filters by `kills.event_epoch` — the millisecond UTC stamp of the
+ * actual kill on the Riot stage, NOT when our worker imported the row.
+ * Without this, freshly-backfilled gol.gg historical kills (scraped in
+ * 2026) would always slot into the 2026 eras.
+ *
+ * Wave 34 T1.3 fix : previously filtered on the nested
+ * `games.matches.scheduled_at` without an `!inner` join, so the
+ * predicate was silently dropped to a LEFT JOIN and the function
+ * returned kills from outside the era. event_epoch lives directly on
+ * the kills row and is backed by the partial index
+ * `idx_kills_event_epoch_published` (migration 071) — same approach
+ * countKillsByEra has used since Wave 32.
+ *
+ * Same selection criteria as getPublishedKills :
+ *   * publication_status='published' (with PR23 legacy fallback on `status`)
+ *   * kill_visible=true (Gemini QC has confirmed the kill is in-frame)
+ *   * clip_url_vertical NOT NULL + thumbnail_url NOT NULL (real R2 asset)
+ *
+ * Sorted by highlight_score DESC NULLS LAST, then created_at DESC — same
+ * ordering as the homepage feed so eras with high-quality clips bubble
+ * the best plays to the top of the strip.
+ *
+ * Returns an empty array if no kills fall in the window (e.g. early LFL
+ * eras where no clips have been backfilled yet) — never throws.
+ */
 export const getKillsByEra = cache(async function getKillsByEra(
   opts: KillsByEraOpts,
 ): Promise<PublishedKillRow[]> {
   const limit = opts.limit ?? 60;
-  // Build a half-open ISO range from the era's calendar-day window.
-  // dateEnd is inclusive at the date level, so we filter < (end + 1 day).
-  const startISO = `${opts.startDate}T00:00:00Z`;
-  // gte/lte on a date string compares lexicographically — appending the
-  // end-of-day timestamp avoids dropping kills that happened on dateEnd.
-  const endISO = `${opts.endDate}T23:59:59Z`;
+  // Build a half-open millisecond range from the era's calendar-day
+  // window. Matches the BIGINT shape of kills.event_epoch directly.
+  const startMs = Date.parse(`${opts.startDate}T00:00:00Z`);
+  const endMs = Date.parse(`${opts.endDate}T23:59:59Z`);
+  if (!Number.isFinite(startMs) || !Number.isFinite(endMs)) return [];
   try {
     const supabase = opts.buildTime
       ? createAnonSupabase()
@@ -1105,10 +1116,9 @@ export const getKillsByEra = cache(async function getKillsByEra(
       .eq("kill_visible", true)
       .not("clip_url_vertical", "is", null)
       .not("thumbnail_url", "is", null)
-      // Filter on the match date (when the kill actually happened on
-      // stage), NOT on `kills.created_at` which is the worker import time.
-      .gte("games.matches.scheduled_at", startISO)
-      .lte("games.matches.scheduled_at", endISO)
+      // Filter on event_epoch directly — see comment above.
+      .gte("event_epoch", startMs)
+      .lte("event_epoch", endMs)
       .order("highlight_score", { ascending: false, nullsFirst: false })
       .order("created_at", { ascending: false })
       .limit(limit);
