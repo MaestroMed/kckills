@@ -7,6 +7,7 @@ import { CommandPaletteButton } from "./CommandPalette";
 import { LangSwitcher } from "./i18n/LangSwitcher";
 import { SearchBar } from "./search/SearchBar";
 import { LeagueNav } from "./league/LeagueNav";
+import { HeaderAura } from "./HeaderAura";
 import { useT } from "@/lib/i18n/use-lang";
 
 // PR-loltok BC : env-gated multi-league chip strip.
@@ -79,12 +80,16 @@ export function Navbar() {
   }, []);
 
   return (
-    <nav className="sticky top-0 z-50 border-b border-[var(--border-gold)] glass">
-      <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-2.5">
+    <nav className="sticky top-0 z-50 border-b border-[var(--border-gold)] glass overflow-hidden">
+      {/* Wave 35 #9 — mega-header aura : flowing waves + breathing halos
+          + particles. Decorative, pointer-events-none, sits behind the
+          nav content via absolute positioning. */}
+      <HeaderAura />
+      <div className="relative z-10 mx-auto flex max-w-7xl items-center justify-between px-4 py-2.5">
         {/* Logo */}
         <Link href="/" className="flex items-center gap-2.5 group">
           <KCKILLSLogo />
-          <span className="font-display text-base md:text-lg font-black tracking-[0.1em] hidden sm:inline">
+          <span className="font-display text-base md:text-lg font-black tracking-[0.1em] hidden sm:inline drop-shadow-[0_0_8px_rgba(200,170,110,0.35)]">
             KC<span className="text-[var(--gold)]">KILLS</span>
           </span>
         </Link>
@@ -184,11 +189,13 @@ export function Navbar() {
           today's homepage. The chip strip sits BELOW the main nav row
           so it scrolls horizontally on mobile without disrupting the
           burger / search button. */}
-      <LeagueNav enabled={LOLTOK_PUBLIC} />
+      <div className="relative z-10">
+        <LeagueNav enabled={LOLTOK_PUBLIC} />
+      </div>
 
       {/* Mobile menu */}
       {mobileOpen && (
-        <div id="mobile-nav" className="border-t border-[var(--border-gold)] px-4 py-3 md:hidden space-y-1">
+        <div id="mobile-nav" className="relative z-10 border-t border-[var(--border-gold)] px-4 py-3 md:hidden space-y-1 bg-[var(--bg-primary)]/85 backdrop-blur">
           {/* Wave 6 — inline search bar in the mobile drawer. Tapping a
               recent search closes the drawer naturally via navigation. */}
           <div className="pb-2">

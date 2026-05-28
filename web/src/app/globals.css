@@ -546,6 +546,132 @@ button:focus-visible {
   border-bottom: 1px solid rgba(200,170,110,0.08);
 }
 
+/* ─── HeaderAura — Wave 35 #9 ──────────────────────
+   Mega-header decorative backdrop : breathing halos +
+   flowing waves + floating particles. All transform/opacity
+   based — no layout thrash, GPU-composited. */
+
+.header-aura {
+  contain: strict;
+  will-change: auto;
+  isolation: isolate;
+  /* Slight breathing scale on the whole aura — vibration / pulse */
+  animation: aura-breathe-soft 9s ease-in-out infinite;
+}
+@keyframes aura-breathe-soft {
+  0%, 100% { transform: scale(1); }
+  50%      { transform: scale(1.015); }
+}
+
+/* Halo blobs — large blurred radial gradients */
+.aura-halo {
+  filter: blur(48px);
+  opacity: 0.35;
+  transform-origin: center;
+  will-change: opacity, transform;
+}
+.aura-halo-blue {
+  background: radial-gradient(circle, rgba(0,87,255,0.55) 0%, rgba(0,87,255,0) 70%);
+  animation: aura-halo-pulse 7s ease-in-out infinite;
+}
+.aura-halo-gold {
+  background: radial-gradient(circle, rgba(200,170,110,0.50) 0%, rgba(200,170,110,0) 70%);
+  animation: aura-halo-pulse 9s ease-in-out infinite 1.5s;
+}
+.aura-halo-cyan {
+  background: radial-gradient(circle, rgba(10,200,185,0.35) 0%, rgba(10,200,185,0) 70%);
+  animation: aura-halo-pulse 11s ease-in-out infinite 3s;
+  opacity: 0.22;
+}
+@keyframes aura-halo-pulse {
+  0%, 100% { opacity: 0.18; transform: translate(0,-50%) scale(0.95); }
+  50%      { opacity: 0.45; transform: translate(0,-50%) scale(1.08); }
+}
+.aura-halo-cyan { /* override — uses translate(-50%,-50%) base */
+  animation: aura-halo-cyan-pulse 11s ease-in-out infinite 3s;
+}
+@keyframes aura-halo-cyan-pulse {
+  0%, 100% { opacity: 0.12; transform: translate(-50%,-50%) scale(0.9); }
+  50%      { opacity: 0.30; transform: translate(-50%,-50%) scale(1.1); }
+}
+
+/* Flowing waves — horizontal translate creates the "current" feeling,
+   slight vertical wiggle adds undulation. */
+.aura-wave {
+  will-change: transform;
+  transform-origin: center;
+}
+.aura-wave-1 { animation: aura-wave-flow 16s linear infinite, aura-wave-undulate 7s ease-in-out infinite; }
+.aura-wave-2 { animation: aura-wave-flow 22s linear infinite reverse, aura-wave-undulate 9s ease-in-out infinite 1s; }
+.aura-wave-3 { animation: aura-wave-flow 28s linear infinite, aura-wave-undulate 11s ease-in-out infinite 2s; }
+
+@keyframes aura-wave-flow {
+  from { transform: translate3d(0,0,0); }
+  to   { transform: translate3d(-800px,0,0); }
+}
+@keyframes aura-wave-undulate {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-2px); }
+}
+
+/* Particles — slow float in a lazy lemniscate pattern */
+.aura-particle {
+  position: absolute;
+  border-radius: 9999px;
+  opacity: 0;
+  pointer-events: none;
+  will-change: transform, opacity;
+  animation-name: aura-particle-float;
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: infinite;
+  animation-fill-mode: both;
+}
+.aura-particle-gold {
+  background: radial-gradient(circle, rgba(240,230,210,0.95) 0%, rgba(200,170,110,0.4) 60%, transparent 100%);
+  box-shadow: 0 0 6px rgba(200,170,110,0.6), 0 0 12px rgba(200,170,110,0.3);
+}
+.aura-particle-cyan {
+  background: radial-gradient(circle, rgba(180,240,255,0.9) 0%, rgba(10,200,185,0.35) 60%, transparent 100%);
+  box-shadow: 0 0 5px rgba(10,200,185,0.55), 0 0 10px rgba(10,200,185,0.25);
+}
+@keyframes aura-particle-float {
+  0%   { opacity: 0;   transform: translate3d(0, 0, 0); }
+  15%  { opacity: 0.7; }
+  50%  { opacity: 1;   transform: translate3d(40px, -10px, 0); }
+  85%  { opacity: 0.6; }
+  100% { opacity: 0;   transform: translate3d(80px, 5px, 0); }
+}
+
+/* Top edge sweep — gold highlight slides across the 1px line */
+.aura-top-sweep {
+  background: linear-gradient(90deg,
+    transparent 0%,
+    transparent 30%,
+    rgba(240,230,210,0.9) 50%,
+    transparent 70%,
+    transparent 100%);
+  background-size: 200% 100%;
+  animation: aura-top-sweep 9s linear infinite;
+  mix-blend-mode: screen;
+}
+@keyframes aura-top-sweep {
+  from { background-position: -100% 0; }
+  to   { background-position: 200% 0; }
+}
+
+/* Accessibility — disable everything but the static gradient when
+   the user prefers reduced motion. */
+@media (prefers-reduced-motion: reduce) {
+  .header-aura,
+  .aura-halo,
+  .aura-wave,
+  .aura-particle,
+  .aura-top-sweep {
+    animation: none !important;
+  }
+  .aura-particle { opacity: 0.4; }
+}
+
 /* ─── Number counter animation ───────────────────── */
 @keyframes countUp {
   from { opacity: 0; transform: translateY(10px); }
