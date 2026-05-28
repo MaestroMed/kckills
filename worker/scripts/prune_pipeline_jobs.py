@@ -3,7 +3,27 @@ prune_pipeline_jobs.py — Wrapper around fn_prune_pipeline_jobs RPC.
 
 Wave 17 (2026-05-07) — runs weekly via install-maintenance-tasks.ps1
 on Sunday 03:00 local. Calls migration 053's RPC to delete terminal-
-state pipeline_jobs older than 30 days.
+state pipeline_jobs older than --keep-days.
+
+Wave 35 #5 (2026-05-28) — index audit
+    Existing indexes on pipeline_jobs are well-designed :
+      * idx_pipeline_jobs_claim         (status, run_after, prio, created_at)
+                                        partial WHERE status='pending'
+      * idx_pipeline_jobs_expired_lease (locked_until)
+                                        partial WHERE status='claimed'
+      * idx_pipeline_jobs_entity        (entity_type, entity_id, created_at)
+      * idx_pipeline_jobs_type_status_finished (type, status, finished_at)
+      * idx_pipeline_jobs_active_unique UNIQUE (type, entity_type, entity_id)
+                                        partial WHERE status IN
+                                        ('pending', 'claimed')
+      * idx_pipeline_jobs_terminal_old  (created_at)
+                                        partial WHERE terminal statuses
+    No critical missing index. fn_claim_pipeline_jobs hits the claim
+    partial index ; queue_health/watchdog filter queries use the
+    type_status index. The biggest win was lower retention (default
+    bumped 30 → 14 days here) to keep the table compact, plus the
+    paced one-time purge from worker/scripts/purge_pipeline_jobs_paced.py
+    that flushed 150k stale rows.
 
 Pings Discord on success / failure so the operator sees the cleanup
 running. Idempotent : the RPC handles the deletion atomically.
@@ -12,7 +32,7 @@ Usage
 ─────
     python worker/scripts/prune_pipeline_jobs.py [--keep-days N] [--dry-run]
 
-`--keep-days N` overrides the 30-day default. RPC enforces minimum 7.
+`--keep-days N` overrides the 14-day default. RPC enforces minimum 7.
 `--dry-run` reports row count without calling the RPC.
 """
 from __future__ import annotations
@@ -108,8 +128,10 @@ async def main(keep_days: int, dry_run: bool) -> int:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--keep-days", type=int, default=30,
-                        help="Retention window in days (RPC enforces min 7)")
+    parser.add_argument("--keep-days", type=int, default=14,
+                        help="Retention window in days (RPC enforces min 7). "
+                             "Wave 35 #5 dropped from 30 → 14 to keep "
+                             "pipeline_jobs compact for query plans.")
     parser.add_argument("--dry-run", action="store_true",
                         help="Report only — don't write")
     args = parser.parse_args()
