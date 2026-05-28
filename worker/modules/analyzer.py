@@ -1165,6 +1165,24 @@ def _build_analysis_patch(result: dict, kill: dict) -> dict:
 
     needs_reclip_due_to_drift = (qc_drift_sec is not None and qc_drift_sec > 30)
 
+    # Wave 35 #11 — derive qc_status alongside the kill_visible flip so
+    # the new-system status_split columns stay in sync. Migration 027 had
+    # a SQL trigger doing this but the comment said "Drop after the
+    # codebase stops writing legacy" and it indeed got dropped. Result :
+    # 480 analyzed kills sat with qc_status=pending forever, blocking the
+    # is_publishable gate on game_events.qc_clip_validated → kills never
+    # advanced to status='published'. Pipeline gripped at the publisher.
+    #
+    # Derivation matches the migration 027 backfill rule exactly :
+    #   kill_visible=TRUE  → qc_status='passed'
+    #   kill_visible=FALSE → qc_status='failed'
+    #   kill_visible=None  → qc_status stays 'pending' (no decision yet)
+    qc_status_derived = None
+    if kill_visible_flag is True:
+        qc_status_derived = "passed"
+    elif kill_visible_flag is False:
+        qc_status_derived = "failed"
+
     patch = {
         "highlight_score": _safe_float(result.get("highlight_score")),
         "ai_tags": result.get("tags") or [],
@@ -1190,6 +1208,8 @@ def _build_analysis_patch(result: dict, kill: dict) -> dict:
         "caster_hype_level": _safe_int(result.get("caster_hype_level")),
         "status": "analyzed",
     }
+    if qc_status_derived is not None:
+        patch["qc_status"] = qc_status_derived
     if needs_reclip_due_to_drift:
         patch["needs_reclip"] = True
     return patch

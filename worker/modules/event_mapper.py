@@ -293,10 +293,22 @@ async def _bulk_insert_events(db, rows: list[dict]) -> int:
         if r.status_code in (200, 201):
             inserted = r.json() or []
             return len(inserted)
-        # 409 = duplicate (idempotent skip). 400 / 5xx = real failure.
-        # Lower the warning level for 409 so it doesn't drown real bugs.
-        level = log.debug if r.status_code == 409 else log.warn
-        level(
+        # 409 = duplicate. Wave 35 #11 — UPSERT fallback. The unique
+        # index on kill_id is PARTIAL (WHERE kill_id IS NOT NULL) so
+        # PostgREST can't auto-infer it for ON CONFLICT — bulk INSERT
+        # fails wholesale instead of ignoring duplicates. Previously
+        # we just logged and bailed (return 0), leaving game_events
+        # rows STALE with qc_clip_validated=false even after the kill
+        # was analyzed. Result : is_publishable stays false → kills
+        # never advance to status='published'.
+        #
+        # Fix : on 409, fall back to per-row PATCH on the kill_id, so
+        # the QC ticks get refreshed and is_publishable recomputes via
+        # the GENERATED column trigger.
+        if r.status_code == 409 or "23505" in (r.text or ""):
+            return await _bulk_update_events_fallback(db, rows)
+        # 400 / 5xx = real failure.
+        log.warn(
             "event_mapper_insert_failed",
             status=r.status_code,
             body=r.text[:300],
@@ -306,6 +318,57 @@ async def _bulk_insert_events(db, rows: list[dict]) -> int:
     except Exception as e:
         log.error("event_mapper_insert_threw", error=str(e)[:200])
         return 0
+
+
+async def _bulk_update_events_fallback(db, rows: list[dict]) -> int:
+    """Fallback path : per-kill_id PATCH when the bulk INSERT can't
+    resolve a partial-index dup. Re-applies the QC ticks + descriptive
+    columns so the is_publishable GENERATED column recomputes.
+
+    Wave 35 #11 — was previously a no-op (just logged the dup and
+    returned 0). The pipeline gripped at the publisher because of this
+    silent drop. Now we PATCH and let the trigger advance the gate.
+
+    Returns the number of rows successfully PATCHed.
+    """
+    if not rows:
+        return 0
+    headers = {
+        **db.headers,
+        "Content-Type": "application/json",
+        "Prefer": "return=minimal",
+    }
+    # Patch surface : the columns event_mapper actually computes. We
+    # leave detection_* and tracked_team_involvement out of the PATCH
+    # since they're set at INSERT time and shouldn't change on re-run.
+    PATCH_KEYS = (
+        "qc_clip_produced", "qc_clip_validated", "qc_typed",
+        "qc_described", "qc_visible",
+    )
+    patched = 0
+    for row in rows:
+        kid = row.get("kill_id")
+        if not kid:
+            continue
+        body = {k: row[k] for k in PATCH_KEYS if k in row}
+        if not body:
+            continue
+        try:
+            r = await asyncio.to_thread(
+                httpx.patch,
+                f"{db.base}/game_events",
+                params={"kill_id": f"eq.{kid}"},
+                headers=headers,
+                json=body,
+                timeout=20.0,
+            )
+            if r.status_code in (200, 204):
+                patched += 1
+        except Exception:
+            continue
+    if patched:
+        log.info("event_mapper_upsert_fallback", patched=patched, batch_size=len(rows))
+    return patched
 
 
 # ─── Per-game mapping ─────────────────────────────────────────────────
