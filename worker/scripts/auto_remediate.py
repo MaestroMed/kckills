@@ -218,6 +218,57 @@ def kills_published_count() -> int:
 
 
 # ─── Remediations ──────────────────────────────────────────────────────
+def reset_zombie_clipping(minutes_old: int = STUCK_CLIPPING_MINUTES) -> int:
+    """Flip kills.status='clipping' (>N min stale) back to vod_found so
+    the clipper can re-claim them.
+
+    Wave 35 #7 hotfix : the lease release RPC only handles pipeline_jobs
+    rows ; if the clipper crashed AFTER setting kills.status='clipping'
+    but BEFORE finishing the clip, the kill row is stuck in a phantom
+    state forever (until stuck_kill_reset at boot, which uses a 24h
+    threshold — way too slow for an active pipeline).
+
+    Direct PATCH via PostgREST `in.(...)` filter. Idempotent.
+    """
+    try:
+        cutoff = (_utc_now() - timedelta(minutes=minutes_old)).isoformat()
+        # First find ids (bounded to 100/cycle so a huge backlog doesn't
+        # explode the URL length on the IN filter)
+        r = httpx.get(
+            f"{SB_URL}/rest/v1/kills",
+            params={
+                "select": "id",
+                "status": "eq.clipping",
+                "updated_at": f"lt.{cutoff}",
+                "limit": "100",
+            },
+            headers=HEADERS,
+            timeout=10,
+        )
+        if r.status_code != 200:
+            return 0
+        rows = r.json() or []
+        if not rows:
+            return 0
+        ids = [row["id"] for row in rows]
+        in_clause = "in.(" + ",".join(ids) + ")"
+        p = httpx.patch(
+            f"{SB_URL}/rest/v1/kills",
+            params={"id": in_clause},
+            json={
+                "status": "vod_found",
+                "updated_at": _utc_now().isoformat(),
+            },
+            headers={**HEADERS, "Prefer": "return=minimal"},
+            timeout=20,
+        )
+        if p.status_code in (200, 204):
+            return len(ids)
+        return 0
+    except Exception:
+        return 0
+
+
 def release_stale_locks() -> int:
     """Call fn_release_stale_pipeline_locks. Returns rows released."""
     try:
@@ -342,24 +393,20 @@ def cycle(auto_restart: bool = False) -> None:
     # We call the RPC regardless (cheap), but only NOTIFY when it actually
     # released something. Persistent zombies are tracked separately so we
     # warn once they cross a streak instead of spamming every cycle.
-    zombie_streak = int(state.get("zombie_clipping_streak", 0))
+    # Two-step recovery :
+    #   step 1 : release pipeline_jobs lease holds (RPC, cheap)
+    #   step 2 : if any kills.status='clipping' remain stuck (no live job
+    #            to release — clipper crashed after status flip but before
+    #            completion), flip them back to vod_found so the clipper
+    #            re-claims them on the next cycle. The 24h stuck_kill_reset
+    #            module wouldn't touch these for hours otherwise.
     if stuck > 0:
         released = release_stale_locks()
         if released > 0:
             actions.append(f"REMEDIATE released {released} stale locks (stuck={stuck})")
-            zombie_streak = 0
-        else:
-            zombie_streak += 1
-            if zombie_streak == QUEUE_GROWTH_STREAK_CYCLES:
-                # Warn ONCE when streak crosses the threshold, then go quiet.
-                actions.append(
-                    f"WARN {stuck} zombie kills.status=clipping for "
-                    f"{QUEUE_GROWTH_STREAK_CYCLES * 5}+ min — manual reset via "
-                    f"scripts/backfill_stuck_pipeline.py recommended"
-                )
-    else:
-        zombie_streak = 0
-    state["zombie_clipping_streak"] = zombie_streak
+        zombie_reset = reset_zombie_clipping()
+        if zombie_reset > 0:
+            actions.append(f"REMEDIATE reset {zombie_reset} zombie clipping → vod_found")
 
     # ─── D) Queue growth monitor (warn only) ───────────────────────────
     last_pending = int(state.get("last_pending_pipeline_jobs", -1))
