@@ -35,6 +35,7 @@ declare global {
           events?: {
             onReady?: (e: { target: YTPlayer }) => void;
             onStateChange?: (e: { data: number; target: YTPlayer }) => void;
+            onError?: (e: { data: number; target: YTPlayer }) => void;
           };
         },
       ) => YTPlayer;
@@ -133,6 +134,17 @@ export function BgmPlayer() {
           onStateChange: (e) => {
             // 0 = ended → next track
             if (e.data === 0) next();
+          },
+          // Wave 35 #10 — auto-skip dead tracks (deleted / region blocked
+          // / non-embeddable). Without this, the BGM hangs silently on a
+          // bad track until the user manually advances. YT codes
+          // 100/101/150 = unrecoverable, skip.
+          onError: (e) => {
+            // eslint-disable-next-line no-console
+            console.warn("[bgm] YT.Player onError — auto-skipping", { code: e.data });
+            if (e.data === 2 || e.data === 5 || e.data === 100 || e.data === 101 || e.data === 150) {
+              next();
+            }
           },
         },
       });

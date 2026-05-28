@@ -247,6 +247,7 @@ interface WindowYTLike {
       events?: {
         onReady?: (e: { target: YTPlayerLocal }) => void;
         onStateChange?: (e: { data: number; target: YTPlayerLocal }) => void;
+        onError?: (e: { data: number; target: YTPlayerLocal }) => void;
       };
     },
   ) => YTPlayerLocal;
@@ -343,6 +344,7 @@ function HiddenAudioIframe() {
     volume,
     _attachPlayer,
     _onPlayerStateChange,
+    next,
   } = useFloatingPlayerInternal();
   const containerRef = useRef<HTMLDivElement | null>(null);
   const playerRef = useRef<YTPlayerLocal | null>(null);
@@ -465,6 +467,33 @@ function HiddenAudioIframe() {
             },
             onStateChange: (e) => {
               _onPlayerStateChange(e.data);
+            },
+            // Wave 35 #10 — auto-skip dead tracks. YT error codes :
+            //   2   = invalid videoId
+            //   5   = HTML5 player error
+            //   100 = video not found (deleted / private)
+            //   101 / 150 = embedding not allowed (uploader disabled it
+            //               OR region-restricted in user's country)
+            // Before this handler, a dead track would just hang silently
+            // on the wolf player — user had no clue the playback failed.
+            // Now we advance to the next track immediately + leave a
+            // console breadcrumb so admins can spot which ID went dead.
+            onError: (e) => {
+              const code = e.data;
+              // eslint-disable-next-line no-console
+              console.warn("[wolf] YT.Player onError — auto-skipping", {
+                code,
+                youtubeId: currentTrack?.youtubeId,
+                title: currentTrack?.title,
+              });
+              if (code === 2 || code === 5 || code === 100 || code === 101 || code === 150) {
+                try {
+                  next();
+                } catch (err) {
+                  // eslint-disable-next-line no-console
+                  console.warn("[wolf] auto-skip next() threw", err);
+                }
+              }
             },
           },
         });

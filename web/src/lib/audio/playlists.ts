@@ -83,18 +83,32 @@ export const DEFAULT_HOMEPAGE_PLAYLIST: BgmTrack[] = [
 ];
 
 /**
- * Default scroll playlist — high-energy LoL anthems.
+ * Default scroll playlist — high-energy "montage" anthems for the
+ * TikTok-style scroll feed.
  *
- * Wave 30m (2026-05-14) — replaced the generic NCS "Phoenix" (was
- * youtubeId p7ZsBPK656s : Netrum & Halvorsen) with the OFFICIAL Riot
- * Worlds 2019 anthem by Cailin Russo + Chrissy Costanza. The user
- * caught it ("c pas le bon son phoenix mdrrr") — for a LoL fan site
- * the Phoenix track is non-negotiably the Worlds 2019 banger.
+ * Wave 35 #10 (2026-05-28) — full curation pass after user reported
+ * "royalty marche pas" + "j'ai dit de mettre le bon phoenix aussi".
+ * Two issues to address :
  *
- * Added the full Worlds-anthem pack (Rise 2018, Phoenix 2019, Take
- * Over 2020, Burn It All Down 2021, Star Walkin' 2022, Heavy Is The
- * Crown 2023, Gods 2024) + K/DA Pop/Stars + Edge of the Universe
- * 2024. These are THE LoL fan anthems — same vibe as the scroll feed.
+ *   1. Royalty was wired to youtubeId `C5rCADZbfGs` — that upload is
+ *      taken down / non-embeddable. Replaced with the OFFICIAL
+ *      NoCopyrightSounds upload : `cXOY9b_Bv-w` (Egzod & Maestro
+ *      Chives ft. Neoni, released 2020-02-21).
+ *
+ *   2. Phoenix is now PRIMARY (top of queue) since it's the canonical
+ *      LoL montage track. Worlds 2019 official animated MV ID is
+ *      `i1IKnWDecwA` on the @LeagueOfLegends channel.
+ *
+ * Curation principle : every track is either an official Riot Games
+ * anthem or an NCS-released banger, both of which permit iframe
+ * embedding. No covers, no fan remixes — those get DMCA'd and the
+ * IDs go dead. The order is "best-known bangers first" so the player
+ * opens on a hook the user will recognise.
+ *
+ * Failsafe : the player now has an `onError` handler (use-floating-
+ * player.tsx) that auto-advances when YT returns error 100/101/150
+ * (video not found / embedding disabled / region blocked). So even
+ * if one ID goes dead in the future, the playlist keeps flowing.
  */
 export const DEFAULT_SCROLL_PLAYLIST: BgmTrack[] = [
   {
@@ -106,19 +120,19 @@ export const DEFAULT_SCROLL_PLAYLIST: BgmTrack[] = [
     genre: "anthemic",
   },
   {
-    id: "phoenix-ncs",
-    title: "Phoenix [NCS]",
-    artist: "Netrum & Halvorsen",
-    youtubeId: "p7ZsBPK656s",
-    durationSeconds: 186,
-    genre: "synthwave",
-  },
-  {
     id: "rise-worlds-2018",
     title: "RISE (Worlds 2018)",
     artist: "The Glitch Mob, Mako & The Word Alive",
     youtubeId: "fB8TyLTD7EE",
     durationSeconds: 175,
+    genre: "anthemic",
+  },
+  {
+    id: "legends-never-die-worlds-2017",
+    title: "Legends Never Die (Worlds 2017)",
+    artist: "Against The Current",
+    youtubeId: "r6zIGXun57U",
+    durationSeconds: 220,
     genre: "anthemic",
   },
   {
@@ -154,6 +168,14 @@ export const DEFAULT_SCROLL_PLAYLIST: BgmTrack[] = [
     genre: "anthemic",
   },
   {
+    id: "warriors-worlds-2014",
+    title: "Warriors (Worlds 2014)",
+    artist: "Imagine Dragons",
+    youtubeId: "fmI_Ndrxy14",
+    durationSeconds: 173,
+    genre: "anthemic",
+  },
+  {
     id: "kda-pop-stars",
     title: "POP/STARS",
     artist: "K/DA (Madison Beer, (G)I-DLE, Jaira Burns)",
@@ -162,12 +184,37 @@ export const DEFAULT_SCROLL_PLAYLIST: BgmTrack[] = [
     genre: "edm",
   },
   {
-    id: "royalty",
+    id: "kda-more",
+    title: "MORE",
+    artist: "K/DA (Madison Beer, (G)I-DLE, Lexie Liu, Jaira Burns, Seraphine)",
+    youtubeId: "qSk2t9wkSxA",
+    durationSeconds: 246,
+    genre: "edm",
+  },
+  {
+    id: "kda-the-baddest",
+    title: "THE BADDEST",
+    artist: "K/DA",
+    youtubeId: "wKZUF0_dRzE",
+    durationSeconds: 196,
+    genre: "edm",
+  },
+  {
+    id: "royalty-ncs",
     title: "Royalty",
     artist: "Egzod & Maestro Chives ft. Neoni",
-    youtubeId: "C5rCADZbfGs",
+    // Wave 35 #10 — was `C5rCADZbfGs` (dead) → official NCS upload.
+    youtubeId: "cXOY9b_Bv-w",
     durationSeconds: 199,
     genre: "trap",
+  },
+  {
+    id: "phoenix-ncs",
+    title: "Phoenix [NCS]",
+    artist: "Netrum & Halvorsen",
+    youtubeId: "p7ZsBPK656s",
+    durationSeconds: 186,
+    genre: "synthwave",
   },
 ];
 
