@@ -325,8 +325,40 @@ def write_restart_marker(reason: str) -> None:
 
 
 # ─── Main cycle ────────────────────────────────────────────────────────
+def _db_health_probe() -> bool:
+    """Cheap read probe: is the DB answering fast? count=planned on a
+    tiny filter (sub-ms when healthy). Returns True iff status 200 AND
+    latency < 3s. Used by the circuit breaker — Wave 35 SOTA #H6.
+    """
+    try:
+        t0 = time.monotonic()
+        r = httpx.head(
+            f"{SB_URL}/rest/v1/health_checks",
+            params={"select": "id", "limit": "1"},
+            headers={**HEADERS, "Prefer": "count=planned", "Range": "0-0"},
+            timeout=5,
+        )
+        return r.status_code in (200, 206) and (time.monotonic() - t0) < 3.0
+    except Exception:
+        return False
+
+
 def cycle(auto_restart: bool = False) -> None:
     state = load_state()
+
+    # ─── CIRCUIT BREAKER (Wave 35 SOTA #H6) ────────────────────────────
+    # auto_remediate AMPLIFIED the DB-saturation incident : it kept firing
+    # write remediations (release_stale_locks RPC + reset_zombie PATCH)
+    # against an already-dying DB every cycle. Now we gate the WRITE
+    # remediations behind a DB-health probe. After >=2 consecutive
+    # unhealthy probes the breaker OPENS : reads/warnings still run, but
+    # we STOP writing until a probe succeeds. "When the DB is drowning,
+    # don't pour more water in."
+    db_ok = _db_health_probe()
+    distress = int(state.get("db_distress_streak", 0))
+    distress = 0 if db_ok else distress + 1
+    state["db_distress_streak"] = distress
+    breaker_open = distress >= 2
 
     log_summary = scan_log_recent(minutes=5)
     gem_calls, gem_cost = gemini_cost_today()
@@ -400,7 +432,13 @@ def cycle(auto_restart: bool = False) -> None:
     #            completion), flip them back to vod_found so the clipper
     #            re-claims them on the next cycle. The 24h stuck_kill_reset
     #            module wouldn't touch these for hours otherwise.
-    if stuck > 0:
+    if breaker_open:
+        # DB is distressed — do NOT add write load. Read-only this cycle.
+        actions.append(
+            f"BREAKER open (db_distress_streak={distress}) — skipping write "
+            f"remediations (stuck={stuck}); waiting for DB to recover"
+        )
+    elif stuck > 0:
         released = release_stale_locks()
         if released > 0:
             actions.append(f"REMEDIATE released {released} stale locks (stuck={stuck})")

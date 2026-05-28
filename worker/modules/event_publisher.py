@@ -211,6 +211,13 @@ async def _discover_and_enqueue(db) -> int:
     The unique index on (type, entity_type, entity_id) WHERE active makes
     this idempotent — re-discovery on the next tick won't double-enqueue.
     """
+    # Wave 35 SOTA #D6 — backpressure symmetry. This is the last enqueue
+    # producer that lacked the throttle gate the transitioner + dispatcher
+    # got. It's bounded per-cycle (the scan has a LIMIT) so it can't flood
+    # like the transitioner did, but if publish.check consumers stall it
+    # still climbs — gate it for consistency.
+    if job_queue.should_throttle_enqueue("publish.check"):
+        return 0
     publishable = await _fetch_publishable(db)
     enqueued = 0
     for ev in publishable:

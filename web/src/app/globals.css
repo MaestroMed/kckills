@@ -652,7 +652,10 @@ button:focus-visible {
     transparent 100%);
   background-size: 200% 100%;
   animation: aura-top-sweep 9s linear infinite;
-  mix-blend-mode: screen;
+  /* Wave 35 #13 — dropped `mix-blend-mode: screen` : it forced a
+     non-composited repaint of the sticky navbar region every frame of
+     the 9s sweep (INP/jank risk on low-end mobile over scrolling
+     content). The gold-on-dark gradient reads fine without it. */
 }
 @keyframes aura-top-sweep {
   from { background-position: -100% 0; }
@@ -668,6 +671,10 @@ button:focus-visible {
   .aura-particle,
   .aura-top-sweep {
     animation: none !important;
+    /* Wave 35 #13 — release the compositor-layer pin for reduced-motion
+       users. Without this, the ~20 aura layers kept will-change:transform
+       promoted (GPU memory + battery) even though nothing animates. */
+    will-change: auto !important;
   }
   .aura-particle { opacity: 0.4; }
 }
