@@ -75,7 +75,13 @@ STATE_FILE = _WORKER / ".auto_remediate_state.json"
 RESTART_MARKER = _WORKER / ".auto_remediate_restart"
 
 # ─── Thresholds ───────────────────────────────────────────────────────
-GEMINI_COST_SOFT_CAP_USD = 15.0          # of the $20 cap, warn at 75%
+# Wave 35 #8 — user explicitly chose tout-3.5 quality-max. NO automated
+# tier downgrade ; we only WARN at ladder steps. The worker's internal
+# KCKILLS_GEMINI_DAILY_COST_CAP_USD hard-stops Gemini at the configured
+# limit, which is the right safety net (degrades to no-AI rather than
+# silently switching to a cheaper model the user didn't authorize).
+GEMINI_COST_WARN_USD = 15.0              # first ping (75% of $20 cap)
+GEMINI_COST_HARD_WARN_USD = 18.0         # urgent ping (90% of $20 cap)
 THROTTLE_429_PER_CYCLE = 10              # 429 events in last 5min → suspect
 THROTTLE_STREAK_CYCLES = 3               # consecutive cycles before action
 STUCK_CLIPPING_MINUTES = 30              # kills.status='clipping' age
@@ -280,18 +286,28 @@ def cycle(auto_restart: bool = False) -> None:
 
     actions: list[str] = []
 
-    # ─── A) Gemini cost soft-cap ───────────────────────────────────────
-    if gem_cost >= GEMINI_COST_SOFT_CAP_USD:
-        # Hot-swap premium → free in env + write restart marker.
-        # The runtime cap at $20 will still hard-stop us if we hit it,
-        # but we'd rather degrade quality than tilt the budget.
-        if os.environ.get("KCKILLS_GEMINI_TIER") != "free":
-            changed = edit_env_int("KCKILLS_GEMINI_TIER", "free")  # str works too
-            if changed:
-                write_restart_marker(f"gemini cost {gem_cost:.2f} >= soft cap")
-                actions.append(f"REMEDIATE gemini → tier=free (cost={gem_cost:.2f})")
-            else:
-                actions.append("gemini already at free tier")
+    # ─── A) Gemini cost ladder warnings ────────────────────────────────
+    # Wave 35 #8 — NO auto-downgrade. User explicitly chose tout-3.5 for
+    # max quality. We WARN at $15 (75%) and $18 (90%) of the $20 cap so
+    # they have lead time to act. The runtime cap inside the scheduler
+    # hard-stops Gemini at the configured value ; that's the right safety
+    # net (no surprise tier swap behind the user's back).
+    last_warn = float(state.get("last_gemini_warn_usd", 0.0))
+    if gem_cost >= GEMINI_COST_HARD_WARN_USD and last_warn < GEMINI_COST_HARD_WARN_USD:
+        actions.append(
+            f"WARN gemini cost ${gem_cost:.2f} >= ${GEMINI_COST_HARD_WARN_USD} "
+            f"(90% du cap). Pause auto dans ~${20 - gem_cost:.2f}."
+        )
+        state["last_gemini_warn_usd"] = GEMINI_COST_HARD_WARN_USD
+    elif gem_cost >= GEMINI_COST_WARN_USD and last_warn < GEMINI_COST_WARN_USD:
+        actions.append(
+            f"WARN gemini cost ${gem_cost:.2f} >= ${GEMINI_COST_WARN_USD} "
+            f"(75% du cap). Monitoring."
+        )
+        state["last_gemini_warn_usd"] = GEMINI_COST_WARN_USD
+    elif gem_cost < GEMINI_COST_WARN_USD and last_warn > 0:
+        # New day reset (07:00 UTC) or cost went down → forget warn level
+        state["last_gemini_warn_usd"] = 0.0
 
     # ─── B) yt-dlp 429 streak ──────────────────────────────────────────
     streak_429 = int(state.get("streak_429", 0))
@@ -314,9 +330,36 @@ def cycle(auto_restart: bool = False) -> None:
     state["streak_429"] = streak_429
 
     # ─── C) Stuck clipping → release stale locks ───────────────────────
+    # Two distinct failure modes share the same symptom (kill.status=
+    # 'clipping' for >30 min) :
+    #   1. Active lease was abandoned (worker crashed mid-job). The lock
+    #      release RPC frees the pipeline_jobs row → fresh worker grabs.
+    #   2. Zombie kills.status='clipping' with no live pipeline_jobs row
+    #      (legacy pre-queue path crashed, or stuck_kill_reset skipped
+    #      because it found a now-stale active job). The lock release
+    #      returns 0 because there's nothing to release.
+    #
+    # We call the RPC regardless (cheap), but only NOTIFY when it actually
+    # released something. Persistent zombies are tracked separately so we
+    # warn once they cross a streak instead of spamming every cycle.
+    zombie_streak = int(state.get("zombie_clipping_streak", 0))
     if stuck > 0:
         released = release_stale_locks()
-        actions.append(f"REMEDIATE released {released} stale locks (stuck={stuck})")
+        if released > 0:
+            actions.append(f"REMEDIATE released {released} stale locks (stuck={stuck})")
+            zombie_streak = 0
+        else:
+            zombie_streak += 1
+            if zombie_streak == QUEUE_GROWTH_STREAK_CYCLES:
+                # Warn ONCE when streak crosses the threshold, then go quiet.
+                actions.append(
+                    f"WARN {stuck} zombie kills.status=clipping for "
+                    f"{QUEUE_GROWTH_STREAK_CYCLES * 5}+ min — manual reset via "
+                    f"scripts/backfill_stuck_pipeline.py recommended"
+                )
+    else:
+        zombie_streak = 0
+    state["zombie_clipping_streak"] = zombie_streak
 
     # ─── D) Queue growth monitor (warn only) ───────────────────────────
     last_pending = int(state.get("last_pending_pipeline_jobs", -1))
