@@ -53,17 +53,40 @@ async def run() -> int:
         primary_team=tracked[0].slug if tracked else None,
     )
 
-    # All raw kills (small set in steady state — only kills not yet
-    # transitioned). PostgREST default 1000-row cap is fine here.
-    raw_kills = safe_select("kills", "id, game_id", status="raw") or []
+    # Wave 35 #6 — bug critique : raw_kills was unbounded, hitting the
+    # PostgREST default 1000-row silent cap. With 7K kills stuck in `raw`,
+    # the visible 1000-row window was dominated by kills attached to
+    # VOD-less games (filtered out below at line 76) so they'd keep
+    # cycling without ever flipping → backlog effectively invisible.
+    # Investigation : daemon-wave35.log showed `raw_remaining=1000`
+    # repeating exactly, confirming the cap.
+    #
+    # Fix : explicit _limit=500 per cycle + _order=event_epoch.desc to
+    # process RECENT kills first (user-requested priority — newly-played
+    # KC matches land on /scroll ASAP). Old backlog still drains via
+    # subsequent cycles.
+    raw_kills = safe_select(
+        "kills",
+        "id, game_id, event_epoch",
+        status="raw",
+        _order="event_epoch.desc.nullslast",
+        _limit=500,
+    ) or []
     if not raw_kills:
         log.info("transitioner_no_raw")
         return 0
 
-    # Games with a VOD ready. Small table (< few thousand games), fine
-    # to fetch and dict-index. We could push the join into a SQL view
-    # but the simpler approach scales easily up to mid-five-figure rows.
-    games = safe_select("games", "id, vod_youtube_id, vod_offset_seconds") or []
+    # Games with a VOD ready. Wave 35 #6 — bump limit explicitly above
+    # the games table size (~534 today, ~2-3K at end-of-pilot) so the
+    # 1000-row cap doesn't silently truncate the dict and cause some
+    # VOD-ready raws to look orphaned. safe_select wraps filters as
+    # `eq.X` so we can't push `not.is.null` server-side from here ;
+    # client-side dict filter below stays the source of truth.
+    games = safe_select(
+        "games",
+        "id, vod_youtube_id, vod_offset_seconds",
+        _limit=5000,
+    ) or []
     games_with_vod = {
         g["id"]: g for g in games if g.get("vod_youtube_id")
     }

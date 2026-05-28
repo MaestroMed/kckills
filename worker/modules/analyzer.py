@@ -771,6 +771,8 @@ async def run() -> int:
     # ─── 2. Legacy fallback if queue was empty ────────────────────
     if not work_kills:
         legacy_fallback_used = True
+        # Wave 35 #6 — recent matches first (event_epoch DESC). User wants
+        # the latest KC kills analyzed/published before older backfill.
         kills = safe_select(
             "kills",
             "id, killer_champion, victim_champion, is_first_blood, multi_kill, "
@@ -778,6 +780,8 @@ async def run() -> int:
             "kill_visible, assistants, shutdown_bounty, retry_count, "
             "clip_url_vertical, clip_url_horizontal, game_time_seconds",
             status="clipped",
+            _order="event_epoch.desc.nullslast",
+            _limit=ANALYZER_BATCH_SIZE,
         )
         if not kills:
             return 0

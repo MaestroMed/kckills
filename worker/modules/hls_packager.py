@@ -339,8 +339,12 @@ async def run() -> int:
                     "hls_master_url": "is.null",
                     "clip_url_vertical": "not.is.null",
                     "needs_reclip": "neq.true",
-                    # Drain oldest first — they've waited the longest.
-                    "order": "created_at.asc",
+                    # Wave 35 #6 — recent matches first. User explicitly
+                    # asked for new KC kills to land on /scroll ASAP,
+                    # adaptive HLS included. Old backlog still drains via
+                    # subsequent cycles ; recent-first just biases the
+                    # tail.
+                    "order": "event_epoch.desc.nullslast,created_at.desc",
                     "limit": str(MAX_PER_RUN * 2),  # 2× buffer for client-side filter
                 },
                 headers=db.headers,

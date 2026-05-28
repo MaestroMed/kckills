@@ -1196,10 +1196,16 @@ async def run() -> int:
     if not work:
         legacy_fallback_used = True
 
+        # Wave 35 #6 — recent matches first. The user asks for newly-
+        # played KC matches to land on /scroll ASAP. Sort vod_found kills
+        # by event_epoch DESC so the most recent ones get clipped + enqueued
+        # first. Old kills still drain via subsequent cycles.
         fresh_kills = safe_select(
             "kills",
             "id, game_id, game_time_seconds, status, retry_count",
             status="vod_found",
+            _order="event_epoch.desc.nullslast",
+            _limit=BATCH_SIZE * 2,
         ) or []
 
         # Retry queue : push the retry_count<MAX filter into SQL so we
