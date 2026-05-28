@@ -91,6 +91,18 @@ async def run() -> int:
         g["id"]: g for g in games if g.get("vod_youtube_id")
     }
 
+    # ─── Wave 35 #12 — BACKPRESSURE GATE ───────────────────────────────
+    # THE fix for the runaway. Before flooding the queue with clip.create
+    # jobs, check how many are already pending. If the clipper can't keep
+    # up (queue at/over MAX_PENDING_PER_TYPE), SKIP this cycle entirely —
+    # leave the kills as 'raw', they'll transition once the queue drains.
+    # Without this, the transitioner enqueued 500/cycle regardless of
+    # clipper throughput → pipeline_jobs ballooned to 20K+ → claim RPC
+    # statement-timeout → DB DoS. Bounded producer = bounded queue.
+    if job_queue.should_throttle_enqueue("clip.create"):
+        log.info("transitioner_backpressure_skip", raw_available=len(raw_kills))
+        return 0
+
     transitioned = 0
     enqueued = 0
 

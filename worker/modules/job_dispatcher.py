@@ -89,6 +89,12 @@ async def _bridge_kill_status_to_job(
     constraint already had jobs for those rows — totally fine, that's
     the dedup working.
     """
+    # Wave 35 #12 — backpressure. The job_dispatcher is the SECOND enqueuer
+    # (alongside the transitioner). If the queue for this job_type is
+    # already saturated, skip the scan+enqueue entirely so we don't
+    # compound the runaway. Cheap count=planned check.
+    if job_queue.should_throttle_enqueue(job_type):
+        return 0, 0
     rows = _scan_status(kill_status, "id")
     if not rows:
         return 0, 0

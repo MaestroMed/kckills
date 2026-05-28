@@ -103,6 +103,11 @@ def patched_dispatcher(monkeypatch, patch_observability):
     monkeypatch.setattr(mod, "get_db", lambda: fake_db)
     monkeypatch.setattr(mod.httpx, "get", lambda *a, **k: fake_response)
     monkeypatch.setattr(job_queue, "enqueue", fake_enqueue)
+    # Wave 35 #12 — dispatcher now consults the backpressure gate before
+    # enqueueing. These tests assert behaviour under NORMAL (non-saturated)
+    # queue conditions, so stub the gate to "not throttled". A dedicated
+    # test below covers the throttled path.
+    monkeypatch.setattr(job_queue, "should_throttle_enqueue", lambda job_type: False)
 
     class Bag:
         pass

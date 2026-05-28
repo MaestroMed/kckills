@@ -384,13 +384,19 @@ def renew_lease(job_id: str, additional_seconds: int = 300) -> bool:
 
 # ─── get_active_count ──────────────────────────────────────────────────
 
-def get_active_count(job_types: list[str]) -> int:
+def get_active_count(job_types: list[str], *, exact: bool = False) -> int:
     """Count active ('pending' + 'claimed') jobs of the given types.
 
-    Used by job_dispatcher and the analyzer/clipper backpressure path :
-    don't enqueue more 'clip.create' jobs if 1000 are already pending.
+    Used by job_dispatcher and the transitioner backpressure path :
+    don't enqueue more 'clip.create' jobs if MAX_PENDING are already pending.
 
-    Uses PostgREST's exact-count header for precision.
+    Wave 35 #12 — defaults to count=planned (NOT exact). The exact count
+    forces a sequential scan on pipeline_jobs and was itself timing out
+    (57014) during the runaway incident — the very query meant to PREVENT
+    overload was contributing to it. The planner estimate (pg_class stats)
+    is sub-ms and accurate enough for a backpressure threshold : we only
+    need "are we roughly over the cap", not a hand-count. Pass exact=True
+    for the rare case precision matters.
     """
     db = get_db()
     if db is None:
@@ -399,6 +405,7 @@ def get_active_count(job_types: list[str]) -> int:
         return 0
 
     types_filter = "in.(" + ",".join(job_types) + ")"
+    prefer = "count=exact" if exact else "count=planned"
 
     try:
         client = db._get_client()
@@ -410,7 +417,8 @@ def get_active_count(job_types: list[str]) -> int:
                 "status": "in.(pending,claimed)",
                 "limit": "1",  # we only need the header, not the rows
             },
-            headers={**db.headers, "Prefer": "count=exact"},
+            headers={**db.headers, "Prefer": prefer},
+            timeout=10,
         )
         r.raise_for_status()
         # PostgREST returns Content-Range : '0-0/N' (or '*/N' when limit=0)
@@ -425,7 +433,46 @@ def get_active_count(job_types: list[str]) -> int:
         return 0
     except Exception as e:
         log.warn("job_queue_count_failed", types=job_types, error=str(e)[:200])
-        return 0
+        # On error, return a LARGE sentinel so backpressure treats the
+        # queue as "full" and skips enqueueing. Fail-safe : when we can't
+        # measure the queue (DB struggling), we must NOT pile on more work.
+        return 10_000_000
+
+
+# ─── Backpressure gate (Wave 35 #12) ─────────────────────────────────────
+
+import os as _os
+
+
+def _max_pending_per_type() -> int:
+    """Soft cap on pending+claimed jobs per type before enqueuers back off.
+
+    Tunable via KCKILLS_MAX_PENDING_PER_TYPE (default 800). The core fix
+    for the unbounded-producer runaway : a producer (transitioner,
+    job_dispatcher) checks this before enqueueing and SKIPS its cycle if
+    the queue for that type is already saturated. Bounds the queue depth
+    so fn_claim_pipeline_jobs stays fast (Little's Law — arrival rate
+    can't exceed service rate indefinitely without the queue → ∞).
+    """
+    try:
+        return max(50, int(_os.environ.get("KCKILLS_MAX_PENDING_PER_TYPE", "800")))
+    except (TypeError, ValueError):
+        return 800
+
+
+def should_throttle_enqueue(job_type: str) -> bool:
+    """Return True if the pending queue for job_type is at/over the cap —
+    callers should SKIP enqueueing this cycle. Cheap (count=planned).
+    """
+    cap = _max_pending_per_type()
+    depth = get_active_count([job_type])
+    if depth >= cap:
+        log.info(
+            "enqueue_backpressure_skip",
+            job_type=job_type, pending=depth, cap=cap,
+        )
+        return True
+    return False
 
 
 __all__ = [
@@ -435,4 +482,5 @@ __all__ = [
     "fail",
     "renew_lease",
     "get_active_count",
+    "should_throttle_enqueue",
 ]
