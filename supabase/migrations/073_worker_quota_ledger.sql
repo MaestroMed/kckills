@@ -23,6 +23,11 @@ CREATE TABLE IF NOT EXISTS worker_quota_ledger (
 COMMENT ON TABLE worker_quota_ledger IS
     'Wave 34 T3.1 — shared quota ledger across orchestrator child processes.';
 
+-- RLS : aucun accès anon / authenticated. Toutes les écritures et lectures
+-- passent par les 2 RPCs ci-dessous (SECURITY DEFINER, granted service_role).
+-- Sans policy explicite, RLS enabled bloque tout — exactement ce qu'on veut.
+ALTER TABLE worker_quota_ledger ENABLE ROW LEVEL SECURITY;
+
 -- Index pour lookups par service (utilisé partout dans le worker)
 CREATE INDEX IF NOT EXISTS idx_worker_quota_ledger_service
     ON worker_quota_ledger (service, quota_date DESC);
