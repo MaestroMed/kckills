@@ -175,6 +175,21 @@ export function FeedPlayerPool({
    *  reassignment and reset hasPlayed accordingly. */
   const prevSlotItemRef = useRef<number[]>([...slotItemIndex]);
 
+  /** Wave 34 T5 fix — "did this slot just get a NEW item this render".
+   *  Set to true when itemIdx changes ; consumed (and reset) by
+   *  applyPriority so the seek-to-0 only fires on the binding render,
+   *  not on every subsequent re-render of the same item.
+   *
+   *  Symptom pre-fix : clip plays 5s → reset → 10s → reset → ... because
+   *  applyPriority(priority='live', hasPlayedBefore=true, resetOnFirstPlay=true)
+   *  fires on every parent re-render and SEEKS to 0 each time. With
+   *  a slow MP4 download, the visible playback wraps around the buffered
+   *  range, looking like the clip "rewinds" while it actually keeps
+   *  resetting. Awful UX on mobile / slow networks. */
+  const justReboundRef = useRef<boolean[]>(
+    Array.from({ length: POOL_SIZE }, () => false),
+  );
+
   /** HLS adapter (Wave 11 — Agent DE) — lazy-loads hls.js on first
    *  non-Safari attach via the shared `hls-loader.ts` dynamic import.
    *  The hook returns "hls" | "mp4" | "none" so we can record the
@@ -418,6 +433,10 @@ export function FeedPlayerPool({
         });
         v.poster = item.thumbnail ?? "";
         hasPlayedRef.current[s] = false;
+        // Wave 34 T5 — signal "first applyPriority call after new
+        // binding" to the downstream applyPriority helper. Cleared
+        // right after the first applyPriority consumed it.
+        justReboundRef.current[s] = true;
       }
 
       // Position the video at the right "lane" — translateY relative
@@ -432,7 +451,18 @@ export function FeedPlayerPool({
       v.style.opacity = "1";
 
       // Apply priority-driven playback state.
-      applyPriority(v, priority, hasPlayedRef.current[s], resetOnFirstPlay);
+      // Wave 34 T5 — pass `justRebound` so applyPriority's seek-to-0
+      // only fires on the binding render, not on every re-render of
+      // the same item. Consumed once : clear immediately after.
+      const justRebound = justReboundRef.current[s];
+      applyPriority(
+        v,
+        priority,
+        hasPlayedRef.current[s],
+        resetOnFirstPlay,
+        justRebound,
+      );
+      justReboundRef.current[s] = false;
       if (priority === "live") {
         hasPlayedRef.current[s] = true;
       }
@@ -751,16 +781,29 @@ function mediaErrorCodeName(code: number): string {
   }
 }
 
-/** Translate slot priority into video element flags. */
+/** Translate slot priority into video element flags.
+ *
+ * Wave 34 T5 — `justRebound` gates the seek-to-0. Was previously gated
+ * only by `hasPlayedBefore && resetOnFirstPlay` which fired on EVERY
+ * re-render with priority='live', causing the clip to perpetually
+ * rewind to 0 while the MP4 was still downloading on slow networks.
+ * Now seek-to-0 only fires on the binding render (right after a slot
+ * gets a new item).
+ */
 function applyPriority(
   v: HTMLVideoElement,
   priority: SlotPriority,
   hasPlayedBefore: boolean,
   resetOnFirstPlay: boolean,
+  justRebound: boolean,
 ) {
   if (priority === "live") {
     v.preload = "auto";
-    if (hasPlayedBefore && resetOnFirstPlay) {
+    // Only seek to 0 when the slot has been rebound to a new item AND
+    // it has been played before AND the caller asked for restart-on-
+    // first-play. The hasPlayedBefore + justRebound combo means : "this
+    // slot was reused for a new item, the old item left it mid-playback".
+    if (justRebound && hasPlayedBefore && resetOnFirstPlay) {
       try {
         v.currentTime = 0;
       } catch {

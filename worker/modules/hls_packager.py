@@ -303,22 +303,56 @@ async def package_clip(kill_id: str, mp4_url: str) -> str | None:
 
 @run_logged()
 async def run() -> int:
-    """Find published clips without HLS master, package next 5."""
+    """Find published clips without HLS master, package next batch.
+
+    Wave 34 T4 fix (2026-05-28) — bug critique de catch-up.
+
+    Avant : `safe_select(... status='published')` sans filter `is.null`
+    sur hls_master_url + sans limit explicite → PostgREST applique son
+    default 1000 rows triés par created_at DESC. Comme les NOUVEAUX
+    clips sont déjà packagés par le daemon en marche, le scanner ne
+    voit jamais que des rows avec hls_master_url NOT NULL → "no_pending"
+    à chaque cycle, alors qu'il y a 412 anciens clips sans HLS.
+
+    Résultat user-visible : 94% des delivery sur /scroll étaient en MP4
+    fallback (20 MB pour 30s de clip → stalls sur 4G mobile → reset
+    UX cassée).
+
+    Fix : custom httpx query avec `hls_master_url=is.null` ET un order
+    `created_at.asc` (drain les plus anciens d'abord, ils ont attendu
+    longtemps) + limit explicite MAX_PER_RUN.
+    """
     log.info("hls_packager_start")
 
-    # Get up to MAX_PER_RUN clips with MP4 but no HLS
-    candidates = safe_select(
-        "kills",
-        "id, clip_url_vertical, hls_master_url, needs_reclip",
-        status="published",
-        # hls_master_url IS NULL — Supabase REST doesn't support raw `is.null` via kwargs
-        # Use a custom filter via httpx instead
-    ) or []
+    # Wave 34 — custom httpx call to apply the is.null filter that
+    # safe_select() can't express (it always wraps filters in eq.).
+    db = get_db()
+    candidates: list[dict] = []
+    if db:
+        try:
+            client = db._get_client()
+            r = client.get(
+                f"{db.base}/kills",
+                params={
+                    "select": "id, clip_url_vertical, hls_master_url, needs_reclip",
+                    "status": "eq.published",
+                    "hls_master_url": "is.null",
+                    "clip_url_vertical": "not.is.null",
+                    "needs_reclip": "neq.true",
+                    # Drain oldest first — they've waited the longest.
+                    "order": "created_at.asc",
+                    "limit": str(MAX_PER_RUN * 2),  # 2× buffer for client-side filter
+                },
+                headers=db.headers,
+                timeout=15,
+            )
+            r.raise_for_status()
+            candidates = r.json() or []
+        except Exception as e:
+            log.warn("hls_packager_scan_failed", error=str(e)[:200])
 
-    # Filter client-side to those without hls_master_url + with vertical clip
-    # + NOT marked needs_reclip (Wave 27.12 — kills that previously failed
-    # HLS encoding due to a permanent issue like audio-only source are
-    # flagged so we don't burn cycles retrying them every scan).
+    # Defensive client-side recheck (the params above already filter
+    # server-side, but keep this as a guard against any future regression).
     pending = [
         k for k in candidates
         if not k.get("hls_master_url")
