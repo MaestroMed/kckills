@@ -2,11 +2,16 @@
 OBSERVABILITY — Per-module run accounting against pipeline_runs.
 
 Provides @run_logged() — a decorator wrapping a module's async run() so
-each invocation produces ONE row in the pipeline_runs table :
+each invocation MAY produce a row in the pipeline_runs table :
 
-    started_at      → INSERT row, status='running'
-    on success      → UPDATE status='succeeded', items_*, duration_ms
-    on exception    → UPDATE status='failed', error_summary
+    sampled cycle (default 10%) :
+        started_at      → INSERT row, status='running'
+        on success      → UPDATE status='succeeded', items_*, duration_ms
+        on exception    → UPDATE status='failed', error_summary
+    non-sampled cycle :
+        on success      → no DB writes (memory-only)
+        on exception    → synthesize INSERT at finally-time with
+                          status='failed' so errors aren't dropped
 
 Plus :
     note(...)              call from inside the wrapped function to
@@ -32,6 +37,11 @@ DESIGN RULES
 4. Worker_id format : `orchestrator-{role}-PID{pid}`.
    Role is taken from --role argv or the KCKILLS_WORKER_ROLE env var
    set by orchestrator.py when it spawns children. Falls back to 'solo'.
+
+5. Wave 35 #2 : pipeline_runs INSERTs are SAMPLED to reduce Supabase
+   compute. Override via KCKILLS_PIPELINE_RUNS_SAMPLE_RATE (default 0.1).
+   Sampled rows carry metadata.sampled=true and metadata.sample_rate so
+   the dashboard can project true cardinality.
 """
 
 from __future__ import annotations
@@ -39,6 +49,7 @@ from __future__ import annotations
 import asyncio
 import functools
 import os
+import random
 import sys
 import time
 from contextvars import ContextVar
@@ -49,6 +60,27 @@ from typing import Any, Callable, Optional
 import structlog
 
 log = structlog.get_logger()
+
+
+# ─── Wave 35 #2 — pipeline_runs sampling ──────────────────────────────
+# pre-Wave-35 : we INSERTed one pipeline_runs row PER module cycle. With
+# orchestrator running ~10 modules every 30-300s, this generated ~30k rows/day
+# and showed up at #2 in pg_stat_statements (~14% of Supabase compute).
+#
+# Fix : keep one row per cycle for SUCCEEDED runs is overkill. We sample
+# at SAMPLE_RATE (default 10%) to keep a representative distribution for
+# the dashboard, but ALWAYS insert when status='failed' so error tracking
+# stays complete.
+#
+# Override via env var :
+#   KCKILLS_PIPELINE_RUNS_SAMPLE_RATE=0.05   → 5% sampling
+#   KCKILLS_PIPELINE_RUNS_SAMPLE_RATE=1.0    → full firehose (pre-Wave-35)
+#   KCKILLS_PIPELINE_RUNS_SAMPLE_RATE=0.0    → errors only
+try:
+    _RAW_SAMPLE = os.environ.get("KCKILLS_PIPELINE_RUNS_SAMPLE_RATE", "0.1")
+    SAMPLE_RATE = max(0.0, min(1.0, float(_RAW_SAMPLE)))
+except (TypeError, ValueError):
+    SAMPLE_RATE = 0.1
 
 
 # ─── Context — the currently-active run id, per asyncio task ──────────
@@ -342,10 +374,15 @@ def run_logged(module_name: str | None = None) -> Callable:
 
         @functools.wraps(func)
         async def wrapper(*args, **kwargs):
-            # 1. Open a fresh counter bag and INSERT the row. If insert
-            #    fails (Supabase down), we still set the contextvar so
-            #    note()/record_metric() don't blow up — they just won't
-            #    be persisted this cycle.
+            # 1. Open a fresh counter bag. Sampling decision happens here :
+            #    - Sampled (random < SAMPLE_RATE) → INSERT now, UPDATE on
+            #      completion (full status='running' → 'succeeded' track).
+            #    - Not sampled → run_id stays None. If we crash, we'll
+            #      synthesize a row at finally-time so errors aren't lost.
+            #
+            # If the INSERT itself fails (Supabase down), we still set the
+            # contextvar so note()/record_metric() don't blow up — they
+            # just won't be persisted this cycle.
             counters: dict = {
                 "items_scanned": 0,
                 "items_processed": 0,
@@ -353,7 +390,8 @@ def run_logged(module_name: str | None = None) -> Callable:
                 "items_skipped": 0,
                 "metadata": {},
             }
-            run_id = _try_insert_run(resolved_name)
+            sampled = random.random() < SAMPLE_RATE
+            run_id = _try_insert_run(resolved_name) if sampled else None
 
             tok_id = _current_run_id.set(run_id)
             tok_mod = _current_module.set(resolved_name)
@@ -395,6 +433,17 @@ def run_logged(module_name: str | None = None) -> Callable:
                 # it — handy for ad-hoc queries on individual rows.
                 meta_with_duration = dict(extra)
                 meta_with_duration["duration_ms"] = duration_ms
+                # Tag sampled rows so we can compute true cardinality from
+                # the dashboard (multiply by 1/SAMPLE_RATE for projection).
+                if sampled and status != "failed":
+                    meta_with_duration["sampled"] = True
+                    meta_with_duration["sample_rate"] = SAMPLE_RATE
+
+                # Wave 35 #2 : ALWAYS persist failed runs, even if we
+                # initially skipped the INSERT for sampling. Synthesize the
+                # row now so error tracking stays complete.
+                if status == "failed" and run_id is None:
+                    run_id = _try_insert_run(resolved_name)
 
                 if run_id:
                     _try_update_run(
