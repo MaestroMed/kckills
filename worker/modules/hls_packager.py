@@ -29,7 +29,7 @@ from config import config
 from services import r2_client
 from services.observability import run_logged
 from services.runtime_tuning import get_batch_size, get_parallelism
-from services.supabase_client import safe_select, safe_update
+from services.supabase_client import get_db, safe_select, safe_update
 
 log = structlog.get_logger()
 
