@@ -1,48 +1,12 @@
 import "server-only";
 import Link from "next/link";
 import Image from "next/image";
-import { createServerSupabase } from "@/lib/supabase/server";
-
-interface SimilarKill {
-  id: string;
-  killer_champion: string | null;
-  victim_champion: string | null;
-  thumbnail_url: string | null;
-  highlight_score: number | null;
-  ai_description_preview: string | null;
-  similarity: number;
-}
-
-async function fetchSimilar(killId: string): Promise<SimilarKill[]> {
-  try {
-    const sb = await createServerSupabase();
-    const { data, error } = await sb.rpc("fn_similar_kills", {
-      target_id: killId,
-      match_count: 6,
-    });
-    if (error) {
-      console.warn("[SimilarClipsCarousel] rpc error:", error.message);
-      return [];
-    }
-    return (data ?? []).map((row: Record<string, unknown>) => ({
-      id: String(row.id ?? ""),
-      killer_champion: (row.killer_champion as string) ?? null,
-      victim_champion: (row.victim_champion as string) ?? null,
-      thumbnail_url: (row.thumbnail_url as string) ?? null,
-      highlight_score:
-        row.highlight_score == null ? null : Number(row.highlight_score),
-      ai_description_preview:
-        (row.ai_description_preview as string) ?? null,
-      similarity: Number(row.similarity ?? 0),
-    }));
-  } catch (err) {
-    console.warn("[SimilarClipsCarousel] threw:", err);
-    return [];
-  }
-}
+import { getCachedSimilarKills } from "@/lib/supabase/similar-kills-cached";
 
 export async function SimilarClipsCarousel({ killId }: { killId: string }) {
-  const similar = await fetchSimilar(killId);
+  // Wave 35 #3 : cached cross-request (1h TTL) — was #3 Supabase compute
+  // consumer because HNSW vector search ran on every page render.
+  const similar = await getCachedSimilarKills(killId);
   if (similar.length === 0) return null;
 
   return (

@@ -132,13 +132,21 @@ RELEASE_STALE_MAX_AGE_MINUTES: int = int(
 # ─── Low-level PostgREST helpers ──────────────────────────────────────
 
 def _count_with_filter(db, params: dict) -> int:
-    """Return the exact row count for a PostgREST query, using the
+    """Return the row count for a PostgREST query, using the
     Content-Range header. Returns 0 on any error / missing header.
 
     `params` must include 'select' (a real column name, not '*' — some
-    PostgREST versions choke on count=exact + select=*) and any filter
+    PostgREST versions choke on count + select=*) and any filter
     columns. We always set limit=1 so PostgREST doesn't actually return
     rows ; only the header is used.
+
+    Wave 35 #4 : switched from count=exact → count=planned. The planner
+    estimate uses pg_class stats (no scan, sub-ms) and is accurate to
+    within a few % for a health snapshot. Exact counts were the #4
+    Supabase compute consumer because they force a sequential scan
+    on pipeline_jobs (~150k+ rows pre-purge). The 1-5% error in the
+    snapshot doesn't materially affect any threshold (THRESHOLD_PENDING
+    is 30 min on age, not row count ; stale_claim is age-based too).
     """
     try:
         client = db._get_client()
@@ -146,7 +154,7 @@ def _count_with_filter(db, params: dict) -> int:
         r = client.get(
             f"{db.base}/pipeline_jobs",
             params=merged,
-            headers={**db.headers, "Prefer": "count=exact"},
+            headers={**db.headers, "Prefer": "count=planned"},
         )
         r.raise_for_status()
         cr = r.headers.get("content-range") or ""
@@ -203,6 +211,11 @@ def _oldest_age_seconds(db, status: str, kind: str, age_column: str) -> int:
 def _succeed_throughput_per_min(db, kind: str, window_minutes: int = 60) -> float:
     """Count succeeded jobs of `kind` in the last `window_minutes` minutes,
     return per-minute throughput. Returns 0.0 on any error.
+
+    Wave 35 #4 : count=exact → count=estimated. The throughput is a
+    snapshot trend indicator ; we don't need a hand-counted row count.
+    count=estimated is even cheaper than count=planned for filtered
+    queries because PostgREST falls back to a cheap row sample.
     """
     try:
         from datetime import timedelta
@@ -218,7 +231,7 @@ def _succeed_throughput_per_min(db, kind: str, window_minutes: int = 60) -> floa
                 "finished_at": f"gte.{cutoff_iso}",
                 "limit": "1",
             },
-            headers={**db.headers, "Prefer": "count=exact"},
+            headers={**db.headers, "Prefer": "count=estimated"},
         )
         r.raise_for_status()
         cr = r.headers.get("content-range") or ""

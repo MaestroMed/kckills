@@ -96,7 +96,12 @@ DEFAULTS: Final[dict[str, dict[str, int]]] = {
     # Health -------------------------------------------------------------
     "heartbeat":           {"parallel": 1, "interval": 21600,"batch":   1, "lease":   60},
     "watchdog":            {"parallel": 1, "interval": 1800, "batch":   1, "lease":   60},
-    "queue_health":        {"parallel": 1, "interval":  300, "batch":   1, "lease":   60},
+    # queue_health : Wave 35 #4 — bumped 300 → 900 (15 min). Each cycle
+    # fires 175 PostgREST queries (25 JOB_KINDS × 7 status/age/throughput
+    # queries) so the cadence was the #4 Supabase compute consumer.
+    # 15 min still catches stale pending within the 30 min threshold ;
+    # release_stale_locks handles its own 5-min staleness window via RPC.
+    "queue_health":        {"parallel": 1, "interval":  900, "batch":   1, "lease":   60},
     "dlq_drainer":         {"parallel": 1, "interval": 1800, "batch":  50, "lease":  120},
 }
 

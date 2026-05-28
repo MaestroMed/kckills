@@ -197,7 +197,7 @@ def test_defaults_table_matches_main_py_intervals(monkeypatch: pytest.MonkeyPatc
         "hls_packager":     1800,
         "heartbeat":        21600,
         "watchdog":         1800,
-        "queue_health":     300,
+        "queue_health":     900,  # Wave 35 #4 — bumped 300 → 900
         "job_runner":       30,
     }
     for name, want in expected.items():
