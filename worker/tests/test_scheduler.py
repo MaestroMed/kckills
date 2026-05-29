@@ -4,10 +4,17 @@ import asyncio
 import time
 import sys
 import os
+from unittest.mock import patch
 
 # Add worker root to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 from scheduler import LoLTokScheduler
+
+# Hermetic default quotas. DAILY_QUOTAS is a class attribute frozen at
+# import from KCKILLS_GEMINI_DAILY_CAP — worker/.env sets gemini=4000
+# (paid tier, Wave 33b), so tests asserting the 950 free-tier default
+# must patch the class dict to stay deployment-independent.
+_DEFAULT_QUOTAS = {"gemini": 950, "youtube_search": 95}
 
 
 def test_delays():
@@ -24,22 +31,24 @@ def test_delays():
 
 
 def test_daily_quotas():
-    """Test daily quota tracking."""
-    s = LoLTokScheduler()
-    assert s.get_remaining("gemini") == 950
-    assert s.get_remaining("youtube_search") == 95
-    assert s.get_remaining("nonexistent") is None
+    """Test daily quota tracking (against the free-tier defaults)."""
+    with patch.dict(LoLTokScheduler.DAILY_QUOTAS, _DEFAULT_QUOTAS):
+        s = LoLTokScheduler()
+        assert s.get_remaining("gemini") == 950
+        assert s.get_remaining("youtube_search") == 95
+        assert s.get_remaining("nonexistent") is None
     print("  [OK] Daily quotas correct")
 
 
 def test_stats():
-    """Test stats reporting."""
-    s = LoLTokScheduler()
-    stats = s.get_stats()
-    assert "daily_counts" in stats
-    assert "daily_remaining" in stats
-    assert "reset_date" in stats
-    assert stats["daily_remaining"]["gemini"] == 950
+    """Test stats reporting (against the free-tier defaults)."""
+    with patch.dict(LoLTokScheduler.DAILY_QUOTAS, _DEFAULT_QUOTAS):
+        s = LoLTokScheduler()
+        stats = s.get_stats()
+        assert "daily_counts" in stats
+        assert "daily_remaining" in stats
+        assert "reset_date" in stats
+        assert stats["daily_remaining"]["gemini"] == 950
     print("  [OK] Stats reporting works")
 
 

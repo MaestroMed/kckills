@@ -912,11 +912,78 @@ async def _process_one(kill: dict, clip_path: str | None,
         _cleanup_clip(clip_path)
 
         if not result:
-            if job is not None:
+            # Wave 35 SOTA #H3 — graceful Gemini degradation (CLAUDE.md §5.9
+            # "Gemini down → publier SANS tags/description/score"). Before
+            # this, a Gemini outage fail()'d every clip.analyze job until it
+            # dead-lettered — the pipeline stopped publishing entirely.
+            #
+            # Policy : RETRY while transient (attempts < 3, backoff), then
+            # DEGRADE-publish on exhaustion so an outage can't block the feed.
+            # The degraded kill gets a factual templated description (champion
+            # names — data we already have without Gemini), kill_visible=true
+            # (permissive : we can't QC visibility without Gemini, spec says
+            # publish anyway), and ai_pipeline_version='degraded-no-gemini' so
+            # a backfill re-analyzes it for the rich description once Gemini
+            # recovers (and retracts it if the kill turns out off-screen).
+            attempts = 0
+            try:
+                attempts = int((job or {}).get("attempts", 0) or 0)
+            except (TypeError, ValueError):
+                attempts = 0
+            if job is not None and attempts < 3:
+                # Transient — retry with backoff.
                 await asyncio.to_thread(
                     job_queue.fail, job["id"],
                     "gemini returned no result", 300, "gemini_empty",
                 )
+                return
+
+            # Exhausted → degrade-publish.
+            killer = kill.get("killer_champion") or "?"
+            victim = kill.get("victim_champion") or "?"
+            # Honest, ≥50 chars so it clears the qc_described gate (50-char
+            # threshold). Tells the viewer the AI pass is pending.
+            degraded_desc = (
+                f"{killer} elimine {victim} — analyse IA en attente, "
+                f"clip disponible."
+            )
+            safe_update("kills", {
+                "status": "analyzed",
+                "ai_description": degraded_desc,
+                "ai_description_fr": degraded_desc,
+                "ai_tags": [],
+                "kill_visible": True,
+                "qc_status": "passed",
+                "ai_pipeline_version": "degraded-no-gemini",
+            }, "id", kill["id"])
+            # Tick the game_events QC gates so the publisher can surface it
+            # (no-op if the event row isn't mapped yet — event.map below
+            # will set qc_clip_validated from status='analyzed' + clip).
+            try:
+                from services.event_qc import (
+                    tick_qc_described, tick_qc_visible, tick_qc_clip_validated,
+                )
+                tick_qc_described(kill["id"])
+                tick_qc_visible(kill["id"], True)
+                tick_qc_clip_validated(kill["id"])
+            except Exception:
+                pass
+            if job is not None:
+                await asyncio.to_thread(
+                    job_queue.succeed, job["id"], {"degraded": "no_gemini"},
+                )
+            for next_type in ("og.generate", "embedding.compute", "event.map"):
+                await asyncio.to_thread(
+                    job_queue.enqueue, next_type, "kill", kill["id"],
+                    None, 50, None, 3,
+                )
+            counters["degraded"] = counters.get("degraded", 0) + 1
+            log.warn(
+                "analyzer_degraded_publish",
+                kill_id=kill["id"][:8],
+                reason="gemini_persistent_failure",
+                attempts=attempts,
+            )
             return
 
         desc = result.get("description_fr")

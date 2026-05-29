@@ -171,16 +171,50 @@ DAEMON_MODULES: list[tuple[str, int, str]] = [
 
 RESTART_DELAY = 10  # seconds between a module crash and its next attempt
 
+# Wave 35 SOTA #H5 — hard ceiling on a single module run() invocation.
+# Before this, `await run_func()` had NO timeout : a module hung on a
+# stuck socket (an httpx call missing a timeout, a wedged subprocess)
+# would block its task FOREVER. The supervised-restart only fires on
+# EXCEPTIONS, not hangs — so a hung module silently stopped running with
+# zero alert. No module legitimately runs 30 min (the clipper's worst
+# case is ~10-15 min at batch 200); anything past the ceiling is a hang.
+# wait_for cancels the coroutine (async httpx calls are cancellation
+# points; a to_thread subprocess detaches but the loop recovers).
+# Override per-deploy via KCKILLS_MODULE_TIMEOUT_SEC.
+try:
+    MODULE_TIMEOUT_SEC = max(300, int(os.environ.get("KCKILLS_MODULE_TIMEOUT_SEC", "1800")))
+except (TypeError, ValueError):
+    MODULE_TIMEOUT_SEC = 1800
+
 
 async def supervised_task(name: str, interval: int, run_func):
-    """Run a module in a loop with auto-restart on crash."""
+    """Run a module in a loop with auto-restart on crash OR hang."""
     while True:
         try:
             start = time.monotonic()
             log.info("module_start", module=name)
-            await run_func()
+            await asyncio.wait_for(run_func(), timeout=MODULE_TIMEOUT_SEC)
             elapsed = time.monotonic() - start
             log.info("module_done", module=name, elapsed_s=round(elapsed, 1))
+        except asyncio.TimeoutError:
+            # Wave 35 SOTA #H5 — the module hung past the ceiling. Treat
+            # like a crash : log + alert + restart after the delay, so a
+            # wedged module can't silently take itself (and its slot in
+            # the pipeline) offline.
+            log.error(
+                "module_timeout",
+                module=name,
+                timeout_s=MODULE_TIMEOUT_SEC,
+            )
+            try:
+                from services import discord_webhook
+                await discord_webhook.notify_error(
+                    name, f"module hung > {MODULE_TIMEOUT_SEC}s — force-restarted"
+                )
+            except Exception:
+                pass
+            await asyncio.sleep(RESTART_DELAY)
+            continue
         except Exception as e:
             log.error(
                 "module_crash",

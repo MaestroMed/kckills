@@ -144,8 +144,14 @@ def test_premium_provider_pins_3_5_flash():
 def test_premium_provider_resolves_thinking_budget_from_config():
     from services.ai_providers.gemini_premium import GeminiPremiumProvider
 
-    with patch.dict(os.environ, {"GEMINI_API_KEY": "fake"}):
-        # Default = medium (Google's default)
+    from config import config as _cfg
+    # Hermetic : config.GEMINI_THINKING_BUDGET is frozen at config.py import
+    # time from KCKILLS_GEMINI_THINKING (worker/.env sets it to "high" in
+    # Wave 35 #8), so popping the env in the test is too late. Patch the
+    # resolved config attribute to None to exercise the genuine "medium"
+    # fallback.
+    with patch.dict(os.environ, {"GEMINI_API_KEY": "fake"}), \
+         patch.object(_cfg, "GEMINI_THINKING_BUDGET", None):
         p = GeminiPremiumProvider()
     assert p.thinking_budget == "medium"
 
@@ -221,6 +227,12 @@ def test_scheduler_wait_for_allows_when_under_cost_cap():
     async def run():
         s = LoLTokScheduler()
         s.DAILY_COST_CAPS_USD = {"gemini": 1.0}
+        # Hermetic : stub the shared-ledger read so wait_for uses the
+        # in-memory cost the test controls, not today's real DB ledger
+        # (Wave 34 T3.1 made wait_for consult worker_quota_ledger).
+        async def _no_shared(_service):
+            return None
+        s._get_shared_count = _no_shared
         s.record_cost("gemini", 0.50)
         ok = await s.wait_for("gemini")
         return ok
