@@ -34,6 +34,27 @@ export function Navbar() {
   const t = useT();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [user, setUser] = useState<{ name: string; avatar: string } | null>(null);
+  // Wave 35 #13 — scroll-reactive condensing header (the premium signal).
+  // At top of page the bar is tall + airy ; once the user scrolls past a
+  // small threshold it condenses (shorter, solid bg, sharper border) like
+  // Linear/Vercel. rAF-throttled so the scroll listener never janks.
+  const [scrolled, setScrolled] = useState(false);
+  useEffect(() => {
+    let raf = 0;
+    const onScroll = () => {
+      if (raf) return;
+      raf = requestAnimationFrame(() => {
+        setScrolled(window.scrollY > 24);
+        raf = 0;
+      });
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    onScroll();
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      if (raf) cancelAnimationFrame(raf);
+    };
+  }, []);
 
   // ── Mobile drawer UX hardening ──────────────────────────────────────
   // - Esc closes the drawer (a11y)
@@ -80,12 +101,23 @@ export function Navbar() {
   }, []);
 
   return (
-    <nav className="sticky top-0 z-50 border-b border-[var(--border-gold)] glass overflow-hidden">
-      {/* Wave 35 #9 — mega-header aura : flowing waves + breathing halos
-          + particles. Decorative, pointer-events-none, sits behind the
-          nav content via absolute positioning. */}
-      <HeaderAura />
-      <div className="relative z-10 mx-auto flex max-w-7xl items-center justify-between px-4 py-2.5">
+    <nav
+      data-scrolled={scrolled}
+      className={`sticky top-0 z-50 overflow-hidden glass transition-[border-color,box-shadow] duration-500 ${
+        scrolled
+          ? "border-b border-[var(--gold)]/25 shadow-[0_8px_30px_-12px_rgba(0,0,0,0.7)]"
+          : "border-b border-[var(--border-gold)]"
+      }`}
+    >
+      {/* Wave 35 #13 — "Hextech Command Bar" : focused signature backdrop
+          (single radial glow + the kill-pulse hairline) replacing the
+          scattered halos/waves/particles. Intensifies subtly when scrolled. */}
+      <HeaderAura scrolled={scrolled} />
+      <div
+        className={`relative z-10 mx-auto flex max-w-7xl items-center justify-between px-4 transition-[padding] duration-500 ${
+          scrolled ? "py-1.5" : "py-3"
+        }`}
+      >
         {/* Logo */}
         <Link href="/" className="flex items-center gap-2.5 group">
           <KCKILLSLogo />
