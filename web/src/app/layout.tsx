@@ -92,6 +92,20 @@ const SITE_URL =
   process.env.NEXT_PUBLIC_SITE_URL ??
   (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000");
 
+// Service-worker cache-bust token (Wave 36 #33). Changes on every deploy so
+// the SW re-installs and evicts the previous build's cached chunks. On
+// Vercel this is the commit SHA; locally it falls back to a per-build
+// timestamp captured at module eval (stable for the lifetime of one
+// `next dev` / `next build`). Sanitised to [A-Za-z0-9] — it lands inside an
+// inline <script> string, so we strip anything that could break out of it.
+const SW_BUILD_ID = (
+  process.env.VERCEL_GIT_COMMIT_SHA ||
+  process.env.NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA ||
+  `dev${Date.now()}`
+)
+  .replace(/[^A-Za-z0-9]/g, "")
+  .slice(0, 40) || "dev";
+
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title: {
@@ -328,7 +342,16 @@ export default async function RootLayout({
             style={{ position: "absolute", left: -9999, top: -9999 }}
           />
         </noscript>
-        <script dangerouslySetInnerHTML={{ __html: `if('serviceWorker' in navigator){navigator.serviceWorker.register('/sw.js')}` }} />
+        {/* PWA service-worker registration (Wave 36 #33).
+            The `?v=<build>` query param busts the SW cache on every
+            deploy : sw.js is served verbatim from /public and can't be
+            rewritten at build time, so the cache name can't change on its
+            own. Passing the commit SHA in the script URL makes the browser
+            re-fetch + re-install the SW each deploy, and sw.js reads this
+            same value to scope CACHE_NAME — so the activate sweep evicts
+            the previous build's hashed chunks. Constrained to [A-Za-z0-9]
+            so the inline string stays injection-safe. */}
+        <script dangerouslySetInnerHTML={{ __html: `if('serviceWorker' in navigator){navigator.serviceWorker.register('/sw.js?v=${SW_BUILD_ID}')}` }} />
       </body>
     </html>
   );

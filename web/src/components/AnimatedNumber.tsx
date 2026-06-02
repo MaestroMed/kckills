@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { useMotionValue, animate, useInView } from "motion/react";
+import { useMotionValue, animate, useInView, useReducedMotion } from "motion/react";
 
 type FormatType = "integer" | "decimal1" | "percent1" | "percent0";
 
@@ -38,8 +38,16 @@ export function AnimatedNumber({
   const isInView = useInView(ref, { once: true, amount: 0.3 });
   const [display, setDisplay] = useState("0");
   const motionValue = useMotionValue(0);
+  // CLAUDE.md: disable ALL animation for prefers-reduced-motion. These users
+  // get the final number instantly — the JS count-up is skipped entirely.
+  const prefersReducedMotion = useReducedMotion();
 
   useEffect(() => {
+    // Reduced motion: snap straight to the target, no count-up tween.
+    if (prefersReducedMotion) {
+      setDisplay(formatValue(value, format));
+      return;
+    }
     if (!startOnView || isInView) {
       const controls = animate(motionValue, value, {
         duration,
@@ -47,14 +55,17 @@ export function AnimatedNumber({
       });
       return () => controls.stop();
     }
-  }, [isInView, motionValue, value, duration, startOnView]);
+  }, [isInView, motionValue, value, duration, startOnView, prefersReducedMotion, format]);
 
   useEffect(() => {
+    // The change subscription only drives the count-up. With reduced motion the
+    // value is set directly above, so skip wiring the listener.
+    if (prefersReducedMotion) return;
     const unsub = motionValue.on("change", (latest) => {
       setDisplay(formatValue(latest, format));
     });
     return unsub;
-  }, [motionValue, format]);
+  }, [motionValue, format, prefersReducedMotion]);
 
   return (
     <span ref={ref} className={className}>

@@ -14,7 +14,7 @@ import {
   Play,
   type LucideIcon,
 } from "lucide-react";
-import { getPublishedKills, type PublishedKillRow } from "@/lib/supabase/kills";
+import { getCardKills, type CardKillRow } from "@/lib/supabase/kills";
 import { championIconUrl } from "@/lib/constants";
 import { isDescriptionClean } from "@/lib/scroll/sanitize-description";
 import { Breadcrumb } from "@/components/Breadcrumb";
@@ -29,9 +29,10 @@ import { Description } from "@/components/i18n/Description";
  * top 3 clips; a "voir tout" chip deep-links into /clips with the right
  * sort/filter params so the user can go deeper.
  *
- * Server component — data pulled once via `getPublishedKills(500)` which
- * is cached() across the session, so this page adds zero egress when
- * another SSR on the same user hit the cache within 30s.
+ * Server component — data pulled once via `getCardKills(500)` (slim
+ * card projection) which is cached() across the session, so this page
+ * adds zero egress when another SSR on the same user hit the cache
+ * within 30s.
  *
  * Categories (Wave 36 — OS emoji marks swapped for lucide hextech icons):
  *   Trophy    Score IA absolu      (all-time top highlight_score)
@@ -71,15 +72,15 @@ interface Category {
   /** lucide-react icon used as the category's primary hextech mark. */
   Icon: LucideIcon;
   accent: string;
-  /** Filter predicate applied over getPublishedKills(500). */
-  filter: (k: PublishedKillRow) => boolean;
+  /** Filter predicate applied over getCardKills(500). */
+  filter: (k: CardKillRow) => boolean;
   /** Sort — default is highlight_score desc. */
-  sort?: (a: PublishedKillRow, b: PublishedKillRow) => number;
+  sort?: (a: CardKillRow, b: CardKillRow) => number;
   /** Where the "voir tout" chip links. */
   allHref: string;
 }
 
-const hasTag = (k: PublishedKillRow, ...tags: string[]): boolean =>
+const hasTag = (k: CardKillRow, ...tags: string[]): boolean =>
   (k.ai_tags ?? []).some((t) => tags.includes(t));
 
 const CATEGORIES: Category[] = [
@@ -150,11 +151,13 @@ export default async function RecordsPage() {
   // This page aggregates 6 hall-of-fame categories across ALL-TIME KC
   // history. Some are rare (pentakills/quadras, snipes) and need the
   // wider pool to surface even 3 entries. With ~1650 published rows in
-  // DB, 500 caps the egress at ~1MB per cache miss while still pulling
-  // the full top-by-highlight_score slice. Revalidate=3600 keeps this
-  // pre-rendered for 99%+ of traffic, so the egress hit is amortised
-  // across thousands of pageviews.
-  const all = await getPublishedKills(500, { buildTime: true });
+  // DB, 500 rows pulls the full top-by-highlight_score slice.
+  // Revalidate=3600 keeps this pre-rendered for 99%+ of traffic, so the
+  // egress hit is amortised across thousands of pageviews.
+  // Wave 36 — getCardKills (slim CARD_SELECT) instead of getPublishedKills:
+  // this page renders only card fields, so the ~25 extra columns the fat
+  // loader ships were dead egress. Cuts the per-cache-miss payload ~2-3×.
+  const all = await getCardKills(500, { buildTime: true });
   const scored = all.filter((k) => k.kill_visible !== false);
 
   const categories = CATEGORIES.map((cat) => {
@@ -372,7 +375,7 @@ function RecordCard({
   rank,
   accent,
 }: {
-  kill: PublishedKillRow;
+  kill: CardKillRow;
   rank: number;
   accent: string;
 }) {

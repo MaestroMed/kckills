@@ -1,7 +1,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import type { Metadata } from "next";
-import { getPublishedKills, type PublishedKillRow } from "@/lib/supabase/kills";
+import { getCardKills, type CardKillRow } from "@/lib/supabase/kills";
 import { championIconUrl } from "@/lib/constants";
 import { isDescriptionClean } from "@/lib/scroll/sanitize-description";
 import { TEAM_LOGOS } from "@/lib/kc-assets";
@@ -54,7 +54,7 @@ const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
  *  - final = base × (0.7 + recency × 0.3)   // 70% quality, 30% recency
  *  - multipliers for penta / quadra / first-blood
  */
-function weeklyScore(k: PublishedKillRow, now: number): number {
+function weeklyScore(k: CardKillRow, now: number): number {
   const base = k.highlight_score ?? 5;
   const ts = k.created_at ? new Date(k.created_at).getTime() : now;
   const age = Math.max(0, now - ts);
@@ -77,11 +77,14 @@ export default async function WeekPage() {
   // KC-killer clips per day → ~35-100 per week. 200 row sample gives a
   // 2-5× safety margin for high-volume weeks (international event runs,
   // pentakill spurts) while sorting by highlight_score DESC means the
-  // best of the week is always in the slice. Cuts cache-miss egress
-  // ~3× vs the previous 500.
+  // best of the week is always in the slice.
   // buildTime: true uses the cookie-less anon client so the page keeps
   // its `revalidate = 600` ISR (cookies() would force per-visitor SSR).
-  const all = await getPublishedKills(200, { buildTime: true });
+  // Wave 36 — getCardKills (slim CARD_SELECT): the page reads only card
+  // fields (+ games.matches.external_id for the opponent logo), so the
+  // fat loader's ~25 extra columns were pure waste. Stacks with the
+  // 200-row cap to cut per-cache-miss egress another ~2-3×.
+  const all = await getCardKills(200, { buildTime: true });
   const data = loadRealData();
 
   // Filter: visible KC-killer clips from last 7 days
@@ -308,7 +311,7 @@ function PodiumCard({
   rank,
   data,
 }: {
-  kill: PublishedKillRow;
+  kill: CardKillRow;
   rank: number;
   data: ReturnType<typeof loadRealData>;
 }) {
@@ -431,7 +434,7 @@ function MiniCard({
   kill,
   data,
 }: {
-  kill: PublishedKillRow;
+  kill: CardKillRow;
   data: ReturnType<typeof loadRealData>;
 }) {
   const matchExt = kill.games?.matches?.external_id;

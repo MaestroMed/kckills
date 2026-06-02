@@ -695,6 +695,34 @@ button:focus-visible {
     animation-delay: 0ms !important;
     transition-duration: 0.01ms !important;
   }
+
+  /* CLAUDE.md mandates DISABLING all animation for reduced-motion. The blanket
+     0.01ms guard above merely shrinks loops to near-zero — the keyframe still
+     ticks. Hard-stop the looping DECORATIVE keyframes outright (animation:none)
+     so they never run. This also reaches `kc-arrow-pulse`, defined in an inline
+     <style> in KillCinematicView whose local reduce guard only covers its
+     particles, leaving the pulsing arrow alive until now. */
+
+  /* Tailwind looping utilities */
+  .animate-bounce,
+  .animate-pulse,
+  /* In-file decorative loops */
+  .badge-penta,        /* shimmer */
+  .hero-border-pulse { /* (borderGlow) — sibling of the named set */
+    animation: none !important;
+  }
+
+  /* Neutralise the named keyframes at the source so EVERY element applying
+     them — including component-scoped inline <style> blocks — is covered,
+     regardless of selector. Redefine each as a static no-op frame (the same
+     technique used by next-match-enter / tcg-* below). */
+  @keyframes float      { from { opacity: 0; } to { opacity: 0; } }
+  @keyframes pulseGlow  { from { box-shadow: none; } to { box-shadow: none; } }
+  @keyframes shimmer    { from { background-position: 0 0; } to { background-position: 0 0; } }
+  @keyframes kc-arrow-pulse {
+    from { transform: none; filter: none; }
+    to   { transform: none; filter: none; }
+  }
 }
 
 /* ─── Ranks ──────────────────────────────────────── */

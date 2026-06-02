@@ -415,6 +415,11 @@ export default async function ScrollV2Page({ searchParams }: ScrollPageProps) {
 
   return (
     <>
+      {/* Document outline root + skip target. The visible headliner lives
+          inside ScrollFeedV2 as a <p> (styled chrome), so the page would
+          otherwise have no <h1>. sr-only keeps it screen-reader-available
+          without altering the TikTok-style layout. */}
+      <h1 className="sr-only">Fil des kills Karmine Corp</h1>
       <JsonLd data={scrollItemListJsonLd} />
       <JsonLd data={breadcrumbJsonLd} />
       {/* Wave 36 — the desktop wide-stage ScrollContextPanel (match header,

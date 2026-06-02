@@ -269,6 +269,14 @@ export default function SettingsPage() {
                exportStatus === "error" ? "Erreur, réessaie" :
                "Exporter mes données"}
             </button>
+            {/* SR-only live region — announces the export outcome to assistive tech. */}
+            <span role="status" aria-live="polite" className="sr-only">
+              {exportStatus === "loading" ? "Export de tes données en cours." :
+               exportStatus === "done" ? "Export téléchargé." :
+               exportStatus === "auth" ? "Connecte-toi d'abord pour exporter tes données." :
+               exportStatus === "error" ? "Échec de l'export. Réessaie." :
+               ""}
+            </span>
           </HextechCard>
 
           {/* Delete account (RGPD) */}
@@ -307,6 +315,16 @@ export default function SettingsPage() {
                 )}
               </div>
             )}
+            {/* SR-only live region — announces the delete-account flow,
+                including the destructive confirm step, to assistive tech. */}
+            <span role="status" aria-live="polite" className="sr-only">
+              {deleteStatus === "confirming" ? "Confirmation requise : clique encore pour supprimer définitivement ton compte, ou annule." :
+               deleteStatus === "deleting" ? "Suppression de ton compte en cours." :
+               deleteStatus === "done" ? "Compte supprimé. Redirection en cours." :
+               deleteStatus === "auth" ? "Connecte-toi pour supprimer ton compte." :
+               deleteStatus === "error" ? "Échec de la suppression. Réessaie." :
+               ""}
+            </span>
           </HextechCard>
         </div>
 

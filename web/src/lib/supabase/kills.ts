@@ -249,6 +249,198 @@ const KILL_SELECT = `
 // and lets the planner stream the LIMIT 250 batch directly off
 // idx_kills_scroll_feed without the join blocking.
 
+// ═══════════════════════════════════════════════════════════════════
+// SLIM CARD PROJECTION (egress lever — Wave 36)
+// ═══════════════════════════════════════════════════════════════════
+//
+// The fat KILL_SELECT above ships ~40 columns (5 description langs +
+// assets_manifest + hls + og + the 4-way split-status columns + the
+// full games/matches join) on every read. Pure-card browse surfaces
+// (/records, /week) render ~15 of those fields and never touch the
+// player, so the rest is dead egress.
+//
+// CARD_SELECT lists ONLY the columns a browse CARD renders. It is a
+// strict subset of KILL_SELECT, so a CardKillRow is structurally
+// assignable into the slots of PublishedKillRow that overlap — but
+// the two loaders stay independent. NEVER use CARD_SELECT for /scroll
+// (needs clip/hls/manifest URLs) or /kill/[id] (needs everything).
+//
+// Fields included and why they survived the diet :
+//   id                         — key + /scroll?kill= deep-link
+//   killer_player_id           — card grouping / future filters
+//   killer_champion            — champion icon (left)
+//   victim_champion            — champion icon (right)
+//   thumbnail_url              — poster <Image>
+//   clip_url_vertical          — /week "has a real clip" gate
+//   clip_url_vertical_low      — symmetry with the clip gate; cheap
+//   highlight_score            — score pill + sort key
+//   avg_rating / rating_count  — (community sort hooks; tiny ints)
+//   multi_kill                 — orange multi-kill badge
+//   is_first_blood             — red FB badge + ranking bonus
+//   tracked_team_involvement   — "team_killer" filter (both pages)
+//   kill_visible               — drop QC-rejected rows client-side
+//   fight_type                 — /records "Teamfights" category filter
+//   ai_tags                    — /records 1v3 / snipe category filters
+//   ai_description(+fr/en/ko/es)— <Description> i18n picks one of these
+//   created_at                 — recency sort + 7-day window
+//   games.matches.external_id  — /week opponent-logo lookup
+//   games.matches.stage        — named in the slim spec; cheap text
+//
+// Deliberately EXCLUDED (heavy / unused on cards) : clip_url_horizontal,
+// hls_master_url, og_image_url, assets_manifest, game_time_seconds,
+// lane_phase, objective_context, matchup_lane, champion_class,
+// game_minute_bucket, best_thumbnail_seconds, impression_count,
+// comment_count, data_source, status + the 4 split-status columns,
+// and the games-level external_id / game_number (only matches.* used).
+const CARD_SELECT = `
+  id,
+  killer_player_id,
+  killer_champion,
+  victim_champion,
+  thumbnail_url,
+  clip_url_vertical,
+  clip_url_vertical_low,
+  highlight_score,
+  avg_rating,
+  rating_count,
+  multi_kill,
+  is_first_blood,
+  tracked_team_involvement,
+  kill_visible,
+  fight_type,
+  ai_tags,
+  ai_description,
+  ai_description_fr,
+  ai_description_en,
+  ai_description_ko,
+  ai_description_es,
+  created_at,
+  games (
+    matches (
+      external_id,
+      stage
+    )
+  )
+`.trim();
+
+/**
+ * Slim row returned by CARD_SELECT. A strict subset of PublishedKillRow
+ * carrying only the fields a browse card renders. The shared `games`
+ * shape is reused but only `matches.external_id` / `matches.stage` are
+ * populated (the other match/game keys come back null from normalize).
+ */
+export interface CardKillRow {
+  id: string;
+  killer_player_id: string | null;
+  killer_champion: string | null;
+  victim_champion: string | null;
+  thumbnail_url: string | null;
+  clip_url_vertical: string | null;
+  clip_url_vertical_low: string | null;
+  highlight_score: number | null;
+  avg_rating: number | null;
+  rating_count: number;
+  multi_kill: string | null;
+  is_first_blood: boolean;
+  tracked_team_involvement: string | null;
+  kill_visible: boolean | null;
+  fight_type: FightType | null;
+  ai_tags: string[];
+  ai_description: string | null;
+  ai_description_fr: string | null;
+  ai_description_en: string | null;
+  ai_description_ko: string | null;
+  ai_description_es: string | null;
+  created_at: string;
+  games: {
+    matches: {
+      external_id: string;
+      stage: string | null;
+    } | null;
+  } | null;
+}
+
+/** Raw shape from the CARD_SELECT clause, pre-normalisation. */
+interface RawCardSelect {
+  id?: string | null;
+  killer_player_id?: string | null;
+  killer_champion?: string | null;
+  victim_champion?: string | null;
+  thumbnail_url?: string | null;
+  clip_url_vertical?: string | null;
+  clip_url_vertical_low?: string | null;
+  highlight_score?: number | null;
+  avg_rating?: number | null;
+  rating_count?: number | null;
+  multi_kill?: string | null;
+  is_first_blood?: boolean | null;
+  tracked_team_involvement?: string | null;
+  kill_visible?: boolean | null;
+  fight_type?: FightType | null;
+  ai_tags?: string[] | null;
+  ai_description?: string | null;
+  ai_description_fr?: string | null;
+  ai_description_en?: string | null;
+  ai_description_ko?: string | null;
+  ai_description_es?: string | null;
+  created_at?: string | null;
+  games?: RawCardGameSelect | RawCardGameSelect[] | null;
+}
+
+interface RawCardGameSelect {
+  matches?: RawCardMatchSelect | RawCardMatchSelect[] | null;
+}
+
+interface RawCardMatchSelect {
+  external_id?: string | null;
+  stage?: string | null;
+}
+
+/** Collapse the object|array join ambiguity and coerce nullable scalars,
+ *  mirroring normalize() but for the slim card shape. */
+function normalizeCard(row: RawCardSelect): CardKillRow {
+  const games = Array.isArray(row.games) ? row.games[0] ?? null : row.games ?? null;
+  let gamesNormalized: CardKillRow["games"] = null;
+  if (games) {
+    const matches = Array.isArray(games.matches)
+      ? games.matches[0] ?? null
+      : games.matches ?? null;
+    gamesNormalized = {
+      matches: matches
+        ? {
+            external_id: String(matches.external_id ?? ""),
+            stage: matches.stage ?? null,
+          }
+        : null,
+    };
+  }
+  return {
+    id: String(row.id ?? ""),
+    killer_player_id: row.killer_player_id ?? null,
+    killer_champion: row.killer_champion ?? null,
+    victim_champion: row.victim_champion ?? null,
+    thumbnail_url: row.thumbnail_url ?? null,
+    clip_url_vertical: row.clip_url_vertical ?? null,
+    clip_url_vertical_low: row.clip_url_vertical_low ?? null,
+    highlight_score: row.highlight_score ?? null,
+    avg_rating: row.avg_rating ?? null,
+    rating_count: Number(row.rating_count ?? 0),
+    multi_kill: row.multi_kill ?? null,
+    is_first_blood: Boolean(row.is_first_blood),
+    tracked_team_involvement: row.tracked_team_involvement ?? null,
+    kill_visible: row.kill_visible ?? null,
+    fight_type: row.fight_type ?? null,
+    ai_tags: Array.isArray(row.ai_tags) ? row.ai_tags : [],
+    ai_description: row.ai_description ?? null,
+    ai_description_fr: row.ai_description_fr ?? null,
+    ai_description_en: row.ai_description_en ?? null,
+    ai_description_ko: row.ai_description_ko ?? null,
+    ai_description_es: row.ai_description_es ?? null,
+    created_at: String(row.created_at ?? ""),
+    games: gamesNormalized,
+  };
+}
+
 /**
  * Raw row shape returned by the SELECT clause above. Mirrors the
  * Supabase response one-to-one BEFORE normalisation. Defining this in
@@ -492,6 +684,56 @@ export const getPublishedKills = cache(async function getPublishedKills(
   } catch (err) {
     rethrowIfDynamic(err);
     console.warn("[supabase/kills] getPublishedKills threw:", err);
+    return [];
+  }
+});
+
+/**
+ * getCardKills — slim sibling of getPublishedKills for pure-card browse
+ * surfaces (/records, /week). Identical filters + ordering + buildTime
+ * escape hatch + React cache(), but selects CARD_SELECT instead of the
+ * fat KILL_SELECT — dropping ~25 unused columns per row (the player-only
+ * clip/hls/manifest URLs, the 4 split-status columns, the full
+ * games/matches join, and the lane/objective/minute analysis fields).
+ *
+ * Same WHERE chain as getPublishedKills so the row SET is byte-for-byte
+ * the same kills, only narrower — callers that render exclusively card
+ * fields swap loaders with zero behavioural change, just less egress.
+ *
+ * Returns CardKillRow (a strict subset of PublishedKillRow). DO NOT use
+ * for /scroll (needs clip_url_vertical/hls/manifest) or /kill/[id]
+ * (needs the full row + status columns).
+ */
+export const getCardKills = cache(async function getCardKills(
+  limit = 50,
+  opts: { buildTime?: boolean } = {},
+): Promise<CardKillRow[]> {
+  try {
+    const supabase = opts.buildTime
+      ? createAnonSupabase()
+      : await createServerSupabase();
+    const { data, error } = await supabase
+      .from("kills")
+      .select(CARD_SELECT)
+      // PR23 split-status fallback — same predicate as getPublishedKills.
+      .or(
+        "publication_status.eq.published," +
+          "and(publication_status.is.null,status.eq.published)",
+      )
+      .eq("kill_visible", true)
+      .not("clip_url_vertical", "is", null)
+      .not("thumbnail_url", "is", null)
+      .order("highlight_score", { ascending: false, nullsFirst: false })
+      .order("created_at", { ascending: false })
+      .limit(limit);
+    if (error) {
+      console.warn("[supabase/kills] getCardKills error:", error.message);
+      return [];
+    }
+    return (data ?? []).map((row) => normalizeCard(row as unknown as RawCardSelect));
+  } catch (err) {
+    rethrowIfDynamic(err);
+    console.warn("[supabase/kills] getCardKills threw:", err);
     return [];
   }
 });

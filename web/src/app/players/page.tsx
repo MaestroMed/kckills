@@ -177,7 +177,7 @@ export default function PlayersPage() {
                       {player.name}
                     </h3>
 
-                    <div className="mt-3 grid grid-cols-4 gap-2 text-center">
+                    <div className="mt-3 grid grid-cols-2 min-[420px]:grid-cols-4 gap-2 text-center">
                       <div>
                         <p className="font-data text-lg font-bold text-[var(--green)]">
                           {player.totalKills}

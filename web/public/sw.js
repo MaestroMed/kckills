@@ -18,10 +18,92 @@
 // installations cling to the previous CACHE_NAME until activate fires;
 // without it, returning users hit the stale handler from cache for days.
 
-const CACHE_NAME = "loltok-v6";
+// ── Cache versioning (Wave 36 #33 — stale-JS-after-deploy fix) ──────────
+//
+// THE BUG : the previous fetch handler network-firsted *every* same-origin
+// GET into ONE fixed cache (`loltok-v6`) and only purged caches whose name
+// differed from the current one. Because the cache name was tied to manual
+// SW edits — not to each deploy — a normal redeploy left the prior build's
+// hashed `_next/static/...chunk.js` and cached HTML sitting in `loltok-v6`.
+// On any offline/flaky fetch the SW then served stale HTML pointing at
+// chunk hashes that no longer exist on the CDN → blank screen / ChunkLoad
+// errors for returning users. Network-first masked it on a good network but
+// never *evicted* the stale build.
+//
+// THE FIX :
+//   1. Build-scoped cache name. The SW reads a `?v=<build>` query param off
+//      its OWN script URL — `layout.tsx` registers `/sw.js?v=<commit-sha>`
+//      and changes that value on every deploy (sw.js itself is byte-stable
+//      and can't be rewritten because it's served verbatim from /public).
+//      A changed `?v=` makes the browser re-fetch + re-install the SW, and
+//      the new value flows into CACHE_NAME ⇒ the activate sweep drops the
+//      entire prior build's cache in one shot. Falls back to "dev" when the
+//      param is absent (local `next dev`).
+//   2. Per-request-class strategy instead of "cache everything":
+//        • Next dev HMR / hot-update  → network only, NEVER cached.
+//        • Navigations (documents)    → network-first → cached shell →
+//                                        offline.html. HTML is NOT written
+//                                        to the runtime cache (stale HTML is
+//                                        the root cause of #33); we only
+//                                        ever fall back to the precached
+//                                        shell routes.
+//        • `/_next/static/*` (hashed) → stale-while-revalidate. Content is
+//                                        addressed by hash, so a cached copy
+//                                        is always correct; we still refetch
+//                                        in the background to warm the new
+//                                        build's chunks.
+//        • icons / manifest / static  → cache-first (rarely change; cheap).
+//        • everything else same-origin → network-first, no persistence.
+// Derive the build id from this script's own URL (?v=<commit-sha>), set by
+// the registration in layout.tsx. Defaults to "dev" for local `next dev`
+// where the registration omits the param. Wrapped in try/catch because
+// `self.location` / URL parsing must never throw and dead-letter the SW.
+function readBuildId() {
+  try {
+    const v = new URL(self.location.href).searchParams.get("v");
+    return v && v.trim() ? v.trim().slice(0, 64) : "dev";
+  } catch {
+    return "dev";
+  }
+}
+const BUILD_ID = readBuildId();
+const CACHE_PREFIX = "loltok";
+// Bump the `v6` token when the SW logic itself changes; BUILD_ID busts on
+// every deploy. Either changing produces a fresh cache + activate sweep.
+const CACHE_NAME = `${CACHE_PREFIX}-v6-${BUILD_ID}`;
 const PRECACHE = ["/scroll", "/live", "/", "/manifest.json", "/offline.html"];
 
-// Install: precache shell
+// Static, slow-moving assets that are safe to cache-first (not content
+// hashed, but they change at most once per deploy and the activate sweep
+// re-primes them under the new cache name anyway).
+function isStaticAsset(url) {
+  return (
+    url.pathname === "/manifest.json" ||
+    url.pathname.startsWith("/icons/") ||
+    url.pathname.startsWith("/fonts/") ||
+    /\.(?:png|jpg|jpeg|gif|svg|webp|avif|ico|woff2?|ttf)$/i.test(url.pathname)
+  );
+}
+
+// Next.js content-hashed build output. These are immutable per build — a
+// cached hit is always byte-correct, so stale-while-revalidate is safe and
+// fast.
+function isHashedNextAsset(url) {
+  return url.pathname.startsWith("/_next/static/");
+}
+
+// Next.js dev hot-reload traffic. Caching this breaks HMR and pins dev to a
+// stale module graph — bypass the SW entirely.
+function isDevHmr(url) {
+  return (
+    url.pathname.startsWith("/_next/webpack-hmr") ||
+    url.pathname.startsWith("/__nextjs") ||
+    url.pathname.includes("/_next/static/webpack/") ||
+    /\.hot-update\.(?:json|js)$/i.test(url.pathname)
+  );
+}
+
+// Install: precache shell, then take over immediately.
 self.addEventListener("install", (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => cache.addAll(PRECACHE))
@@ -29,57 +111,109 @@ self.addEventListener("install", (event) => {
   self.skipWaiting();
 });
 
-// Activate: clean old caches
+// Activate: drop every cache from a prior build/version (anything under our
+// prefix that isn't the live name), then claim open clients.
 self.addEventListener("activate", (event) => {
   event.waitUntil(
-    caches.keys().then((keys) =>
-      Promise.all(keys.filter((k) => k !== CACHE_NAME).map((k) => caches.delete(k)))
-    )
+    (async () => {
+      const keys = await caches.keys();
+      await Promise.all(
+        keys
+          .filter((k) => k.startsWith(CACHE_PREFIX) && k !== CACHE_NAME)
+          .map((k) => caches.delete(k))
+      );
+      await self.clients.claim();
+    })()
   );
-  self.clients.claim();
 });
 
-// Fetch: network-first for same-origin only.
-// Cross-origin requests (CDN images, fonts, APIs) are NOT intercepted
-// to avoid CSP connect-src conflicts and cache-put errors.
+// Fetch: per-request-class strategy for same-origin only.
+// Cross-origin requests (CDN clips/images, fonts, APIs) are NOT intercepted
+// to avoid CSP connect-src conflicts and opaque-response cache.put errors.
 self.addEventListener("fetch", (event) => {
   if (event.request.method !== "GET") return;
 
   const url = new URL(event.request.url);
 
-  // Only cache same-origin requests — let cross-origin go through normally
+  // Only handle same-origin — let cross-origin pass through untouched.
   if (url.origin !== self.location.origin) return;
 
-  // Skip chrome-extension and other non-http schemes
+  // Skip chrome-extension and other non-http schemes.
   if (!url.protocol.startsWith("http")) return;
 
-  event.respondWith(
-    fetch(event.request)
-      .then((response) => {
-        // Only cache successful, basic (same-origin) responses.
-        // Cross-origin opaque responses can't be cached safely and
-        // throw NetworkError on cache.put().
-        if (
-          response.status === 200 &&
-          response.type === "basic" &&
-          (event.request.method === "GET" || event.request.method === "HEAD")
-        ) {
-          const clone = response.clone();
-          caches.open(CACHE_NAME).then((cache) => {
-            cache.put(event.request, clone).catch(() => { /* ignore */ });
-          }).catch(() => { /* ignore */ });
-        }
-        return response;
+  // Never touch dev HMR — it must hit the network raw every time.
+  if (isDevHmr(url)) return;
+
+  // Navigations / documents → network-first, fall back to the precached
+  // shell (NOT runtime-cached HTML), then offline.html. We deliberately do
+  // not persist navigation responses: stale HTML referencing dead chunk
+  // hashes is exactly the regression #33 is about.
+  if (event.request.mode === "navigate") {
+    event.respondWith(
+      fetch(event.request).catch(async () => {
+        const cache = await caches.open(CACHE_NAME);
+        return (
+          (await cache.match(event.request)) ||
+          (await cache.match(url.pathname)) ||
+          (await cache.match("/offline.html")) ||
+          new Response("Offline", {
+            status: 503,
+            headers: { "Content-Type": "text/plain" },
+          })
+        );
       })
-      .catch(() =>
-        caches.match(event.request).then((cached) => {
-          if (cached) return cached;
-          if (event.request.mode === "navigate") {
-            return caches.match("/offline.html");
+    );
+    return;
+  }
+
+  // Hashed Next build assets → stale-while-revalidate.
+  if (isHashedNextAsset(url)) {
+    event.respondWith(
+      (async () => {
+        const cache = await caches.open(CACHE_NAME);
+        const cached = await cache.match(event.request);
+        const network = fetch(event.request)
+          .then((response) => {
+            if (response && response.status === 200 && response.type === "basic") {
+              cache.put(event.request, response.clone()).catch(() => {});
+            }
+            return response;
+          })
+          .catch(() => null);
+        return cached || (await network) || new Response("", { status: 504 });
+      })()
+    );
+    return;
+  }
+
+  // Static icons / manifest / fonts → cache-first.
+  if (isStaticAsset(url)) {
+    event.respondWith(
+      (async () => {
+        const cache = await caches.open(CACHE_NAME);
+        const cached = await cache.match(event.request);
+        if (cached) return cached;
+        try {
+          const response = await fetch(event.request);
+          if (response && response.status === 200 && response.type === "basic") {
+            cache.put(event.request, response.clone()).catch(() => {});
           }
+          return response;
+        } catch {
           return new Response("Offline", { status: 503 });
-        })
-      )
+        }
+      })()
+    );
+    return;
+  }
+
+  // Everything else same-origin (data / API / dynamic) → network-first with
+  // no persistence, falling back to any prior cached copy if offline.
+  event.respondWith(
+    fetch(event.request).catch(async () => {
+      const cached = await caches.match(event.request);
+      return cached || new Response("Offline", { status: 503 });
+    })
   );
 });
 

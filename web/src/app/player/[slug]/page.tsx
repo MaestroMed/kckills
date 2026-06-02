@@ -714,13 +714,16 @@ export default async function PlayerPage({ params }: Props) {
 }
 
 // ─── Local section-header helper ───────────────────────────────────────
+// Renders a real <h2> so the page has a correct heading outline (each
+// major section is a top-level landmark on this profile page). The
+// decorative rule + losange stay aria-hidden.
 function SectionHeader({ kicker }: { kicker: string }) {
   return (
     <div className="flex items-center gap-3 mb-8">
-      <span className="h-px w-12 bg-[var(--gold)]" />
-      <span className="font-data text-[10px] uppercase tracking-[0.3em] font-bold text-[var(--gold)]">
+      <span className="h-px w-12 bg-[var(--gold)]" aria-hidden />
+      <h2 className="font-data text-[10px] uppercase tracking-[0.3em] font-bold text-[var(--gold)]">
         {kicker}
-      </span>
+      </h2>
       <span className="text-[var(--gold)]/40 text-xs" aria-hidden>
         ◆
       </span>

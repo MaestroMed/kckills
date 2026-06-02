@@ -50,12 +50,25 @@ export function LiveScroll({ initialMatch, initialKills, initialScore }: Props) 
   const [score, setScore] = useState<{ kc: number; opp: number }>(initialScore);
   const [now, setNow] = useState<number>(() => Date.now());
 
+  // Screen-reader announcement (WCAG 4.1.3). Updated ONLY when fresh kills
+  // are ingested — never on the 1-Hz timer tick or on hover — so the polite
+  // live region speaks the new score plus an arrival count instead of
+  // chattering on every render. The trailing cumulative total is strictly
+  // increasing, which guarantees the text differs each ingestion so the
+  // screen reader re-reads it even when the score itself didn't move.
+  const [announce, setAnnounce] = useState<string>("");
+
   // Tracks every kill id we've ever ingested so dedup stays correct even
   // after the 40-row render cap drops old kills, and so score deltas are
   // computed exactly once per kill (the merge updater itself stays pure —
   // no setState nested inside it, which would double-count under React's
   // strict-mode double-invocation).
   const seenIdsRef = useRef<Set<string>>(new Set(initialKills.map((k) => k.id)));
+
+  // Authoritative running score, mirrored as a ref so the announcement can
+  // read the post-delta value synchronously inside the poll tick (the loop
+  // closes over a stale `score` state). Updated in lock-step with setScore.
+  const scoreRef = useRef<{ kc: number; opp: number }>(initialScore);
 
   const heroKill = kills[0] ?? null;
 
@@ -121,8 +134,30 @@ export function LiveScroll({ initialMatch, initialKills, initialScore }: Props) 
             else if (k.tracked_team_involvement === "team_victim") oppDelta += 1;
           }
           if (kcDelta || oppDelta) {
-            setScore((s) => ({ kc: s.kc + kcDelta, opp: s.opp + oppDelta }));
+            scoreRef.current = {
+              kc: scoreRef.current.kc + kcDelta,
+              opp: scoreRef.current.opp + oppDelta,
+            };
+            setScore(scoreRef.current);
           }
+          // Announce to screen readers (WCAG 4.1.3): the new score plus how
+          // many kills just landed. Built here in the tick body (runs once
+          // per poll — Strict Mode double-invokes render/updaters, not this
+          // async callback) and read from scoreRef so it reflects the
+          // authoritative post-delta score even though the loop closes over a
+          // stale `score` state. Assist-only ticks keep the score and still
+          // announce the arrival. The strictly-increasing total guarantees
+          // the string changes each ingestion, so the polite region re-reads
+          // even when the score didn't move. Never fired on the 1-Hz tick.
+          const total = seenIdsRef.current.size;
+          const plural = fresh.length > 1;
+          setAnnounce(
+            `Score Karmine Corp ${scoreRef.current.kc}, adversaire ${
+              scoreRef.current.opp
+            }. ${fresh.length} nouveau${plural ? "x" : ""} kill${
+              plural ? "s" : ""
+            }. ${total} au total.`,
+          );
           // Cap the rendered window — deltas above counted every fresh kill,
           // so trimming old rows here doesn't skew the score.
           setKills((prev) => [...fresh, ...prev].slice(0, MAX_RENDERED_KILLS));
@@ -191,6 +226,13 @@ export function LiveScroll({ initialMatch, initialKills, initialScore }: Props) 
 
   return (
     <main className="mx-auto flex max-w-5xl flex-col gap-6 px-3 py-4 pb-32 sm:px-5">
+      {/* Polite live region (WCAG 4.1.3) — announces score changes + new
+          kill arrivals to screen readers. Text updates only on ingestion,
+          never on the 1-Hz timer tick, so it never chatters. */}
+      <div role="status" aria-live="polite" className="sr-only">
+        {announce}
+      </div>
+
       {/* ─── Cinematic header ─────────────────────────────────── */}
       <header className="rounded-2xl border border-[var(--red)]/30 bg-gradient-to-br from-[#1a0408] via-[#0d020a] to-[#080203] p-4 shadow-2xl sm:p-6">
         <div className="flex items-center gap-3">
