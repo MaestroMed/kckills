@@ -87,8 +87,12 @@ async def _fetch_recent_published(db) -> list[dict]:
         f"{db.base}/kills",
         headers=db.headers,
         params={
+            # vod_youtube_id lives on games (joined via kills.game_id), NOT
+            # on kills — embed it and flatten below so the rest of the
+            # module keeps reading row["vod_youtube_id"]. (Fixes the boot
+            # 42703 "column kills.vod_youtube_id does not exist".)
             "select": (
-                "id,created_at,clip_url_horizontal,vod_youtube_id,"
+                "id,created_at,clip_url_horizontal,games(vod_youtube_id),"
                 "highlight_score,data_source,kill_visible,duration_ms"
             ),
             "status": "eq.published",
@@ -103,7 +107,11 @@ async def _fetch_recent_published(db) -> list[dict]:
     if r.status_code != 200:
         log.warn("qc_sampler_fetch_failed", status=r.status_code, body=r.text[:200])
         return []
-    return r.json() or []
+    rows = r.json() or []
+    for row in rows:
+        g = row.pop("games", None)
+        row["vod_youtube_id"] = g.get("vod_youtube_id") if isinstance(g, dict) else None
+    return rows
 
 
 async def _fetch_already_qcd(db, kill_ids: list[str]) -> set[str]:
@@ -360,16 +368,17 @@ def _fetch_verified_vod_set(db, vod_ids: list[str]) -> set[str]:
                 f"{db.base}/kills",
                 headers=db.headers,
                 params={
-                    "select": "vod_youtube_id",
+                    # vod_youtube_id is on games (via kills.game_id), embed it.
+                    "select": "games(vod_youtube_id)",
                     "id": in_filter,
-                    "vod_youtube_id": "not.is.null",
                     "limit": BATCH,
                 },
                 timeout=20.0,
             )
             if r3.status_code == 200:
                 for kr in r3.json() or []:
-                    v = kr.get("vod_youtube_id")
+                    g = kr.get("games")
+                    v = g.get("vod_youtube_id") if isinstance(g, dict) else None
                     if v:
                         verified_vods.add(v)
         return verified_vods
