@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import Image from "next/image";
-import { m, AnimatePresence } from "motion/react";
+import { m } from "motion/react";
+import { Modal } from "@/components/ui/FocusTrapModal";
 import type { Era, EraLink } from "@/lib/eras";
 
 const LINK_ICONS: Record<string, string> = {
@@ -144,44 +145,46 @@ export function EraClipsSection({ era }: { era: Era }) {
       )}
 
       {/* Lightbox for direct embeds */}
-      <AnimatePresence>
-        {activeClip && (
-          <m.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[200] flex items-center justify-center bg-black/95 backdrop-blur-xl p-6"
+      <Modal
+        open={activeClip !== null}
+        onClose={() => setActiveClip(null)}
+        label="Clip vidéo"
+        showCloseButton={false}
+        zIndexClassName="z-[200]"
+        scrimClassName="bg-black/95 backdrop-blur-xl"
+        overlayClassName="items-center justify-center p-6"
+        panelClassName="w-full max-w-6xl"
+      >
+        <m.div
+          initial={{ scale: 0.9, y: 20 }}
+          animate={{ scale: 1, y: 0 }}
+          exit={{ scale: 0.9, y: 20 }}
+          transition={{ type: "spring", stiffness: 300, damping: 25 }}
+          className="relative w-full"
+          style={{ aspectRatio: "16/9" }}
+        >
+          <iframe
+            className="absolute inset-0 w-full h-full rounded-2xl border border-[var(--gold)]/20 shadow-2xl"
+            src={
+              activeClip
+                ? `https://www.youtube.com/embed/${activeClip}?autoplay=1&rel=0`
+                : undefined
+            }
+            title="YouTube clip"
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+            allowFullScreen
+          />
+          <button
             onClick={() => setActiveClip(null)}
+            className="absolute -top-12 right-0 flex h-10 w-10 items-center justify-center rounded-full border border-white/20 bg-black/60 text-white hover:bg-white/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--gold)] focus-visible:outline-offset-2"
+            aria-label="Fermer"
           >
-            <m.div
-              initial={{ scale: 0.9, y: 20 }}
-              animate={{ scale: 1, y: 0 }}
-              exit={{ scale: 0.9, y: 20 }}
-              transition={{ type: "spring", stiffness: 300, damping: 25 }}
-              className="relative w-full max-w-6xl"
-              style={{ aspectRatio: "16/9" }}
-              onClick={(e) => e.stopPropagation()}
-            >
-              <iframe
-                className="absolute inset-0 w-full h-full rounded-2xl border border-[var(--gold)]/20 shadow-2xl"
-                src={`https://www.youtube.com/embed/${activeClip}?autoplay=1&rel=0`}
-                title="YouTube clip"
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                allowFullScreen
-              />
-              <button
-                onClick={() => setActiveClip(null)}
-                className="absolute -top-12 right-0 flex h-10 w-10 items-center justify-center rounded-full border border-white/20 bg-black/60 text-white hover:bg-white/10"
-                aria-label="Fermer"
-              >
-                <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </m.div>
-          </m.div>
-        )}
-      </AnimatePresence>
+            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </m.div>
+      </Modal>
     </section>
   );
 }

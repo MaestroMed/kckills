@@ -16,9 +16,10 @@
  * Storage : `localStorage.kc_onboarded_v1` = "true" | "skipped".
  */
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Image from "next/image";
 import { m, AnimatePresence } from "motion/react";
+import { useFocusTrap } from "@/components/ui/FocusTrapModal";
 import { useAffinityStore } from "./hooks/useAffinityStore";
 import { track } from "@/lib/analytics/track";
 
@@ -57,6 +58,7 @@ export function OnboardingModal({ roster }: Props) {
   const [open, setOpen] = useState(false);
   const [picked, setPicked] = useState<Set<string>>(new Set());
   const { seedFromOnboarding } = useAffinityStore();
+  const panelRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     // Wait one frame so the SSR feed paints first — onboarding shows
@@ -66,8 +68,6 @@ export function OnboardingModal({ roster }: Props) {
     }, 600);
     return () => window.clearTimeout(t);
   }, []);
-
-  if (!open) return null;
 
   const togglePick = (id: string) => {
     setPicked((prev) => {
@@ -115,6 +115,10 @@ export function OnboardingModal({ roster }: Props) {
     setOpen(false);
   };
 
+  // Focus trap: focus-on-open, Tab cycling, Escape-to-close (mirrors the
+  // scrim → skip path), inert background, focus-restore to the opener on close.
+  useFocusTrap(panelRef, { active: open, onEscape: skip, restoreFocus: true });
+
   return (
     <AnimatePresence>
       {open && (
@@ -133,11 +137,13 @@ export function OnboardingModal({ roster }: Props) {
             onClick={skip}
           />
           <m.div
+            ref={panelRef}
+            tabIndex={-1}
             initial={{ y: 60, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: 60, opacity: 0 }}
             transition={{ type: "spring", stiffness: 260, damping: 28 }}
-            className="relative w-full sm:max-w-md sm:m-4 rounded-t-3xl sm:rounded-3xl bg-[var(--bg-surface)] border-t sm:border border-[var(--gold)]/40 backdrop-blur-md px-5 py-6 space-y-5"
+            className="relative w-full sm:max-w-md sm:m-4 rounded-t-3xl sm:rounded-3xl bg-[var(--bg-surface)] border-t sm:border border-[var(--gold)]/40 backdrop-blur-md px-5 py-6 space-y-5 outline-none"
             style={{
               paddingBottom: "max(1.5rem, env(safe-area-inset-bottom, 1.5rem))",
             }}

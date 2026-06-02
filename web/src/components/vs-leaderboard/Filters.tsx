@@ -16,9 +16,10 @@
  * control surfaced it (keeps the UI cohesive across devices).
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { m, AnimatePresence } from "motion/react";
 
+import { useFocusTrap } from "@/components/ui/FocusTrapModal";
 import type { Era } from "@/lib/eras";
 
 export interface LeaderboardFiltersValue {
@@ -237,6 +238,7 @@ function ChampionDropdown({
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const rootRef = useRef<HTMLDivElement>(null);
+  const listboxId = useId();
 
   useEffect(() => {
     if (!open) return;
@@ -245,8 +247,23 @@ function ChampionDropdown({
         setOpen(false);
       }
     };
+    // Capture-phase Escape so that when this dropdown is open *inside* the
+    // mobile sheet, closing it stops the event before the sheet's focus-trap
+    // Escape handler (document, bubble phase) can also fire and close the
+    // whole sheet. One Escape = one level dismissed.
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        e.stopPropagation();
+        setOpen(false);
+      }
+    };
     window.addEventListener("mousedown", onClick);
-    return () => window.removeEventListener("mousedown", onClick);
+    window.addEventListener("keydown", onKeyDown, true);
+    return () => {
+      window.removeEventListener("mousedown", onClick);
+      window.removeEventListener("keydown", onKeyDown, true);
+    };
   }, [open]);
 
   const filtered = useMemo(() => {
@@ -262,6 +279,7 @@ function ChampionDropdown({
         onClick={() => setOpen((o) => !o)}
         aria-haspopup="listbox"
         aria-expanded={open}
+        aria-controls={open ? listboxId : undefined}
         aria-label="Filtrer par champion"
         className="inline-flex items-center gap-2 rounded-xl border border-[var(--border-gold)] bg-black/25 px-3 py-1.5 font-data text-[10px] uppercase tracking-[0.2em] text-white/75 hover:border-[var(--gold)]/60 hover:text-white transition-colors"
       >
@@ -270,11 +288,7 @@ function ChampionDropdown({
         <span aria-hidden className="text-[var(--gold)]/70">▾</span>
       </button>
       {open && (
-        <div
-          role="dialog"
-          aria-label="Sélection champion"
-          className="absolute left-0 top-full mt-2 z-40 w-64 rounded-xl border border-white/15 bg-[var(--bg-elevated)]/95 backdrop-blur-md shadow-2xl overflow-hidden"
-        >
+        <div className="absolute left-0 top-full mt-2 z-40 w-64 rounded-xl border border-white/15 bg-[var(--bg-elevated)]/95 backdrop-blur-md shadow-2xl overflow-hidden">
           <div className="p-2 border-b border-white/10">
             <input
               type="text"
@@ -286,8 +300,8 @@ function ChampionDropdown({
               className="w-full rounded-lg bg-black/40 border border-white/10 px-3 py-1.5 text-xs text-white placeholder:text-white/35 focus:outline-none focus:border-[var(--gold)]/60"
             />
           </div>
-          <ul role="listbox" className="max-h-64 overflow-auto py-1">
-            <li>
+          <ul id={listboxId} role="listbox" aria-label="Champions" className="max-h-64 overflow-auto py-1">
+            <li role="option" aria-selected={value === null}>
               <button
                 type="button"
                 onClick={() => {
@@ -319,7 +333,7 @@ function ChampionDropdown({
               </li>
             ))}
             {filtered.length === 0 && (
-              <li className="px-3 py-2 text-[10px] uppercase tracking-widest text-white/40">
+              <li role="presentation" className="px-3 py-2 text-[10px] uppercase tracking-widest text-white/40">
                 Aucun champion
               </li>
             )}
@@ -345,6 +359,7 @@ function EraDropdown({
 }) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
+  const listboxId = useId();
 
   useEffect(() => {
     if (!open) return;
@@ -353,8 +368,21 @@ function EraDropdown({
         setOpen(false);
       }
     };
+    // Capture-phase Escape: see ChampionDropdown — closes only this dropdown
+    // when nested in the mobile sheet, without bubbling to the sheet's trap.
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        e.stopPropagation();
+        setOpen(false);
+      }
+    };
     window.addEventListener("mousedown", onClick);
-    return () => window.removeEventListener("mousedown", onClick);
+    window.addEventListener("keydown", onKeyDown, true);
+    return () => {
+      window.removeEventListener("mousedown", onClick);
+      window.removeEventListener("keydown", onKeyDown, true);
+    };
   }, [open]);
 
   const selectedEra = value ? eras.find((e) => e.id === value) ?? null : null;
@@ -366,6 +394,7 @@ function EraDropdown({
         onClick={() => setOpen((o) => !o)}
         aria-haspopup="listbox"
         aria-expanded={open}
+        aria-controls={open ? listboxId : undefined}
         aria-label="Filtrer par époque"
         className="inline-flex items-center gap-2 rounded-xl border border-[var(--border-gold)] bg-black/25 px-3 py-1.5 font-data text-[10px] uppercase tracking-[0.2em] text-white/75 hover:border-[var(--gold)]/60 hover:text-white transition-colors"
       >
@@ -384,13 +413,9 @@ function EraDropdown({
         <span aria-hidden className="text-[var(--gold)]/70">▾</span>
       </button>
       {open && (
-        <div
-          role="dialog"
-          aria-label="Sélection époque"
-          className="absolute left-0 top-full mt-2 z-40 w-72 rounded-xl border border-white/15 bg-[var(--bg-elevated)]/95 backdrop-blur-md shadow-2xl overflow-hidden"
-        >
-          <ul role="listbox" className="max-h-80 overflow-auto py-1">
-            <li>
+        <div className="absolute left-0 top-full mt-2 z-40 w-72 rounded-xl border border-white/15 bg-[var(--bg-elevated)]/95 backdrop-blur-md shadow-2xl overflow-hidden">
+          <ul id={listboxId} role="listbox" aria-label="Époques" className="max-h-80 overflow-auto py-1">
+            <li role="option" aria-selected={value === null}>
               <button
                 type="button"
                 onClick={() => {
@@ -609,6 +634,14 @@ function MobileSheet({
   onClose: () => void;
   onReset: () => void;
 }) {
+  // Adopt the shared focus-trap primitive (hook-only variant) so the sheet
+  // keeps its signature slide-up animation while gaining: focus-on-open,
+  // Tab cycling, Escape-to-close, focus-restore to the trigger, and an inert
+  // background. The panel is the trap container (tabIndex=-1 fallback).
+  const panelRef = useRef<HTMLDivElement>(null);
+  const titleId = useId();
+  useFocusTrap(panelRef, { active: true, onEscape: onClose, restoreFocus: true });
+
   return (
     <m.div
       initial={{ opacity: 0 }}
@@ -616,9 +649,6 @@ function MobileSheet({
       exit={{ opacity: 0 }}
       transition={{ duration: 0.2 }}
       className="fixed inset-0 z-50 md:hidden"
-      role="dialog"
-      aria-modal="true"
-      aria-label="Filtres du classement"
     >
       <div
         className="absolute inset-0 bg-black/70 backdrop-blur-sm"
@@ -626,11 +656,16 @@ function MobileSheet({
         aria-hidden
       />
       <m.div
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        tabIndex={-1}
         initial={{ y: "100%" }}
         animate={{ y: 0 }}
         exit={{ y: "100%" }}
         transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
-        className="absolute inset-x-0 bottom-0 rounded-t-3xl border-t border-[var(--gold)]/30 bg-[var(--bg-surface)] p-5 max-h-[85vh] overflow-auto"
+        className="absolute inset-x-0 bottom-0 rounded-t-3xl border-t border-[var(--gold)]/30 bg-[var(--bg-surface)] p-5 max-h-[85vh] overflow-auto outline-none"
         style={{ boxShadow: "0 -20px 50px rgba(0,0,0,0.6)" }}
       >
         <div className="flex items-center justify-between mb-5">
@@ -645,7 +680,7 @@ function MobileSheet({
                 background: "linear-gradient(135deg, var(--gold-bright), var(--gold))",
               }}
             />
-            <h2 className="font-display text-base font-black text-[var(--gold-bright)] uppercase tracking-[0.15em]">
+            <h2 id={titleId} className="font-display text-base font-black text-[var(--gold-bright)] uppercase tracking-[0.15em]">
               Filtres
             </h2>
           </div>

@@ -30,9 +30,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { m, AnimatePresence, useReducedMotion } from "motion/react";
+import { m, useReducedMotion } from "motion/react";
 import { Check, Crown, Swords } from "lucide-react";
 
+import { Modal } from "@/components/ui/FocusTrapModal";
 import { createClient } from "@/lib/supabase/client";
 import type {
   BracketBundle,
@@ -215,20 +216,18 @@ export function BracketView({ bundle, pastWinners, readOnly = false }: BracketVi
 
       <PastWinnersGallery winners={pastWinners} currentSlug={tournament.slug} />
 
-      <AnimatePresence>
-        {openMatch && tournament && (
-          <VoteModal
-            key={openMatch.id}
-            tournament={tournament}
-            match={openMatch}
-            alreadyVoted={voted.has(openMatch.id)}
-            readOnly={readOnly}
-            onClose={() => setOpenMatchId(null)}
-            onVoted={(tally) => markVoted(openMatch.id, tally)}
-            prefersReducedMotion={prefersReducedMotion}
-          />
-        )}
-      </AnimatePresence>
+      <VoteModal
+        open={openMatch != null}
+        tournament={tournament}
+        match={openMatch}
+        alreadyVoted={openMatch ? voted.has(openMatch.id) : false}
+        readOnly={readOnly}
+        onClose={() => setOpenMatchId(null)}
+        onVoted={(tally) => {
+          if (openMatch) markVoted(openMatch.id, tally);
+        }}
+        prefersReducedMotion={prefersReducedMotion}
+      />
     </>
   );
 }
@@ -897,6 +896,7 @@ function SideRow({
 // ════════════════════════════════════════════════════════════════════
 
 function VoteModal({
+  open,
   tournament,
   match,
   alreadyVoted,
@@ -905,8 +905,9 @@ function VoteModal({
   onVoted,
   prefersReducedMotion,
 }: {
+  open: boolean;
   tournament: BracketTournament;
-  match: BracketMatch;
+  match: BracketMatch | null;
   alreadyVoted: boolean;
   readOnly: boolean;
   onClose: () => void;
@@ -921,33 +922,40 @@ function VoteModal({
   const [voted, setVoted] = useState<"a" | "b" | null>(null);
   const [voteError, setVoteError] = useState<string | null>(null);
   const sessionHashRef = useRef<string>("bracket-ssr-placeholder");
-  const closeButtonRef = useRef<HTMLButtonElement>(null);
+
+  // Sticky copy of the match so its clips/labels keep rendering during the
+  // primitive's exit fade (after the parent nulls `match` on close).
+  const stickyMatchRef = useRef<BracketMatch | null>(match);
+  if (match) stickyMatchRef.current = match;
+  const displayMatch = match ?? stickyMatchRef.current;
 
   useEffect(() => {
     sessionHashRef.current = getBracketSessionHash();
   }, []);
 
-  // Focus close button on mount + trap focus minimally.
+  // Reset per-session vote state whenever a NEW match is opened. (Previously
+  // a `key` on the parent forced a remount; the modal is now persistently
+  // mounted for the primitive's exit animation, so we reset explicitly. We
+  // ignore the null→close transition so state survives the exit fade.)
+  const matchId = match?.id ?? null;
   useEffect(() => {
-    closeButtonRef.current?.focus();
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
+    if (matchId == null) return;
+    setVoted(null);
+    setVoteError(null);
+  }, [matchId]);
 
   const castVote = useCallback(
     async (choice: "a" | "b") => {
-      if (voting || readOnly) return;
-      const winnerKillId = choice === "a" ? match.kill_a_id : match.kill_b_id;
+      const m = stickyMatchRef.current;
+      if (voting || readOnly || !m) return;
+      const winnerKillId = choice === "a" ? m.kill_a_id : m.kill_b_id;
       if (!winnerKillId) return;
       setVoting(true);
       setVoteError(null);
       const sb = createClient();
       try {
         const { data, error } = await sb.rpc("fn_record_bracket_vote", {
-          p_match_id: match.id,
+          p_match_id: m.id,
           p_winner_kill_id: winnerKillId,
           p_session_hash: sessionHashRef.current,
         });
@@ -967,39 +975,37 @@ function VoteModal({
         setVoting(false);
       }
     },
-    [voting, readOnly, match.id, match.kill_a_id, match.kill_b_id, onVoted],
+    [voting, readOnly, onVoted],
   );
 
-  const disabledA = match.kill_a_id == null;
-  const disabledB = match.kill_b_id == null;
+  if (!displayMatch) return null;
+
+  const disabledA = displayMatch.kill_a_id == null;
+  const disabledB = displayMatch.kill_b_id == null;
 
   return (
-    <m.div
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="bracket-modal-title"
-      initial={prefersReducedMotion ? undefined : { opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={prefersReducedMotion ? undefined : { opacity: 0 }}
-      transition={{ duration: 0.2 }}
-      className="fixed inset-0 z-50 flex items-end md:items-center justify-center p-3 md:p-8 bg-black/85 backdrop-blur-md"
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
+    <Modal
+      open={open}
+      onClose={onClose}
+      labelledBy="bracket-modal-title"
+      showCloseButton={false}
+      zIndexClassName="z-50"
+      scrimClassName="bg-black/85 backdrop-blur-md"
+      overlayClassName="items-end md:items-center justify-center p-3 md:p-8"
+      panelClassName="w-full max-w-4xl"
     >
       <m.div
         initial={prefersReducedMotion ? undefined : { y: 30, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
         exit={prefersReducedMotion ? undefined : { y: 30, opacity: 0 }}
         transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
-        className="relative w-full max-w-4xl rounded-2xl border border-[var(--border-gold)] bg-[var(--bg-surface)]/95 backdrop-blur-md overflow-hidden"
+        className="relative w-full rounded-2xl border border-[var(--border-gold)] bg-[var(--bg-surface)]/95 backdrop-blur-md overflow-hidden"
         style={{ boxShadow: "0 32px 80px rgba(0,0,0,0.7), inset 0 0 0 1px rgba(200,170,110,0.08)" }}
-        onClick={(e) => e.stopPropagation()}
       >
         <header className="flex items-center justify-between px-5 py-4 border-b border-white/10">
           <div>
             <p id="bracket-modal-title" className="font-data text-[10px] uppercase tracking-[0.3em] text-[var(--gold)]/80">
-              Match #{match.match_index + 1}
+              Match #{displayMatch.match_index + 1}
             </p>
             <p className="font-display text-base md:text-lg font-black text-[var(--text-primary)] leading-tight">
               {voted || alreadyVoted
@@ -1008,11 +1014,10 @@ function VoteModal({
             </p>
           </div>
           <button
-            ref={closeButtonRef}
             type="button"
             onClick={onClose}
             aria-label="Fermer"
-            className="rounded-lg border border-white/15 bg-black/30 px-3 py-1.5 font-data text-xs uppercase tracking-widest text-[var(--text-muted)] hover:border-white/40 hover:text-white transition-colors"
+            className="rounded-lg border border-white/15 bg-black/30 px-3 py-1.5 font-data text-xs uppercase tracking-widest text-[var(--text-muted)] hover:border-white/40 hover:text-white transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--gold)] focus-visible:outline-offset-2"
           >
             Fermer ✕
           </button>
@@ -1022,18 +1027,18 @@ function VoteModal({
           <ModalClipPanel
             label="Gauche"
             accent="var(--cyan)"
-            thumb={match.kill_a_thumbnail}
-            clipVertical={match.kill_a_clip_vertical}
-            clipVerticalLow={match.kill_a_clip_vertical_low}
-            killerName={match.kill_a_killer_name}
-            killerChampion={match.kill_a_killer_champion}
-            victimChampion={match.kill_a_victim_champion}
-            aiDescription={match.kill_a_ai_description}
-            highlightScore={match.kill_a_highlight_score}
-            avgRating={match.kill_a_avg_rating}
-            multiKill={match.kill_a_multi_kill}
-            firstBlood={match.kill_a_first_blood}
-            votes={match.votes_a}
+            thumb={displayMatch.kill_a_thumbnail}
+            clipVertical={displayMatch.kill_a_clip_vertical}
+            clipVerticalLow={displayMatch.kill_a_clip_vertical_low}
+            killerName={displayMatch.kill_a_killer_name}
+            killerChampion={displayMatch.kill_a_killer_champion}
+            victimChampion={displayMatch.kill_a_victim_champion}
+            aiDescription={displayMatch.kill_a_ai_description}
+            highlightScore={displayMatch.kill_a_highlight_score}
+            avgRating={displayMatch.kill_a_avg_rating}
+            multiKill={displayMatch.kill_a_multi_kill}
+            firstBlood={displayMatch.kill_a_first_blood}
+            votes={displayMatch.votes_a}
             voted={voted === "a"}
             otherVoted={voted === "b"}
             onVote={() => castVote("a")}
@@ -1044,18 +1049,18 @@ function VoteModal({
           <ModalClipPanel
             label="Droite"
             accent="var(--gold)"
-            thumb={match.kill_b_thumbnail}
-            clipVertical={match.kill_b_clip_vertical}
-            clipVerticalLow={match.kill_b_clip_vertical_low}
-            killerName={match.kill_b_killer_name}
-            killerChampion={match.kill_b_killer_champion}
-            victimChampion={match.kill_b_victim_champion}
-            aiDescription={match.kill_b_ai_description}
-            highlightScore={match.kill_b_highlight_score}
-            avgRating={match.kill_b_avg_rating}
-            multiKill={match.kill_b_multi_kill}
-            firstBlood={match.kill_b_first_blood}
-            votes={match.votes_b}
+            thumb={displayMatch.kill_b_thumbnail}
+            clipVertical={displayMatch.kill_b_clip_vertical}
+            clipVerticalLow={displayMatch.kill_b_clip_vertical_low}
+            killerName={displayMatch.kill_b_killer_name}
+            killerChampion={displayMatch.kill_b_killer_champion}
+            victimChampion={displayMatch.kill_b_victim_champion}
+            aiDescription={displayMatch.kill_b_ai_description}
+            highlightScore={displayMatch.kill_b_highlight_score}
+            avgRating={displayMatch.kill_b_avg_rating}
+            multiKill={displayMatch.kill_b_multi_kill}
+            firstBlood={displayMatch.kill_b_first_blood}
+            votes={displayMatch.votes_b}
             voted={voted === "b"}
             otherVoted={voted === "a"}
             onVote={() => castVote("b")}
@@ -1085,7 +1090,7 @@ function VoteModal({
                 <button
                   type="button"
                   onClick={onClose}
-                  className="rounded-lg border border-white/20 bg-black/30 px-4 py-2 font-display text-[10px] font-bold uppercase tracking-[0.25em] text-[var(--text-secondary)] hover:border-white/45 hover:text-white transition-colors"
+                  className="rounded-lg border border-white/20 bg-black/30 px-4 py-2 font-display text-[10px] font-bold uppercase tracking-[0.25em] text-[var(--text-secondary)] hover:border-white/45 hover:text-white transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--gold)] focus-visible:outline-offset-2"
                   aria-label="Continuer à explorer le bracket"
                 >
                   Continuer le bracket
@@ -1095,7 +1100,7 @@ function VoteModal({
           </div>
         )}
       </m.div>
-    </m.div>
+    </Modal>
   );
 }
 

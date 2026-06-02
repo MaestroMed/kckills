@@ -33,7 +33,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { m, AnimatePresence } from "motion/react";
+import { Modal } from "@/components/ui/FocusTrapModal";
 import { LikeButton } from "./LikeButton";
 import { CommentSheetV2 } from "./CommentSheetV2";
 import { EmojiReactions } from "@/components/scroll/v2/EmojiReactions";
@@ -610,16 +610,6 @@ function StarRatingPopover({
     if (isOpen) setScore(initialScore);
   }, [isOpen, initialScore]);
 
-  // Esc to close.
-  useEffect(() => {
-    if (!isOpen) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [isOpen, onClose]);
-
   const submit = async (value: number) => {
     // Toggle off when re-tapping the current score.
     const next = value === score ? 0 : value;
@@ -643,74 +633,58 @@ function StarRatingPopover({
   const display = hover || score;
 
   return (
-    <AnimatePresence>
-      {isOpen && (
-        <m.div
-          className="fixed inset-0 z-[350] flex items-end justify-center p-4 md:items-center"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          onClick={onClose}
-        >
-          <m.div
-            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
-            aria-hidden
-          />
-          <m.div
-            role="dialog"
-            aria-label="Noter ce kill"
-            onClick={(e) => e.stopPropagation()}
-            className="relative w-full max-w-xs rounded-3xl border border-[var(--gold)]/30 bg-[var(--bg-surface)] p-6 text-center shadow-[0_40px_120px_rgba(0,0,0,0.7)]"
-            initial={{ scale: 0.92, y: 14, opacity: 0 }}
-            animate={{ scale: 1, y: 0, opacity: 1 }}
-            exit={{ scale: 0.95, opacity: 0 }}
-            transition={{ type: "spring", stiffness: 380, damping: 28 }}
-          >
-            <h3 className="font-display text-lg font-black text-[var(--gold-bright)]">
-              Note ce kill
-            </h3>
-            <p className="mt-1 mb-5 text-xs text-white/55">
-              De routine à exceptionnel — ta note alimente le feed.
-            </p>
-            <div
-              className="star-rating flex items-center justify-center gap-2"
-              onMouseLeave={() => setHover(0)}
+    <Modal
+      open={isOpen}
+      onClose={onClose}
+      label="Noter ce kill"
+      showCloseButton={false}
+      zIndexClassName="z-[350]"
+      overlayClassName="items-end justify-center p-4 md:items-center"
+      scrimClassName="bg-black/60 backdrop-blur-sm"
+      panelClassName="w-full max-w-xs rounded-3xl border border-[var(--gold)]/30 bg-[var(--bg-surface)] p-6 text-center shadow-[0_40px_120px_rgba(0,0,0,0.7)]"
+    >
+      <h3 className="font-display text-lg font-black text-[var(--gold-bright)]">
+        Note ce kill
+      </h3>
+      <p className="mt-1 mb-5 text-xs text-white/55">
+        De routine à exceptionnel — ta note alimente le feed.
+      </p>
+      <div
+        className="star-rating flex items-center justify-center gap-2"
+        onMouseLeave={() => setHover(0)}
+      >
+        {[1, 2, 3, 4, 5].map((n) => {
+          const filled = n <= display;
+          return (
+            <button
+              key={n}
+              type="button"
+              disabled={pending}
+              onMouseEnter={() => setHover(n)}
+              onFocus={() => setHover(n)}
+              onBlur={() => setHover(0)}
+              onClick={() => void submit(n)}
+              aria-label={`${n} étoile${n > 1 ? "s" : ""}`}
+              aria-pressed={n <= score}
+              className="star flex h-12 w-12 items-center justify-center rounded-full bg-black/30 transition-colors hover:bg-black/45 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gold)] disabled:opacity-70"
             >
-              {[1, 2, 3, 4, 5].map((n) => {
-                const filled = n <= display;
-                return (
-                  <button
-                    key={n}
-                    type="button"
-                    disabled={pending}
-                    onMouseEnter={() => setHover(n)}
-                    onFocus={() => setHover(n)}
-                    onBlur={() => setHover(0)}
-                    onClick={() => void submit(n)}
-                    aria-label={`${n} étoile${n > 1 ? "s" : ""}`}
-                    aria-pressed={n <= score}
-                    className="star flex h-12 w-12 items-center justify-center rounded-full bg-black/30 transition-colors hover:bg-black/45 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gold)] disabled:opacity-70"
-                  >
-                    <svg
-                      className={`h-7 w-7 transition-colors ${filled ? "text-[var(--gold)]" : "text-[var(--text-disabled)]"}`}
-                      viewBox="0 0 24 24"
-                      fill="currentColor"
-                    >
-                      <path d="M12 2.5l2.81 6.06 6.69.62-5.05 4.44 1.49 6.56L12 17.27l-5.94 3.41 1.49-6.56-5.05-4.44 6.69-.62L12 2.5z" />
-                    </svg>
-                  </button>
-                );
-              })}
-            </div>
-            {score > 0 && (
-              <p className="mt-4 font-data text-xs text-white/60">
-                Ta note : <span className="font-bold text-[var(--gold)]">{score}/5</span>
-              </p>
-            )}
-          </m.div>
-        </m.div>
+              <svg
+                className={`h-7 w-7 transition-colors ${filled ? "text-[var(--gold)]" : "text-[var(--text-disabled)]"}`}
+                viewBox="0 0 24 24"
+                fill="currentColor"
+              >
+                <path d="M12 2.5l2.81 6.06 6.69.62-5.05 4.44 1.49 6.56L12 17.27l-5.94 3.41 1.49-6.56-5.05-4.44 6.69-.62L12 2.5z" />
+              </svg>
+            </button>
+          );
+        })}
+      </div>
+      {score > 0 && (
+        <p className="mt-4 font-data text-xs text-white/60">
+          Ta note : <span className="font-bold text-[var(--gold)]">{score}/5</span>
+        </p>
       )}
-    </AnimatePresence>
+    </Modal>
   );
 }
 
