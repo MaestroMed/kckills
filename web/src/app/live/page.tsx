@@ -32,7 +32,7 @@ export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 export const metadata = {
-  title: "KC Live — kills en direct · KCKILLS",
+  title: "KC Live — kills en direct",
   description:
     "Les kills de Karmine Corp en direct pendant le match LEC. Clips, score live, et notifs push.",
   alternates: { canonical: "/live" },

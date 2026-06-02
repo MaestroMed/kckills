@@ -117,6 +117,20 @@ interface Props {
    *  to "auto" → hls.js bandwidth probe picks the level. */
   quality?: import("./hooks/useNetworkQuality").NetworkQuality;
   isDesktop: boolean;
+  /** Wave 36 — the bounded 9:16 desktop stage (min-width 1024). When true
+   *  the pool lives INSIDE StageFrame, so:
+   *    - pickSrc KEEPS the 9:16 vertical (no horizontal swap) unless cinema,
+   *    - the video uses objectFit:"cover" (poster is object-cover too) so the
+   *      9:16 clip fills the frame with no letterbox,
+   *    - the vertical HLS ladder is RE-ENABLED (the StageFrame is 9:16, so
+   *      the vertical ladder no longer letterboxes — that was the only reason
+   *      desktop forced MP4-direct).
+   *  False = the sacred <768 mobile path (byte-identical to before). */
+  isWideStage?: boolean;
+  /** Cinema mode — the StageFrame has expanded 9:16 → 16:9, so on the wide
+   *  stage we WANT the 16:9 horizontal clip (+ MP4-direct, the HLS master
+   *  only carries the vertical ladder). No effect when !isWideStage. */
+  cinema?: boolean;
   reducedMotion: boolean;
   onError: (itemId: string, src: string) => void;
   /** Optional: tells the active video element to start from 0 the very
@@ -147,6 +161,8 @@ export function FeedPlayerPool({
   useLowQuality,
   quality = "auto",
   isDesktop,
+  isWideStage = false,
+  cinema = false,
   reducedMotion,
   onError,
   resetOnFirstPlay = true,
@@ -340,6 +356,24 @@ export function FeedPlayerPool({
     }
   }, [speed]);
 
+  /** Wave 36 — cinema toggle re-binds the LIVE source. The source swap +
+   *  HLS attach only fire inside the main effect's `itemIdx !== prevItemIdx`
+   *  branch (i.e. on a slot rebind). When `cinema` flips but activeIndex is
+   *  unchanged, no slot rebinds, so the 9:16↔16:9 source would never swap.
+   *  We invalidate prevSlotItemRef on a cinema change so the next main-effect
+   *  pass treats every bound slot as a fresh bind (re-runs pickSrc + HLS).
+   *  Guarded by a prev-value ref so first mount doesn't force a needless
+   *  re-bind. Only meaningful on the wide stage (cinema is inert otherwise). */
+  const prevCinemaRef = useRef(cinema);
+  useEffect(() => {
+    if (prevCinemaRef.current === cinema) return;
+    prevCinemaRef.current = cinema;
+    if (!isWideStage) return;
+    prevSlotItemRef.current = prevSlotItemRef.current.map(() => -1);
+    // The main effect runs right after this (cinema is in its deps), and
+    // will see every bound slot as a new bind → re-pickSrc + re-attach HLS.
+  }, [cinema, isWideStage]);
+
   /** Main effect: react to slot assignments + priority changes.
    *  Run play/pause/preload commands and update src as needed. */
   useEffect(() => {
@@ -363,7 +397,7 @@ export function FeedPlayerPool({
 
       // Did this slot just take a new item? Update src (HLS-aware) + reset hasPlayed.
       if (itemIdx !== prevItemIdx) {
-        const fallbackMp4 = pickSrc(item, isDesktop, useLowQuality);
+        const fallbackMp4 = pickSrc(item, isDesktop, useLowQuality, isWideStage, cinema);
         // PR23.8 — On desktop with a horizontal MP4 available, SKIP HLS
         // entirely. The HLS master playlist only carries the 9:16 vertical
         // ladder (which is what the worker's hls_packager produces today),
@@ -371,7 +405,16 @@ export function FeedPlayerPool({
         // letterboxed with massive black bars. Mobile (or desktop with
         // no horizontal MP4 fallback) still uses HLS — that's where the
         // adaptive bitrate actually pays off.
-        const useMp4Direct = isDesktop && !!item.clipHorizontal;
+        //
+        // Wave 36 — the bounded 9:16 StageFrame changes this calculus. On
+        // the wide stage (NOT cinema) the box IS 9:16, so the vertical HLS
+        // ladder fits perfectly — RE-ENABLE it. We only fall back to
+        // MP4-direct when we're genuinely showing a 16:9 source. This uses
+        // the SAME canonical predicate as pickSrc's `wantHorizontal` so the
+        // chosen source and the HLS decision can never disagree (even during
+        // the transient cinema-without-wide-stage frame the self-exit effect
+        // is about to correct).
+        const useMp4Direct = wantsHorizontalSource(isDesktop, isWideStage, cinema) && !!item.clipHorizontal;
         const hlsUrl = useMp4Direct ? null : (item.hlsMasterUrl ?? null);
 
         // Wave 11 (Agent DE) — explicit attach/detach order matters for
@@ -450,6 +493,19 @@ export function FeedPlayerPool({
       v.style.transform = `translate3d(0, ${baseY}px, 0)`;
       v.style.opacity = "1";
 
+      // Wave 36 — object-fit is written IMPERATIVELY here (same effect as the
+      // transform) so the <video> agrees with its object-cover poster with NO
+      // extra React commit. On the bounded 9:16 wide stage (non-cinema) the
+      // vertical clip should COVER the frame edge-to-edge (matches FeedItem's
+      // object-cover poster) ; cinema mode + the legacy contain-on-desktop
+      // path want CONTAIN so the 16:9 source shows whole. The <768 mobile
+      // path keeps the JSX default ("contain") because there the 9:16 clip
+      // already matches the 9:16 viewport, so contain == cover visually and
+      // we leave the sacred path's computed style untouched.
+      if (isWideStage) {
+        v.style.objectFit = cinema ? "contain" : "cover";
+      }
+
       // Apply priority-driven playback state.
       // Wave 34 T5 — pass `justRebound` so applyPriority's seek-to-0
       // only fires on the binding render, not on every re-render of
@@ -476,6 +532,8 @@ export function FeedPlayerPool({
     activeIndex,
     itemHeight,
     isDesktop,
+    isWideStage,
+    cinema,
     useLowQuality,
     // `quality` is intentionally NOT in this deps array : the Wave 11
     // useHlsPlayer hook ignores it (capLevelToPlayerSize handles the
@@ -549,10 +607,15 @@ export function FeedPlayerPool({
           playsInline
           preload="metadata"
           // Video sizing:
-          // - Mobile (portrait 9:16): cover on the 9:16 vertical clip
-          // - Desktop (landscape 16:9): contain on the 16:9 horizontal
-          //   clip so the whole frame shows (no top/bottom crop). pickSrc
-          //   already swapped the source to clipHorizontal on desktop.
+          // - Mobile (<768, portrait 9:16): contain == cover (clip matches
+          //   the 9:16 viewport) — JSX default below stands, NEVER touched.
+          // - Wide stage (≥1024, bounded 9:16 StageFrame): object-fit is set
+          //   IMPERATIVELY to "cover" in the main effect (same write as the
+          //   transform) so the 9:16 clip fills the frame and agrees with the
+          //   object-cover poster. Cinema (16:9) flips it back to "contain".
+          // - Legacy desktop (768–1023): contain on the 16:9 horizontal so
+          //   the whole frame shows ; pickSrc swapped the source there.
+          // The JSX value here is just the initial / mobile value.
           // CRITICAL: height MUST be non-zero or video is invisible (audio plays).
           style={{
             position: "absolute",
@@ -738,7 +801,35 @@ export function FeedPlayerPool({
 
 // ─── Helpers ───────────────────────────────────────────────────────────
 
-function pickSrc(item: PoolItem, isDesktop: boolean, useLowQuality: boolean): string {
+/**
+ * Canonical "this context shows a 16:9 source" predicate, shared by pickSrc
+ * (which file to load) AND the main effect's HLS decision (the HLS master
+ * only carries the vertical ladder, so 16:9 ⇒ MP4-direct). Keeping ONE
+ * source of truth guarantees the two never disagree.
+ *
+ *   - Wide stage (StageFrame): horizontal ONLY in cinema (the box is 16:9
+ *     then) ; the default wide stage is a bounded 9:16 frame → vertical.
+ *   - Legacy desktop (no wide stage, e.g. an in-between 768–1023 width that
+ *     still flags isDesktop): contain the 16:9 clip as before.
+ *   - Mobile (<768): always vertical (viewport IS 9:16).
+ */
+function wantsHorizontalSource(
+  isDesktop: boolean,
+  isWideStage: boolean,
+  cinema: boolean,
+): boolean {
+  return (isWideStage && cinema) || (isDesktop && !isWideStage);
+}
+
+function pickSrc(
+  item: PoolItem,
+  isDesktop: boolean,
+  useLowQuality: boolean,
+  isWideStage = false,
+  cinema = false,
+): string {
+  const wantHorizontal = wantsHorizontalSource(isDesktop, isWideStage, cinema);
+
   // Manifest-aware path (migration 026 — kill_assets table).
   // The manifest is the source of truth for asset URLs once the
   // worker has clipped through the new pipeline. Same selection
@@ -746,20 +837,16 @@ function pickSrc(item: PoolItem, isDesktop: boolean, useLowQuality: boolean): st
   const m = item.assetsManifest;
   if (m) {
     if (useLowQuality && m.vertical_low?.url) return m.vertical_low.url;
-    if (isDesktop && m.horizontal?.url) return m.horizontal.url;
+    if (wantHorizontal && m.horizontal?.url) return m.horizontal.url;
     if (m.vertical?.url) return m.vertical.url;
     // Manifest present but missing the type we wanted — fall through to
     // legacy fields below rather than returning nothing.
   }
   // Legacy back-compat path : rows clipped before migration 026 still
   // carry only the flat clip_url_* columns.
-  // Desktop wants the native 16:9 landscape clip — letterboxing a 9:16
-  // vertical inside a 16:9 viewport leaves black bars on 2/3 of the
-  // screen and feels like a broken layout. Mobile stays on vertical
-  // since viewport IS 9:16.
   // Low-quality variant only for data-saver/slow networks.
   if (useLowQuality && item.clipVerticalLow) return item.clipVerticalLow;
-  if (isDesktop && item.clipHorizontal) return item.clipHorizontal;
+  if (wantHorizontal && item.clipHorizontal) return item.clipHorizontal;
   return item.clipVertical;
 }
 

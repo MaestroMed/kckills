@@ -21,7 +21,7 @@ interface Props {
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { id } = await params;
   const era = getEraById(id);
-  if (!era) return { title: "\u00c9poque \u2014 KCKILLS" };
+  if (!era) return { title: "\u00c9poque" };
 
   const description = `${era.subtitle} \u2014 ${era.result}. ${era.keyMoment.slice(0, 140)}...`;
   const title = `${era.label} \u2014 ${era.period}`;

@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import Image from "next/image";
+import { usePathname } from "next/navigation";
 import { useState, useEffect } from "react";
 import { CommandPaletteButton } from "./CommandPalette";
 import { LangSwitcher } from "./i18n/LangSwitcher";
@@ -32,6 +33,12 @@ const NAV_LINKS: { href: string; tKey: string }[] = [
 
 export function Navbar() {
   const t = useT();
+  const pathname = usePathname();
+  // Active-section detection : a link is active on its exact route or any
+  // sub-route (/players/caliste highlights "Joueurs"). The home "/" is
+  // intentionally excluded so the logo, not a nav item, owns the landing.
+  const isActiveLink = (href: string) =>
+    pathname === href || pathname.startsWith(href + "/");
   const [mobileOpen, setMobileOpen] = useState(false);
   const [user, setUser] = useState<{ name: string; avatar: string } | null>(null);
   // Wave 35 #13 — scroll-reactive condensing header (the premium signal).
@@ -128,15 +135,23 @@ export function Navbar() {
 
         {/* Desktop nav */}
         <div className="hidden items-center gap-5 md:flex">
-          {NAV_LINKS.map((link) => (
-            <Link
-              key={link.href}
-              href={link.href}
-              className="text-sm text-[var(--text-muted)] transition-colors hover:text-[var(--gold)] relative after:absolute after:bottom-[-14px] after:left-0 after:right-0 after:h-[2px] after:bg-[var(--gold)] after:scale-x-0 after:transition-transform hover:after:scale-x-100"
-            >
-              {t(link.tKey)}
-            </Link>
-          ))}
+          {NAV_LINKS.map((link) => {
+            const active = isActiveLink(link.href);
+            return (
+              <Link
+                key={link.href}
+                href={link.href}
+                aria-current={active ? "page" : undefined}
+                className={`relative text-sm transition-colors after:absolute after:bottom-[-7px] after:left-0 after:right-0 after:h-[2px] after:rounded-full after:origin-left after:transition-transform after:duration-300 after:[background-image:linear-gradient(90deg,var(--gold),var(--blue-kc))] hover:after:scale-x-100 ${
+                  active
+                    ? "text-[var(--gold-bright)] after:scale-x-100"
+                    : "text-[var(--text-muted)] hover:text-[var(--gold)] after:scale-x-0"
+                }`}
+              >
+                {t(link.tKey)}
+              </Link>
+            );
+          })}
         </div>
 
         {/* Right side — Search + Lang + CTA + Auth */}
@@ -233,16 +248,24 @@ export function Navbar() {
           <div className="pb-2">
             <SearchBar />
           </div>
-          {NAV_LINKS.map((link) => (
-            <Link
-              key={link.href}
-              href={link.href}
-              className="block rounded-lg py-2.5 px-3 text-sm text-[var(--text-secondary)] hover:bg-[var(--bg-elevated)] transition-colors"
-              onClick={() => setMobileOpen(false)}
-            >
-              {t(link.tKey)}
-            </Link>
-          ))}
+          {NAV_LINKS.map((link) => {
+            const active = isActiveLink(link.href);
+            return (
+              <Link
+                key={link.href}
+                href={link.href}
+                aria-current={active ? "page" : undefined}
+                className={`block rounded-lg py-2.5 px-3 text-sm transition-colors ${
+                  active
+                    ? "bg-[var(--bg-elevated)] text-[var(--gold-bright)] border-l-2 border-[var(--gold)]"
+                    : "text-[var(--text-secondary)] hover:bg-[var(--bg-elevated)]"
+                }`}
+                onClick={() => setMobileOpen(false)}
+              >
+                {t(link.tKey)}
+              </Link>
+            );
+          })}
           {/* Lang switcher (full width on mobile) */}
           <div className="pt-2 pb-1 flex justify-center">
             <LangSwitcher variant="full" />

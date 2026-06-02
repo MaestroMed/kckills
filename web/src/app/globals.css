@@ -24,6 +24,14 @@
   --text-disabled: #3D4A63;
   --border-gold: rgba(200, 170, 110, 0.15);
   --border-subtle: rgba(100, 140, 200, 0.1);
+  /* ─── Wave 36 — Wide-stage scroll shell tokens ───
+     (desktop-only foundation; the <768 mobile feed never reads these) */
+  --cream: #F0E6D2;
+  --cream-wash: rgba(240, 230, 210, 0.06);
+  --cream-wash-strong: rgba(240, 230, 210, 0.12);
+  --rail: 248px;
+  --ctx: 372px;
+  --stage-radius: 18px;
 }
 
 body {
@@ -556,18 +564,39 @@ button:focus-visible {
   isolation: isolate;
 }
 
+/* THE DEPTH GLOW — a single blue→gold bloom anchored behind the logo that
+   slowly *breathes* (scale + opacity) so the bar feels alive without a
+   particle field. GPU transform/opacity only. `--glow-base` is set inline
+   and lifts when the bar condenses on scroll (the glow tightens + brightens). */
+.aura-glow {
+  transform: translateY(-50%) scale(1);
+  opacity: var(--glow-base, 0.38);
+  will-change: transform, opacity;
+  animation: aura-glow-breathe 8.5s ease-in-out infinite;
+}
+@keyframes aura-glow-breathe {
+  0%, 100% { transform: translateY(-50%) scale(0.95); opacity: calc(var(--glow-base, 0.38) * 0.66); }
+  50%      { transform: translateY(-50%) scale(1.07); opacity: var(--glow-base, 0.38); }
+}
+
 /* THE KILL PULSE — a bright surge crossing the bottom hairline on a slow
-   cadence : the heartbeat of the kill feed. The brand-tied signature. */
+   cadence : the heartbeat of the kill feed. The brand-tied signature. A
+   gold/cream core trailing a cyan→blue hextech wake, with a layered bloom
+   so it reads as a comet of light even over a bright video hero. */
 .aura-killpulse {
-  width: 220px;
+  width: 260px;
   will-change: transform, opacity;
   background: linear-gradient(90deg,
     transparent 0%,
-    rgba(0,87,255,0.55) 28%,
-    rgba(240,230,210,1) 50%,
-    rgba(200,170,110,0.8) 72%,
+    rgba(10,200,185,0.45) 18%,
+    rgba(0,87,255,0.65) 34%,
+    rgba(240,230,210,1) 52%,
+    rgba(200,170,110,0.9) 74%,
     transparent 100%);
-  box-shadow: 0 0 8px rgba(240,230,210,0.65), 0 0 18px rgba(200,170,110,0.35);
+  box-shadow:
+    0 0 10px rgba(240,230,210,0.85),
+    0 0 26px rgba(200,170,110,0.5),
+    0 0 46px rgba(10,200,185,0.28);
   animation: aura-killpulse-travel 6.5s cubic-bezier(0.45,0,0.2,1) infinite;
 }
 @keyframes aura-killpulse-travel {
@@ -581,6 +610,11 @@ button:focus-visible {
    static hairlines + depth glow remain (no animation, no layer pin). */
 @media (prefers-reduced-motion: reduce) {
   .aura-killpulse { animation: none !important; opacity: 0 !important; }
+  .aura-glow {
+    animation: none !important;
+    transform: translateY(-50%) scale(1) !important;
+    opacity: var(--glow-base, 0.38) !important;
+  }
 }
 
 /* ─── Number counter animation ───────────────────── */
@@ -861,3 +895,66 @@ button:focus-visible {
     animation: none !important;
   }
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   Wave 36 — WIDE-STAGE SCROLL SHELL (desktop ≥1024 only)
+   ───────────────────────────────────────────────────────────────
+   The desktop "hall" that frames the 9:16 scroll stage between a left
+   rail and a right context column. The <768 mobile feed renders
+   byte-identical and never consumes any of these classes — they are
+   only ever attached behind an isWideStage / lg: gate.
+   ═══════════════════════════════════════════════════════════════ */
+
+/* The desktop shell backdrop — a soft gold bloom raining from the top
+   over the deep navy. NEVER pure #000: the brand floor is --bg-primary. */
+.scroll-hall {
+  background:
+    radial-gradient(ellipse 120% 80% at 50% -10%, rgba(200, 170, 110, 0.06), transparent 60%),
+    var(--bg-primary);
+}
+
+/* THE STAGE — the single 9:16 hero box the active clip lives in. One
+   signature bloom: a 1px gold rim, a deep cinematic drop, and a faint
+   KC-blue halo so the stage reads as lit from within the hextech world. */
+.scroll-stage {
+  aspect-ratio: 9 / 16;
+  border-radius: var(--stage-radius);
+  overflow: hidden;
+  box-shadow:
+    0 0 0 1px rgba(200, 170, 110, 0.18),
+    0 40px 120px rgba(0, 0, 0, 0.65),
+    0 0 80px rgba(0, 87, 255, 0.10);
+}
+
+/* THE LEFT RAIL — glass surface helper that hosts the desktop nav /
+   stage controls. Reuses the .glass language (blur + navy veil + gold
+   hairline) sized to the --rail track. */
+.scroll-rail {
+  width: var(--rail);
+  backdrop-filter: blur(16px) saturate(180%);
+  -webkit-backdrop-filter: blur(16px) saturate(180%);
+  background: rgba(10, 20, 40, 0.75);
+  border-right: 1px solid rgba(200, 170, 110, 0.08);
+}
+
+/* THE MOBILE BOTTOM BAR — glass tab strip pinned to the bottom of the
+   shell on the in-between breakpoints. Respects the iOS home indicator
+   via safe-area inset padding. (Behind an explicit gate; the <768 feed
+   keeps its own sacred chrome.) */
+.scroll-bottom-bar {
+  backdrop-filter: blur(16px) saturate(180%);
+  -webkit-backdrop-filter: blur(16px) saturate(180%);
+  background: rgba(10, 20, 40, 0.82);
+  border-top: 1px solid rgba(200, 170, 110, 0.08);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+/* Off-stage panels marked inert must not steal pointer events while the
+   stage transition plays (the panel is still painted, just non-interactive). */
+[data-inert] {
+  pointer-events: none;
+}
+
+/* No new keyframes are introduced by this block, so there is nothing extra
+   to gate for prefers-reduced-motion — the global reduce guard above already
+   neutralises any animation/transition these surfaces might inherit. */

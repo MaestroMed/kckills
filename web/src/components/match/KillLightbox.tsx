@@ -35,7 +35,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { AnimatePresence, motion } from "motion/react";
+import { AnimatePresence, m } from "motion/react";
 import { pickAssetUrl, pickBestForViewport } from "@/lib/kill-assets";
 import { track } from "@/lib/analytics/track";
 import { StarRating } from "@/components/star-rating";
@@ -262,7 +262,7 @@ export function KillLightbox({
 
   return (
     <AnimatePresence>
-      <motion.div
+      <m.div
         key="kill-lightbox-overlay"
         className="fixed inset-0 z-[80] flex items-center justify-center bg-black/80 backdrop-blur-md"
         onClick={onClose}
@@ -270,7 +270,7 @@ export function KillLightbox({
         animate={overlayVariants.animate}
         exit={overlayVariants.exit}
       >
-        <motion.div
+        <m.div
           ref={dialogRef}
           role="dialog"
           aria-modal="true"
@@ -481,8 +481,8 @@ export function KillLightbox({
               {activeIdx + 1} / {kills.length}
             </p>
           </div>
-        </motion.div>
-      </motion.div>
+        </m.div>
+      </m.div>
     </AnimatePresence>
   );
 }

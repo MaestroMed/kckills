@@ -20,7 +20,7 @@
  */
 
 import { useEffect, useState } from "react";
-import { motion, useMotionValueEvent, type MotionValue } from "motion/react";
+import { m, useMotionValueEvent, type MotionValue } from "motion/react";
 
 const PTR_THRESHOLD = 80;
 
@@ -105,7 +105,7 @@ export function PullToRefreshIndicator({
   const showSpinner = isRefreshing || pullPx > 5;
 
   return (
-    <motion.div
+    <m.div
       className="pointer-events-none fixed left-0 right-0 z-[55] flex flex-col items-center justify-center"
       style={{
         // Sits at the top of the viewport, translates DOWN with the pull.
@@ -154,6 +154,6 @@ export function PullToRefreshIndicator({
               ? "Tirer"
               : ""}
       </p>
-    </motion.div>
+    </m.div>
   );
 }

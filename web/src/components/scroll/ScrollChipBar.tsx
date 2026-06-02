@@ -121,7 +121,12 @@ export function ScrollChipBar({ filters, rosterChips = [] }: Props) {
 
   return (
     <div
-      className="fixed left-0 right-0 z-40 px-3"
+      // `lg:hidden` — the desktop ScrollRail subsumes these chip filters
+      // from the wide stage up (≥1024). Below lg the mobile feed keeps the
+      // floating chip bar, which now also covers the 768–1023 band (the
+      // wide-stage shell only mounts at 1024, so md:hidden left that band
+      // with neither chips nor rail). Sacred <768 path is untouched.
+      className="lg:hidden fixed left-0 right-0 z-40 px-3"
       style={{ top: "calc(env(safe-area-inset-top, 0.75rem) + 56px)" }}
     >
       <div

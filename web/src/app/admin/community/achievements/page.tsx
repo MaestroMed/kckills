@@ -22,7 +22,7 @@ import {
 import { createAnonSupabase } from "@/lib/supabase/server";
 
 export const metadata: Metadata = {
-  title: "Achievements Admin — KCKILLS",
+  title: "Achievements Admin",
   robots: { index: false, follow: false },
 };
 

@@ -99,6 +99,12 @@ export function BgmPlayer() {
   const [hasInteracted, setHasInteracted] = useState(false);
   const playerRef = useRef<YTPlayer | null>(null);
   const playerDivRef = useRef<HTMLDivElement | null>(null);
+  // Wave 36 — circuit breaker : if every track is unplayable (dead IDs /
+  // CSP-blocked IFrame API / region lock), the onError→next() auto-skip
+  // would churn the whole playlist endlessly. Stop after this many
+  // CONSECUTIVE dead tracks; the streak resets when a track starts PLAYING.
+  const consecutiveErrorsRef = useRef(0);
+  const MAX_CONSECUTIVE_SKIPS = 6;
 
   const current = playlist[currentIdx % playlist.length];
 
@@ -132,6 +138,8 @@ export function BgmPlayer() {
             e.target.setVolume(BGM_VOLUME);
           },
           onStateChange: (e) => {
+            // 1 = PLAYING → the track is alive, clear the dead-track streak.
+            if (e.data === 1) consecutiveErrorsRef.current = 0;
             // 0 = ended → next track
             if (e.data === 0) next();
           },
@@ -139,12 +147,27 @@ export function BgmPlayer() {
           // / non-embeddable). Without this, the BGM hangs silently on a
           // bad track until the user manually advances. YT codes
           // 100/101/150 = unrecoverable, skip.
+          // Wave 36 — guarded by a circuit breaker so an all-dead playlist
+          // can't spin through itself many times a second.
           onError: (e) => {
+            const isDead =
+              e.data === 2 || e.data === 5 || e.data === 100 || e.data === 101 || e.data === 150;
+            consecutiveErrorsRef.current += 1;
             // eslint-disable-next-line no-console
-            console.warn("[bgm] YT.Player onError — auto-skipping", { code: e.data });
-            if (e.data === 2 || e.data === 5 || e.data === 100 || e.data === 101 || e.data === 150) {
-              next();
+            console.warn("[bgm] YT.Player onError", {
+              code: e.data,
+              consecutive: consecutiveErrorsRef.current,
+            });
+            if (!isDead) return;
+            if (consecutiveErrorsRef.current >= MAX_CONSECUTIVE_SKIPS) {
+              // eslint-disable-next-line no-console
+              console.warn(
+                `[bgm] ${consecutiveErrorsRef.current} consecutive dead tracks — ` +
+                  "pausing auto-skip (circuit breaker). Check playlist IDs / CSP.",
+              );
+              return;
             }
+            next();
           },
         },
       });

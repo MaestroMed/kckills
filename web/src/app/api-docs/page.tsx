@@ -2,7 +2,7 @@ import Link from "next/link";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "API Documentation \u2014 KCKILLS",
+  title: "API Documentation",
   description: "Documentation de l'API publique KCKILLS pour acc\u00e9der aux kills, joueurs et matchs KC.",
 };
 

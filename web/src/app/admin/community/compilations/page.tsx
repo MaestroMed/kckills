@@ -13,7 +13,7 @@ import { AdminCard } from "@/components/admin/ui/AdminCard";
 import { createAnonSupabase } from "@/lib/supabase/server";
 
 export const metadata: Metadata = {
-  title: "Compilations Admin — KCKILLS",
+  title: "Compilations Admin",
   robots: { index: false, follow: false },
 };
 

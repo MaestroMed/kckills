@@ -54,7 +54,7 @@ export const QUOTES: Quote[] = [
     role: "ADC KC (2022)",
     source: "Interview sheepesports",
     date: "2022-03",
-    eraId: "lfl-2022",
+    eraId: "lfl-2022-spring",
     playerSlug: "Rekkles",
   },
   {

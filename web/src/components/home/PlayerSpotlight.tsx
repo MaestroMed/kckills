@@ -375,10 +375,11 @@ export function PlayerSpotlight({ matches, windowSize = 5 }: Props) {
                 <span aria-hidden>→</span>
               </Link>
               <Link
-                href={`/scroll?killerPlayer=${encodeURIComponent(spotlight.name)}`}
+                href={`/player/${encodeURIComponent(spotlight.name)}`}
+                aria-label={`Voir tous les kills de ${spotlight.name}`}
                 className="inline-flex items-center gap-2 rounded-lg border border-[var(--border-gold)] bg-[var(--bg-surface)] px-5 py-2.5 font-display text-xs font-bold uppercase tracking-widest text-[var(--text-secondary)] hover:border-[var(--gold)]/50 hover:text-[var(--gold)] transition-colors"
               >
-                Scroll ses kills
+                Tous ses kills
                 <span aria-hidden>→</span>
               </Link>
             </div>

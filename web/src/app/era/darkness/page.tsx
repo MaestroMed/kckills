@@ -17,7 +17,7 @@ import Link from "next/link";
 import { getEraById } from "@/lib/eras";
 
 export const metadata: Metadata = {
-  title: "L'ere sombre \u2014 KCKILLS",
+  title: "L'ere sombre",
   description: "Le chapitre qu'on prefere oublier. 2024. Les deux derniers rangs consecutifs. La reverse sweep reverse. La redemption commence ici.",
   robots: {
     index: false,

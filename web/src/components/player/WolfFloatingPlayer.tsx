@@ -354,6 +354,14 @@ function HiddenAudioIframe() {
    *  prefer loadVideoById on the existing player for track swaps. */
   const playerCreatedRef = useRef(false);
   const currentVideoIdRef = useRef<string | null>(null);
+  // Wave 36 — circuit breaker for the auto-skip. If every track is
+  // unplayable (dead IDs, the IFrame API blocked by CSP, or region lock),
+  // the onError→next() loop would otherwise churn the whole playlist many
+  // times a second and flood the console. After this many CONSECUTIVE dead
+  // tracks we stop auto-advancing and leave a single breadcrumb. The streak
+  // resets as soon as any track actually starts PLAYING.
+  const consecutiveErrorsRef = useRef(0);
+  const MAX_CONSECUTIVE_SKIPS = 6;
 
   // (Re)create / update the player when the track changes. Uses the
   // module-level whenYTReady() helper so /scroll's BgmPlayer and the
@@ -466,6 +474,11 @@ function HiddenAudioIframe() {
               }
             },
             onStateChange: (e) => {
+              // A track that actually starts playing clears the dead-track
+              // streak, so the circuit breaker only trips on a REAL run of
+              // consecutive failures (PlayerState.PLAYING === 1).
+              const playing = getWindowYT()?.PlayerState?.PLAYING ?? 1;
+              if (e.data === playing) consecutiveErrorsRef.current = 0;
               _onPlayerStateChange(e.data);
             },
             // Wave 35 #10 — auto-skip dead tracks. YT error codes :
@@ -480,19 +493,33 @@ function HiddenAudioIframe() {
             // console breadcrumb so admins can spot which ID went dead.
             onError: (e) => {
               const code = e.data;
+              const isDead =
+                code === 2 || code === 5 || code === 100 || code === 101 || code === 150;
+              consecutiveErrorsRef.current += 1;
               // eslint-disable-next-line no-console
-              console.warn("[wolf] YT.Player onError — auto-skipping", {
+              console.warn("[wolf] YT.Player onError", {
                 code,
                 youtubeId: currentTrack?.youtubeId,
                 title: currentTrack?.title,
+                consecutive: consecutiveErrorsRef.current,
               });
-              if (code === 2 || code === 5 || code === 100 || code === 101 || code === 150) {
-                try {
-                  next();
-                } catch (err) {
-                  // eslint-disable-next-line no-console
-                  console.warn("[wolf] auto-skip next() threw", err);
-                }
+              if (!isDead) return;
+              if (consecutiveErrorsRef.current >= MAX_CONSECUTIVE_SKIPS) {
+                // Circuit breaker : the whole playlist looks unplayable.
+                // Stop auto-advancing so we don't spin. Manual next/prev
+                // still works and a successful play resets the streak.
+                // eslint-disable-next-line no-console
+                console.warn(
+                  `[wolf] ${consecutiveErrorsRef.current} consecutive dead tracks — ` +
+                    "pausing auto-skip (circuit breaker). Check playlist IDs / CSP.",
+                );
+                return;
+              }
+              try {
+                next();
+              } catch (err) {
+                // eslint-disable-next-line no-console
+                console.warn("[wolf] auto-skip next() threw", err);
               }
             },
           },

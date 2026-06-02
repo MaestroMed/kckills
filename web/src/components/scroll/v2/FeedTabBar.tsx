@@ -54,7 +54,12 @@ export function FeedTabBar({ active }: Props) {
       role="tablist"
       aria-label="Filtre du feed"
       className={
-        "fixed left-1/2 z-40 -translate-x-1/2 flex items-center gap-1 rounded-full border border-[var(--gold)]/20 bg-black/60 backdrop-blur-md px-1 py-1 shadow-lg shadow-black/30 transition-opacity " +
+        // `lg:hidden` — from the wide stage up (≥1024), the persistent
+        // ScrollRail replaces this floating bar. Below lg the mobile feed
+        // keeps it, which now covers the 768–1023 band too (the wide-stage
+        // shell only mounts at 1024, so md:hidden left that band with no
+        // tabs and no rail). Sacred <768 path is untouched.
+        "lg:hidden fixed left-1/2 z-40 -translate-x-1/2 flex items-center gap-1 rounded-full border border-[var(--gold)]/20 bg-black/60 backdrop-blur-md px-1 py-1 shadow-lg shadow-black/30 transition-opacity " +
         (pending ? "opacity-70" : "opacity-100")
       }
       style={{

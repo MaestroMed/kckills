@@ -178,6 +178,12 @@ interface FeedItemVideoProps extends SharedFeedItemProps {
    *  call `jumpTo(activeIndex + 1)`. Optional: when omitted the auto-skip
    *  path silently no-ops. */
   onAutoSkipNext?: () => void;
+  /** Wave 36 — true on the bounded ≥1024 wide stage. When set, the FULL
+   *  un-clamped AI description moves OUT to the ScrollContextPanel, so the
+   *  on-stage overlay keeps only a 1-line teaser (the bottom block is now
+   *  bounded by the 9:16 frame, not the 1920px viewport). Default false =
+   *  the sacred mobile overlay, untouched. */
+  isWideStage?: boolean;
 }
 
 export function FeedItemVideo({
@@ -187,6 +193,7 @@ export function FeedItemVideo({
   itemHeight,
   isActive,
   onAutoSkipNext,
+  isWideStage = false,
 }: FeedItemVideoProps) {
   const isKcKill = item.kcInvolvement === "team_killer";
   // Fire impression beacon after 1.5s of dwell (real engagement signal,
@@ -486,14 +493,39 @@ export function FeedItemVideo({
         />
       )}
 
-      {/* TikTok-grade right action rail: like + comments + share + detail.
-          Owns the InlineAuthPrompt — every action surfaces it on 401. */}
+      {/* TikTok-grade right action rail: avatar + ★ noter + like +
+          comments + share + bookmark + detail. Owns the InlineAuthPrompt
+          — every action surfaces it on 401. Wave 37 — wired killer
+          identity (avatar → /player) + server rating (★ NOTER hero) +
+          a localStorage-backed bookmark stub (mirrors the long-press
+          menu's onSave so a save from either surface persists). */}
       <FeedSidebarV2
         killId={item.id}
         shareTitle={`${item.killerChampion} kills ${item.victimChampion}`}
         shareText={item.aiDescription ?? undefined}
         initialLikeCount={item.ratingCount ?? 0}
         initialCommentCount={item.commentCount ?? 0}
+        initialAvgRating={item.avgRating}
+        initialRatingCount={item.ratingCount ?? 0}
+        killerName={item.killerName}
+        killerPlayerId={item.killerPlayerId}
+        killerChampion={item.killerChampion}
+        onBookmark={(killId, next) => {
+          try {
+            const raw = window.localStorage.getItem("kc_bookmarks_v1");
+            const arr: string[] = raw ? JSON.parse(raw) : [];
+            const set = new Set(arr);
+            if (next) set.add(killId);
+            else set.delete(killId);
+            window.localStorage.setItem(
+              "kc_bookmarks_v1",
+              JSON.stringify([...set].slice(-200)),
+            );
+            window.dispatchEvent(new CustomEvent("kc:bookmarks-changed"));
+          } catch {
+            /* storage disabled — best-effort */
+          }
+        }}
         visible={isActive}
       />
 
@@ -667,7 +699,13 @@ export function FeedItemVideo({
               gate visibility through isDescriptionClean(item.aiDescription)
               because the moderation/cleanliness pass runs on the legacy
               field — if that one was rejected, the localized variants
-              shouldn't show either. */}
+              shouldn't show either.
+
+              Wave 36 — on the wide stage the FULL un-clamped description
+              lives in the ScrollContextPanel (right column), so on-stage we
+              keep only a 1-line teaser to protect the bounded 9:16 frame
+              from a tall text block. The <768 path keeps the 3/4-line clamp
+              byte-identical. */}
           {isDescriptionClean(item.aiDescription) && (
             <Description
               kill={{
@@ -679,7 +717,11 @@ export function FeedItemVideo({
               }}
               as="p"
               quoted
-              className="text-[13px] md:text-[15px] lg:text-base text-white/90 italic leading-relaxed line-clamp-3 md:line-clamp-4 drop-shadow-md"
+              className={
+                isWideStage
+                  ? "text-[13px] lg:text-sm text-white/85 italic leading-relaxed line-clamp-1 drop-shadow-md"
+                  : "text-[13px] md:text-[15px] lg:text-base text-white/90 italic leading-relaxed line-clamp-3 md:line-clamp-4 drop-shadow-md"
+              }
             />
           )}
 
@@ -1004,69 +1046,5 @@ export function FeedItemMoment({
         </div>
       </div>
     </div>
-  );
-}
-
-// ─── Share button (Fab in top-right corner) ────────────────────────────
-
-/**
- * Share a single kill from the /scroll feed.
- *
- * - navigator.share (mobile native sheet) if available
- * - navigator.clipboard fallback with a brief confirm toast
- *
- * The URL is /scroll?kill=<id> so when shared, the recipient lands on
- * the feed already pinned to the exact clip — not the top of the shuffle.
- */
-function ShareFab({ killId }: { killId: string }) {
-  const [toast, setToast] = useState<string | null>(null);
-
-  const onShare = useCallback(
-    async (e: React.MouseEvent) => {
-      e.preventDefault();
-      e.stopPropagation();
-      const url = `${window.location.origin}/scroll?kill=${killId}`;
-      const title = "KCKILLS — clip à voir";
-      try {
-        if (typeof navigator !== "undefined" && typeof navigator.share === "function") {
-          await navigator.share({ title, url });
-          return;
-        }
-      } catch {
-        // user cancelled share sheet — fall through silently
-        return;
-      }
-      // Clipboard fallback
-      try {
-        await navigator.clipboard.writeText(url);
-        setToast("Lien copié !");
-        window.setTimeout(() => setToast(null), 1800);
-      } catch {
-        setToast("Copie impossible");
-        window.setTimeout(() => setToast(null), 1800);
-      }
-    },
-    [killId],
-  );
-
-  return (
-    <>
-      <button
-        type="button"
-        onClick={onShare}
-        aria-label="Partager ce clip"
-        title="Partager"
-        className="absolute top-28 right-4 z-20 flex h-10 w-10 items-center justify-center rounded-full bg-black/40 backdrop-blur-sm text-white/80 hover:bg-[var(--gold)]/30 hover:text-[var(--gold)] transition-all active:scale-95"
-      >
-        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
-        </svg>
-      </button>
-      {toast && (
-        <div className="pointer-events-none fixed top-20 left-1/2 -translate-x-1/2 z-[70] rounded-full bg-black/85 backdrop-blur-sm px-4 py-2 text-xs font-bold text-[var(--gold)] shadow-lg animate-pulse">
-          {toast}
-        </div>
-      )}
-    </>
   );
 }

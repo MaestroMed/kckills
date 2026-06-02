@@ -410,25 +410,45 @@ export function KillCinematicView({
                 onClick={togglePlay}
               />
 
-              {/* Custom play overlay — only shown when paused */}
+              {/* Large play disc — decorative affordance shown only when
+                  paused. Non-interactive (pointer-events-none): the actual
+                  toggle is the keyboard-reachable button below, plus the
+                  click handler on the <video> for mouse users. */}
               {!isPlaying && (
-                <button
-                  type="button"
-                  onClick={togglePlay}
-                  aria-label="Lecture"
-                  className="absolute inset-0 grid place-items-center group"
-                >
+                <div className="absolute inset-0 grid place-items-center pointer-events-none">
                   <span
-                    className="grid place-items-center h-20 w-20 rounded-full border-2 border-[var(--gold)]/60 bg-black/50 backdrop-blur-sm
-                               transition-all duration-300 group-hover:scale-110 group-hover:border-[var(--gold)] group-hover:bg-black/30"
+                    className="grid place-items-center h-20 w-20 rounded-full border-2 border-[var(--gold)]/60 bg-black/50 backdrop-blur-sm"
                     style={{ boxShadow: "0 0 30px rgba(200,170,110,0.4)" }}
                   >
                     <svg className="h-7 w-7 text-[var(--gold)] ml-1" fill="currentColor" viewBox="0 0 24 24">
                       <path d="M8 5v14l11-7z" />
                     </svg>
                   </span>
-                </button>
+                </div>
               )}
+
+              {/* Keyboard-operable play/pause toggle — always rendered so
+                  keyboard / switch users can pause moving content (WCAG
+                  2.1.1) ; aria-label toggles to announce state (4.1.2). */}
+              <button
+                type="button"
+                onClick={togglePlay}
+                aria-label={isPlaying ? "Pause" : "Lecture"}
+                aria-pressed={isPlaying}
+                className="absolute bottom-3 right-3 z-10 grid h-11 w-11 place-items-center rounded-full border border-[var(--gold)]/50 bg-black/60 text-[var(--gold)] backdrop-blur-sm
+                           transition-colors hover:border-[var(--gold)] hover:bg-black/40
+                           focus-visible:outline-none focus-visible:[outline:2px_solid_var(--gold)] focus-visible:outline-offset-2"
+              >
+                {isPlaying ? (
+                  <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M6 5h4v14H6zM14 5h4v14h-4z" />
+                  </svg>
+                ) : (
+                  <svg className="h-5 w-5 ml-0.5" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M8 5v14l11-7z" />
+                  </svg>
+                )}
+              </button>
 
               {/* Custom thin scrubber */}
               <div className="absolute bottom-0 left-0 right-0 h-1 bg-white/10">

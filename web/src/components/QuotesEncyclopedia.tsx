@@ -101,57 +101,52 @@ export function QuotesEncyclopedia({
 
   return (
     <div className="mx-auto w-full max-w-7xl px-4 md:px-6">
-      {/* ─── HERO BAND ──────────────────────────────────────────────── */}
-      <section className="relative overflow-hidden rounded-3xl border border-[var(--border-gold)] bg-[var(--bg-surface)] py-10 px-6 md:py-14 md:px-12 mb-10">
-        <div
-          aria-hidden
-          className="absolute inset-0 pointer-events-none"
-          style={{
-            background:
-              "radial-gradient(ellipse 70% 80% at 50% 0%, rgba(200,170,110,0.18), transparent 70%)",
-          }}
-        />
-        <div className="relative z-10 flex flex-col items-center text-center gap-5">
-          <span className="font-data text-[10px] md:text-[11px] uppercase tracking-[0.5em] text-[var(--gold)]">
-            ▽ Encyclopedie sonore Karmine Corp
-          </span>
-          <h1 className="font-display text-4xl md:text-6xl font-black text-[var(--text-primary)] leading-none">
-            Phrases <span className="text-[var(--gold)]">Cultes</span>
-          </h1>
-          <p className="max-w-2xl text-sm md:text-base text-[var(--text-secondary)]">
-            Les shouts des casters · extraits automatiquement de chaque clip
-            KC. L&apos;IA transcrit l&apos;audio et garde les pepites — tu
-            ecoutes, tu votes, tu cites.
-          </p>
+      {/* ─── HERO ────────────────────────────────────────────────────────
+          Transparent / borderless on purpose : the page shell
+          (quotes/page.tsx) already paints the radial-gold bloom + scanline
+          backdrop + floating losanges, so the hero sits directly on it —
+          no band-around-a-band. Mirrors the cinematic /players + /vs hero
+          (Losange eyebrow → text-shimmer H1 → muted subtitle). */}
+      <section className="relative flex flex-col items-center text-center gap-5 pt-2 pb-10 md:pt-4 md:pb-14 mb-10">
+        <span className="inline-flex items-center gap-2 font-data text-[10px] md:text-[11px] uppercase tracking-[0.3em] text-[var(--gold)]/70">
+          <Losange small />
+          Encyclopedie sonore Karmine Corp
+        </span>
+        <h1 className="font-display text-5xl md:text-6xl lg:text-7xl font-black leading-none tracking-tight">
+          <span className="text-shimmer">Phrases Cultes</span>
+        </h1>
+        <p className="max-w-2xl text-sm md:text-base text-[var(--text-muted)] leading-relaxed">
+          Les shouts des casters · extraits automatiquement de chaque clip
+          KC. L&apos;IA transcrit l&apos;audio et garde les pepites — tu
+          ecoutes, tu votes, tu cites.
+        </p>
 
-          <dl className="grid grid-cols-2 md:grid-cols-3 gap-6 md:gap-12 mt-3 text-center">
-            <Stat
-              label="Phrases extraites"
-              value={stats.total_quotes.toLocaleString("fr-FR")}
-            />
-            <Stat
-              label="Clips analyses"
-              value={stats.total_kills.toLocaleString("fr-FR")}
-            />
-            <Stat
-              label={stats.top_caster ?? "Top caster"}
-              value={
-                stats.top_caster
-                  ? `${stats.top_caster_quotes} phrases`
-                  : "—"
-              }
-              hideOnMobile={!stats.top_caster}
-            />
-          </dl>
-        </div>
+        <dl className="grid grid-cols-2 md:grid-cols-3 gap-6 md:gap-12 mt-3 text-center">
+          <Stat
+            label="Phrases extraites"
+            value={stats.total_quotes.toLocaleString("fr-FR")}
+          />
+          <Stat
+            label="Clips analyses"
+            value={stats.total_kills.toLocaleString("fr-FR")}
+          />
+          <Stat
+            label={stats.top_caster ?? "Top caster"}
+            value={
+              stats.top_caster ? `${stats.top_caster_quotes} phrases` : "—"
+            }
+            hideOnMobile={!stats.top_caster}
+          />
+        </dl>
       </section>
 
       {/* ─── FEATURED QUOTE ─────────────────────────────────────────── */}
       {featured && (
         <section className="mb-10">
           <header className="flex items-center justify-between mb-4">
-            <p className="font-data text-[10px] uppercase tracking-[0.3em] text-[var(--gold)]/70">
-              ★ Phrase du jour
+            <p className="inline-flex items-center gap-2 font-data text-[10px] uppercase tracking-[0.3em] text-[var(--gold)]/70">
+              <Losange small />
+              Phrase du jour
             </p>
           </header>
           <div className="rounded-3xl border-2 border-[var(--gold)]/30 bg-gradient-to-br from-[var(--bg-surface)] to-[var(--bg-elevated)] p-6 md:p-10">
@@ -172,7 +167,7 @@ export function QuotesEncyclopedia({
       )}
 
       {/* ─── STICKY SEARCH BAND ─────────────────────────────────────── */}
-      <div className="sticky top-2 z-30 mb-8 rounded-2xl border border-[var(--border-gold)] bg-[var(--bg-primary)]/95 backdrop-blur p-4 md:p-5">
+      <div className="glass sticky top-2 z-30 mb-8 rounded-2xl border border-[var(--border-gold)] p-4 md:p-5">
         <div className="flex flex-col md:flex-row md:items-center gap-3 md:gap-4">
           <label className="relative flex-1">
             <span className="sr-only">Rechercher une phrase</span>
@@ -242,6 +237,25 @@ export function QuotesEncyclopedia({
 
 // ─── Small bits ────────────────────────────────────────────────────────
 
+/** Gold "losange" — rotated-square hextech mark, same pattern as
+ *  VSRoulette. Used as the eyebrow lead-in instead of an OS glyph. */
+function Losange({ small }: { small?: boolean } = {}) {
+  const size = small ? 8 : 14;
+  return (
+    <span
+      aria-hidden
+      className="inline-block shrink-0"
+      style={{
+        width: size,
+        height: size,
+        transform: "rotate(45deg)",
+        background: "linear-gradient(135deg, var(--gold-bright), var(--gold))",
+        boxShadow: "0 0 14px rgba(200,170,110,0.5)",
+      }}
+    />
+  );
+}
+
 function Stat({
   label,
   value,
@@ -310,7 +324,7 @@ function EmptyState({
 }) {
   if (query.trim().length > 0) {
     return (
-      <div className="rounded-2xl border border-[var(--border-gold)] bg-[var(--bg-surface)] p-10 text-center">
+      <div className="glass rounded-2xl border border-[var(--border-gold)] p-10 text-center">
         <p className="font-display text-lg text-[var(--text-primary)]">
           Aucune phrase ne matche &laquo; {query.trim()} &raquo;.
         </p>
@@ -322,7 +336,7 @@ function EmptyState({
   }
   if (!hasSlate) {
     return (
-      <div className="rounded-2xl border border-[var(--border-gold)] bg-[var(--bg-surface)] p-10 text-center">
+      <div className="glass rounded-2xl border border-[var(--border-gold)] p-10 text-center">
         <p className="font-display text-lg text-[var(--text-primary)]">
           Pas encore de phrase extraite.
         </p>

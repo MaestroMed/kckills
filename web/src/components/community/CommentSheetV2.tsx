@@ -35,7 +35,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
-import { motion, AnimatePresence, useMotionValue } from "motion/react";
+import { m, AnimatePresence, useMotionValue, useReducedMotion } from "motion/react";
 import { ReportButton } from "./ReportButton";
 import { CommentVote } from "./CommentVote";
 import { CommentSortToggle } from "./CommentSortToggle";
@@ -85,6 +85,19 @@ interface Props {
   isOpen: boolean;
   onClose: () => void;
   onAuthRequired?: () => void;
+  /**
+   * Presentation mode — branches the *wrapper* only; the lazy-load,
+   * auth-prompt, list, vote and composer logic are shared verbatim.
+   *
+   *   'sheet' (default, mobile)  — 62vh drag-to-dismiss bottom sheet,
+   *     role=dialog, Esc-closes, backdrop, fixed-positioned overlay.
+   *   'panel' (desktop right col) — static inline role=region container
+   *     that lives inside the context panel: NO drag handle, NO backdrop,
+   *     NO focus-trap, NO fixed positioning. Scroll-contained (max-h +
+   *     overflow-y:auto) so it never covers the stage. Collapsed summary
+   *     header expands inline.
+   */
+  mode?: "sheet" | "panel";
 }
 
 // Threshold (px) past which a release closes the sheet. < 80px = bounce back.
@@ -92,35 +105,52 @@ const DISMISS_THRESHOLD = 120;
 const DISMISS_VELOCITY = 500; // px/sec — fast flick down also closes
 
 
-export function CommentSheetV2({ killId, isOpen, onClose, onAuthRequired }: Props) {
+export function CommentSheetV2({ killId, isOpen, onClose, onAuthRequired, mode = "sheet" }: Props) {
+  const isPanel = mode === "panel";
+  // Honour prefers-reduced-motion for the panel chevron (the sheet's own
+  // motion is part of the untouched mobile path). When reduced, the chevron
+  // snaps instead of spring-rotating.
+  const reduceMotion = useReducedMotion();
   const [comments, setComments] = useState<UiComment[]>([]);
   const [loading, setLoading] = useState(true);
   const [postText, setPostText] = useState("");
   const [posting, setPosting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [sortMode, setSortMode] = useState<CommentSortMode>("latest");
+  // Panel-only: collapsed summary header that expands inline. Sheets are
+  // always "expanded" (the body is the whole point of opening one).
+  const [panelExpanded, setPanelExpanded] = useState(false);
   const errorTimerRef = useRef<number | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const y = useMotionValue(0);
 
-  // Reset y on open so previous drag offset doesn't persist
-  useEffect(() => {
-    if (isOpen) y.set(0);
-  }, [isOpen, y]);
+  // The data effect below keys off `active`: in sheet mode that's `isOpen`
+  // (mounts only when the AnimatePresence child is on screen); in panel
+  // mode the container is always inline-rendered, so it's always active —
+  // but we defer the fetch until the section is expanded to avoid loading
+  // comments for every clip the user merely scrolls past.
+  const active = isPanel ? panelExpanded : isOpen;
 
-  // Close on Esc
+  // Reset y on open so previous drag offset doesn't persist. Drag only
+  // exists in sheet mode, so this is a no-op for panels.
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isPanel && isOpen) y.set(0);
+  }, [isPanel, isOpen, y]);
+
+  // Close on Esc — sheet only. The panel is a static region inside the
+  // context column; it has no backdrop and must not hijack Escape.
+  useEffect(() => {
+    if (isPanel || !isOpen) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [isOpen, onClose]);
+  }, [isPanel, isOpen, onClose]);
 
   // Load comments on open
   useEffect(() => {
-    if (!isOpen) return;
+    if (!active) return;
     setLoading(true);
     setErrorMsg(null);
     const ac = new AbortController();
@@ -138,7 +168,7 @@ export function CommentSheetV2({ killId, isOpen, onClose, onAuthRequired }: Prop
         setErrorMsg("Impossible de charger les commentaires");
       });
     return () => ac.abort();
-  }, [killId, isOpen]);
+  }, [killId, active]);
 
   // Cleanup timers on unmount
   useEffect(() => () => {
@@ -250,10 +280,157 @@ export function CommentSheetV2({ killId, isOpen, onClose, onAuthRequired }: Prop
     [comments, sortMode],
   );
 
+  // ── Shared body fragments ────────────────────────────────────────────
+  // Identical markup in BOTH modes — extracted so the sheet and panel
+  // wrappers compose the SAME list + composer with zero prop-drilling and
+  // zero duplication (the component is NOT forked). Only the outer chrome
+  // (drag/backdrop vs static region, close X vs collapse chevron) differs.
+
+  const listBody = (
+    <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
+      {loading ? (
+        <CommentSkeletons />
+      ) : sortedComments.length === 0 ? (
+        <EmptyState />
+      ) : (
+        sortedComments.map((c) => (
+          <CommentRow
+            key={c.id}
+            comment={c}
+            depth={0}
+            onAuthRequired={onAuthRequired}
+            onVoteChange={handleVoteChange}
+          />
+        ))
+      )}
+    </div>
+  );
+
+  const composer = (
+    <div className="border-t border-white/5 bg-[var(--bg-surface)]/95 backdrop-blur-md">
+      {errorMsg && (
+        <p
+          role="status"
+          aria-live="polite"
+          className="px-5 pt-2 text-[11px] text-[var(--red)] flex items-center gap-1"
+        >
+          <span>{"⚠"}</span>
+          {errorMsg}
+        </p>
+      )}
+      <div
+        className="flex gap-2 px-5 py-3"
+        style={{ paddingBottom: "max(0.75rem, env(safe-area-inset-bottom, 0.75rem))" }}
+      >
+        <input
+          ref={inputRef}
+          type="text"
+          value={postText}
+          onChange={(e) => setPostText(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && !posting) {
+              e.preventDefault();
+              submit();
+            }
+          }}
+          placeholder={"Ajoute un commentaire…"}
+          maxLength={500}
+          disabled={posting}
+          className="flex-1 rounded-full bg-white/8 border border-white/10 px-4 py-2.5 text-sm text-white placeholder-white/30 outline-none focus:border-[var(--gold)]/55 focus:bg-white/12 disabled:opacity-60"
+        />
+        <button
+          type="button"
+          onClick={submit}
+          disabled={!postText.trim() || posting}
+          className="flex h-10 w-10 items-center justify-center rounded-full bg-[var(--gold)] text-black font-bold transition-transform active:scale-90 disabled:opacity-30 disabled:scale-100"
+          aria-label="Envoyer"
+        >
+          {posting ? (
+            <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
+              <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" strokeDasharray="50 100" />
+            </svg>
+          ) : (
+            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 12l14-7-7 14-2-5-5-2z" />
+            </svg>
+          )}
+        </button>
+      </div>
+    </div>
+  );
+
+  // ── Panel mode (desktop right column) ────────────────────────────────
+  // Static inline region — NO drag, NO backdrop, NO focus-trap, NO fixed
+  // positioning. Lives inside the context panel and must never cover the
+  // stage. A collapsed summary header expands the body inline; the body is
+  // scroll-contained (max-h + overflow-y:auto via the shared listBody) so
+  // it stays put.
+  if (isPanel) {
+    return (
+      <section
+        role="region"
+        aria-label="Commentaires"
+        className="glass flex flex-col overflow-hidden rounded-2xl border border-[var(--gold)]/15 bg-[var(--bg-surface)]/60"
+      >
+        {/* Collapsed summary header — click / Enter / Space toggles the
+            body inline. Same title + count line as the sheet header; the
+            close X is swapped for a rotating chevron affordance. */}
+        <button
+          type="button"
+          onClick={() => setPanelExpanded((v) => !v)}
+          aria-expanded={panelExpanded}
+          aria-controls="comment-panel-body"
+          className="flex items-center justify-between gap-3 px-5 py-4 text-left transition-colors hover:bg-[var(--cream-wash)]"
+        >
+          <div className="min-w-0">
+            <h3 className="font-display text-base font-bold text-white leading-none">
+              Commentaires
+            </h3>
+            <p className="font-data text-[10px] uppercase tracking-widest text-white/45 mt-1.5">
+              {totalComments} {totalComments <= 1 ? "message" : "messages"}
+            </p>
+          </div>
+          <m.svg
+            className="h-4 w-4 flex-shrink-0 text-white/55"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+            aria-hidden="true"
+            initial={false}
+            animate={{ rotate: panelExpanded ? 180 : 0 }}
+            transition={
+              reduceMotion ? { duration: 0 } : { type: "spring", stiffness: 320, damping: 32 }
+            }
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
+          </m.svg>
+        </button>
+
+        {panelExpanded && (
+          <div id="comment-panel-body" className="flex flex-col border-t border-white/5">
+            {/* Sort toggle gets its own row in the panel (there's no close
+                button to share the header bar with). */}
+            <div className="flex items-center justify-end px-5 py-2.5">
+              <CommentSortToggle mode={sortMode} onChange={setSortMode} />
+            </div>
+            {/* Scroll-contained list — max-h caps the panel so it never
+                grows tall enough to push the composer off-screen or cover
+                the stage. The shared listBody already owns overflow-y. */}
+            <div className="flex max-h-[min(52vh,420px)] flex-col">
+              {listBody}
+            </div>
+            {composer}
+          </div>
+        )}
+      </section>
+    );
+  }
+
+  // ── Sheet mode (default, mobile) — unchanged ─────────────────────────
   return (
     <AnimatePresence>
       {isOpen && (
-        <motion.div
+        <m.div
           className="fixed inset-0 z-[300]"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
@@ -263,7 +440,7 @@ export function CommentSheetV2({ killId, isOpen, onClose, onAuthRequired }: Prop
               semi-transparent so the video behind the sheet stays
               visible and the user keeps the conversation context.
               Tap to dismiss. */}
-          <motion.div
+          <m.div
             className="absolute inset-0 bg-black/30"
             onClick={onClose}
             initial={{ opacity: 0 }}
@@ -277,7 +454,7 @@ export function CommentSheetV2({ killId, isOpen, onClose, onAuthRequired }: Prop
               clip's bottom 1/3 (where the player names + tags live)
               still shows, so the conversation always knows what
               kill it's about. */}
-          <motion.div
+          <m.div
             className="absolute bottom-0 left-0 right-0 flex flex-col rounded-t-3xl bg-[var(--bg-surface)]/92 backdrop-blur-md border-t border-[var(--gold)]/25 shadow-[0_-30px_80px_rgba(0,0,0,0.65)]"
             style={{ height: "62vh", y }}
             initial={{ y: "100%" }}
@@ -323,77 +500,12 @@ export function CommentSheetV2({ killId, isOpen, onClose, onAuthRequired }: Prop
             </div>
 
             {/* Comments list */}
-            <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
-              {loading ? (
-                <CommentSkeletons />
-              ) : sortedComments.length === 0 ? (
-                <EmptyState />
-              ) : (
-                sortedComments.map((c) => (
-                  <CommentRow
-                    key={c.id}
-                    comment={c}
-                    depth={0}
-                    onAuthRequired={onAuthRequired}
-                    onVoteChange={handleVoteChange}
-                  />
-                ))
-              )}
-            </div>
+            {listBody}
 
             {/* Sticky composer */}
-            <div className="border-t border-white/5 bg-[var(--bg-surface)]/95 backdrop-blur-md">
-              {errorMsg && (
-                <p
-                  role="status"
-                  aria-live="polite"
-                  className="px-5 pt-2 text-[11px] text-[var(--red)] flex items-center gap-1"
-                >
-                  <span>{"\u26A0"}</span>
-                  {errorMsg}
-                </p>
-              )}
-              <div
-                className="flex gap-2 px-5 py-3"
-                style={{ paddingBottom: "max(0.75rem, env(safe-area-inset-bottom, 0.75rem))" }}
-              >
-                <input
-                  ref={inputRef}
-                  type="text"
-                  value={postText}
-                  onChange={(e) => setPostText(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" && !posting) {
-                      e.preventDefault();
-                      submit();
-                    }
-                  }}
-                  placeholder="Ajoute un commentaire…"
-                  maxLength={500}
-                  disabled={posting}
-                  className="flex-1 rounded-full bg-white/8 border border-white/10 px-4 py-2.5 text-sm text-white placeholder-white/30 outline-none focus:border-[var(--gold)]/55 focus:bg-white/12 disabled:opacity-60"
-                />
-                <button
-                  type="button"
-                  onClick={submit}
-                  disabled={!postText.trim() || posting}
-                  className="flex h-10 w-10 items-center justify-center rounded-full bg-[var(--gold)] text-black font-bold transition-transform active:scale-90 disabled:opacity-30 disabled:scale-100"
-                  aria-label="Envoyer"
-                >
-                  {posting ? (
-                    <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
-                      <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" strokeDasharray="50 100" />
-                    </svg>
-                  ) : (
-                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 12l14-7-7 14-2-5-5-2z" />
-                    </svg>
-                  )}
-                </button>
-              </div>
-            </div>
-          </motion.div>
-        </motion.div>
+            {composer}
+          </m.div>
+        </m.div>
       )}
     </AnimatePresence>
   );

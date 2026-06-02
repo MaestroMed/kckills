@@ -13,7 +13,7 @@ import { getTopFaceOffDuels } from "@/lib/supabase/face-off";
 import { createAnonSupabase } from "@/lib/supabase/server";
 
 export const metadata: Metadata = {
-  title: "Face-off Admin — KCKILLS",
+  title: "Face-off Admin",
   robots: { index: false, follow: false },
 };
 

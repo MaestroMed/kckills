@@ -284,8 +284,10 @@ export function VSLeaderboard({
         visibleCount={rows.length}
       />
 
-      {/* Two-column layout : main + sidebar (desktop only) */}
-      <div className="mx-auto max-w-7xl px-3 md:px-6 lg:grid lg:grid-cols-[1fr_320px] lg:gap-8">
+      {/* Two-column layout : main + sidebar (desktop only). Unified
+          container — max-w-7xl + px-4 matches the hero and the sticky
+          filter bar so everything lines up on the same gutters. */}
+      <div className="mx-auto max-w-7xl px-4 lg:grid lg:grid-cols-[1fr_320px] lg:gap-8">
         {/* Main column */}
         <div
           className="transition-opacity duration-300"
@@ -341,7 +343,7 @@ function EmptyState({
     filters.eraId !== null ||
     filters.minBattles > 5;
   return (
-    <section className="mx-auto max-w-2xl px-3 py-16 text-center">
+    <section className="mx-auto max-w-2xl py-16 text-center">
       <div className="inline-flex items-center justify-center mb-5">
         <span
           aria-hidden
@@ -398,7 +400,7 @@ function PodiumSkeleton({
   prefersReducedMotion: boolean;
 }) {
   return (
-    <section className="mx-auto max-w-5xl px-4 pt-8 md:pt-12">
+    <section className="pt-8 md:pt-12">
       <div className="grid gap-5 md:grid-cols-3 md:gap-8 items-end">
         {[1, 0, 2].map((rank) => (
           <m.div

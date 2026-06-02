@@ -60,8 +60,8 @@ export function ChampionPoolHextech({
           return (
             <a
               key={c.name}
-              href={`/scroll?killerChampion=${encodeURIComponent(c.name)}`}
-              aria-label={`Voir les kills sur ${c.name} dans le scroll`}
+              href={`/champion/${encodeURIComponent(c.name)}`}
+              aria-label={`Voir la page du champion ${c.name}`}
               className="hex-card group relative aspect-[4/5] overflow-hidden bg-[var(--bg-surface)] transition-transform hover:-translate-y-1 focus-visible:outline-2 focus-visible:outline-[var(--gold)] focus-visible:outline-offset-2"
               style={{
                 clipPath:

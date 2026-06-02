@@ -641,21 +641,23 @@ export default async function PlayerPage({ params }: Props) {
 
           {/* Auxiliary links — Leaguepedia + all kills */}
           <div className="mt-10 grid gap-3 md:grid-cols-2">
-            <Link
-              href={`/scroll?killerPlayerId=${playerId ?? ""}`}
-              className="flex items-center justify-between rounded-xl border border-[var(--border-gold)] bg-[var(--bg-surface)] px-5 py-4 text-sm text-[var(--text-secondary)] transition-colors hover:border-[var(--gold)]/50 hover:text-[var(--gold)] focus-visible:outline-2 focus-visible:outline-[var(--gold)] focus-visible:outline-offset-2"
-              aria-label={`Voir tous les kills de ${name} dans le scroll`}
-            >
-              <span className="flex items-center gap-3">
-                <span className="font-data text-[10px] uppercase tracking-widest text-[var(--text-muted)]">
-                  scroll
+            {playerId && (
+              <Link
+                href={`/scroll?player=${playerId}`}
+                className="flex items-center justify-between rounded-xl border border-[var(--border-gold)] bg-[var(--bg-surface)] px-5 py-4 text-sm text-[var(--text-secondary)] transition-colors hover:border-[var(--gold)]/50 hover:text-[var(--gold)] focus-visible:outline-2 focus-visible:outline-[var(--gold)] focus-visible:outline-offset-2"
+                aria-label={`Voir tous les kills de ${name} dans le scroll`}
+              >
+                <span className="flex items-center gap-3">
+                  <span className="font-data text-[10px] uppercase tracking-widest text-[var(--text-muted)]">
+                    scroll
+                  </span>
+                  <span>Tous les kills de {name}</span>
                 </span>
-                <span>Tous les kills de {name}</span>
-              </span>
-              <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M9 5l7 7-7 7" />
-              </svg>
-            </Link>
+                <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M9 5l7 7-7 7" />
+                </svg>
+              </Link>
+            )}
             <a
               href={`https://lol.fandom.com/wiki/${encodeURIComponent(name)}`}
               target="_blank"

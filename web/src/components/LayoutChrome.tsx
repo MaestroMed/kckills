@@ -26,10 +26,10 @@ export function LayoutChrome({ children }: { children: React.ReactNode }) {
     // so it doesn't fight the TikTok-style UI.
     return (
       <>
-        {children}
+        <main id="main-content">{children}</main>
         <p
           aria-label="Riot Games disclaimer"
-          className="pointer-events-none fixed inset-x-0 bottom-1 z-50 px-4 text-center text-[9px] leading-tight text-white/40 mix-blend-difference"
+          className="pointer-events-none fixed inset-x-0 bottom-1 z-[70] px-4 text-center text-[9px] leading-tight text-white/40 mix-blend-difference"
         >
           KCKILLS is not endorsed by Riot Games. Assets &copy; Riot Games.
         </p>

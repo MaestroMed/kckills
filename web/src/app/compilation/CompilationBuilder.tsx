@@ -26,6 +26,7 @@ import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react"
 import Image from "next/image";
 import Link from "next/link";
 import { m, AnimatePresence, Reorder, useReducedMotion } from "motion/react";
+import { Check, X, GripHorizontal, Loader2 } from "lucide-react";
 
 import { championIconUrl } from "@/lib/constants";
 
@@ -322,7 +323,7 @@ export function CompilationBuilder({ pool }: CompilationBuilderProps) {
                   type="button"
                   disabled={!canGoStep2}
                   onClick={() => setStep(2)}
-                  className="rounded-lg bg-[var(--gold)] px-4 py-2 text-sm font-bold text-black transition disabled:cursor-not-allowed disabled:bg-[var(--gold-dark)] disabled:text-[var(--text-disabled)]"
+                  className={PRIMARY_CTA}
                 >
                   Suivant — Réordonner
                 </button>
@@ -363,7 +364,7 @@ export function CompilationBuilder({ pool }: CompilationBuilderProps) {
                   type="button"
                   disabled={!canGoStep3}
                   onClick={() => setStep(3)}
-                  className="rounded-lg bg-[var(--gold)] px-4 py-2 text-sm font-bold text-black transition disabled:cursor-not-allowed disabled:bg-[var(--gold-dark)] disabled:text-[var(--text-disabled)]"
+                  className={PRIMARY_CTA}
                 >
                   Suivant — Titre
                 </button>
@@ -405,9 +406,16 @@ export function CompilationBuilder({ pool }: CompilationBuilderProps) {
                   type="button"
                   disabled={!canSubmit || submitting}
                   onClick={() => void submit()}
-                  className="rounded-lg bg-[var(--gold)] px-4 py-2 text-sm font-bold text-black transition disabled:cursor-not-allowed disabled:bg-[var(--gold-dark)] disabled:text-[var(--text-disabled)]"
+                  className={`${PRIMARY_CTA} inline-flex items-center gap-2`}
                 >
-                  {submitting ? "Lancement…" : "Lancer le rendu"}
+                  {submitting ? (
+                    <>
+                      <Loader2 className="size-4 animate-spin" aria-hidden />
+                      Lancement…
+                    </>
+                  ) : (
+                    "Lancer le rendu"
+                  )}
                 </button>
               }
             />
@@ -464,7 +472,7 @@ function StepIndicator({ step }: { step: Step }) {
                     : "border-[var(--border-subtle)] text-[var(--text-muted)]"
               }`}
             >
-              {isDone ? "✓" : l.id}
+              {isDone ? <Check className="size-3.5" aria-hidden /> : l.id}
             </span>
             <span
               className={`text-xs uppercase tracking-[0.2em] ${
@@ -474,7 +482,7 @@ function StepIndicator({ step }: { step: Step }) {
               {l.label}
             </span>
             {l.id < 3 ? (
-              <span className="ml-2 hidden h-px w-8 bg-[var(--border-subtle)] sm:inline-block" />
+              <span className="gold-line ml-2 hidden w-8 sm:inline-block" />
             ) : null}
           </li>
         );
@@ -602,69 +610,113 @@ function PickerStep({
         </ul>
 
         {filtered.length === 0 ? (
-          <p className="mt-6 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)]/30 px-4 py-6 text-center text-sm text-[var(--text-muted)]">
+          <p className="glass mt-6 rounded-lg border border-[var(--border-gold)] px-4 py-6 text-center text-sm text-[var(--text-muted)]">
             Aucun clip ne matche ces filtres. Élargis la recherche.
           </p>
         ) : null}
+
+        {/* Mobile running selection — collapsible so it never hides the
+            grid, but the chosen clips + their remove controls stay one tap
+            away on phones (the desktop sticky aside is hidden < lg). */}
+        <details
+          open
+          className="glass group relative mt-6 overflow-hidden rounded-2xl border border-[var(--border-gold)] lg:hidden"
+        >
+          <CornerLosange position="tl" gold />
+          <CornerLosange position="br" gold />
+          <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-4 py-3">
+            <span className="flex items-center gap-2 font-display text-sm font-bold uppercase tracking-[0.2em] text-[var(--gold)]">
+              Ta sélection
+              <span className="rounded-full bg-[var(--gold)]/15 px-2 py-0.5 font-mono text-[11px] text-[var(--gold)]">
+                {selected.length}
+              </span>
+            </span>
+            <span className="text-[10px] uppercase tracking-widest text-[var(--text-muted)] transition group-open:hidden">
+              Voir
+            </span>
+            <span className="hidden text-[10px] uppercase tracking-widest text-[var(--text-muted)] group-open:inline">
+              Réduire
+            </span>
+          </summary>
+          <div className="px-4 pb-4">
+            <SelectionList selected={selected} removeAt={removeAt} />
+          </div>
+        </details>
       </div>
 
-      {/* ───── Selection sidecar ──────────────────────────────── */}
-      <aside className="sticky top-4 hidden h-fit rounded-2xl border border-[var(--border-gold)] bg-[var(--bg-surface)]/40 p-4 lg:block">
+      {/* ───── Selection sidecar (desktop) ────────────────────── */}
+      <aside className="glass sticky top-4 hidden h-fit overflow-hidden rounded-2xl border border-[var(--border-gold)] p-4 lg:block">
+        <CornerLosange position="tl" gold />
+        <CornerLosange position="br" gold />
         <h2 className="mb-1 font-display text-sm font-bold uppercase tracking-[0.2em] text-[var(--gold)]">
           Ta sélection
         </h2>
-        <p className="mb-3 text-[11px] text-[var(--text-muted)]">
-          {selected.length === 0
-            ? "Clique un clip pour le sélectionner."
-            : `${selected.length} clip${selected.length === 1 ? "" : "s"} — ordre modifiable à l'étape suivante.`}
-        </p>
-        {selected.length > 0 ? (
-          <ol className="space-y-2">
-            {selected.map((k, i) => (
-              <li
-                key={k.id}
-                className="flex items-center gap-2 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-elevated)]/40 p-2"
-              >
-                <span className="font-mono text-xs text-[var(--gold)]">
-                  {String(i + 1).padStart(2, "0")}
-                </span>
-                <div className="relative size-10 shrink-0 overflow-hidden rounded">
-                  <Image
-                    src={championIconUrl(k.killerChampion ?? "Aatrox")}
-                    alt={k.killerChampion ?? "?"}
-                    width={40}
-                    height={40}
-                    className="size-full object-cover"
-                  />
-                </div>
-                <div className="min-w-0 flex-1 text-xs">
-                  <p className="truncate text-[var(--text-primary)]">
-                    {k.killerChampion} → {k.victimChampion}
-                  </p>
-                  <p className="truncate text-[10px] text-[var(--text-muted)]">
-                    {k.matchStage ?? "LEC"}
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => removeAt(k.id)}
-                  aria-label={`Retirer ${k.killerChampion} → ${k.victimChampion}`}
-                  className="rounded p-1 text-[var(--text-muted)] hover:bg-black/20 hover:text-[var(--red)]"
-                >
-                  <svg className="size-3.5" viewBox="0 0 20 20" fill="currentColor" aria-hidden>
-                    <path
-                      fillRule="evenodd"
-                      d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
-                      clipRule="evenodd"
-                    />
-                  </svg>
-                </button>
-              </li>
-            ))}
-          </ol>
-        ) : null}
+        <SelectionList selected={selected} removeAt={removeAt} />
       </aside>
     </div>
+  );
+}
+
+/**
+ * SelectionList — the running pick list + per-clip remove control.
+ * Shared between the desktop sticky aside and the mobile collapsible
+ * panel so the selection + remove affordance is reachable on every
+ * breakpoint (the note's "stay visible on desktop and mobile").
+ */
+function SelectionList({
+  selected,
+  removeAt,
+}: {
+  selected: BuilderKill[];
+  removeAt: (id: string) => void;
+}) {
+  return (
+    <>
+      <p className="mb-3 text-[11px] text-[var(--text-muted)]">
+        {selected.length === 0
+          ? "Clique un clip pour le sélectionner."
+          : `${selected.length} clip${selected.length === 1 ? "" : "s"} — ordre modifiable à l'étape suivante.`}
+      </p>
+      {selected.length > 0 ? (
+        <ol className="space-y-2">
+          {selected.map((k, i) => (
+            <li
+              key={k.id}
+              className="flex items-center gap-2 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-elevated)]/40 p-2"
+            >
+              <span className="font-mono text-xs text-[var(--gold)]">
+                {String(i + 1).padStart(2, "0")}
+              </span>
+              <div className="relative size-10 shrink-0 overflow-hidden rounded">
+                <Image
+                  src={championIconUrl(k.killerChampion ?? "Aatrox")}
+                  alt={k.killerChampion ?? "?"}
+                  width={40}
+                  height={40}
+                  className="size-full object-cover"
+                />
+              </div>
+              <div className="min-w-0 flex-1 text-xs">
+                <p className="truncate text-[var(--text-primary)]">
+                  {k.killerChampion} → {k.victimChampion}
+                </p>
+                <p className="truncate text-[10px] text-[var(--text-muted)]">
+                  {k.matchStage ?? "LEC"}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => removeAt(k.id)}
+                aria-label={`Retirer ${k.killerChampion} → ${k.victimChampion}`}
+                className="rounded p-1 text-[var(--text-muted)] transition hover:bg-black/20 hover:text-[var(--red)]"
+              >
+                <X className="size-4" aria-hidden />
+              </button>
+            </li>
+          ))}
+        </ol>
+      ) : null}
+    </>
   );
 }
 
@@ -714,7 +766,7 @@ function PickerCard({
         className={`group relative block aspect-[9/16] w-full overflow-hidden rounded-xl border-2 text-left transition focus:outline-none focus:ring-2 focus:ring-[var(--gold)]/60 ${
           selected
             ? "border-[var(--gold)] shadow-lg shadow-[var(--gold)]/20"
-            : "border-[var(--border-subtle)] hover:border-[var(--gold)]/50"
+            : "border-[var(--border-subtle)] hover:border-[var(--gold)]/50 hover:gold-glow"
         }`}
       >
         {kill.thumbnailUrl ? (
@@ -824,7 +876,9 @@ function ReorderStep({
       />
 
       {/* Reorder ribbon */}
-      <div className="my-6 rounded-2xl border border-[var(--border-gold)] bg-[var(--bg-surface)]/30 p-3">
+      <div className="glass relative my-6 overflow-hidden rounded-2xl border border-[var(--border-gold)] p-3">
+        <CornerLosange position="tl" gold />
+        <CornerLosange position="br" gold />
         <Reorder.Group
           axis="x"
           values={selected}
@@ -860,8 +914,9 @@ function ReorderStep({
               <span className="absolute left-1.5 top-1.5 flex size-6 items-center justify-center rounded-full bg-[var(--gold)] font-mono text-[11px] font-bold text-black">
                 {i + 1}
               </span>
-              <span className="absolute right-1.5 top-1.5 text-[10px] text-white/80">
-                ↔ Drag
+              <span className="absolute right-1.5 top-1.5 flex items-center gap-1 rounded bg-black/45 px-1 py-0.5 text-[9px] uppercase tracking-wider text-white/85 backdrop-blur-sm">
+                <GripHorizontal className="size-3" aria-hidden />
+                Drag
               </span>
               <div className="absolute inset-x-1.5 bottom-1.5 text-[10px] text-white">
                 <p className="truncate font-bold">
@@ -908,7 +963,7 @@ function TextCard({
   const accentClass = accent === "cyan" ? "text-[var(--cyan)]" : "text-[var(--gold)]";
   return (
     <label
-      className={`block rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)]/30 p-4 transition focus-within:border-[var(--gold)]/40`}
+      className="glass block rounded-2xl border border-[var(--border-gold)] p-4 transition focus-within:border-[var(--gold)]/40"
     >
       <span
         className={`mb-2 block text-[10px] uppercase tracking-[0.24em] ${accentClass}`}
@@ -1181,11 +1236,53 @@ function StickyBar({
   right: React.ReactNode;
 }) {
   return (
-    <div className="sticky bottom-0 z-30 mt-8 -mx-4 border-t border-[var(--border-subtle)] bg-[var(--bg-primary)]/95 px-4 py-3 backdrop-blur supports-[backdrop-filter]:bg-[var(--bg-primary)]/80">
-      <div className="mx-auto flex max-w-6xl items-center justify-between gap-3">
+    <div className="sticky bottom-0 z-30 mt-8 -mx-4 border-t border-[var(--border-gold)] bg-[var(--bg-primary)]/95 px-4 py-3 backdrop-blur supports-[backdrop-filter]:bg-[var(--bg-primary)]/80">
+      <div className="mx-auto flex max-w-7xl items-center justify-between gap-3">
         {left}
         {right}
       </div>
     </div>
   );
 }
+
+// ════════════════════════════════════════════════════════════════════
+// Hextech corner accent — copied from VSRoulette's CornerLosange so the
+// builder's primary cards share the same gold-diamond corner language.
+// ════════════════════════════════════════════════════════════════════
+
+function CornerLosange({
+  position,
+  gold,
+}: {
+  position: "tl" | "tr" | "bl" | "br";
+  gold?: boolean;
+}) {
+  const map: Record<string, string> = {
+    tl: "top-2 left-2",
+    tr: "top-2 right-2",
+    bl: "bottom-2 left-2",
+    br: "bottom-2 right-2",
+  };
+  return (
+    <span
+      aria-hidden
+      className={`absolute ${map[position]}`}
+      style={{
+        width: 8,
+        height: 8,
+        transform: "rotate(45deg)",
+        background: gold
+          ? "linear-gradient(135deg, var(--gold-bright), var(--gold))"
+          : "rgba(200,170,110,0.5)",
+        boxShadow: gold ? "0 0 10px rgba(200,170,110,0.6)" : undefined,
+      }}
+    />
+  );
+}
+
+// Shared disabled-CTA class. The OLD styling (disabled:bg-[var(--gold-dark)]
+// disabled:text-[var(--text-disabled)]) read as a muddy half-lit gold button
+// — users couldn't tell it was inert. This is an explicit, legible disabled
+// state : flat surface, gold-tinted muted label, no shadow, no-drop cursor.
+const PRIMARY_CTA =
+  "rounded-lg bg-[var(--gold)] px-4 py-2 text-sm font-bold text-black shadow-[0_8px_24px_rgba(200,170,110,0.25)] transition hover:bg-[var(--gold-bright)] disabled:cursor-not-allowed disabled:border disabled:border-[var(--border-gold)] disabled:bg-[var(--bg-elevated)]/60 disabled:text-[var(--text-muted)] disabled:shadow-none";

@@ -8,10 +8,10 @@
  *
  * Mobile  : same data but rendered as cards (1-col grid).
  *
- * The "VS" button currently jumps to /vs?seedA=<id>&seedB=<other>. Until
- * /vs supports a pair seed, we settle for /vs?focus=<id> as a soft hint
- * — the seed param is read-noop on /vs today but lays the wire for a
- * future "challenge this kill" feature. Clicking the thumbnail goes to
+ * The "VS" button links to /kill/<id> (the kill detail page). /vs does
+ * not read a focus/seed param today, so pointing it there would always
+ * open a random roulette — /kill/<id> is the working destination that
+ * matches the button's intent. Clicking the thumbnail goes to
  * /scroll?kill=<id> so users can see the clip full-screen.
  *
  * Hover row : subtle gold glow + 1.01 scale. Reduced motion → snap.
@@ -80,7 +80,7 @@ export function LeaderboardTable({
   return (
     <section
       aria-label="Suite du classement ELO"
-      className="mx-auto max-w-6xl px-3 md:px-6 mt-8 md:mt-12 pb-12"
+      className="mt-8 md:mt-12 pb-12"
     >
       {/* Mobile : card grid */}
       <ul className="md:hidden flex flex-col gap-2.5">
@@ -97,7 +97,7 @@ export function LeaderboardTable({
       </ul>
 
       {/* Desktop : table */}
-      <div className="hidden md:block rounded-2xl border border-[var(--border-gold)] bg-[var(--bg-surface)]/65 backdrop-blur-md overflow-hidden">
+      <div className="glass hidden md:block rounded-2xl border border-[var(--border-gold)] overflow-hidden">
         <table className="w-full" role="table">
           <thead>
             <tr className="border-b border-[var(--border-gold)]">
@@ -247,9 +247,9 @@ function RowDesktop({
       </td>
       <td className="px-3 py-3 pr-5 text-right">
         <Link
-          href={`/vs?focus=${row.kill_id}`}
+          href={`/kill/${row.kill_id}`}
           className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--gold)]/45 bg-[var(--gold)]/10 px-3 py-1.5 font-display text-[10px] font-black uppercase tracking-[0.25em] text-[var(--gold)] hover:border-[var(--gold)] hover:bg-[var(--gold)]/20 transition-all"
-          aria-label={`Affronter ${killerName} dans la roulette VS`}
+          aria-label={`Voir le détail du kill : ${killerName} contre ${victimName}`}
         >
           VS <span aria-hidden>→</span>
         </Link>
@@ -286,8 +286,7 @@ function RowCard({
         duration: 0.35,
         delay: prefersReducedMotion ? 0 : Math.min(index * 0.03, 0.35),
       }}
-      className="rounded-xl border border-[var(--border-gold)] bg-[var(--bg-surface)]/70 backdrop-blur-md p-3"
-      style={{ boxShadow: "0 8px 20px rgba(0,0,0,0.35)" }}
+      className="glass rounded-xl border border-[var(--border-gold)] p-3 shadow-[0_8px_20px_rgba(0,0,0,0.35)] transition-shadow hover:border-[var(--gold)]/40 hover:shadow-[0_0_20px_rgba(200,170,110,0.15),0_0_60px_rgba(200,170,110,0.05)]"
     >
       <div className="flex items-start gap-3">
         <Link
@@ -351,9 +350,9 @@ function RowCard({
               <Mini label="IA" value={row.highlight_score.toFixed(1)} accent="var(--gold)" />
             )}
             <Link
-              href={`/vs?focus=${row.kill_id}`}
+              href={`/kill/${row.kill_id}`}
               className="ml-auto inline-flex items-center gap-1 rounded-md border border-[var(--gold)]/45 bg-[var(--gold)]/10 px-2 py-0.5 font-display text-[9px] font-black uppercase tracking-[0.25em] text-[var(--gold)]"
-              aria-label={`Affronter ${killerName} dans la roulette VS`}
+              aria-label={`Voir le détail du kill : ${killerName} contre ${victimName}`}
             >
               VS →
             </Link>

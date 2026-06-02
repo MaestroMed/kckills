@@ -128,7 +128,7 @@ export default async function VSLeaderboardPage() {
           }}
         />
 
-        <div className="relative z-10 mx-auto max-w-5xl px-5 pt-12 pb-12 md:pt-20 md:pb-16 text-center">
+        <div className="relative z-10 mx-auto max-w-7xl px-4 pt-12 pb-12 md:pt-20 md:pb-16 text-center">
           <nav
             aria-label="Fil d'Ariane"
             className="mb-6 flex items-center justify-center gap-2 text-xs text-white/55"
@@ -170,7 +170,7 @@ export default async function VSLeaderboardPage() {
           </p>
 
           {/* Bilan strip */}
-          <div className="mt-7 inline-flex items-center gap-4 md:gap-6 flex-wrap justify-center rounded-2xl border border-[var(--border-gold)] bg-black/30 backdrop-blur-md px-5 py-3">
+          <div className="glass gold-glow mt-7 inline-flex items-center gap-4 md:gap-6 flex-wrap justify-center rounded-2xl border border-[var(--border-gold)] px-5 py-3">
             <Bilan
               label="Duels totaux"
               value={initialStats.total_battles.toLocaleString("fr-FR")}

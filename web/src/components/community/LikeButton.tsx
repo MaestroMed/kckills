@@ -18,8 +18,9 @@
  *     the heart paints correctly without a flash of wrong state.
  *
  * Backed by the `toggleKillLike` Server Action (`./actions`) which writes
- * to the existing `ratings` table (score=5). The 5-star precision UI
- * remains available via the RatingSheet (secondary action).
+ * to the dedicated `likes` table (Wave 36 / migr 080) — independent of the
+ * 1-5 ratings. The 5-star precision rating is the separate `rateKill`
+ * action (StarRating UI), and the two no longer overwrite each other.
  */
 
 import {
@@ -30,7 +31,7 @@ import {
   useState,
   useTransition,
 } from "react";
-import { motion, AnimatePresence } from "motion/react";
+import { m, AnimatePresence } from "motion/react";
 import { toggleKillLike, getKillLikeState } from "./actions";
 
 interface Props {
@@ -95,7 +96,7 @@ export function LikeButton({
       try {
         const data = await getKillLikeState(killId);
         if (cancelled) return;
-        setServerState({ liked: data.liked, count: data.ratingCount });
+        setServerState({ liked: data.liked, count: data.likeCount });
       } catch {
         // Silent — server-rendered initialCount is the fallback
       }
@@ -143,7 +144,7 @@ export function LikeButton({
           }
           // Trust server's count (might differ from optimistic if other
           // users liked concurrently between request + response).
-          setServerState({ liked: result.liked, count: result.ratingCount });
+          setServerState({ liked: result.liked, count: result.likeCount });
           // V9 — sync the localStorage liked-cache so subsequent
           // mounts of this kill (other ScrollFeed renders, /kill/[id]
           // detail page, ClipReel cards) show the heart filled in.
@@ -204,7 +205,7 @@ export function LikeButton({
             : "border-white/10 hover:bg-black/65"
         }`}
       >
-        <motion.svg
+        <m.svg
           key={liked ? "filled" : "outline"}
           className={`${sizes.icon} ${liked ? "text-[var(--red)]" : "text-white"} transition-colors`}
           viewBox="0 0 24 24"
@@ -220,7 +221,7 @@ export function LikeButton({
             strokeLinejoin="round"
             d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"
           />
-        </motion.svg>
+        </m.svg>
 
         {/* Burst — exploding little hearts when liked */}
         <AnimatePresence>
@@ -264,7 +265,7 @@ function BurstEffect() {
         const dx = Math.cos(rad) * 30;
         const dy = Math.sin(rad) * 30 - 8; // bias upward
         return (
-          <motion.span
+          <m.span
             key={i}
             className="pointer-events-none absolute inset-0 flex items-center justify-center"
             initial={{ opacity: 1, x: 0, y: 0, scale: 0.5 }}
@@ -275,7 +276,7 @@ function BurstEffect() {
             <svg className="h-3 w-3 text-[var(--red)]" viewBox="0 0 24 24" fill="currentColor">
               <path d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
             </svg>
-          </motion.span>
+          </m.span>
         );
       })}
     </>

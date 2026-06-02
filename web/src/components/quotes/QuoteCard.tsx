@@ -115,20 +115,20 @@ export function QuoteCard({ quote, variant = "full" }: Props) {
   return (
     <article
       className={[
-        "group relative flex flex-col gap-4 rounded-2xl border bg-[var(--bg-surface)] p-5 transition-all",
-        "border-[var(--border-gold)] hover:border-[var(--gold)]/60",
+        "group relative flex flex-col gap-4 rounded-2xl border bg-[var(--bg-surface)] transition-all",
+        "border-[var(--border-gold)] hover:border-[var(--gold)]/60 hover:-translate-y-0.5",
+        // gold-glow on hover — the .gold-glow box-shadow as an explicit
+        // arbitrary value (Tailwind v4 won't generate hover:gold-glow off a
+        // plain class). Same values as globals.css .gold-glow / LeaderboardTable.
+        "hover:shadow-[0_0_20px_rgba(200,170,110,0.15),0_0_60px_rgba(200,170,110,0.05)]",
         variant === "inline" ? "p-4" : "p-5 md:p-6",
       ].join(" ")}
     >
-      {/* corner deco (gold L) */}
-      <span
-        aria-hidden
-        className="absolute top-0 left-0 h-5 w-5 rounded-tl-2xl border-t-2 border-l-2 border-[var(--gold)]/70"
-      />
-      <span
-        aria-hidden
-        className="absolute bottom-0 right-0 h-5 w-5 rounded-br-2xl border-b-2 border-r-2 border-[var(--gold)]/30"
-      />
+      {/* Corner losanges — premium hextech accents (rotated-square spans,
+          same pattern as VSRoulette's ClipPanel). Bright top-left + faint
+          bottom-right preserves the original L-deco visual hierarchy. */}
+      <CornerLosange position="tl" gold />
+      <CornerLosange position="br" />
 
       {/* Top row : context + memetic chip */}
       {variant === "full" && (
@@ -144,8 +144,9 @@ export function QuoteCard({ quote, variant = "full" }: Props) {
             )}
           </div>
           {quote.is_memetic && (
-            <span className="rounded-full bg-[var(--gold)]/20 border border-[var(--gold)]/50 px-2.5 py-1 font-data font-black text-[var(--gold-bright)]">
-              ★ Meme
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-[var(--gold)]/20 border border-[var(--gold)]/50 px-2.5 py-1 font-data font-black text-[var(--gold-bright)]">
+              <Losange small />
+              Meme
             </span>
           )}
         </header>
@@ -214,4 +215,56 @@ function formatMs(ms: number): string {
   const m = Math.floor(s / 60);
   const r = s % 60;
   return `${m}:${r.toString().padStart(2, "0")}`;
+}
+
+// ─── Hextech ornaments ──────────────────────────────────────────────────
+// Rotated-square "losange" accents — the same premium pattern used by
+// VSRoulette's ClipPanel. Kept inline (VSRoulette's copies are
+// module-private) so QuoteCard stays self-contained.
+
+function CornerLosange({
+  position,
+  gold,
+}: {
+  position: "tl" | "tr" | "bl" | "br";
+  gold?: boolean;
+}) {
+  const map: Record<string, string> = {
+    tl: "top-2 left-2",
+    tr: "top-2 right-2",
+    bl: "bottom-2 left-2",
+    br: "bottom-2 right-2",
+  };
+  return (
+    <span
+      aria-hidden
+      className={`absolute ${map[position]}`}
+      style={{
+        width: 8,
+        height: 8,
+        transform: "rotate(45deg)",
+        background: gold
+          ? "linear-gradient(135deg, var(--gold-bright), var(--gold))"
+          : "rgba(200,170,110,0.5)",
+        boxShadow: gold ? "0 0 10px rgba(200,170,110,0.6)" : undefined,
+      }}
+    />
+  );
+}
+
+function Losange({ small }: { small?: boolean } = {}) {
+  const size = small ? 8 : 14;
+  return (
+    <span
+      aria-hidden
+      className="inline-block shrink-0"
+      style={{
+        width: size,
+        height: size,
+        transform: "rotate(45deg)",
+        background: "linear-gradient(135deg, var(--gold-bright), var(--gold))",
+        boxShadow: "0 0 14px rgba(200,170,110,0.5)",
+      }}
+    />
+  );
 }

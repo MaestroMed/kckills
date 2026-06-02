@@ -9,7 +9,7 @@ import { Breadcrumb } from "@/components/Breadcrumb";
 
 export const revalidate = 1800; // Wave 13d : DB pressure (roster stable)
 export const metadata: Metadata = {
-  title: "Joueurs KC — KCKILLS",
+  title: "Joueurs KC",
   description:
     "Roster actuel Karmine Corp LEC 2026 : Canna, Yike, Kyeahoo, Caliste, Busio. Stats, KDA, top champions + anciens joueurs (Rekkles, Targamas, Cabochard, etc.)",
   alternates: { canonical: "/players" },

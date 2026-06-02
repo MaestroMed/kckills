@@ -37,7 +37,7 @@ interface Props {
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params;
   const league = await getLeagueBySlug(slug);
-  if (!league) return { title: "Ligue introuvable — KCKILLS" };
+  if (!league) return { title: "Ligue introuvable" };
   const title = `${league.short_name} (${league.name}) — KCKILLS`;
   const description = `Toutes les équipes et matchs de la ${league.name} (${league.region}) sur KCKILLS.`;
   const canonicalPath = `/league/${league.slug}`;

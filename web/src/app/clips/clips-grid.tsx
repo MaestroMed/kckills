@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
 import { championIconUrl } from "@/lib/constants";
@@ -8,6 +9,8 @@ import { TEAM_LOGOS } from "@/lib/kc-assets";
 import { isDescriptionClean } from "@/lib/scroll/sanitize-description";
 import { Breadcrumb } from "@/components/Breadcrumb";
 import { Description } from "@/components/i18n/Description";
+import { useCurrentLang } from "@/lib/i18n/use-lang";
+import type { Lang } from "@/lib/i18n/lang";
 
 /**
  * Default poster dimensions for vertical clip thumbnails when the
@@ -91,6 +94,27 @@ const FIGHT_TYPE_LABELS: Record<string, string> = {
   teamfight_5v5: "TF 5v5",
 };
 
+/**
+ * The description text a card actually renders for the active language,
+ * mirroring <Description>'s pick(): localized → French → legacy. The search
+ * filter matches against this so a non-FR user can find a word visible in
+ * the displayed (localized) description, not just the base ai_description.
+ */
+function cardDescription(card: ClipCard, lang: Lang): string {
+  const localized =
+    lang === "fr" ? card.aiDescriptionFr :
+    lang === "en" ? card.aiDescriptionEn :
+    lang === "ko" ? card.aiDescriptionKo :
+    lang === "es" ? card.aiDescriptionEs :
+    null;
+  return (
+    (localized && localized.trim()) ||
+    (card.aiDescriptionFr && card.aiDescriptionFr.trim()) ||
+    (card.aiDescription && card.aiDescription.trim()) ||
+    ""
+  );
+}
+
 export function ClipsGrid({ initialCards, initialFilters }: { initialCards: ClipCard[]; initialFilters?: InitialFilters }) {
   const [sortKey, setSortKey] = useState<SortKey>(initialFilters?.sort ?? "recent");
   const [opponentFilter, setOpponentFilter] = useState<string | null>(initialFilters?.opponent ?? null);
@@ -99,6 +123,40 @@ export function ClipsGrid({ initialCards, initialFilters }: { initialCards: Clip
   const [firstBloodOnly, setFirstBloodOnly] = useState(initialFilters?.firstBloodOnly ?? false);
   const [search, setSearch] = useState(initialFilters?.search ?? "");
   const [visibleCount, setVisibleCount] = useState(60);
+
+  // Active language drives which ai_description_* field each card renders;
+  // the search filter matches that same localized text (see cardDescription).
+  const lang = useCurrentLang();
+
+  // Sync filter/sort/search state to the URL so /clips views are
+  // bookmarkable, shareable and back-button-restorable. The server
+  // page.tsx parses exactly these keys (multi/fb/fight/opp/sort/q) into
+  // initialFilters, so the round-trip is lossless. Debounced (200ms) to
+  // avoid a history entry per keystroke; router.replace keeps it out of
+  // the back-stack and scroll:false preserves the grid position.
+  const router = useRouter();
+  const pathname = usePathname();
+  const didMount = useRef(false);
+  useEffect(() => {
+    // Skip the very first run so we don't immediately rewrite the URL the
+    // server already seeded from.
+    if (!didMount.current) {
+      didMount.current = true;
+      return;
+    }
+    const t = setTimeout(() => {
+      const params = new URLSearchParams();
+      if (multiKillsOnly) params.set("multi", "1");
+      if (firstBloodOnly) params.set("fb", "1");
+      if (fightTypeFilter) params.set("fight", fightTypeFilter);
+      if (opponentFilter) params.set("opp", opponentFilter);
+      if (sortKey !== "recent") params.set("sort", sortKey);
+      if (search.trim()) params.set("q", search.trim());
+      const qs = params.toString();
+      router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+    }, 200);
+    return () => clearTimeout(t);
+  }, [router, pathname, sortKey, opponentFilter, fightTypeFilter, multiKillsOnly, firstBloodOnly, search]);
 
   // Distinct opponents for the chip bar
   const opponents = useMemo(() => {
@@ -132,7 +190,7 @@ export function ClipsGrid({ initialCards, initialFilters }: { initialCards: Clip
         (c) =>
           c.killerChampion.toLowerCase().includes(q) ||
           c.victimChampion.toLowerCase().includes(q) ||
-          (c.aiDescription ?? "").toLowerCase().includes(q),
+          cardDescription(c, lang).toLowerCase().includes(q),
       );
     }
 
@@ -156,7 +214,7 @@ export function ClipsGrid({ initialCards, initialFilters }: { initialCards: Clip
     }
 
     return list;
-  }, [initialCards, sortKey, opponentFilter, fightTypeFilter, multiKillsOnly, firstBloodOnly, search]);
+  }, [initialCards, sortKey, opponentFilter, fightTypeFilter, multiKillsOnly, firstBloodOnly, search, lang]);
 
   const hasActiveFilter =
     opponentFilter || fightTypeFilter || multiKillsOnly || firstBloodOnly || search.trim();
@@ -208,6 +266,7 @@ export function ClipsGrid({ initialCards, initialFilters }: { initialCards: Clip
               setVisibleCount(60);
             }}
             placeholder="Filtrer par champion ou description..."
+            aria-label="Filtrer les clips par champion ou description"
             className="flex-1 rounded-lg border border-[var(--border-gold)] bg-[var(--bg-surface)] px-3 py-2 text-sm focus:border-[var(--gold)] outline-none"
           />
           <div className="flex gap-1">
@@ -215,6 +274,7 @@ export function ClipsGrid({ initialCards, initialFilters }: { initialCards: Clip
               <button
                 key={k}
                 onClick={() => setSortKey(k)}
+                aria-pressed={sortKey === k}
                 className={`rounded-lg border px-3 py-2 text-xs font-bold whitespace-nowrap transition-all ${
                   sortKey === k
                     ? "border-[var(--gold)] bg-[var(--gold)]/15 text-[var(--gold)]"
@@ -231,6 +291,7 @@ export function ClipsGrid({ initialCards, initialFilters }: { initialCards: Clip
         <div className="flex flex-wrap gap-1.5">
           <button
             onClick={() => setOpponentFilter(null)}
+            aria-pressed={!opponentFilter}
             className={`rounded-full px-3 py-1 text-xs font-bold border transition-all ${
               !opponentFilter
                 ? "border-[var(--gold)] bg-[var(--gold)]/20 text-[var(--gold)]"
@@ -243,6 +304,7 @@ export function ClipsGrid({ initialCards, initialFilters }: { initialCards: Clip
             <button
               key={code}
               onClick={() => setOpponentFilter(opponentFilter === code ? null : code)}
+              aria-pressed={opponentFilter === code}
               className={`flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-bold border transition-all ${
                 opponentFilter === code
                   ? "border-[var(--gold)] bg-[var(--gold)]/20 text-[var(--gold)]"
@@ -261,6 +323,7 @@ export function ClipsGrid({ initialCards, initialFilters }: { initialCards: Clip
         <div className="flex flex-wrap gap-1.5">
           <button
             onClick={() => setFightTypeFilter(null)}
+            aria-pressed={!fightTypeFilter}
             className={`rounded-full px-3 py-1 text-[10px] font-bold uppercase tracking-wider border transition-all ${
               !fightTypeFilter
                 ? "border-[var(--cyan)] bg-[var(--cyan)]/20 text-[var(--cyan)]"
@@ -273,6 +336,7 @@ export function ClipsGrid({ initialCards, initialFilters }: { initialCards: Clip
             <button
               key={ft}
               onClick={() => setFightTypeFilter(fightTypeFilter === ft ? null : ft)}
+              aria-pressed={fightTypeFilter === ft}
               className={`rounded-full px-3 py-1 text-[10px] font-bold uppercase tracking-wider border transition-all ${
                 fightTypeFilter === ft
                   ? "border-[var(--cyan)] bg-[var(--cyan)]/20 text-[var(--cyan)]"
@@ -284,6 +348,7 @@ export function ClipsGrid({ initialCards, initialFilters }: { initialCards: Clip
           ))}
           <button
             onClick={() => setMultiKillsOnly((v) => !v)}
+            aria-pressed={multiKillsOnly}
             className={`rounded-full px-3 py-1 text-[10px] font-bold uppercase tracking-wider border transition-all ${
               multiKillsOnly
                 ? "border-[var(--orange)] bg-[var(--orange)]/20 text-[var(--orange)]"
@@ -294,6 +359,7 @@ export function ClipsGrid({ initialCards, initialFilters }: { initialCards: Clip
           </button>
           <button
             onClick={() => setFirstBloodOnly((v) => !v)}
+            aria-pressed={firstBloodOnly}
             className={`rounded-full px-3 py-1 text-[10px] font-bold uppercase tracking-wider border transition-all ${
               firstBloodOnly
                 ? "border-[var(--red)] bg-[var(--red)]/20 text-[var(--red)]"
@@ -350,9 +416,14 @@ function ClipCardComponent({ card }: { card: ClipCard }) {
   // gracefully (shows the stats card).
   const href = card.isDataOnly ? `/kill/${card.id}` : `/scroll?kill=${card.id}`;
 
+  // Mandated accessible kill phrasing — "{champion} élimine {champion}".
+  // Reused for both the card link's accessible name and the thumbnail alt.
+  const killAlt = `${card.killerChampion} élimine ${card.victimChampion}`;
+
   return (
     <Link
       href={href}
+      aria-label={killAlt}
       className={`group relative flex flex-col overflow-hidden rounded-xl border bg-[var(--bg-surface)] hover:border-[var(--gold)]/60 hover:-translate-y-0.5 transition-all ${
         card.isDataOnly
           ? "border-[var(--border-subtle)]"
@@ -375,7 +446,7 @@ function ClipCardComponent({ card }: { card: ClipCard }) {
         {card.thumbnail ? (
           <Image
             src={card.thumbnail}
-            alt={`${card.killerChampion} → ${card.victimChampion}`}
+            alt={killAlt}
             fill
             // Sizes hint matches the responsive grid breakpoints (50vw
             // mobile, 25vw tablet, 16vw desktop). next/image still

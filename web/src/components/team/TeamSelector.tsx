@@ -33,7 +33,7 @@
 import { useState, useEffect, useRef, useMemo, useCallback, useId } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { motion, AnimatePresence } from "motion/react";
+import { m, AnimatePresence } from "motion/react";
 
 interface WireTeam {
   slug: string;
@@ -285,20 +285,20 @@ export function TeamSelector({
       {/* ─── MOBILE BOTTOM SHEET ────────────────────────────────── */}
       <AnimatePresence>
         {isMobile && open && (
-          <motion.div
+          <m.div
             className="fixed inset-0 z-[400]"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
           >
-            <motion.div
+            <m.div
               className="absolute inset-0 bg-black/60 backdrop-blur-[3px]"
               onClick={() => setOpen(false)}
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
             />
-            <motion.div
+            <m.div
               role="dialog"
               aria-modal="true"
               aria-labelledby={headingId}
@@ -363,8 +363,8 @@ export function TeamSelector({
                 onSelect={navigateToTeam}
                 onMouseEnter={(i) => setActiveIndex(i)}
               />
-            </motion.div>
-          </motion.div>
+            </m.div>
+          </m.div>
         )}
       </AnimatePresence>
     </div>

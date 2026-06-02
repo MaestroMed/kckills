@@ -58,7 +58,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const row = await getCompilationByShortCode(shortCode, { buildTime: true });
   if (!row) {
     return {
-      title: "Compilation introuvable — KCKILLS",
+      title: "Compilation introuvable",
       robots: { index: false, follow: false },
     };
   }

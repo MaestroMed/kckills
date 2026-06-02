@@ -5,9 +5,10 @@
  *
  * Two side-by-side leaderboards :
  *   • "Champions KC favoris" — top 10 champions PICKED by KC players,
- *     ordered by games played. Click → /scroll?killerChampion=X.
+ *     ordered by games played. Click → /champion/X.
  *   • "Cibles préférées"     — top 10 ENEMY champions KC has eliminated
- *     most often. Click → /scroll?victimChampion=X.
+ *     most often. Click → /champion/X (the route serves both killer and
+ *     victim clips for that champion).
  *
  * Animated horizontal bars (gold for picks, cyan for kills) grow from
  * 0 → 100% on scroll-into-view. Hover lifts the row and saturates the
@@ -123,14 +124,14 @@ export function ChampionLadders({ matches, top = 10 }: Props) {
           subtitle="Triés par games jouées"
           rows={picked}
           tone="gold"
-          linkPrefix="/scroll?killerChampion="
+          linkPrefix="/champion/"
         />
         <Ladder
           title="Cibles préférées"
           subtitle="Adversaires qui meurent le plus"
           rows={victims}
           tone="cyan"
-          linkPrefix="/scroll?victimChampion="
+          linkPrefix="/champion/"
         />
       </div>
     </section>

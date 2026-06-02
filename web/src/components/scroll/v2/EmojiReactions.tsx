@@ -20,7 +20,7 @@
  */
 
 import { useEffect, useRef, useState } from "react";
-import { motion, AnimatePresence } from "motion/react";
+import { m, AnimatePresence } from "motion/react";
 import { track } from "@/lib/analytics/track";
 
 const EMOJIS = ["🔥", "👏", "😂", "😱", "💀", "🐐"] as const;
@@ -143,7 +143,7 @@ export function EmojiReactions({ killId, visible }: Props) {
       {/* Palette */}
       <AnimatePresence>
         {open && (
-          <motion.div
+          <m.div
             role="menu"
             aria-label="Choisir une réaction"
             initial={{ opacity: 0, scale: 0.85, y: 10 }}
@@ -166,14 +166,14 @@ export function EmojiReactions({ killId, visible }: Props) {
                 {e}
               </button>
             ))}
-          </motion.div>
+          </m.div>
         )}
       </AnimatePresence>
 
       {/* Floating bursts — drift up + fade */}
       <AnimatePresence>
         {bursts.map((b) => (
-          <motion.span
+          <m.span
             key={b.id}
             className="pointer-events-none absolute right-3 bottom-12 text-2xl"
             initial={{ opacity: 0, y: 0, scale: 0.6 }}
@@ -187,7 +187,7 @@ export function EmojiReactions({ killId, visible }: Props) {
             aria-hidden
           >
             {b.emoji}
-          </motion.span>
+          </m.span>
         ))}
       </AnimatePresence>
     </div>

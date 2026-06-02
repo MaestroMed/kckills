@@ -18,7 +18,7 @@
 
 import { useState, useEffect } from "react";
 import Image from "next/image";
-import { motion, AnimatePresence } from "motion/react";
+import { m, AnimatePresence } from "motion/react";
 import { useAffinityStore } from "./hooks/useAffinityStore";
 import { track } from "@/lib/analytics/track";
 
@@ -118,7 +118,7 @@ export function OnboardingModal({ roster }: Props) {
   return (
     <AnimatePresence>
       {open && (
-        <motion.div
+        <m.div
           role="dialog"
           aria-modal="true"
           aria-label="Choisis tes joueurs favoris"
@@ -132,7 +132,7 @@ export function OnboardingModal({ roster }: Props) {
             className="absolute inset-0 bg-black/80 backdrop-blur-md"
             onClick={skip}
           />
-          <motion.div
+          <m.div
             initial={{ y: 60, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: 60, opacity: 0 }}
@@ -226,8 +226,8 @@ export function OnboardingModal({ roster }: Props) {
                   : `Valider (${picked.size})`}
               </button>
             </div>
-          </motion.div>
-        </motion.div>
+          </m.div>
+        </m.div>
       )}
     </AnimatePresence>
   );

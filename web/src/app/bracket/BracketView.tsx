@@ -31,6 +31,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { m, AnimatePresence, useReducedMotion } from "motion/react";
+import { Check, Crown, Swords } from "lucide-react";
 
 import { createClient } from "@/lib/supabase/client";
 import type {
@@ -683,7 +684,7 @@ function MatchCard({
     >
       {/* Match index micro-label */}
       <div className="flex items-center justify-between px-3 pt-2 pb-1.5">
-        <span className="font-data text-[9px] uppercase tracking-[0.25em] text-white/40">
+        <span className="font-data text-[9px] uppercase tracking-[0.25em] text-[var(--text-muted)]">
           Match #{match.match_index + 1}
         </span>
         {voted && (
@@ -1011,7 +1012,7 @@ function VoteModal({
             type="button"
             onClick={onClose}
             aria-label="Fermer"
-            className="rounded-lg border border-white/15 bg-black/30 px-3 py-1.5 font-data text-xs uppercase tracking-widest text-white/65 hover:border-white/40 hover:text-white transition-colors"
+            className="rounded-lg border border-white/15 bg-black/30 px-3 py-1.5 font-data text-xs uppercase tracking-widest text-[var(--text-muted)] hover:border-white/40 hover:text-white transition-colors"
           >
             Fermer ✕
           </button>
@@ -1071,10 +1072,11 @@ function VoteModal({
         {(voted != null || alreadyVoted) && (
           <div className="px-5 pb-5">
             <div className="rounded-xl bg-black/30 border border-[var(--gold)]/30 p-4 text-center">
-              <p className="font-data text-[10px] uppercase tracking-[0.3em] text-[var(--gold)] mb-1">
-                ✓ Vote enregistré
+              <p className="font-data text-[10px] uppercase tracking-[0.3em] text-[var(--gold)] mb-1 inline-flex items-center justify-center gap-1.5">
+                <Check size={11} strokeWidth={3} aria-hidden />
+                Vote enregistré
               </p>
-              <p className="text-sm text-white/75">
+              <p className="text-sm text-[var(--text-secondary)]">
                 {voted != null
                   ? "Reviens demain pour le prochain round du tournoi."
                   : "Tu as déjà voté sur ce match — reviens demain pour la suite."}
@@ -1083,7 +1085,7 @@ function VoteModal({
                 <button
                   type="button"
                   onClick={onClose}
-                  className="rounded-lg border border-white/20 bg-black/30 px-4 py-2 font-display text-[10px] font-bold uppercase tracking-[0.25em] text-white/75 hover:border-white/45 hover:text-white transition-colors"
+                  className="rounded-lg border border-white/20 bg-black/30 px-4 py-2 font-display text-[10px] font-bold uppercase tracking-[0.25em] text-[var(--text-secondary)] hover:border-white/45 hover:text-white transition-colors"
                   aria-label="Continuer à explorer le bracket"
                 >
                   Continuer le bracket
@@ -1189,7 +1191,7 @@ function ModalClipPanel({
         ) : thumb ? (
           <Image src={thumb} alt={`Clip ${label}`} fill sizes="(max-width: 768px) 50vw, 400px" className="object-cover" />
         ) : (
-          <div className="absolute inset-0 flex items-center justify-center text-white/35 text-xs">
+          <div className="absolute inset-0 flex items-center justify-center text-[var(--text-muted)] text-xs">
             Clip indisponible
           </div>
         )}
@@ -1237,7 +1239,7 @@ function ModalClipPanel({
       </div>
 
       <div className="px-3 py-3 border-t border-white/10 flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2 font-data text-[10px] uppercase tracking-widest text-white/45">
+        <div className="flex items-center gap-2 font-data text-[10px] uppercase tracking-widest text-[var(--text-muted)]">
           {typeof highlightScore === "number" && (
             <span className="text-[var(--gold)]">IA {highlightScore.toFixed(1)}</span>
           )}
@@ -1260,7 +1262,7 @@ function ModalClipPanel({
         onClick={onVote}
         disabled={disabled || alreadyVotedOnce}
         aria-label={`Voter pour ${killerName ?? killerChampion ?? "ce clip"}`}
-        className="w-full py-3 font-display text-xs font-black uppercase tracking-[0.25em] border-t transition-all disabled:cursor-not-allowed"
+        className="w-full py-3 font-display text-xs font-black uppercase tracking-[0.25em] border-t transition-all disabled:cursor-not-allowed inline-flex items-center justify-center gap-1.5"
         style={{
           background: voted
             ? `linear-gradient(135deg, var(--gold-bright), var(--gold))`
@@ -1272,7 +1274,16 @@ function ModalClipPanel({
           opacity: alreadyVotedOnce && !voted ? 0.45 : 1,
         }}
       >
-        {voted ? "✓ Tu as voté ici" : alreadyVotedOnce ? "Vote déjà placé" : "Celui-ci"}
+        {voted ? (
+          <>
+            <Check size={13} strokeWidth={3} aria-hidden />
+            Tu as voté ici
+          </>
+        ) : alreadyVotedOnce ? (
+          "Vote déjà placé"
+        ) : (
+          "Celui-ci"
+        )}
       </button>
     </m.div>
   );
@@ -1294,52 +1305,48 @@ function PastWinnersGallery({
   return (
     <section
       aria-labelledby="bracket-past-winners"
-      className="mx-auto max-w-6xl px-4 md:px-6 pb-16 pt-8 md:pt-12"
+      className="mx-auto max-w-7xl px-4 md:px-6 pb-16 pt-8 md:pt-12"
     >
       <div className="flex items-center gap-3 mb-6" id="bracket-past-winners">
-        <span className="h-px w-12 bg-[var(--gold)]" />
+        <Losange small />
         <span className="font-data text-[10px] uppercase tracking-[0.3em] font-bold text-[var(--gold)]">
           Galerie des GOATs
         </span>
-        <span className="text-[var(--gold)]/40 text-xs" aria-hidden>
-          ◆
-        </span>
+        <span className="gold-line flex-1 opacity-50" aria-hidden />
       </div>
-      <div className="flex gap-3 md:gap-4 overflow-x-auto pb-3" style={{ scrollSnapType: "x mandatory" }}>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 md:gap-4">
         {filtered.map((w) => (
           <Link
             key={w.tournament_id}
             href={`/bracket/${w.slug}`}
-            className="group flex-shrink-0 rounded-2xl border border-[var(--border-gold)] bg-[var(--bg-surface)]/70 backdrop-blur-md overflow-hidden transition-all hover:border-[var(--gold)]/70 hover:-translate-y-0.5"
-            style={{
-              width: 220,
-              scrollSnapAlign: "start",
-              boxShadow: "0 12px 28px rgba(0,0,0,0.4)",
-            }}
+            className="glass group relative rounded-2xl border border-[var(--border-gold)] overflow-hidden transition-all hover:border-[var(--gold)]/70 hover:-translate-y-0.5 hover:gold-glow"
+            style={{ boxShadow: "0 12px 28px rgba(0,0,0,0.4)" }}
             aria-label={`Voir le bracket ${w.name}`}
           >
+            <CornerLosange position="tr" />
             <div className="relative bg-black/40" style={{ aspectRatio: "16 / 9" }}>
               {w.champion_thumbnail ? (
                 <Image
                   src={w.champion_thumbnail}
                   alt={`Champion ${w.name}`}
                   fill
-                  sizes="220px"
+                  sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, (max-width: 1280px) 33vw, 25vw"
                   className="object-cover group-hover:scale-105 transition-transform"
                 />
               ) : (
-                <div className="absolute inset-0 flex items-center justify-center text-white/30 font-display text-3xl">
-                  ♛
+                <div className="absolute inset-0 flex items-center justify-center text-[var(--gold)]/25">
+                  <Crown size={36} strokeWidth={1.5} aria-hidden />
                 </div>
               )}
               <span
-                className="absolute top-2 left-2 rounded-md px-1.5 py-0.5 text-[9px] font-data font-black uppercase tracking-widest"
+                className="absolute top-2 left-2 inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[9px] font-data font-black uppercase tracking-widest"
                 style={{
                   color: "var(--bg-primary)",
                   background: "linear-gradient(135deg, var(--gold-bright), var(--gold))",
                 }}
               >
-                ♛ GOAT
+                <Crown size={10} strokeWidth={2.5} aria-hidden />
+                GOAT
               </span>
             </div>
             <div className="px-3 py-3">
@@ -1349,7 +1356,7 @@ function PastWinnersGallery({
               <p className="mt-1 font-display text-sm font-black text-[var(--text-primary)] leading-tight truncate">
                 {w.champion_killer_name ?? w.champion_killer_champion ?? "—"}
               </p>
-              <p className="font-data text-[10px] uppercase tracking-widest text-white/45 truncate">
+              <p className="font-data text-[10px] uppercase tracking-widest text-[var(--text-muted)] truncate">
                 {w.champion_killer_champion ?? "?"}
                 {w.champion_victim_champion ? <> · vs {w.champion_victim_champion}</> : null}
               </p>
@@ -1398,4 +1405,57 @@ function formatRelative(iso: string): string {
   } catch {
     return "bientôt";
   }
+}
+
+// ════════════════════════════════════════════════════════════════════
+// Hextech ornaments — losange marks (mirrors VSRoulette / Atrium)
+// ════════════════════════════════════════════════════════════════════
+
+/** Inline gold rhombus used to lead eyebrows + section labels. */
+function Losange({ small }: { small?: boolean } = {}) {
+  const size = small ? 8 : 14;
+  return (
+    <span
+      aria-hidden
+      className="inline-block flex-shrink-0"
+      style={{
+        width: size,
+        height: size,
+        transform: "rotate(45deg)",
+        background: "linear-gradient(135deg, var(--gold-bright), var(--gold))",
+        boxShadow: "0 0 14px rgba(200,170,110,0.5)",
+      }}
+    />
+  );
+}
+
+/** Absolutely-positioned corner accent for the primary hextech cards. */
+function CornerLosange({
+  position,
+  gold,
+}: {
+  position: "tl" | "tr" | "bl" | "br";
+  gold?: boolean;
+}) {
+  const map: Record<string, string> = {
+    tl: "top-2 left-2",
+    tr: "top-2 right-2",
+    bl: "bottom-2 left-2",
+    br: "bottom-2 right-2",
+  };
+  return (
+    <span
+      aria-hidden
+      className={`absolute z-10 ${map[position]}`}
+      style={{
+        width: 8,
+        height: 8,
+        transform: "rotate(45deg)",
+        background: gold
+          ? "linear-gradient(135deg, var(--gold-bright), var(--gold))"
+          : "rgba(200,170,110,0.5)",
+        boxShadow: gold ? "0 0 10px rgba(200,170,110,0.6)" : undefined,
+      }}
+    />
+  );
 }

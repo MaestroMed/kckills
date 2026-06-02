@@ -27,7 +27,7 @@
  */
 
 import { useEffect, useRef, useState } from "react";
-import { motion, AnimatePresence } from "motion/react";
+import { m, AnimatePresence } from "motion/react";
 import { track } from "@/lib/analytics/track";
 
 /**
@@ -76,7 +76,7 @@ export function OfflineBanner() {
   return (
     <AnimatePresence>
       {isOffline && (
-        <motion.div
+        <m.div
           key="offline-banner"
           role="status"
           aria-live="polite"
@@ -103,7 +103,7 @@ export function OfflineBanner() {
               </span>
             </p>
           </div>
-        </motion.div>
+        </m.div>
       )}
     </AnimatePresence>
   );

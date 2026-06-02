@@ -77,14 +77,22 @@ export default async function BracketPage() {
 
       <nav
         aria-label="Fil d'Ariane"
-        className="mx-auto max-w-6xl px-5 pt-6 flex items-center justify-start gap-2 text-xs text-white/55"
+        className="mx-auto max-w-7xl px-5 pt-6 flex items-center justify-start gap-2 text-xs text-[var(--text-muted)]"
       >
         <Link href="/" className="hover:text-[var(--gold)] transition-colors">
           Accueil
         </Link>
-        <span aria-hidden className="text-white/25">
-          ◆
-        </span>
+        <span
+          aria-hidden
+          className="inline-block"
+          style={{
+            width: 5,
+            height: 5,
+            transform: "rotate(45deg)",
+            background: "var(--gold)",
+            opacity: 0.5,
+          }}
+        />
         <span className="text-[var(--gold)]">Tournoi du Mois</span>
       </nav>
 
@@ -92,7 +100,7 @@ export default async function BracketPage() {
 
       <p
         aria-label="Riot Games disclaimer"
-        className="px-4 pb-6 text-center text-[9px] uppercase tracking-widest text-white/30"
+        className="px-4 pb-6 text-center text-[9px] uppercase tracking-widest text-[var(--text-muted)]"
       >
         Not endorsed by Riot Games. League of Legends © Riot Games.
       </p>

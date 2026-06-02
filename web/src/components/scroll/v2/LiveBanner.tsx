@@ -25,7 +25,7 @@
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
-import { motion, useReducedMotion } from "motion/react";
+import { m, useReducedMotion } from "motion/react";
 import { useLiveViewerCount } from "./hooks/useLiveViewerCount";
 
 interface Props {
@@ -78,7 +78,7 @@ export function LiveBanner({ isLive, matchId, opponentCode, gameNumber, onTap }:
       {/* Pulsing dot — gold-outlined, always animating (the spec calls for
           it to remain even with prefers-reduced-motion). */}
       <div className="flex items-center pl-3 shrink-0">
-        <motion.span
+        <m.span
           className="block h-2.5 w-2.5 rounded-full bg-white"
           style={{ boxShadow: "0 0 0 2px rgba(200,170,110,0.6)" }}
           animate={
@@ -100,7 +100,7 @@ export function LiveBanner({ isLive, matchId, opponentCode, gameNumber, onTap }:
             {label}
           </span>
         ) : (
-          <motion.span
+          <m.span
             className="inline-block font-display text-sm font-bold uppercase tracking-widest"
             initial={{ x: "0%" }}
             animate={{ x: "-50%" }}
@@ -115,7 +115,7 @@ export function LiveBanner({ isLive, matchId, opponentCode, gameNumber, onTap }:
                 second copy is exactly aligned at the original 0%. */}
             <span>{marqueeText}</span>
             <span>{marqueeText}</span>
-          </motion.span>
+          </m.span>
         )}
       </div>
 

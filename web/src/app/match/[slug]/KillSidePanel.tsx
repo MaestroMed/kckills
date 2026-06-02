@@ -37,7 +37,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { AnimatePresence, motion } from "motion/react";
+import { AnimatePresence, m } from "motion/react";
 import {
   pickAssetUrl,
   pickBestForViewport,
@@ -241,7 +241,7 @@ export function KillSidePanel({
   return (
     <AnimatePresence>
       {open && kill ? (
-        <motion.div
+        <m.div
           key="kill-side-overlay"
           className="fixed inset-0 z-[70] bg-black/70 backdrop-blur-sm"
           initial={overlay.initial}
@@ -249,7 +249,7 @@ export function KillSidePanel({
           exit={overlay.exit}
           onClick={onClose}
         >
-          <motion.aside
+          <m.aside
             key="kill-side-panel"
             ref={dialogRef}
             role="dialog"
@@ -553,8 +553,8 @@ export function KillSidePanel({
                 />
               </div>
             </div>
-          </motion.aside>
-        </motion.div>
+          </m.aside>
+        </m.div>
       ) : null}
     </AnimatePresence>
   );

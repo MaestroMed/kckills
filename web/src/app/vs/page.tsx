@@ -43,7 +43,7 @@ import { JsonLd, breadcrumbLD } from "@/lib/seo/jsonld";
 export const revalidate = 1800;
 
 export const metadata: Metadata = {
-  title: "VS Roulette — KCKILLS",
+  title: "VS Roulette",
   description:
     "Vote pour le meilleur kill Karmine Corp. Filtre par joueur, champion, époque, type de kill — la roulette pioche deux clips, à toi de trancher. ELO communautaire en temps réel.",
   alternates: { canonical: "/vs" },
@@ -263,7 +263,7 @@ export default async function VSPage() {
       {/* ─── Disclaimer Riot — required on every public page ────── */}
       <p
         aria-label="Riot Games disclaimer"
-        className="px-4 pb-6 text-center text-[9px] uppercase tracking-widest text-white/30"
+        className="px-4 pb-6 text-center text-[9px] uppercase tracking-widest text-[var(--text-muted)]"
       >
         Not endorsed by Riot Games. League of Legends © Riot Games.
       </p>

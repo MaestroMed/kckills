@@ -1,29 +1,27 @@
 import Link from "next/link";
 import Image from "next/image";
-import { getPublishedKills } from "@/lib/supabase/kills";
+import { getRecentPublishedKills } from "@/lib/supabase/kills";
 import { TEAM_LOGOS } from "@/lib/kc-assets";
 import { championIconUrl } from "@/lib/constants";
 
 /**
- * HomeRecentClips — horizontal strip of the 6 most recent clips.
+ * HomeRecentClips — horizontal strip of the 8 most recent clips.
  * Server component. Hidden if no clips are available.
  *
  * Each card shows: thumbnail, opponent badge, killer→victim, score.
  * Click → /scroll?kill=<id> to open in TikTok feed.
+ *
+ * Wave 36 audit fix : sources from getRecentPublishedKills (created_at
+ * DESC) instead of getPublishedKills (highlight_score DESC) + client
+ * re-sort — genuinely new low-score clips now appear, so the "{n}
+ * récents" label is truthful.
  */
 export async function HomeRecentClips() {
   // buildTime: true uses the cookie-less anon Supabase client to keep the
   // host page cacheable (cookies() opts into dynamic rendering otherwise).
-  const allKills = await getPublishedKills(100, { buildTime: true });
-  const cards = allKills
-    .filter((k) =>
-      k.tracked_team_involvement === "team_killer" &&
-      k.kill_visible !== false &&
-      k.clip_url_vertical &&
-      k.thumbnail_url,
-    )
-    .sort((a, b) => (b.created_at ?? "").localeCompare(a.created_at ?? ""))
-    .slice(0, 8);
+  // The loader already orders by recency and filters to team_killer +
+  // visible + has-clip server-side, so we fetch exactly the 8 we render.
+  const cards = await getRecentPublishedKills(8, { buildTime: true });
 
   if (cards.length === 0) return null;
 

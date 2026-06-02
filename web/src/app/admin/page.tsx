@@ -15,7 +15,7 @@ import { createServerSupabase } from "@/lib/supabase/server";
 import { LiveDashboard } from "@/components/admin/LiveDashboard";
 
 export const metadata: Metadata = {
-  title: "Admin Dashboard — KCKILLS",
+  title: "Admin Dashboard",
   robots: { index: false, follow: false },
 };
 

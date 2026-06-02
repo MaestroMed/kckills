@@ -37,12 +37,25 @@ interface LiveStatePayload {
 
 const POLL_MS = 10_000;
 
+// Hard cap on the rendered kill list. A long BO5 can produce 100+ kills;
+// keeping every row mounted (each with an AnimatePresence node + Image)
+// grows the DOM and memory unbounded on a lean-back tab. 40 covers the
+// full current game plus recent history while staying cheap.
+const MAX_RENDERED_KILLS = 40;
+
 export function LiveScroll({ initialMatch, initialKills, initialScore }: Props) {
   const reducedMotion = useReducedMotion();
   const [match, setMatch] = useState<LiveMatchRow | null>(initialMatch);
   const [kills, setKills] = useState<LiveKillRow[]>(initialKills);
   const [score, setScore] = useState<{ kc: number; opp: number }>(initialScore);
   const [now, setNow] = useState<number>(() => Date.now());
+
+  // Tracks every kill id we've ever ingested so dedup stays correct even
+  // after the 40-row render cap drops old kills, and so score deltas are
+  // computed exactly once per kill (the merge updater itself stays pure —
+  // no setState nested inside it, which would double-count under React's
+  // strict-mode double-invocation).
+  const seenIdsRef = useRef<Set<string>>(new Set(initialKills.map((k) => k.id)));
 
   const heroKill = kills[0] ?? null;
 
@@ -55,24 +68,12 @@ export function LiveScroll({ initialMatch, initialKills, initialScore }: Props) 
   // ─── Polling loop with delta queries ─────────────────────────────
   useEffect(() => {
     let cancelled = false;
+    let ended = false;
     let timeoutId: number | null = null;
     let controller: AbortController | null = null;
 
-    const fetchInitialScore = async () => {
-      try {
-        const res = await fetch("/api/live/state");
-        if (!res.ok) return;
-        const data = (await res.json()) as LiveStatePayload;
-        if (cancelled) return;
-        if (data.liveMatch) {
-          setMatch(data.liveMatch);
-          setScore(data.score);
-        }
-      } catch { /* noop */ }
-    };
-
     const tick = async () => {
-      if (cancelled) return;
+      if (cancelled || ended) return;
       if (controller) controller.abort();
       const ac = new AbortController();
       controller = ac;
@@ -93,30 +94,50 @@ export function LiveScroll({ initialMatch, initialKills, initialScore }: Props) 
         const data = (await res.json()) as LiveStatePayload;
         if (cancelled) return;
         if (!data.liveMatch) {
-          // Match ended — flip to off-live mode. We keep the kills
-          // we already have so the page doesn't go blank.
+          // Match ended — flip to off-live mode and STOP polling. We
+          // keep the kills we already have so the page doesn't go blank.
+          // Setting `ended` here prevents the finally block (and any
+          // forgotten tab) from re-arming the timer forever.
+          ended = true;
           setMatch(null);
           return;
         }
         setMatch(data.liveMatch);
-        if (data.recentKills.length > 0) {
-          setKills((prev) => {
-            // Merge new kills at the head, dedup by id.
-            const seen = new Set(prev.map((k) => k.id));
-            const fresh = data.recentKills.filter((k) => !seen.has(k.id));
-            if (fresh.length === 0) return prev;
-            return [...fresh, ...prev];
-          });
-          // Also refresh score whenever we got fresh kills.
-          void fetchInitialScore();
+        // Dedup against every kill ever seen (ref survives the render cap),
+        // then apply both state updates from pure data computed here — no
+        // setState nested inside another updater.
+        const fresh = data.recentKills.filter((k) => !seenIdsRef.current.has(k.id));
+        if (fresh.length > 0) {
+          for (const k of fresh) seenIdsRef.current.add(k.id);
+          // Derive the running score from the fresh kill deltas instead of
+          // firing a second full /api/live/state read per tick. The delta
+          // endpoint already skips the score query (returns 0/0), and the
+          // worker tags each kill's tracked_team_involvement — the exact
+          // field getLiveMatchScore() counts server-side.
+          let kcDelta = 0;
+          let oppDelta = 0;
+          for (const k of fresh) {
+            if (k.tracked_team_involvement === "team_killer") kcDelta += 1;
+            else if (k.tracked_team_involvement === "team_victim") oppDelta += 1;
+          }
+          if (kcDelta || oppDelta) {
+            setScore((s) => ({ kc: s.kc + kcDelta, opp: s.opp + oppDelta }));
+          }
+          // Cap the rendered window — deltas above counted every fresh kill,
+          // so trimming old rows here doesn't skew the score.
+          setKills((prev) => [...fresh, ...prev].slice(0, MAX_RENDERED_KILLS));
         }
       } catch (err) {
         if ((err as { name?: string })?.name !== "AbortError") {
           console.warn("[LiveScroll] poll failed:", err);
         }
       } finally {
-        if (cancelled) return;
-        timeoutId = window.setTimeout(tick, POLL_MS);
+        // Only re-arm while the match is still live and the component is
+        // mounted. When `ended` flipped (liveMatch === null) we let the
+        // loop die so forgotten tabs stop draining Supabase reads.
+        if (!cancelled && !ended) {
+          timeoutId = window.setTimeout(tick, POLL_MS);
+        }
       }
     };
 
@@ -268,7 +289,6 @@ export function LiveScroll({ initialMatch, initialKills, initialScore }: Props) 
             {kills.map((kill) => (
               <m.li
                 key={kill.id}
-                layout={!reducedMotion}
                 initial={
                   reducedMotion
                     ? { opacity: 0 }

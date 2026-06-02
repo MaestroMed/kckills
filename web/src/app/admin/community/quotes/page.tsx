@@ -17,7 +17,7 @@ import { QuoteRowActions } from "@/components/admin/quotes/QuoteRowActions";
 import { createServerSupabase } from "@/lib/supabase/server";
 
 export const metadata: Metadata = {
-  title: "Quotes Admin — KCKILLS",
+  title: "Quotes Admin",
   robots: { index: false, follow: false },
 };
 

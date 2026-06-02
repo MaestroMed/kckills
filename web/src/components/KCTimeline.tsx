@@ -214,6 +214,23 @@ export function KCTimeline({
     }
   }, []);
 
+  // Shared activation logic for a card, by era id. Used by both the click
+  // delegation below and the per-card keyboard handler (Enter / Space), so
+  // mouse and keyboard users trigger identical behaviour.
+  const activateEra = useCallback(
+    (eraId: string) => {
+      if (mode === "filter") {
+        if (!onEraSelect) return;
+        // Toggle : activating the active card again clears the filter.
+        const next = selectedEraId === eraId ? null : eraId;
+        onEraSelect(next);
+      } else {
+        router.push(`/era/${eraId}`);
+      }
+    },
+    [router, mode, selectedEraId, onEraSelect],
+  );
+
   // Click delegation: find the closest data-era-id ancestor and navigate
   // (mode="navigate") OR fire the filter callback (mode="filter").
   // Re-clicking the active card in filter mode clears the filter.
@@ -225,22 +242,30 @@ export function KCTimeline({
       if (!card) return;
       const eraId = card.dataset.eraId;
       if (!eraId) return;
-      if (mode === "filter") {
-        if (!onEraSelect) return;
-        // Toggle : clicking the active card again clears the filter.
-        const next = selectedEraId === eraId ? null : eraId;
-        onEraSelect(next);
-      } else {
-        router.push(`/era/${eraId}`);
-      }
+      activateEra(eraId);
     },
-    [router, mode, selectedEraId, onEraSelect],
+    [activateEra],
   );
 
-  // Keyboard navigation. ArrowLeft/Right scroll the strip horizontally
-  // (and in filter mode, also cycle the active era). Enter / Space on a
-  // focused card triggers the same action as a click. Escape clears the
-  // filter when one is active.
+  // Per-card keyboard activation. Each card is in the tab order
+  // (tabIndex={0}) and exposes role="button", so Enter / Space must mirror
+  // a click. We stop propagation so the keystroke doesn't also bubble to
+  // the container's ArrowLeft/Right handler.
+  const onCardKeyDown = useCallback(
+    (e: React.KeyboardEvent<HTMLDivElement>, eraId: string) => {
+      if (e.key === "Enter" || e.key === " " || e.key === "Spacebar") {
+        e.preventDefault();
+        e.stopPropagation();
+        activateEra(eraId);
+      }
+    },
+    [activateEra],
+  );
+
+  // Container keyboard navigation. ArrowLeft/Right scroll the strip
+  // horizontally (and in filter mode, also cycle the active era). Escape
+  // clears the filter when one is active. Enter / Space activation lives on
+  // the focused card itself via onCardKeyDown.
   const onKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLDivElement>) => {
       const el = containerRef.current;
@@ -362,8 +387,9 @@ export function KCTimeline({
               data-era-id={era.id}
               onMouseEnter={() => onCardHoverStart(era)}
               onMouseLeave={onCardHoverEnd}
+              onKeyDown={(e) => onCardKeyDown(e, era.id)}
               role="button"
-              tabIndex={-1}
+              tabIndex={0}
               aria-label={
                 mode === "filter"
                   ? `Filtrer par ${era.label}`
@@ -384,7 +410,7 @@ export function KCTimeline({
                 zIndex: hoverZ,
               }}
               transition={cardTransition}
-              className="era-card relative overflow-hidden rounded-2xl border-2 flex-shrink-0 cursor-pointer"
+              className="era-card relative overflow-hidden rounded-2xl border-2 flex-shrink-0 cursor-pointer focus-visible:outline-none focus-visible:[outline:2px_solid_var(--gold)] focus-visible:outline-offset-2"
               style={{
                 borderColor: isActiveFilter || isHovered ? era.color : "var(--border-gold)",
                 boxShadow:

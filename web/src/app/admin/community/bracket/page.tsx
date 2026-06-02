@@ -23,7 +23,7 @@ import {
 import { BracketAdminActions } from "@/components/admin/bracket/BracketAdminActions";
 
 export const metadata: Metadata = {
-  title: "Bracket Admin — KCKILLS",
+  title: "Bracket Admin",
   robots: { index: false, follow: false },
 };
 

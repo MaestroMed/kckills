@@ -1,6 +1,11 @@
 import type { NextConfig } from "next";
 import { withSentryConfig } from "@sentry/nextjs";
 
+// `next dev` sets NODE_ENV=development; `next build` / `next start` / Vercel
+// set production. Dev-only CSP relaxations are gated on this so the
+// production policy stays strict (no 'unsafe-eval' ever ships).
+const isDev = process.env.NODE_ENV !== "production";
+
 const securityHeaders = [
   { key: "X-Frame-Options", value: "DENY" },
   { key: "X-Content-Type-Options", value: "nosniff" },
@@ -16,7 +21,11 @@ const securityHeaders = [
       "default-src 'self'",
       // 'unsafe-inline' is required for Next 15's inline bootstrap script.
       // Nonce-based CSP would need middleware — out of scope for now.
-      // 'unsafe-eval' removed — Next 15 does not need it in production.
+      // 'unsafe-eval' is injected ONLY in development : React/Turbopack dev
+      // mode uses eval() for debugging features (callstack reconstruction
+      // across environments). It is NEVER used in production — "React will
+      // never use eval() in production mode" — so the prod CSP stays free of
+      // 'unsafe-eval'. This clears the dev-overlay "eval() not supported" error.
       //
       // www.youtube.com is needed for the IFrame API JS loaded by the
       // wolf floating player + the /scroll BgmPlayer (audio-only YouTube
@@ -24,7 +33,7 @@ const securityHeaders = [
       // https://www.youtube.com/iframe_api → window.YT never exists →
       // wolf head clicks produce no audio. www.gstatic.com covers the
       // www-widgetapi.js that the iframe_api loads as a follow-up.
-      "script-src 'self' 'unsafe-inline' https://vercel.live https://*.umami.is https://www.youtube.com https://www.gstatic.com",
+      `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ""} https://vercel.live https://*.umami.is https://www.youtube.com https://www.gstatic.com`,
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
       "font-src 'self' https://fonts.gstatic.com",
       "img-src 'self' data: blob: https://ddragon.leagueoflegends.com https://static.lolesports.com https://static.wikia.nocookie.net https://clips.kckills.com https://img.youtube.com https://i.ytimg.com https://*.r2.cloudflarestorage.com",

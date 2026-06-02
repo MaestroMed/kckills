@@ -4,31 +4,44 @@
  * FeedSidebarV2 — TikTok-style action rail anchored bottom-right of
  * each feed item.
  *
- * Replaces the v1 RightSidebar (Rate / Chat / Share / Detail). The
- * v2 lineup matches TikTok's mental model:
+ * Wave 37 — "BIG cream-gold rail" restyle. Two visual tiers, hextech:
  *
- *     [Like ❤]      heart toggle, optimistic, count below (LikeButton)
- *     [Comments]    bubble icon, count, opens CommentSheetV2
- *     [Share]       Web Share API with sheet fallback
- *     [Star]        kept as secondary — opens 5-star sheet for users
- *                   who really want to grade beyond binary like
+ *     [Avatar]      killer portrait, 56px gold-ring circle, "+suivre"
+ *                   badge → deep-links to /player/[slug]
+ *     [★ NOTER]     PRIMARY hero — cream→gold→bronze gradient pill that
+ *                   opens a 5-star StarRating popover calling rateKill
+ *                   (login-gated via InlineAuthPrompt intent="rate").
+ *                   This is the real Star slot the old header comment
+ *                   referenced but never rendered.
+ *     [Like ❤]      SECONDARY — heart toggle, optimistic (LikeButton)
+ *     [Comments]    SECONDARY — bubble icon, count, opens CommentSheetV2
+ *     [Share]       SECONDARY — Web Share API with sheet fallback
+ *     [Bookmark]    SECONDARY — save-to-collection (onBookmark stub)
  *     [Detail]      link to /kill/[id] for full page
+ *     [Report]      tertiary, long-press shortcut
  *
  * The sidebar itself owns the InlineAuthPrompt — every action that
  * needs auth raises the prompt with the right `intent` so the copy
  * matches what the user was trying to do.
  *
- * Mobile (default): 6 buttons stacked vertically, anchored bottom-right
- * Desktop: same layout, just bigger hit targets via `variant="wide"`.
+ * THE MOBILE FEED (<768px) IS SACRED — every base/`md:` className below
+ * is preserved byte-for-byte; the BIG cream-gold look is layered ONLY
+ * at the `lg:` breakpoint (≥1024 = the wide stage). So the <768 render
+ * is identical to the previous rail (48px secondaries, gold star).
  */
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
+import { m, AnimatePresence } from "motion/react";
 import { LikeButton } from "./LikeButton";
 import { CommentSheetV2 } from "./CommentSheetV2";
 import { EmojiReactions } from "@/components/scroll/v2/EmojiReactions";
 import { InlineAuthPrompt } from "./InlineAuthPrompt";
 import { ReportButton, type ReportButtonController } from "./ReportButton";
+import { rateKill } from "./actions";
+import { PLAYER_PHOTOS } from "@/lib/kc-assets";
+import { championIconUrl } from "@/lib/constants";
 import { track } from "@/lib/analytics/track";
 
 // Long-press duration to open the report sheet directly. 500ms is the
@@ -37,6 +50,30 @@ import { track } from "@/lib/analytics/track";
 // unresponsive.
 const LONG_PRESS_MS = 500;
 
+// ─── Secondary-tier (cream-gold) shared recipes ──────────────────────
+//
+// SACRED-MOBILE RULE: the unprefixed + `md:` tokens here are the EXACT
+// dark-glass look the rail shipped with, so anything <1024 (incl. the
+// <768 mobile feed) renders byte-identical. The cream-gold "BIG button"
+// spec is layered ONLY on `lg:` utilities. Rest = cream-wash over a
+// black scrim + thin gold border ; hover = full gold border + glow +
+// stronger wash (the .gold-glow utility lives in globals.css).
+const SECONDARY_TILE =
+  "bg-black/55 backdrop-blur-sm border border-white/15 hover:bg-black/75 hover:border-white/25 shadow-[0_4px_18px_rgba(0,0,0,0.5)] " +
+  "lg:bg-[var(--cream-wash)] lg:bg-black/35 lg:backdrop-blur-md lg:border-[var(--gold)]/45 lg:shadow-[0_8px_26px_rgba(0,0,0,0.5)] " +
+  "lg:hover:bg-[var(--cream-wash-strong)] lg:hover:border-[var(--gold)] lg:hover:shadow-[0_0_20px_rgba(200,170,110,0.15),0_0_60px_rgba(200,170,110,0.05)] motion-safe:lg:hover:scale-[1.04]";
+
+// "On"/active secondary (e.g. bookmark saved) — gold-filled accent.
+const SECONDARY_TILE_ON =
+  "border bg-[var(--gold)] border-[var(--gold)] shadow-[0_8px_26px_rgba(200,170,110,0.4),0_0_30px_rgba(200,170,110,0.25)] motion-safe:lg:hover:scale-[1.04]";
+
+const SECONDARY_GLYPH = "text-white lg:text-[var(--gold)] transition-colors";
+
+// Count / label sits in the gap — font-data, legible over bright frames
+// via a drop-shadow. Mobile keeps its original size; bumps to 13px on lg.
+const SECONDARY_LABEL =
+  "font-data text-[10px] lg:text-[13px] 2xl:text-sm font-bold tabular-nums text-white/80 lg:text-white/85 [text-shadow:0_1px_3px_rgba(0,0,0,0.7)]";
+
 interface Props {
   killId: string;
   shareTitle: string;
@@ -44,6 +81,23 @@ interface Props {
   /** Initial counts from server-render, avoid 0 flash. */
   initialLikeCount?: number;
   initialCommentCount?: number;
+  /** Server-rendered rating so the ★ NOTER hero paints the right
+   *  active-star count without a flash before rateKill hydrates. */
+  initialAvgRating?: number | null;
+  initialRatingCount?: number;
+  /** Killer identity for the topmost avatar slot. `killerName` doubles
+   *  as the /player/[slug] slug (slugs are IGNs). `killerChampion`
+   *  drives the Data Dragon fallback portrait when the player isn't in
+   *  PLAYER_PHOTOS. All optional — the avatar slot is skipped when we
+   *  can't resolve a link target. */
+  killerName?: string | null;
+  killerPlayerId?: string | null;
+  killerChampion?: string | null;
+  /** Save-to-collection handler. Wave 37 ships the slot wired to an
+   *  optional `onBookmark(killId, next)` stub — the V-next commit
+   *  persists to a bookmarks table. When omitted the button is hidden
+   *  so older callers don't render a dead control. */
+  onBookmark?: (killId: string, next: boolean) => void;
   /** Whether the parent is currently visible — drives entry animation
    *  + lazy-loads the comment sheet only when item is interactive. */
   visible: boolean;
@@ -55,6 +109,12 @@ export function FeedSidebarV2({
   shareText,
   initialLikeCount = 0,
   initialCommentCount = 0,
+  initialAvgRating = null,
+  initialRatingCount = 0,
+  killerName,
+  killerPlayerId,
+  killerChampion,
+  onBookmark,
   visible,
 }: Props) {
   const [authPromptIntent, setAuthPromptIntent] = useState<
@@ -62,6 +122,10 @@ export function FeedSidebarV2({
   >(null);
   const [showComments, setShowComments] = useState(false);
   const [shareSheet, setShareSheet] = useState(false);
+  const [showRating, setShowRating] = useState(false);
+  // Bookmark is purely optimistic for now (no server read-back) — the
+  // onBookmark prop is a stub until the collections table lands.
+  const [bookmarked, setBookmarked] = useState(false);
   // Long-press shortcut → opens the report sheet without going through
   // the "..." dropdown. We hand a ref to ReportButton and call .open()
   // when the pointer-down survives 500ms.
@@ -133,13 +197,77 @@ export function FeedSidebarV2({
     setShareSheet(true);
   };
 
+  const handleBookmark = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const next = !bookmarked;
+    setBookmarked(next);
+    track(next ? "clip.saved" : "clip.unsaved", {
+      entityType: "kill",
+      entityId: killId,
+    });
+    onBookmark?.(killId, next);
+  };
+
+  // Killer avatar — real LEC portrait for KC players, Data Dragon
+  // champion icon as the universal fallback. Slug = IGN (lower-cased
+  // by the route's case-insensitive lookup). Only render when we can
+  // resolve a link target.
+  const playerSlug = killerName?.trim() ?? "";
+  const avatarSrc =
+    (killerName ? PLAYER_PHOTOS[killerName] : undefined) ??
+    (killerChampion ? championIconUrl(killerChampion) : undefined);
+  const showAvatar = !!playerSlug && !!avatarSrc;
+
   return (
     <>
       <div
-        className={`absolute right-3 md:right-5 lg:right-7 2xl:right-12 bottom-32 md:bottom-40 lg:bottom-48 2xl:bottom-56 z-20 flex flex-col items-center gap-4 md:gap-5 lg:gap-6 2xl:gap-7 transition-all duration-500 delay-150 ${
+        className={`absolute right-3 md:right-5 lg:right-7 2xl:right-12 bottom-32 md:bottom-40 lg:bottom-48 2xl:bottom-56 z-20 flex flex-col items-center gap-4 md:gap-5 lg:gap-[22px] 2xl:gap-7 transition-all duration-500 delay-150 ${
           visible ? "opacity-100 translate-x-0" : "opacity-0 translate-x-3 pointer-events-none"
         }`}
       >
+        {/* Killer avatar — topmost. Hidden <lg so the sacred mobile
+            rail is untouched; on the wide stage it anchors the rail
+            with the player portrait + a "+suivre" badge → /player. */}
+        {showAvatar && (
+          <Link
+            href={`/player/${encodeURIComponent(playerSlug)}`}
+            onClick={(e) => {
+              e.stopPropagation();
+              track("clip.profile_tap", {
+                entityType: "kill",
+                entityId: killId,
+                metadata: { kind: "player", target: killerPlayerId ?? playerSlug, source: "rail" },
+              });
+            }}
+            aria-label={`Voir le profil de ${playerSlug}`}
+            className="group relative hidden lg:flex h-14 w-14 items-center justify-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gold)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg-primary)]"
+          >
+            <span className="relative block h-14 w-14 overflow-hidden rounded-full ring-2 ring-[var(--gold)] shadow-[0_8px_24px_rgba(0,0,0,0.55),0_0_24px_rgba(200,170,110,0.25)] transition-transform duration-300 group-hover:scale-[1.06]">
+              <Image
+                src={avatarSrc}
+                alt={playerSlug}
+                fill
+                sizes="56px"
+                className="object-cover object-top"
+              />
+            </span>
+            {/* "+suivre" badge */}
+            <span className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 flex h-5 min-w-5 items-center justify-center rounded-full border border-[var(--bg-primary)] bg-[var(--gold)] px-1.5 text-[9px] font-data font-bold uppercase tracking-wide text-[var(--bg-primary)] shadow-[0_2px_8px_rgba(0,0,0,0.5)]">
+              +suivre
+            </span>
+          </Link>
+        )}
+
+        {/* ★ NOTER — PRIMARY hero. Opens the StarRating popover. Hidden
+            <lg (the mobile rail keeps the binary like as the hero); on
+            the wide stage it's the cream→gold→bronze gradient CTA. */}
+        <RateHeroButton
+          active={(initialRatingCount ?? 0) > 0 || (initialAvgRating ?? 0) > 0}
+          onOpen={(e) => {
+            e.stopPropagation();
+            setShowRating(true);
+          }}
+        />
         {/* Like — primary action, biggest visual presence.
             Variant scales: compact (mobile/tablet) → wide (≥1280px). */}
         <div className="block lg:hidden">
@@ -166,7 +294,7 @@ export function FeedSidebarV2({
           />
         </div>
 
-        {/* Comments */}
+        {/* Comments — SECONDARY cream-gold tier on the wide stage. */}
         <button
           type="button"
           onClick={(e) => {
@@ -179,11 +307,13 @@ export function FeedSidebarV2({
             setShowComments(true);
           }}
           aria-label={`Commentaires (${initialCommentCount})`}
-          className="flex flex-col items-center gap-1.5 lg:gap-2 select-none"
+          className="group flex flex-col items-center gap-1.5 lg:gap-[5px] select-none"
         >
-          <div className="flex h-12 w-12 lg:h-14 lg:w-14 2xl:h-16 2xl:w-16 items-center justify-center rounded-full bg-black/55 backdrop-blur-sm border border-white/15 transition-all hover:bg-black/75 hover:border-white/25 active:scale-90 shadow-[0_4px_18px_rgba(0,0,0,0.5)]">
+          <div
+            className={`flex h-12 w-12 lg:h-14 lg:w-14 2xl:h-16 2xl:w-16 items-center justify-center rounded-full transition-all active:scale-90 ${SECONDARY_TILE}`}
+          >
             <svg
-              className="h-6 w-6 lg:h-7 lg:w-7 2xl:h-8 2xl:w-8 text-white"
+              className={`h-6 w-6 lg:h-7 lg:w-7 2xl:h-8 2xl:w-8 ${SECONDARY_GLYPH}`}
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
@@ -196,21 +326,21 @@ export function FeedSidebarV2({
               />
             </svg>
           </div>
-          <span className="font-data text-[10px] lg:text-xs 2xl:text-sm font-bold tabular-nums text-white/80">
-            {formatCount(initialCommentCount)}
-          </span>
+          <span className={SECONDARY_LABEL}>{formatCount(initialCommentCount)}</span>
         </button>
 
-        {/* Share */}
+        {/* Share — SECONDARY cream-gold tier on the wide stage. */}
         <button
           type="button"
           onClick={handleShare}
           aria-label="Partager"
-          className="flex flex-col items-center gap-1.5 lg:gap-2 select-none"
+          className="group flex flex-col items-center gap-1.5 lg:gap-[5px] select-none"
         >
-          <div className="flex h-12 w-12 lg:h-14 lg:w-14 2xl:h-16 2xl:w-16 items-center justify-center rounded-full bg-black/55 backdrop-blur-sm border border-white/15 transition-all hover:bg-black/75 hover:border-white/25 active:scale-90 shadow-[0_4px_18px_rgba(0,0,0,0.5)]">
+          <div
+            className={`flex h-12 w-12 lg:h-14 lg:w-14 2xl:h-16 2xl:w-16 items-center justify-center rounded-full transition-all active:scale-90 ${SECONDARY_TILE}`}
+          >
             <svg
-              className="h-5 w-5 lg:h-6 lg:w-6 2xl:h-7 2xl:w-7 text-white"
+              className={`h-5 w-5 lg:h-6 lg:w-6 2xl:h-7 2xl:w-7 ${SECONDARY_GLYPH}`}
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
@@ -223,10 +353,43 @@ export function FeedSidebarV2({
               />
             </svg>
           </div>
-          <span className="font-data text-[10px] lg:text-xs 2xl:text-sm font-bold text-white/80">
-            Partager
-          </span>
+          <span className={SECONDARY_LABEL}>Partager</span>
         </button>
+
+        {/* Bookmark — SECONDARY save-to-collection. Hidden <lg (the
+            mobile rail's save lives in the long-press menu) and only
+            rendered when the caller wires onBookmark. "On" state tints
+            gold-filled per the active-accent spec. */}
+        {onBookmark && (
+          <button
+            type="button"
+            onClick={handleBookmark}
+            aria-pressed={bookmarked}
+            aria-label={bookmarked ? "Retirer des favoris" : "Enregistrer"}
+            className="group hidden lg:flex flex-col items-center gap-[5px] select-none"
+          >
+            <span
+              className={`flex h-14 w-14 2xl:h-16 2xl:w-16 items-center justify-center rounded-full transition-all active:scale-90 ${
+                bookmarked ? SECONDARY_TILE_ON : SECONDARY_TILE
+              }`}
+            >
+              <svg
+                className={`h-7 w-7 2xl:h-8 2xl:w-8 ${bookmarked ? "text-[var(--bg-primary)]" : SECONDARY_GLYPH}`}
+                viewBox="0 0 24 24"
+                fill={bookmarked ? "currentColor" : "none"}
+                stroke="currentColor"
+                strokeWidth={bookmarked ? 0 : 2}
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"
+                />
+              </svg>
+            </span>
+            <span className={SECONDARY_LABEL}>{bookmarked ? "Gardé" : "Garder"}</span>
+          </button>
+        )}
 
         {/* Detail link — keep visual hierarchy lower than the social actions */}
         <Link
@@ -296,16 +459,32 @@ export function FeedSidebarV2({
         onAuthRequired={() => setAuthPromptIntent("comment")}
       />
 
+      {/* ★ NOTER popover — the real StarRating slot. Calls rateKill;
+          a 401 closes the popover and raises the auth prompt with
+          intent="rate" so the copy matches. */}
+      <StarRatingPopover
+        killId={killId}
+        isOpen={showRating}
+        initialScore={Math.round(initialAvgRating ?? 0)}
+        onClose={() => setShowRating(false)}
+        onAuthRequired={() => {
+          setShowRating(false);
+          setAuthPromptIntent("rate");
+        }}
+      />
+
       {/* Auth prompt — single instance for all sidebar actions */}
       <InlineAuthPrompt
         isOpen={authPromptIntent !== null}
         intent={authPromptIntent ?? undefined}
         onClose={() => setAuthPromptIntent(null)}
         onAuthenticated={() => {
-          // Re-trigger the action the user was attempting? For now
-          // we just close the prompt — the user retries. Future
-          // version: store the action callback + invoke it here.
+          // Re-open the action the user was attempting once they're in.
+          // Today only the rating flow can resume cleanly (its UI is
+          // self-contained); the others just close the prompt.
+          const intent = authPromptIntent;
           setAuthPromptIntent(null);
+          if (intent === "rate") setShowRating(true);
         }}
       />
 
@@ -328,6 +507,211 @@ function formatCount(n: number): string {
   if (n < 10_000) return `${(n / 1000).toFixed(1)}K`;
   if (n < 1_000_000) return `${Math.floor(n / 1000)}K`;
   return `${(n / 1_000_000).toFixed(1)}M`;
+}
+
+// ─── ★ NOTER — PRIMARY hero button ───────────────────────────────────
+//
+// Reuses the SpinButton recipe from VSRoulette: cream→gold→bronze
+// gradient, layered hextech shadow, inner white-sweep on group-hover
+// (vs-sweep keyframe). Hidden <lg so the sacred mobile rail keeps the
+// binary heart as its hero — the precision star is a wide-stage affordance.
+function RateHeroButton({
+  active,
+  onOpen,
+}: {
+  active: boolean;
+  onOpen: (e: React.MouseEvent) => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      aria-haspopup="dialog"
+      aria-label={active ? "Modifier ta note" : "Noter ce kill"}
+      className="group relative hidden lg:flex flex-col items-center gap-[5px] select-none focus-visible:outline-none"
+    >
+      <span
+        className="relative flex h-16 w-16 items-center justify-center overflow-hidden rounded-full transition-transform duration-200 group-hover:scale-[1.04] group-focus-visible:ring-2 group-focus-visible:ring-[var(--gold)] group-focus-visible:ring-offset-2 group-focus-visible:ring-offset-[var(--bg-primary)] motion-safe:group-active:scale-[0.92]"
+        style={{
+          color: "var(--bg-primary)",
+          background:
+            "linear-gradient(135deg, #F0E6D2 0%, #C8AA6E 40%, #785A28 100%)",
+          boxShadow:
+            "0 12px 30px rgba(200,170,110,0.4), 0 0 50px rgba(0,87,255,0.20), inset 0 1px 0 rgba(255,255,255,0.5), inset 0 -2px 0 rgba(0,0,0,0.3)",
+        }}
+      >
+        {/* Inner white sweep — reuses the vs-sweep keyframe (VSRoulette). */}
+        <span
+          aria-hidden
+          className="absolute inset-0 rounded-full overflow-hidden pointer-events-none"
+        >
+          <span
+            className="absolute inset-y-0 -inset-x-8 motion-safe:group-hover:animate-[vs-sweep_1s_ease-in-out_infinite]"
+            style={{
+              background:
+                "linear-gradient(110deg, transparent 0%, rgba(255,255,255,0.55) 50%, transparent 100%)",
+              opacity: 0.45,
+              transform: "translateX(-110%)",
+            }}
+          />
+        </span>
+        {/* Star glyph — filled when the kill is already rated. */}
+        <svg
+          className="relative h-8 w-8"
+          viewBox="0 0 24 24"
+          fill="currentColor"
+        >
+          <path d="M12 2.5l2.81 6.06 6.69.62-5.05 4.44 1.49 6.56L12 17.27l-5.94 3.41 1.49-6.56-5.05-4.44 6.69-.62L12 2.5z" />
+        </svg>
+      </span>
+      <span className="font-data text-[13px] 2xl:text-sm font-black uppercase tracking-[0.18em] text-[var(--gold-bright)] [text-shadow:0_1px_3px_rgba(0,0,0,0.7)]">
+        Noter
+      </span>
+      <style jsx>{`
+        @keyframes vs-sweep {
+          0% {
+            transform: translateX(-110%);
+          }
+          100% {
+            transform: translateX(110%);
+          }
+        }
+      `}</style>
+    </button>
+  );
+}
+
+// ─── StarRating popover (rateKill) ───────────────────────────────────
+//
+// 1-5 star grader. Optimistic: the chosen score paints instantly, then
+// rateKill persists it. On a 401 we bubble onAuthRequired so the parent
+// raises the InlineAuthPrompt (intent="rate"). Score 0 = clear (handled
+// by rateKill's delete path) — tapping the already-selected star toggles
+// the rating off.
+function StarRatingPopover({
+  killId,
+  isOpen,
+  initialScore,
+  onClose,
+  onAuthRequired,
+}: {
+  killId: string;
+  isOpen: boolean;
+  initialScore: number;
+  onClose: () => void;
+  onAuthRequired: () => void;
+}) {
+  const [score, setScore] = useState(initialScore);
+  const [hover, setHover] = useState(0);
+  const [pending, setPending] = useState(false);
+
+  // Re-sync when re-opened against a different kill / server value.
+  useEffect(() => {
+    if (isOpen) setScore(initialScore);
+  }, [isOpen, initialScore]);
+
+  // Esc to close.
+  useEffect(() => {
+    if (!isOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [isOpen, onClose]);
+
+  const submit = async (value: number) => {
+    // Toggle off when re-tapping the current score.
+    const next = value === score ? 0 : value;
+    setScore(next);
+    setPending(true);
+    try {
+      const res = await rateKill(killId, next);
+      if (!res.ok) {
+        if (res.authRequired) onAuthRequired();
+        return;
+      }
+      // Success — close after a beat so the user sees the confirmed state.
+      window.setTimeout(() => onClose(), 320);
+    } catch {
+      /* network — leave the popover open, the user can retry */
+    } finally {
+      setPending(false);
+    }
+  };
+
+  const display = hover || score;
+
+  return (
+    <AnimatePresence>
+      {isOpen && (
+        <m.div
+          className="fixed inset-0 z-[350] flex items-end justify-center p-4 md:items-center"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          onClick={onClose}
+        >
+          <m.div
+            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            aria-hidden
+          />
+          <m.div
+            role="dialog"
+            aria-label="Noter ce kill"
+            onClick={(e) => e.stopPropagation()}
+            className="relative w-full max-w-xs rounded-3xl border border-[var(--gold)]/30 bg-[var(--bg-surface)] p-6 text-center shadow-[0_40px_120px_rgba(0,0,0,0.7)]"
+            initial={{ scale: 0.92, y: 14, opacity: 0 }}
+            animate={{ scale: 1, y: 0, opacity: 1 }}
+            exit={{ scale: 0.95, opacity: 0 }}
+            transition={{ type: "spring", stiffness: 380, damping: 28 }}
+          >
+            <h3 className="font-display text-lg font-black text-[var(--gold-bright)]">
+              Note ce kill
+            </h3>
+            <p className="mt-1 mb-5 text-xs text-white/55">
+              De routine à exceptionnel — ta note alimente le feed.
+            </p>
+            <div
+              className="star-rating flex items-center justify-center gap-2"
+              onMouseLeave={() => setHover(0)}
+            >
+              {[1, 2, 3, 4, 5].map((n) => {
+                const filled = n <= display;
+                return (
+                  <button
+                    key={n}
+                    type="button"
+                    disabled={pending}
+                    onMouseEnter={() => setHover(n)}
+                    onFocus={() => setHover(n)}
+                    onBlur={() => setHover(0)}
+                    onClick={() => void submit(n)}
+                    aria-label={`${n} étoile${n > 1 ? "s" : ""}`}
+                    aria-pressed={n <= score}
+                    className="star flex h-12 w-12 items-center justify-center rounded-full bg-black/30 transition-colors hover:bg-black/45 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gold)] disabled:opacity-70"
+                  >
+                    <svg
+                      className={`h-7 w-7 transition-colors ${filled ? "text-[var(--gold)]" : "text-[var(--text-disabled)]"}`}
+                      viewBox="0 0 24 24"
+                      fill="currentColor"
+                    >
+                      <path d="M12 2.5l2.81 6.06 6.69.62-5.05 4.44 1.49 6.56L12 17.27l-5.94 3.41 1.49-6.56-5.05-4.44 6.69-.62L12 2.5z" />
+                    </svg>
+                  </button>
+                );
+              })}
+            </div>
+            {score > 0 && (
+              <p className="mt-4 font-data text-xs text-white/60">
+                Ta note : <span className="font-bold text-[var(--gold)]">{score}/5</span>
+              </p>
+            )}
+          </m.div>
+        </m.div>
+      )}
+    </AnimatePresence>
+  );
 }
 
 // ─── Manual share sheet (Web Share fallback for desktop) ─────────────

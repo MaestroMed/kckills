@@ -23,7 +23,7 @@
  */
 
 import { useEffect } from "react";
-import { motion, AnimatePresence } from "motion/react";
+import { m, AnimatePresence } from "motion/react";
 
 interface Props {
   isOpen: boolean;
@@ -96,20 +96,20 @@ export function InlineAuthPrompt({
   return (
     <AnimatePresence>
       {isOpen && (
-        <motion.div
+        <m.div
           className="fixed inset-0 z-[400] flex items-center justify-center p-4"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
         >
           {/* Backdrop */}
-          <motion.div
+          <m.div
             className="absolute inset-0 bg-black/65 backdrop-blur-md"
             onClick={onClose}
           />
 
           {/* Modal */}
-          <motion.div
+          <m.div
             className="relative w-full max-w-sm rounded-3xl border border-[var(--gold)]/30 bg-[var(--bg-surface)] p-7 shadow-[0_40px_120px_rgba(0,0,0,0.7)] text-center"
             initial={{ scale: 0.92, y: 12, opacity: 0 }}
             animate={{ scale: 1, y: 0, opacity: 1 }}
@@ -162,8 +162,8 @@ export function InlineAuthPrompt({
             >
               Plus tard
             </button>
-          </motion.div>
-        </motion.div>
+          </m.div>
+        </m.div>
       )}
     </AnimatePresence>
   );

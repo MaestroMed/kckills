@@ -75,6 +75,9 @@ type SpinState =
   | { kind: "error"; message: string };
 
 const SPIN_DURATION_MS = 2100;
+// Wave 36 — after a vote, auto-advance to the next duel to keep the
+// judging loop flowing (cancelable). Seconds shown as a countdown.
+const AUTO_NEXT_SECONDS = 6;
 
 // ════════════════════════════════════════════════════════════════════
 // Root component
@@ -257,6 +260,74 @@ export function VSRoulette({
     setState({ kind: "idle" });
   }, []);
 
+  // ─── Auto-next countdown ────────────────────────────────────────
+  // After a vote lands, tick down from AUTO_NEXT_SECONDS and then spin
+  // the next duel automatically. The countdown clears the moment we
+  // leave the "voted" state (re-spin, reset, error…), and the user can
+  // pause it (setAutoNextLeft(null)) to keep studying the result.
+  const [autoNextLeft, setAutoNextLeft] = useState<number | null>(null);
+  const cancelAutoNext = useCallback(() => setAutoNextLeft(null), []);
+
+  useEffect(() => {
+    if (state.kind !== "voted") {
+      setAutoNextLeft(null);
+      return;
+    }
+    setAutoNextLeft(AUTO_NEXT_SECONDS);
+    const iv = window.setInterval(() => {
+      setAutoNextLeft((s) => (s == null ? null : Math.max(0, s - 1)));
+    }, 1000);
+    return () => window.clearInterval(iv);
+  }, [state.kind]);
+
+  useEffect(() => {
+    if (autoNextLeft === 0) spinAgain();
+  }, [autoNextLeft, spinAgain]);
+
+  // ─── Keyboard controls ──────────────────────────────────────────
+  // ← / → vote left / right, ↓ or "=" for a tie, Space / Enter to
+  // (re)spin. Ignored while a form field is focused so the filter
+  // selects keep their native keyboard behaviour (WCAG 2.1 — full
+  // keyboard operability of the core game).
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const el = e.target as HTMLElement | null;
+      if (
+        el &&
+        (el.tagName === "INPUT" ||
+          el.tagName === "SELECT" ||
+          el.tagName === "TEXTAREA" ||
+          el.isContentEditable)
+      ) {
+        return;
+      }
+      if (state.kind === "loaded") {
+        if (e.key === "ArrowLeft") {
+          e.preventDefault();
+          void castVote("a");
+        } else if (e.key === "ArrowRight") {
+          e.preventDefault();
+          void castVote("b");
+        } else if (e.key === "ArrowDown" || e.key === "=") {
+          e.preventDefault();
+          void castVote("tie");
+        }
+      } else if (
+        state.kind === "idle" ||
+        state.kind === "voted" ||
+        state.kind === "empty" ||
+        state.kind === "error"
+      ) {
+        if (e.key === " " || e.key === "Enter") {
+          e.preventDefault();
+          void spin();
+        }
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [state.kind, castVote, spin]);
+
   // ────────────────────────────────────────────────────────────────
   // Render
   // ────────────────────────────────────────────────────────────────
@@ -307,6 +378,8 @@ export function VSRoulette({
           onVote={(choice) => void castVote(choice)}
           onSpinAgain={spinAgain}
           onResetFilters={resetFilters}
+          autoNextLeft={autoNextLeft}
+          onCancelAutoNext={cancelAutoNext}
         />
       </div>
     </div>
@@ -733,6 +806,8 @@ function Arena({
   onVote,
   onSpinAgain,
   onResetFilters,
+  autoNextLeft,
+  onCancelAutoNext,
 }: {
   state: SpinState;
   thumbnails: string[];
@@ -740,6 +815,8 @@ function Arena({
   onVote: (choice: "a" | "b" | "tie") => void;
   onSpinAgain: () => void;
   onResetFilters: () => void;
+  autoNextLeft: number | null;
+  onCancelAutoNext: () => void;
 }) {
   if (state.kind === "idle") {
     return (
@@ -851,6 +928,8 @@ function Arena({
               state={state}
               onSpinAgain={onSpinAgain}
               onResetFilters={onResetFilters}
+              autoNextLeft={autoNextLeft}
+              onCancelAutoNext={onCancelAutoNext}
             />
           </m.div>
         ) : (
@@ -1372,7 +1451,8 @@ function VoteRow({
   const labelA = a.killer_name ?? a.killer_champion ?? "Gauche";
   const labelB = b.killer_name ?? b.killer_champion ?? "Droite";
   return (
-    <div className="grid gap-3 md:grid-cols-[1fr_auto_1fr] items-stretch">
+    <div className="space-y-2.5">
+      <div className="grid gap-3 md:grid-cols-[1fr_auto_1fr] items-stretch">
       <m.button
         type="button"
         onClick={() => onVote("a")}
@@ -1417,6 +1497,13 @@ function VoteRow({
           👉
         </span>
       </m.button>
+      </div>
+      <p
+        className="hidden md:block text-center font-data text-[9px] uppercase tracking-[0.3em] text-white/30"
+        aria-hidden
+      >
+        ← / → pour voter · ↓ égalité · Espace pour relancer
+      </p>
     </div>
   );
 }
@@ -1429,11 +1516,16 @@ function ResultBlock({
   state,
   onSpinAgain,
   onResetFilters,
+  autoNextLeft,
+  onCancelAutoNext,
 }: {
   state: Extract<SpinState, { kind: "voted" }>;
   onSpinAgain: () => void;
   onResetFilters: () => void;
+  autoNextLeft: number | null;
+  onCancelAutoNext: () => void;
 }) {
+  const counting = autoNextLeft != null && autoNextLeft > 0;
   const { a, b, result, voted, deltaA, deltaB } = state;
   const aIsRowA = result.kill_a_id === a.id;
   const aBattles = aIsRowA ? result.kill_a_battles : result.kill_b_battles;
@@ -1498,18 +1590,54 @@ function ResultBlock({
         />
       </div>
 
+      {/* Auto-next countdown — keeps the judging loop flowing. Pause to
+          study the result; the bar drains over AUTO_NEXT_SECONDS. */}
+      {counting ? (
+        <div className="flex items-center justify-center gap-3">
+          <div
+            className="h-1 w-36 overflow-hidden rounded-full bg-white/10"
+            aria-hidden
+          >
+            <div
+              className="h-full rounded-full bg-[var(--gold)] transition-[width] duration-1000 ease-linear"
+              style={{
+                width: `${((autoNextLeft ?? 0) / AUTO_NEXT_SECONDS) * 100}%`,
+              }}
+            />
+          </div>
+          <p
+            className="font-data text-[10px] uppercase tracking-[0.25em] text-white/55"
+            aria-live="polite"
+          >
+            Duel suivant dans {autoNextLeft}s
+          </p>
+          <button
+            type="button"
+            onClick={onCancelAutoNext}
+            className="rounded-md border border-white/20 px-2.5 py-1 font-data text-[10px] uppercase tracking-widest text-white/60 hover:border-white/50 hover:text-white transition-colors"
+            aria-label="Rester sur ce résultat et stopper le passage automatique"
+          >
+            Rester
+          </button>
+        </div>
+      ) : null}
+
       <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
         <button
           type="button"
           onClick={onSpinAgain}
-          aria-label="Relancer la roulette avec les mêmes filtres"
+          aria-label={
+            counting
+              ? "Passer au duel suivant maintenant"
+              : "Relancer la roulette avec les mêmes filtres"
+          }
           className="rounded-xl bg-[var(--gold)] px-6 py-2.5 font-display text-xs font-black uppercase tracking-[0.25em] text-[var(--bg-primary)] hover:bg-[var(--gold-bright)] hover:scale-[1.02] active:scale-95 transition-all"
           style={{
             boxShadow:
               "0 12px 28px rgba(200,170,110,0.35), inset 0 1px 0 rgba(255,255,255,0.4)",
           }}
         >
-          Encore
+          {counting ? "Suivant" : "Encore"}
         </button>
         <button
           type="button"

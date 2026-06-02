@@ -21,15 +21,18 @@
  * page itself.
  */
 
+import { Film, Clock, Link2 } from "lucide-react";
+
 import { getPublishedKills } from "@/lib/supabase/kills";
 import { pickAssetUrl } from "@/lib/kill-assets";
+import { Breadcrumb } from "@/components/Breadcrumb";
 import { CompilationBuilder } from "./CompilationBuilder";
 import type { BuilderKill } from "./CompilationBuilder";
 
 export const revalidate = 600;
 
 export const metadata = {
-  title: "Compilation Builder — KCKILLS",
+  title: "Compilation Builder",
   description:
     "Construis ton best-of Karmine Corp. Choisis tes clips, réordonne-les, et reçois un MP4 partageable en quelques minutes.",
   alternates: { canonical: "/compilation" },
@@ -94,54 +97,135 @@ export default async function CompilationPage() {
     }));
 
   return (
-    <div className="-mt-6 -mx-4 px-4 pb-16">
-      {/* ───── Hero ───────────────────────────────────────────── */}
-      <header className="relative isolate overflow-hidden border-b border-[var(--border-gold)] py-12 sm:py-16">
-        {/* Subtle hextech glow backdrop */}
+    <div
+      className="-mt-6"
+      style={{
+        width: "100vw",
+        position: "relative",
+        left: "50%",
+        right: "50%",
+        marginLeft: "-50vw",
+        marginRight: "-50vw",
+      }}
+    >
+      {/* ─── HERO — cinematic full-bleed band ─────────────────────── */}
+      <section
+        className="relative overflow-hidden border-b border-[var(--border-gold)]"
+        style={{
+          background:
+            "radial-gradient(ellipse 70% 55% at 50% 30%, rgba(200,170,110,0.18) 0%, transparent 60%), linear-gradient(180deg, var(--bg-surface) 0%, var(--bg-primary) 100%)",
+        }}
+      >
+        {/* Scanline overlay — matches the homepage + /vs hero */}
         <div
           aria-hidden
-          className="pointer-events-none absolute inset-0 -z-10 opacity-60"
+          className="absolute inset-0 opacity-[0.14] mix-blend-overlay pointer-events-none"
           style={{
             backgroundImage:
-              "radial-gradient(circle at 20% 30%, rgba(10,200,185,0.10), transparent 55%), radial-gradient(circle at 80% 70%, rgba(200,170,110,0.10), transparent 60%)",
+              "repeating-linear-gradient(180deg, transparent 0px, transparent 2px, rgba(200,170,110,0.08) 3px, transparent 4px)",
+          }}
+        />
+        {/* Floating gold rhombus accents */}
+        <div
+          aria-hidden
+          className="absolute left-[5%] top-10 hidden md:block"
+          style={{
+            width: 14,
+            height: 14,
+            transform: "rotate(45deg)",
+            background: "linear-gradient(135deg, var(--gold), var(--gold-dark))",
+            opacity: 0.55,
+            boxShadow: "0 0 22px rgba(200,170,110,0.5)",
           }}
         />
         <div
           aria-hidden
-          className="pointer-events-none absolute inset-x-0 top-0 h-px"
+          className="absolute right-[7%] top-24 hidden md:block"
           style={{
-            background:
-              "linear-gradient(90deg, transparent, rgba(200,170,110,0.5), transparent)",
+            width: 9,
+            height: 9,
+            transform: "rotate(45deg)",
+            background: "var(--gold)",
+            opacity: 0.4,
+            boxShadow: "0 0 14px rgba(200,170,110,0.4)",
           }}
         />
-        <div className="mx-auto max-w-5xl text-center">
-          <p className="mb-3 text-[11px] uppercase tracking-[0.32em] text-[var(--gold)]/80">
-            Compilation Builder
+
+        <div className="relative z-10 mx-auto max-w-6xl px-5 pt-10 pb-9 md:pt-16 md:pb-12 text-center">
+          <div className="flex justify-center">
+            <Breadcrumb
+              items={[
+                { label: "Accueil", href: "/" },
+                { label: "Compilation" },
+              ]}
+            />
+          </div>
+
+          <p className="mt-8 flex items-center justify-center gap-2.5 font-data text-[11px] uppercase tracking-[0.4em] text-[var(--gold)]/70">
+            <span
+              aria-hidden
+              className="inline-block"
+              style={{
+                width: 8,
+                height: 8,
+                transform: "rotate(45deg)",
+                background: "linear-gradient(135deg, var(--gold), var(--gold-dark))",
+                boxShadow: "0 0 10px rgba(200,170,110,0.5)",
+              }}
+            />
+            Studio de montage KC
           </p>
-          <h1 className="font-display text-3xl font-black tracking-tight sm:text-5xl">
-            Crée ton <span className="text-[var(--gold)]">best-of</span> KC
+          <h1
+            className="mt-3 font-display font-black tracking-tight leading-[0.9] text-5xl md:text-7xl lg:text-[7rem]"
+            style={{ letterSpacing: "-0.015em" }}
+          >
+            <span className="text-shimmer">COMPILATION</span>
           </h1>
-          <p className="mx-auto mt-4 max-w-xl text-sm text-[var(--text-secondary)] sm:text-base">
-            Choisis 3 à 10 clips, réordonne-les, ajoute une intro et un outro. Notre
-            pipeline assemble le MP4 1080p en quelques minutes et te donne un lien
-            partageable.
+          <p className="mt-5 mx-auto max-w-2xl text-base md:text-lg text-[var(--text-muted)] font-medium">
+            Choisis 3 à 10 clips, réordonne-les, ajoute une intro et un outro.
+            Notre pipeline assemble le MP4 1080p en quelques minutes et te donne
+            un lien partageable.
           </p>
-          <div className="mt-6 flex items-center justify-center gap-6 text-[11px] text-[var(--text-muted)]">
-            <span className="flex items-center gap-1.5">
-              <span className="inline-block size-1.5 rounded-full bg-[var(--gold)]" /> 1080p H.264
-            </span>
-            <span className="flex items-center gap-1.5">
-              <span className="inline-block size-1.5 rounded-full bg-[var(--cyan)]" /> Rendu 2-5 min
-            </span>
-            <span className="flex items-center gap-1.5">
-              <span className="inline-block size-1.5 rounded-full bg-[var(--blue-kc)]" /> Lien court /c/…
-            </span>
+
+          <div className="mt-7 flex flex-wrap items-center justify-center gap-2.5">
+            <SpecChip icon={<Film className="size-3.5" aria-hidden />} accent="var(--gold)">
+              1080p H.264
+            </SpecChip>
+            <SpecChip icon={<Clock className="size-3.5" aria-hidden />} accent="var(--cyan)">
+              Rendu 2–5 min
+            </SpecChip>
+            <SpecChip icon={<Link2 className="size-3.5" aria-hidden />} accent="var(--blue-kc)">
+              Lien court /c/…
+            </SpecChip>
           </div>
         </div>
-      </header>
+      </section>
 
       {/* ───── Wizard ─────────────────────────────────────────── */}
-      <CompilationBuilder pool={pool} />
+      <div className="mx-auto max-w-7xl px-4 pb-16">
+        <CompilationBuilder pool={pool} />
+      </div>
     </div>
+  );
+}
+
+/** Hero spec pill — gold-bordered glass chip with a lucide mark. */
+function SpecChip({
+  icon,
+  accent,
+  children,
+}: {
+  icon: React.ReactNode;
+  accent: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <span
+      className="inline-flex items-center gap-1.5 rounded-full border bg-black/30 px-3 py-1.5 font-data text-[11px] uppercase tracking-[0.18em] text-[var(--text-muted)] backdrop-blur-sm"
+      style={{ borderColor: `${accent}40` }}
+    >
+      <span style={{ color: accent }}>{icon}</span>
+      {children}
+    </span>
   );
 }

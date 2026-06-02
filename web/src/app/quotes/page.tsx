@@ -25,7 +25,7 @@ import type { QuoteCardData } from "@/components/quotes/QuoteCard";
 export const revalidate = 900;
 
 export const metadata: Metadata = {
-  title: "Phrases Cultes — KCKILLS",
+  title: "Phrases Cultes",
   description:
     "Toutes les phrases shoutables des casters extraites des clips Karmine Corp. Ecoute, vote, cite. Encyclopedie generee par IA.",
   alternates: { canonical: "/quotes" },
@@ -107,29 +107,90 @@ export default async function QuotesPage() {
   ]);
 
   return (
-    <main className="relative pt-6 pb-20 min-h-[80vh]">
+    <main
+      className="relative -mt-6 pb-20 min-h-[80vh] overflow-hidden"
+      style={{
+        // Full-bleed 100vw breakout so the cinematic backdrop spans the
+        // viewport (recipe item 3 — the page must USE the wide screen,
+        // not float a narrow column in the void). The Atrium + /vs bar
+        // share this exact breakout.
+        width: "100vw",
+        left: "50%",
+        right: "50%",
+        marginLeft: "-50vw",
+        marginRight: "-50vw",
+      }}
+    >
       <JsonLd data={breadcrumb} />
 
-      {/* Subtle top divider so the page reads from the same surface
-          rhythm as the rest of the site. */}
+      {/* ─── Cinematic hextech backdrop ───────────────────────────────
+          A single radial gold bloom anchored top-centre + faint gold
+          scanlines, matching the established /players + /vs hero band.
+          Sits behind the whole page (the encyclopedia owns the H1 title
+          + grid). Pure decoration — pointer-events-none, aria-hidden. */}
       <div
         aria-hidden
-        className="absolute inset-x-0 top-0 h-px"
+        className="absolute inset-x-0 top-0 h-[640px] pointer-events-none"
         style={{
           background:
-            "linear-gradient(90deg, transparent, rgba(200,170,110,0.45), transparent)",
+            "radial-gradient(ellipse 65% 60% at 50% 0%, rgba(200,170,110,0.16) 0%, transparent 62%), linear-gradient(180deg, var(--bg-surface) 0%, transparent 70%)",
+        }}
+      />
+      <div
+        aria-hidden
+        className="absolute inset-x-0 top-0 h-[420px] opacity-[0.12] mix-blend-overlay pointer-events-none motion-reduce:hidden"
+        style={{
+          backgroundImage:
+            "repeating-linear-gradient(180deg, transparent 0px, transparent 2px, rgba(200,170,110,0.09) 3px, transparent 4px)",
         }}
       />
 
-      <QuotesEncyclopedia
-        initialTopQuotes={initialTopQuotes}
-        featured={featured}
-        stats={stats}
+      {/* Floating gold losange accents (recipe item 4 — gold Losange over
+          OS emoji; copied from the VSRoulette rotated-square pattern). */}
+      <span
+        aria-hidden
+        className="absolute left-[6%] top-16 hidden md:block"
+        style={{
+          width: 14,
+          height: 14,
+          transform: "rotate(45deg)",
+          background: "linear-gradient(135deg, var(--gold), var(--gold-dark))",
+          opacity: 0.55,
+          boxShadow: "0 0 22px rgba(200,170,110,0.5)",
+        }}
+      />
+      <span
+        aria-hidden
+        className="absolute right-[8%] top-28 hidden md:block"
+        style={{
+          width: 9,
+          height: 9,
+          transform: "rotate(45deg)",
+          background: "var(--gold)",
+          opacity: 0.4,
+          boxShadow: "0 0 14px rgba(200,170,110,0.4)",
+        }}
       />
 
+      {/* Top gold-line — replaces the hand-rolled h-px divider with the
+          shared .gold-line utility (recipe item 2), centred in the
+          unified container so it reads with the rest of the site rhythm. */}
+      <div className="relative mx-auto max-w-7xl px-4 md:px-6 pt-8">
+        <div aria-hidden className="gold-line" />
+      </div>
+
+      <div className="relative pt-8">
+        <QuotesEncyclopedia
+          initialTopQuotes={initialTopQuotes}
+          featured={featured}
+          stats={stats}
+        />
+      </div>
+
       {/* Riot legal disclaimer — required on every public page per
-          CLAUDE.md PARTIE 7.6 */}
-      <p className="mx-auto mt-16 max-w-3xl text-center text-[10px] uppercase tracking-widest text-[var(--text-disabled)] px-6">
+          CLAUDE.md PARTIE 7.6. Contrast fix kept : --text-muted (AA),
+          never --text-disabled. */}
+      <p className="relative mx-auto mt-16 max-w-3xl text-center text-[10px] uppercase tracking-widest text-[var(--text-muted)] px-6">
         Les phrases sont extraites par IA depuis les commentaires officiels
         des casts. KCKILLS was created under Riot Games&apos; &laquo; Legal
         Jibber Jabber &raquo; policy using assets owned by Riot Games. Riot

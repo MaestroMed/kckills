@@ -16,12 +16,16 @@ interface Props {
 }
 
 const SHORTCUTS: { keys: string[]; label: string }[] = [
-  { keys: ["↓", "J", "Espace"], label: "Clip suivant" },
+  { keys: ["↓", "J"], label: "Clip suivant" },
   { keys: ["↑", "K"], label: "Clip précédent" },
+  { keys: ["Espace"], label: "Lecture / pause" },
   { keys: ["M"], label: "Couper / activer le son" },
-  { keys: ["L"], label: "Liker (note 5/5)" },
+  { keys: ["1 – 5"], label: "Noter le clip (1 à 5)" },
+  { keys: ["L"], label: "Liker" },
   { keys: ["C"], label: "Ouvrir les commentaires" },
+  { keys: ["B"], label: "Mettre en favori" },
   { keys: ["S"], label: "Partager" },
+  { keys: ["F"], label: "Mode cinéma" },
   { keys: ["Esc"], label: "Fermer un panneau" },
   { keys: ["?"], label: "Afficher cette aide" },
 ];

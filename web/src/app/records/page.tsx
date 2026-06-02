@@ -1,6 +1,19 @@
 import Link from "next/link";
 import Image from "next/image";
 import type { Metadata } from "next";
+import {
+  Trophy,
+  Swords,
+  Droplet,
+  Crosshair,
+  Flame,
+  Target,
+  ChevronRight,
+  CalendarDays,
+  Zap,
+  Play,
+  type LucideIcon,
+} from "lucide-react";
 import { getPublishedKills, type PublishedKillRow } from "@/lib/supabase/kills";
 import { championIconUrl } from "@/lib/constants";
 import { isDescriptionClean } from "@/lib/scroll/sanitize-description";
@@ -20,19 +33,19 @@ import { Description } from "@/components/i18n/Description";
  * is cached() across the session, so this page adds zero egress when
  * another SSR on the same user hit the cache within 30s.
  *
- * Categories:
- *   🏆 Score IA absolu          (all-time top highlight_score)
- *   💥 Pentakills & quadras     (multi_kill == penta / quadra)
- *   ⚡ First bloods             (is_first_blood = true)
- *   🎯 1v3+ outplays            (ai_tags contains "1v3" / "1v2" / "clutch")
- *   🔥 Teamfight highlights     (fight_type = teamfight_5v5)
- *   🎪 Snipes longue distance   (ai_tags contains "snipe" / "flash_predict")
+ * Categories (Wave 36 — OS emoji marks swapped for lucide hextech icons):
+ *   Trophy    Score IA absolu      (all-time top highlight_score)
+ *   Swords    Pentakills & quadras (multi_kill == penta / quadra)
+ *   Droplet   First bloods         (is_first_blood = true)
+ *   Crosshair 1v3+ outplays        (ai_tags contains "1v3" / "1v2" / "clutch")
+ *   Flame     Teamfight highlights (fight_type = teamfight_5v5)
+ *   Target    Snipes longue dist.  (ai_tags contains "snipe" / "flash_predict")
  */
 
 export const revalidate = 3600; // Wave 13d : records change rarely
 
 export const metadata: Metadata = {
-  title: "Records Absolus — KCKILLS",
+  title: "Records Absolus",
   description:
     "Hall of fame des plus gros moments Karmine Corp en LEC : pentakills, outplays, teamfights, clutch, first bloods. Le best-of absolu.",
   alternates: { canonical: "/records" },
@@ -55,7 +68,8 @@ export const metadata: Metadata = {
 interface Category {
   title: string;
   kicker: string;
-  icon: string;
+  /** lucide-react icon used as the category's primary hextech mark. */
+  Icon: LucideIcon;
   accent: string;
   /** Filter predicate applied over getPublishedKills(500). */
   filter: (k: PublishedKillRow) => boolean;
@@ -71,8 +85,8 @@ const hasTag = (k: PublishedKillRow, ...tags: string[]): boolean =>
 const CATEGORIES: Category[] = [
   {
     title: "Score IA absolu",
-    kicker: "🏆 Les plus gros moments",
-    icon: "🏆",
+    kicker: "Les plus gros moments",
+    Icon: Trophy,
     accent: "var(--gold)",
     filter: (k) =>
       k.tracked_team_involvement === "team_killer" && (k.highlight_score ?? 0) >= 7,
@@ -80,8 +94,8 @@ const CATEGORIES: Category[] = [
   },
   {
     title: "Pentakills & quadras",
-    kicker: "💥 Multi-kills historiques",
-    icon: "💥",
+    kicker: "Multi-kills historiques",
+    Icon: Swords,
     accent: "var(--orange)",
     filter: (k) =>
       k.tracked_team_involvement === "team_killer" &&
@@ -90,8 +104,8 @@ const CATEGORIES: Category[] = [
   },
   {
     title: "First bloods",
-    kicker: "⚡ Le premier sang",
-    icon: "⚡",
+    kicker: "Le premier sang",
+    Icon: Droplet,
     accent: "var(--red)",
     filter: (k) =>
       k.tracked_team_involvement === "team_killer" && k.is_first_blood === true,
@@ -99,8 +113,8 @@ const CATEGORIES: Category[] = [
   },
   {
     title: "1v3 & clutch",
-    kicker: "🎯 Outplays solo",
-    icon: "🎯",
+    kicker: "Outplays solo",
+    Icon: Crosshair,
     accent: "var(--cyan)",
     filter: (k) =>
       k.tracked_team_involvement === "team_killer" &&
@@ -109,8 +123,8 @@ const CATEGORIES: Category[] = [
   },
   {
     title: "Teamfights",
-    kicker: "🔥 Gros combats",
-    icon: "🔥",
+    kicker: "Gros combats",
+    Icon: Flame,
     accent: "var(--green)",
     filter: (k) =>
       k.tracked_team_involvement === "team_killer" &&
@@ -119,8 +133,8 @@ const CATEGORIES: Category[] = [
   },
   {
     title: "Snipes & skillshots",
-    kicker: "🎪 Précision chirurgicale",
-    icon: "🎪",
+    kicker: "Précision chirurgicale",
+    Icon: Target,
     accent: "var(--gold)",
     filter: (k) =>
       k.tracked_team_involvement === "team_killer" &&
@@ -140,7 +154,7 @@ export default async function RecordsPage() {
   // the full top-by-highlight_score slice. Revalidate=3600 keeps this
   // pre-rendered for 99%+ of traffic, so the egress hit is amortised
   // across thousands of pageviews.
-  const all = await getPublishedKills(500);
+  const all = await getPublishedKills(500, { buildTime: true });
   const scored = all.filter((k) => k.kill_visible !== false);
 
   const categories = CATEGORIES.map((cat) => {
@@ -197,23 +211,59 @@ export default async function RecordsPage() {
       <section className="relative py-16 px-6 md:py-24 bg-gradient-to-b from-[var(--bg-primary)] via-[var(--bg-surface)] to-[var(--bg-primary)] overflow-hidden">
         {/* Subtle gold radial */}
         <div
+          aria-hidden
           className="absolute inset-0 pointer-events-none"
           style={{
             background:
               "radial-gradient(ellipse 60% 50% at 50% 40%, rgba(200,170,110,0.15) 0%, transparent 60%)",
           }}
         />
+        {/* Faint hextech scanlines — matches /players + /vs heroes */}
+        <div
+          aria-hidden
+          className="absolute inset-0 opacity-[0.14] mix-blend-overlay pointer-events-none"
+          style={{
+            backgroundImage:
+              "repeating-linear-gradient(180deg, transparent 0px, transparent 2px, rgba(200,170,110,0.08) 3px, transparent 4px)",
+          }}
+        />
+        {/* Floating gold rhombus accents */}
+        <span
+          aria-hidden
+          className="absolute left-[6%] top-12 hidden md:block"
+          style={{
+            width: 14,
+            height: 14,
+            transform: "rotate(45deg)",
+            background: "linear-gradient(135deg, var(--gold), var(--gold-dark))",
+            opacity: 0.55,
+            boxShadow: "0 0 22px rgba(200,170,110,0.5)",
+          }}
+        />
+        <span
+          aria-hidden
+          className="absolute right-[8%] top-24 hidden md:block"
+          style={{
+            width: 9,
+            height: 9,
+            transform: "rotate(45deg)",
+            background: "var(--gold)",
+            opacity: 0.4,
+            boxShadow: "0 0 14px rgba(200,170,110,0.4)",
+          }}
+        />
 
         <div className="relative max-w-5xl mx-auto text-center">
-          <p className="font-data text-[10px] uppercase tracking-[0.35em] text-[var(--gold)]/70 mb-4">
-            ★ Hall of Fame
+          <p className="font-data text-[10px] uppercase tracking-[0.35em] text-[var(--gold)]/70 mb-4 flex items-center justify-center gap-2.5">
+            <Losange />
+            Hall of Fame
           </p>
           <h1 className="font-display text-5xl md:text-7xl lg:text-8xl font-black leading-none">
             <span className="text-shimmer">RECORDS</span>
             <br />
             <span className="text-white">ABSOLUS</span>
           </h1>
-          <p className="mt-6 max-w-2xl mx-auto text-base md:text-lg text-white/70 leading-relaxed">
+          <p className="mt-6 max-w-2xl mx-auto text-base md:text-lg text-[var(--text-muted)] leading-relaxed">
             Les plus gros moments de la Karmine Corp en LEC. Classés par catégorie.
             Score IA · Multi-kills · First bloods · Clutch plays.
           </p>
@@ -224,9 +274,14 @@ export default async function RecordsPage() {
               <a
                 key={cat.title}
                 href={`#cat-${cat.title.toLowerCase().replace(/\s+/g, "-")}`}
-                className="group rounded-full border border-[var(--border-gold)] bg-[var(--bg-surface)]/70 backdrop-blur-sm px-3.5 py-1.5 text-[11px] font-bold uppercase tracking-widest text-white/70 hover:border-[var(--gold)]/60 hover:text-[var(--gold)] transition-all"
+                className="group inline-flex items-center gap-1.5 rounded-full border border-[var(--border-gold)] bg-[var(--bg-surface)]/70 backdrop-blur-sm px-3.5 py-1.5 text-[11px] font-bold uppercase tracking-widest text-white/70 hover:border-[var(--gold)]/60 hover:text-[var(--gold)] transition-all"
               >
-                <span className="mr-1.5">{cat.icon}</span>
+                <cat.Icon
+                  className="h-3.5 w-3.5"
+                  style={{ color: cat.accent }}
+                  strokeWidth={2.25}
+                  aria-hidden
+                />
                 {cat.title}
               </a>
             ))}
@@ -237,12 +292,15 @@ export default async function RecordsPage() {
           <div className="mt-6">
             <Link
               href="/week"
-              className="inline-flex items-center gap-2 rounded-full border border-[var(--cyan)]/30 bg-[var(--cyan)]/5 px-4 py-1.5 text-[11px] font-bold uppercase tracking-widest text-[var(--cyan)] hover:bg-[var(--cyan)]/15 transition-all"
+              className="group inline-flex items-center gap-2 rounded-full border border-[var(--cyan)]/30 bg-[var(--cyan)]/5 px-4 py-1.5 text-[11px] font-bold uppercase tracking-widest text-[var(--cyan)] hover:bg-[var(--cyan)]/15 transition-all"
             >
-              <span>▽ Voir cette semaine</span>
-              <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M9 5l7 7-7 7" />
-              </svg>
+              <CalendarDays className="h-3.5 w-3.5" strokeWidth={2.25} aria-hidden />
+              <span>Voir cette semaine</span>
+              <ChevronRight
+                className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5"
+                strokeWidth={3}
+                aria-hidden
+              />
             </Link>
           </div>
         </div>
@@ -256,27 +314,37 @@ export default async function RecordsPage() {
             id={`cat-${cat.title.toLowerCase().replace(/\s+/g, "-")}`}
             className="scroll-mt-24"
           >
-            <header className="flex items-end justify-between gap-4 mb-6 flex-wrap">
-              <div>
-                <p
-                  className="font-data text-[10px] uppercase tracking-[0.3em] font-bold mb-1.5"
-                  style={{ color: cat.accent }}
+            <header className="mb-6">
+              <div className="flex items-end justify-between gap-4 flex-wrap">
+                <div>
+                  <p
+                    className="font-data text-[10px] uppercase tracking-[0.3em] font-bold mb-2 flex items-center gap-2"
+                    style={{ color: cat.accent }}
+                  >
+                    <cat.Icon className="h-3.5 w-3.5" strokeWidth={2.25} aria-hidden />
+                    {cat.kicker}
+                  </p>
+                  <h2 className="font-display text-3xl md:text-4xl font-black text-white">
+                    {cat.title}
+                  </h2>
+                </div>
+                <Link
+                  href={cat.allHref}
+                  className="group inline-flex items-center gap-1.5 rounded-full border border-[var(--border-gold)] bg-[var(--bg-surface)] px-4 py-1.5 text-[11px] font-bold uppercase tracking-widest text-[var(--text-muted)] hover:border-[var(--gold)]/60 hover:text-[var(--gold)] transition-all"
                 >
-                  {cat.kicker}
-                </p>
-                <h2 className="font-display text-3xl md:text-4xl font-black text-white">
-                  {cat.title}
-                </h2>
+                  Voir tout
+                  <ChevronRight
+                    className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5"
+                    strokeWidth={3}
+                    aria-hidden
+                  />
+                </Link>
               </div>
-              <Link
-                href={cat.allHref}
-                className="rounded-full border border-[var(--border-gold)] bg-[var(--bg-surface)] px-4 py-1.5 text-[11px] font-bold uppercase tracking-widest text-[var(--text-muted)] hover:border-[var(--gold)]/60 hover:text-[var(--gold)] transition-all"
-              >
-                Voir tout &rarr;
-              </Link>
+              {/* Hextech divider */}
+              <div className="gold-line mt-4" aria-hidden />
             </header>
 
-            <div className="grid gap-4 md:grid-cols-3">
+            <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3 lg:grid-cols-4">
               {rows.map((k, i) => (
                 <RecordCard key={k.id} kill={k} rank={i + 1} accent={cat.accent} />
               ))}
@@ -311,15 +379,14 @@ function RecordCard({
   return (
     <Link
       href={`/scroll?kill=${kill.id}`}
-      className="group relative overflow-hidden rounded-2xl border border-[var(--border-gold)] bg-[var(--bg-surface)] transition-all hover:border-[var(--gold)]/60 hover:-translate-y-1 hover:shadow-2xl hover:shadow-[var(--gold)]/10"
-      style={{ aspectRatio: "9/16" }}
+      className="group glass relative overflow-hidden rounded-2xl border border-[var(--border-gold)] transition-all duration-300 hover:border-[var(--gold)]/60 hover:-translate-y-1 hover:gold-glow aspect-[3/4]"
     >
       {kill.thumbnail_url && (
         <Image
           src={kill.thumbnail_url}
-          alt={`${kill.killer_champion} → ${kill.victim_champion}`}
+          alt={`${kill.killer_champion ?? "?"} élimine ${kill.victim_champion ?? "?"}`}
           fill
-          sizes="(max-width: 768px) 100vw, 33vw"
+          sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
           className="object-cover transition-transform duration-700 group-hover:scale-105"
         />
       )}
@@ -328,34 +395,34 @@ function RecordCard({
       <div className="absolute inset-0 bg-gradient-to-t from-black via-black/30 to-transparent" />
       <div className="absolute inset-0 bg-gradient-to-br from-transparent via-transparent to-black/70" />
 
-      {/* Rank medal */}
-      <div className="absolute top-3 left-3 z-10">
+      {/* Rank badge — hextech gold frame for #1, slim dark chip otherwise */}
+      <div className="absolute top-2.5 left-2.5 z-10">
         <div
-          className="flex h-10 w-10 items-center justify-center rounded-full font-display text-lg font-black"
+          className="flex h-9 w-9 items-center justify-center rounded-lg font-display text-base font-black backdrop-blur-sm"
           style={{
+            color: rank === 1 ? "var(--bg-primary)" : "var(--gold-bright)",
             background:
               rank === 1
-                ? "linear-gradient(135deg, #FFD700, #FFA500)"
-                : rank === 2
-                  ? "linear-gradient(135deg, #C0C0C0, #909090)"
-                  : "linear-gradient(135deg, #CD7F32, #8B4513)",
-            color: "black",
+                ? "linear-gradient(135deg, var(--gold-bright), var(--gold) 55%, var(--gold-dark))"
+                : "rgba(1,10,19,0.62)",
+            border:
+              rank === 1
+                ? "1px solid var(--gold-bright)"
+                : "1px solid var(--border-gold)",
             boxShadow:
               rank === 1
-                ? "0 0 30px rgba(255,215,0,0.5)"
-                : rank === 2
-                  ? "0 0 20px rgba(192,192,192,0.4)"
-                  : "0 0 20px rgba(205,127,50,0.4)",
+                ? "0 0 24px rgba(240,230,210,0.45)"
+                : "0 6px 16px rgba(0,0,0,0.4)",
           }}
         >
-          #{rank}
+          {rank}
         </div>
       </div>
 
       {/* Score pill top right */}
       {kill.highlight_score !== null && (
         <div
-          className="absolute top-3 right-3 rounded-md border px-2 py-0.5 text-[10px] font-data font-black backdrop-blur-sm z-10"
+          className="absolute top-2.5 right-2.5 rounded-md border px-2 py-0.5 text-[10px] font-data font-black backdrop-blur-sm z-10"
           style={{
             borderColor: `${accent}66`,
             color: accent,
@@ -367,10 +434,11 @@ function RecordCard({
       )}
 
       {/* Badges */}
-      <div className="absolute top-14 left-3 z-10 flex flex-col gap-1">
+      <div className="absolute top-[3.25rem] left-2.5 z-10 flex flex-col gap-1">
         {kill.multi_kill && (
-          <span className="rounded-md bg-[var(--orange)]/90 px-1.5 py-0.5 text-[9px] font-black uppercase text-black">
-            ⚡ {kill.multi_kill}
+          <span className="inline-flex items-center gap-1 rounded-md bg-[var(--orange)]/90 px-1.5 py-0.5 text-[9px] font-black uppercase text-black">
+            <Zap className="h-2.5 w-2.5" strokeWidth={3} aria-hidden />
+            {kill.multi_kill}
           </span>
         )}
         {kill.is_first_blood && (
@@ -413,15 +481,63 @@ function RecordCard({
       {/* Hover play icon */}
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-all duration-300 pointer-events-none z-10">
         <div className="h-14 w-14 rounded-full bg-[var(--gold)]/30 backdrop-blur-md border border-[var(--gold)]/60 flex items-center justify-center">
-          <svg
-            className="h-5 w-5 text-[var(--gold)] translate-x-0.5"
-            fill="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path d="M8 5v14l11-7z" />
-          </svg>
+          <Play
+            className="h-5 w-5 translate-x-0.5 text-[var(--gold)] fill-[var(--gold)]"
+            strokeWidth={1.5}
+            aria-hidden
+          />
         </div>
       </div>
+
+      {/* Single corner losange — bottom-right stays clear of the rank badge
+          (top-left), score pill (top-right) and left-aligned info panel. */}
+      <CornerLosange position="br" />
     </Link>
+  );
+}
+
+// ─── Hextech ornaments ─────────────────────────────────────────────────
+
+/** Small rotated-square gold accent — the Losange that precedes eyebrows. */
+function Losange() {
+  return (
+    <span
+      aria-hidden
+      className="inline-block"
+      style={{
+        width: 11,
+        height: 11,
+        transform: "rotate(45deg)",
+        background: "linear-gradient(135deg, var(--gold-bright), var(--gold))",
+        boxShadow: "0 0 12px rgba(200,170,110,0.5)",
+      }}
+    />
+  );
+}
+
+/** Corner accent losange — copied from the VSRoulette card pattern. */
+function CornerLosange({
+  position,
+}: {
+  position: "tl" | "tr" | "bl" | "br";
+}) {
+  const map: Record<string, string> = {
+    tl: "top-2 left-2",
+    tr: "top-2 right-2",
+    bl: "bottom-2 left-2",
+    br: "bottom-2 right-2",
+  };
+  return (
+    <span
+      aria-hidden
+      className={`absolute ${map[position]} z-10`}
+      style={{
+        width: 8,
+        height: 8,
+        transform: "rotate(45deg)",
+        background: "linear-gradient(135deg, var(--gold-bright), var(--gold))",
+        boxShadow: "0 0 10px rgba(200,170,110,0.6)",
+      }}
+    />
   );
 }

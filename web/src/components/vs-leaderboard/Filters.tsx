@@ -78,14 +78,16 @@ export function Filters({
 
   return (
     <>
-      {/* Desktop sticky bar (md+) */}
+      {/* Desktop sticky bar (md+) — full-bleed band, content constrained
+          to the unified max-w-7xl. No negative margins : the parent has no
+          horizontal padding to break out of, so -mx-* bled off-screen. */}
       <div
-        className="hidden md:block sticky top-0 z-30 -mx-4 px-4 py-3 border-y border-[var(--border-gold)] bg-[var(--bg-primary)]/85 backdrop-blur-md"
+        className="hidden md:block sticky top-0 z-30 glass px-4 py-3 border-y border-[var(--border-gold)]"
         style={{
           boxShadow: "0 8px 24px rgba(0,0,0,0.45)",
         }}
       >
-        <div className="mx-auto max-w-6xl flex items-center gap-3 flex-wrap">
+        <div className="mx-auto max-w-7xl flex items-center gap-3 flex-wrap">
           <RoleTabs value={value.role} onChange={(r) => onChange({ ...value, role: r })} />
           <Divider />
           <ChampionDropdown
@@ -117,7 +119,7 @@ export function Filters({
           )}
         </div>
         {activeChips.length > 0 && (
-          <div className="mx-auto max-w-6xl mt-2 flex items-center gap-2 flex-wrap">
+          <div className="mx-auto max-w-7xl mt-2 flex items-center gap-2 flex-wrap">
             <span className="font-data text-[9px] uppercase tracking-[0.3em] text-[var(--gold)]/55 mr-1">
               Filtres actifs
             </span>
@@ -128,9 +130,10 @@ export function Filters({
         )}
       </div>
 
-      {/* Mobile trigger (xs..md-1) */}
-      <div className="md:hidden sticky top-0 z-30 -mx-3 px-3 py-2.5 border-y border-[var(--border-gold)] bg-[var(--bg-primary)]/90 backdrop-blur-md">
-        <div className="flex items-center gap-2">
+      {/* Mobile trigger (xs..md-1) — full-bleed band with its own padding
+          (was -mx-3 with no padded parent → bled off-screen). */}
+      <div className="md:hidden sticky top-0 z-30 glass px-3 py-2.5 border-y border-[var(--border-gold)]">
+        <div className="mx-auto max-w-7xl flex items-center gap-2">
           <button
             type="button"
             onClick={() => setSheetOpen(true)}
@@ -150,7 +153,7 @@ export function Filters({
           </span>
         </div>
         {activeChips.length > 0 && (
-          <div className="mt-2 flex items-center gap-1.5 flex-wrap">
+          <div className="mx-auto max-w-7xl mt-2 flex items-center gap-1.5 flex-wrap">
             {activeChips.map((chip) => (
               <ActiveChip key={chip.key} chip={chip} onRemove={() => removeChip(chip.key, value, onChange)} compact />
             ))}

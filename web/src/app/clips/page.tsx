@@ -11,7 +11,7 @@ import { ClipsGrid, type ClipCard, type InitialFilters } from "./clips-grid";
 export const revalidate = 1800;
 
 export const metadata: Metadata = {
-  title: "Clips — KCKILLS",
+  title: "Clips",
   description:
     "Tous les clips Karmine Corp. Filtrer par joueur, équipe adverse, type de fight, multi-kills, first bloods. Mise à jour live.",
   alternates: { canonical: "/clips" },

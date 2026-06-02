@@ -74,7 +74,7 @@ function eraForDate(iso: string | null): Era | null {
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params;
   const match = await getMatchBySlug(slug);
-  if (!match) return { title: "Match introuvable — KCKILLS" };
+  if (!match) return { title: "Match introuvable" };
 
   const oppCode = match.opponentTeam?.code ?? "OPP";
   const oppName = match.opponentTeam?.name ?? "Adversaire";
@@ -380,7 +380,7 @@ export default async function MatchReplayPage({ params }: Props) {
         />
 
         {/* Riot legal disclaimer — required on every public page. */}
-        <p className="border-t border-[var(--border-gold)]/30 pt-6 text-center text-[10px] leading-relaxed text-[var(--text-disabled)]">
+        <p className="border-t border-[var(--border-gold)]/30 pt-6 text-center text-[10px] leading-relaxed text-[var(--text-muted)]">
           KCKILLS was created under Riot Games&apos; &quot;Legal Jibber
           Jabber&quot; policy using assets owned by Riot Games. Riot Games does
           not endorse or sponsor this project.

@@ -164,7 +164,15 @@ export type EventType =
   // V12/V13 (Wave 21.2) — discoverability taps. Fired when the killer
   // name or the champion bubble is tapped from the active feed item.
   // metadata: { kind: 'player'|'champion', target: string, source: 'feed' }
-  | "clip.profile_tap";
+  | "clip.profile_tap"
+  // Wave 37 — save-to-collection toggle from the FeedSidebarV2 bookmark
+  // slot. Fired optimistically on each toggle. The DB CHECK constraint
+  // hasn't been extended yet — until a follow-up migration whitelists
+  // these values, inserts are silently dropped by Postgres (best-effort
+  // tracker, same pattern as the other un-migrated events above). The
+  // API gate accepts them so the request validates client-side.
+  | "clip.saved"
+  | "clip.unsaved";
 
 // ─── perf.vital metadata contract ──────────────────────────────────────
 // Exported so WebVitalsReporter can build a strict-typed payload and so

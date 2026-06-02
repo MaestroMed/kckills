@@ -131,7 +131,7 @@ export async function voteOnComment(
 export interface KillLikeResult {
   ok: true;
   liked: boolean;
-  ratingCount: number;
+  likeCount: number;
 }
 
 export interface KillLikeError {
@@ -141,12 +141,17 @@ export interface KillLikeError {
 }
 
 /**
- * Toggle the user's "like" on a kill — implemented as a rating with
- * score=5 (matches the legacy /api/kills/[id]/like behaviour). The
- * 5-star precision UI remains available via the RatingSheet.
+ * Toggle the user's binary "like" on a kill.
  *
- * `desired = true`  → upsert(score=5)
- * `desired = false` → delete the row
+ * Wave 36 (migr 080) — the like now lives in the dedicated `likes` table,
+ * NOT as a ratings.score=5 row. Previously a like and a 1-5 star rating
+ * shared the SAME ratings row (UNIQUE kill_id,user_id) and mutually
+ * overwrote; they are now fully independent. The count returned/read here
+ * is kills.like_count (maintained by trg_like_change). 1-5 ratings go
+ * through `rateKill` below and feed avg_rating/rating_count separately.
+ *
+ * `desired = true`  → insert into likes (idempotent on conflict)
+ * `desired = false` → delete the like row
  */
 export async function toggleKillLike(
   killId: string,
@@ -166,40 +171,39 @@ export async function toggleKillLike(
   }
 
   if (desired) {
-    const { error } = await supabase.from("ratings").upsert(
-      { kill_id: killId, user_id: user.id, score: 5 },
-      { onConflict: "kill_id,user_id" },
+    const { error } = await supabase.from("likes").upsert(
+      { kill_id: killId, user_id: user.id },
+      { onConflict: "kill_id,user_id", ignoreDuplicates: true },
     );
     if (error) return { ok: false, error: error.message };
   } else {
     const { error } = await supabase
-      .from("ratings")
+      .from("likes")
       .delete()
       .eq("kill_id", killId)
       .eq("user_id", user.id);
     if (error) return { ok: false, error: error.message };
   }
 
-  // Read back canonical count — the trigger fn_update_kill_rating has
-  // already fired synchronously on the write above.
+  // Read back canonical count — trg_like_change fired synchronously above.
   const { data } = await supabase
     .from("kills")
-    .select("rating_count")
+    .select("like_count")
     .eq("id", killId)
     .maybeSingle();
 
   return {
     ok: true,
     liked: desired,
-    ratingCount: (data?.rating_count as number | null) ?? 0,
+    likeCount: (data?.like_count as number | null) ?? 0,
   };
 }
 
-/** Hydrate the heart on mount (was GET /api/kills/[id]/like). */
+/** Hydrate the heart on mount — reads the dedicated likes table. */
 export async function getKillLikeState(
   killId: string,
-): Promise<{ liked: boolean; ratingCount: number }> {
-  if (!UUID_RE.test(killId)) return { liked: false, ratingCount: 0 };
+): Promise<{ liked: boolean; likeCount: number }> {
+  if (!UUID_RE.test(killId)) return { liked: false, likeCount: 0 };
 
   const supabase = await createServerSupabase();
   const {
@@ -208,21 +212,77 @@ export async function getKillLikeState(
 
   const { data: kill } = await supabase
     .from("kills")
-    .select("rating_count")
+    .select("like_count")
     .eq("id", killId)
     .maybeSingle();
-  const ratingCount = (kill?.rating_count as number | null) ?? 0;
+  const likeCount = (kill?.like_count as number | null) ?? 0;
 
-  if (!user) return { liked: false, ratingCount };
+  if (!user) return { liked: false, likeCount };
 
   const { data } = await supabase
-    .from("ratings")
-    .select("score")
+    .from("likes")
+    .select("id")
     .eq("kill_id", killId)
     .eq("user_id", user.id)
     .maybeSingle();
 
-  // Treat ANY existing rating as "liked" for the heart UI — same rule
-  // as the legacy GET /api/kills/[id]/like handler.
-  return { liked: data != null, ratingCount };
+  return { liked: data != null, likeCount };
+}
+
+/**
+ * Cast / update the user's 1-5 STAR rating on a kill (Wave 36).
+ *
+ * This is the precision rating, independent of the binary like above. It
+ * upserts the user's row in `ratings` (UNIQUE kill_id,user_id); the
+ * existing fn_update_kill_rating trigger recomputes avg_rating +
+ * rating_count, which drive the Wilson feed score. `score = 0` clears the
+ * rating (delete), so the UI can toggle a star off.
+ */
+export async function rateKill(
+  killId: string,
+  score: number,
+): Promise<{ ok: true; avgRating: number; ratingCount: number } | KillLikeError> {
+  if (!UUID_RE.test(killId)) {
+    return { ok: false, error: "Identifiant invalide" };
+  }
+  if (!Number.isInteger(score) || score < 0 || score > 5) {
+    return { ok: false, error: "Note invalide (0-5)" };
+  }
+
+  const supabase = await createServerSupabase();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { ok: false, error: "Connecte-toi pour noter", authRequired: true };
+  }
+
+  if (score === 0) {
+    const { error } = await supabase
+      .from("ratings")
+      .delete()
+      .eq("kill_id", killId)
+      .eq("user_id", user.id);
+    if (error) return { ok: false, error: error.message };
+  } else {
+    const { error } = await supabase.from("ratings").upsert(
+      { kill_id: killId, user_id: user.id, score },
+      { onConflict: "kill_id,user_id" },
+    );
+    if (error) return { ok: false, error: error.message };
+  }
+
+  // fn_update_kill_rating fired synchronously above.
+  const { data } = await supabase
+    .from("kills")
+    .select("avg_rating, rating_count")
+    .eq("id", killId)
+    .maybeSingle();
+
+  return {
+    ok: true,
+    avgRating: (data?.avg_rating as number | null) ?? 0,
+    ratingCount: (data?.rating_count as number | null) ?? 0,
+  };
 }

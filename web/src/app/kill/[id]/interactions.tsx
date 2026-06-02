@@ -292,6 +292,125 @@ export function KillInteractions({ killId }: { killId: string }) {
     }
   }, [killId, isUuid, commentText]);
 
+  // ─── Reply ───────────────────────────────────────────────────────────
+  // Threads `parentId` through the same POST endpoint (which already
+  // accepts it) and optimistically inserts the reply under its parent in
+  // the nested list. Returns true on success so the inline composer can
+  // close + clear; false rolls back and keeps the user's draft.
+  const handleReply = useCallback(
+    async (parentId: string, rawText: string): Promise<boolean> => {
+      const trimmed = rawText.trim();
+      if (!trimmed) return false;
+
+      // Legacy (non-UUID) kills have no server — append locally only.
+      if (!isUuid) {
+        const localReply: Comment = {
+          id: `local-${Date.now()}`,
+          user: "Toi",
+          text: trimmed,
+          time: "maintenant",
+          createdAtMs: Date.now(),
+          upvotes: 0,
+          downvoteCount: 0,
+          userVote: 0,
+        };
+        setComments((prev) =>
+          prev.map((c) =>
+            c.id === parentId
+              ? { ...c, replies: [...(c.replies ?? []), localReply] }
+              : c,
+          ),
+        );
+        return true;
+      }
+
+      const optimisticId = `opt-${Date.now()}`;
+      const optimistic: Comment = {
+        id: optimisticId,
+        user: "Toi",
+        text: trimmed,
+        time: "maintenant",
+        createdAtMs: Date.now(),
+        pending: true,
+        upvotes: 0,
+        downvoteCount: 0,
+        userVote: 0,
+      };
+      // Insert optimistic reply under its parent (parent is always a
+      // top-level row — the API flattens deeper threads onto their root).
+      setComments((prev) =>
+        prev.map((c) =>
+          c.id === parentId
+            ? { ...c, replies: [...(c.replies ?? []), optimistic] }
+            : c,
+        ),
+      );
+
+      const dropOptimistic = () =>
+        setComments((prev) =>
+          prev.map((c) =>
+            c.id === parentId
+              ? { ...c, replies: (c.replies ?? []).filter((r) => r.id !== optimisticId) }
+              : c,
+          ),
+        );
+
+      try {
+        const res = await fetch(`/api/kills/${killId}/comment`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text: trimmed, parentId }),
+        });
+        if (res.status === 401) {
+          dropOptimistic();
+          setAuthError(true);
+          return false;
+        }
+        if (!res.ok) {
+          dropOptimistic();
+          return false;
+        }
+        const data: ApiComment = await res.json();
+        setComments((prev) =>
+          prev.map((c) =>
+            c.id === parentId
+              ? {
+                  ...c,
+                  replies: (c.replies ?? []).map((r) =>
+                    r.id === optimisticId
+                      ? {
+                          id: String(data.id ?? optimisticId),
+                          user: String(
+                            data.profile?.discord_username ??
+                              data.profile?.username ??
+                              "Toi",
+                          ),
+                          avatar: data.profile?.discord_avatar_url ?? undefined,
+                          text: String(data.content ?? data.body ?? trimmed),
+                          time: "maintenant",
+                          createdAtMs: data.created_at
+                            ? new Date(data.created_at).getTime()
+                            : Date.now(),
+                          upvotes: typeof data.upvotes === "number" ? data.upvotes : 0,
+                          downvoteCount:
+                            typeof data.downvote_count === "number" ? data.downvote_count : 0,
+                          userVote: 0,
+                        }
+                      : r,
+                  ),
+                }
+              : c,
+          ),
+        );
+        return true;
+      } catch {
+        dropOptimistic();
+        return false;
+      }
+    },
+    [killId, isUuid],
+  );
+
   // Vote change reconciler — keeps the local list in sync after a
   // CommentVote child fires a successful POST. Walks both top-level
   // and reply rows since the user can vote on either.
@@ -428,6 +547,7 @@ export function KillInteractions({ killId }: { killId: string }) {
             depth={0}
             onAuthRequired={onAuthRequired}
             onVoteChange={handleVoteChange}
+            onReply={handleReply}
           />
         ))}
       </div>
@@ -456,17 +576,26 @@ interface ThreadProps {
   depth: number;
   onAuthRequired?: () => void;
   onVoteChange: (commentId: string, state: { upvotes: number; downvotes: number; userVote: -1 | 0 | 1 }) => void;
+  /** Submits a reply against this comment's parentId. Resolves true on
+   *  success (composer clears + closes), false on auth/error (draft kept). */
+  onReply: (parentId: string, text: string) => Promise<boolean>;
 }
 
-function CommentThread({ comment: c, depth, onAuthRequired, onVoteChange }: ThreadProps) {
+function CommentThread({ comment: c, depth, onAuthRequired, onVoteChange, onReply }: ThreadProps) {
   const maxDepth = 3;
   const indent = Math.min(depth, maxDepth);
   // Optimistic / local-only comments don't have server ids — hide the
-  // report + vote buttons until the canonical row lands.
+  // report + vote + reply buttons until the canonical row lands.
   const isLocalId =
     c.pending || c.id.startsWith("opt-") || c.id.startsWith("local-");
   const reportable = !isLocalId;
   const votable = !isLocalId;
+  // Replies attach to top-level comments only — the GET endpoint flattens
+  // the thread to a single nesting level (parent_id === top-level id), so a
+  // reply-to-a-reply would silently disappear on reload. Gate the affordance
+  // on depth === 0 to keep the optimistic UI consistent with what reloads.
+  const replyable = !isLocalId && depth === 0;
+  const [showReply, setShowReply] = useState(false);
 
   return (
     <div style={{ marginLeft: indent > 0 ? `${indent * 16}px` : 0 }}>
@@ -497,15 +626,36 @@ function CommentThread({ comment: c, depth, onAuthRequired, onVoteChange }: Thre
           )}
         </div>
         <p className="text-sm text-[var(--text-secondary)] pl-8">{c.text}</p>
-        {votable && (
-          <div className="pl-8 mt-1.5">
-            <CommentVote
-              commentId={c.id}
-              initialUpvotes={c.upvotes}
-              initialDownvotes={c.downvoteCount}
-              initialUserVote={c.userVote}
-              onAuthRequired={onAuthRequired}
-              onChange={(state) => onVoteChange(c.id, state)}
+        {(votable || replyable) && (
+          <div className="pl-8 mt-1.5 flex items-center gap-3">
+            {votable && (
+              <CommentVote
+                commentId={c.id}
+                initialUpvotes={c.upvotes}
+                initialDownvotes={c.downvoteCount}
+                initialUserVote={c.userVote}
+                onAuthRequired={onAuthRequired}
+                onChange={(state) => onVoteChange(c.id, state)}
+              />
+            )}
+            {replyable && (
+              <button
+                type="button"
+                onClick={() => setShowReply((v) => !v)}
+                aria-expanded={showReply}
+                className="rounded text-[11px] font-medium text-[var(--text-muted)] hover:text-[var(--gold)] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gold)]"
+              >
+                {showReply ? "Annuler" : "Répondre"}
+              </button>
+            )}
+          </div>
+        )}
+        {replyable && showReply && (
+          <div className="pl-8 mt-2">
+            <CommentReplyComposer
+              parentId={c.id}
+              onReply={onReply}
+              onDone={() => setShowReply(false)}
             />
           </div>
         )}
@@ -521,10 +671,71 @@ function CommentThread({ comment: c, depth, onAuthRequired, onVoteChange }: Thre
               depth={depth + 1}
               onAuthRequired={onAuthRequired}
               onVoteChange={onVoteChange}
+              onReply={onReply}
             />
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+// ─── Inline reply composer ───────────────────────────────────────────────
+// Local draft state lives here so each open thread keeps its own text.
+// Delegates the actual POST (with parentId) to the parent's onReply.
+function CommentReplyComposer({
+  parentId,
+  onReply,
+  onDone,
+}: {
+  parentId: string;
+  onReply: (parentId: string, text: string) => Promise<boolean>;
+  onDone: () => void;
+}) {
+  const [text, setText] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+
+  const submit = useCallback(async () => {
+    const trimmed = text.trim();
+    if (!trimmed || submitting) return;
+    setSubmitting(true);
+    const ok = await onReply(parentId, trimmed);
+    setSubmitting(false);
+    if (ok) {
+      setText("");
+      onDone();
+    }
+    // On failure the draft is kept; the global auth prompt (if any) shows.
+  }, [text, submitting, onReply, parentId, onDone]);
+
+  return (
+    <div className="flex gap-2">
+      <input
+        type="text"
+        value={text}
+        autoFocus
+        onChange={(e) => setText(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" && !submitting) {
+            e.preventDefault();
+            submit();
+          }
+          if (e.key === "Escape") onDone();
+        }}
+        placeholder="Répondre..."
+        maxLength={500}
+        disabled={submitting}
+        aria-label="Répondre à ce commentaire"
+        className="flex-1 rounded-lg border border-[var(--border-gold)] bg-[var(--bg-primary)] px-3 py-1.5 text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] outline-none focus:border-[var(--gold)] disabled:opacity-60"
+      />
+      <button
+        type="button"
+        onClick={submit}
+        disabled={!text.trim() || submitting}
+        className="rounded-lg bg-[var(--gold)] px-3 py-1.5 text-xs font-semibold text-black disabled:opacity-40"
+      >
+        {submitting ? "..." : "Poster"}
+      </button>
     </div>
   );
 }

@@ -21,7 +21,7 @@
 import { useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { motion, AnimatePresence } from "motion/react";
+import { m, AnimatePresence } from "motion/react";
 
 interface Props {
   open: boolean;
@@ -87,7 +87,7 @@ export function PlayerDrawer({
   return (
     <AnimatePresence>
       {open && (
-        <motion.div
+        <m.div
           role="dialog"
           aria-modal="true"
           aria-label={`Profil ${playerName}`}
@@ -101,7 +101,7 @@ export function PlayerDrawer({
             className="absolute inset-0 bg-black/55"
             onClick={onClose}
           />
-          <motion.div
+          <m.div
             initial={{ y: 60, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: 60, opacity: 0 }}
@@ -175,8 +175,8 @@ export function PlayerDrawer({
                 Profil complet →
               </Link>
             )}
-          </motion.div>
-        </motion.div>
+          </m.div>
+        </m.div>
       )}
     </AnimatePresence>
   );

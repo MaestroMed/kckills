@@ -497,6 +497,63 @@ export const getPublishedKills = cache(async function getPublishedKills(
 });
 
 /**
+ * getRecentPublishedKills — published KC-killer clips ordered by
+ * recency (created_at DESC), NOT by highlight_score.
+ *
+ * Wave 36 audit fix : `<HomeRecentClips>`' "Derniers clips" rail used
+ * getPublishedKills (highlight_score DESC) then re-sorted client-side,
+ * so genuinely new low-score clips never made the top-N slice and the
+ * "{n} récents" label lied. This loader sorts on created_at server-side
+ * so the freshest clips always win — same shape/filters as
+ * getPublishedKills, only the ORDER BY differs.
+ *
+ * Filters to `tracked_team_involvement = 'team_killer'` server-side so
+ * the caller fetches exactly what it renders (no over-fetch + client
+ * filter). Same `buildTime` anon-client escape hatch so the homepage
+ * stays ISR-cacheable.
+ */
+export const getRecentPublishedKills = cache(
+  async function getRecentPublishedKills(
+    limit = 12,
+    opts: { buildTime?: boolean } = {},
+  ): Promise<PublishedKillRow[]> {
+    try {
+      const supabase = opts.buildTime
+        ? createAnonSupabase()
+        : await createServerSupabase();
+      const { data, error } = await supabase
+        .from("kills")
+        .select(KILL_SELECT)
+        // PR23 split-status fallback (see getPublishedKills).
+        .or(
+          "publication_status.eq.published," +
+            "and(publication_status.is.null,status.eq.published)",
+        )
+        .eq("kill_visible", true)
+        .eq("tracked_team_involvement", "team_killer")
+        .not("clip_url_vertical", "is", null)
+        .not("thumbnail_url", "is", null)
+        .order("created_at", { ascending: false })
+        .limit(limit);
+      if (error) {
+        console.warn(
+          "[supabase/kills] getRecentPublishedKills error:",
+          error.message,
+        );
+        return [];
+      }
+      return (data ?? []).map((row) =>
+        normalize(row as unknown as RawKillSelect),
+      );
+    } catch (err) {
+      rethrowIfDynamic(err);
+      console.warn("[supabase/kills] getRecentPublishedKills threw:", err);
+      return [];
+    }
+  },
+);
+
+/**
  * getWeekendBestClips — top published clips during a date window.
  *
  * Used by `<HomeWeekendBestClips />` to surface the freshest, best-rated
@@ -634,10 +691,12 @@ export const getWeekendBestClips = cache(async function getWeekendBestClips(
  *        killer + victim + game_time) but the clipping/QC failed.
  *        Better to surface them as stats than hide them entirely.
  *
- * `kill_visible` is enforced ONLY on bucket 1. Buckets 2 and 3 trust
- * the underlying source — gol.gg has post-game verified rosters,
- * livestats-extracted kills already passed the harvester's KC-side
- * detection.
+ * `kill_visible` is enforced on bucket 1 (must be true) and on bucket 2
+ * as `kill_visible IN (true, NULL)` — gol.gg rows Gemini QC flagged
+ * kill_visible=false are dropped, but never-analysed historical rows
+ * (NULL) still surface as data-only cards. Bucket 3 trusts the
+ * underlying source — livestats-extracted kills already passed the
+ * harvester's KC-side detection.
  */
 export const getKillsForGrid = cache(async function getKillsForGrid(
   limit = 200,
@@ -667,10 +726,15 @@ export const getKillsForGrid = cache(async function getKillsForGrid(
       .limit(limit);
 
     // Bucket 2 : gol.gg historical data-only
+    // kill_visible filter (Wave 36 audit) : gol.gg rows that Gemini QC
+    // marked kill_visible=false are over-fetched noise on the grid.
+    // NULL kill_visible (never analysed) is kept via PostgREST `or` so
+    // unanalysed historical rows still surface as data-only cards.
     let golggQuery = supabase
       .from("kills")
       .select(KILL_SELECT)
       .eq("data_source", "gol_gg")
+      .or("kill_visible.eq.true,kill_visible.is.null")
       .order("game_time_seconds", { ascending: true })
       .limit(limit);
 

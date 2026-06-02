@@ -14,6 +14,13 @@
  *   6. CARRIÈRE TIMELINE
  *   7. ÉPOQUES TRAVERSÉES (HonorsAndEras)
  *   8. POUR ALLER PLUS LOIN (links + prev/next)
+ *
+ * Wave 37 — Hextech recipe : ragged 3xl/5xl/7xl section shells unified to
+ * one max-w-5xl measure (prose + vertical timeline keep a tighter inner
+ * max-w-3xl), stats strip rebuilt on .glass + CornerLosange, section
+ * headers use a real gold Losange (SectionEyebrow) instead of the bare "◆"
+ * glyph, and the "pour aller plus loin" cards gain a corner accent. The
+ * era-id anchor + timeline-CTA deep link are preserved verbatim.
  */
 
 import { notFound } from "next/navigation";
@@ -75,6 +82,68 @@ const ROLE_LABEL: Record<string, string> = {
   adc: "BOT LANE",
   support: "SUPPORT",
 };
+
+/**
+ * CornerLosange — server-safe rotated-square accent pinned to a card
+ * corner (same pattern as VSRoulette). Tinted to the era accent.
+ */
+function CornerLosange({
+  position,
+  accent,
+}: {
+  position: "tl" | "tr" | "bl" | "br";
+  accent: string;
+}) {
+  const map: Record<string, string> = {
+    tl: "top-2 left-2",
+    tr: "top-2 right-2",
+    bl: "bottom-2 left-2",
+    br: "bottom-2 right-2",
+  };
+  return (
+    <span
+      aria-hidden
+      className={`absolute z-10 ${map[position]}`}
+      style={{
+        width: 7,
+        height: 7,
+        transform: "rotate(45deg)",
+        background: accent,
+        boxShadow: `0 0 8px ${accent}90`,
+      }}
+    />
+  );
+}
+
+/**
+ * SectionEyebrow — the gold-Losange + uppercase label header that opens
+ * every section. Replaces the bare "◆" glyph with a real diamond and a
+ * trailing gold hairline.
+ */
+function SectionEyebrow({ label, accent }: { label: string; accent: string }) {
+  return (
+    <div className="flex items-center gap-3 mb-8">
+      <span
+        aria-hidden
+        className="inline-block"
+        style={{
+          width: 9,
+          height: 9,
+          transform: "rotate(45deg)",
+          background: accent,
+          boxShadow: `0 0 10px ${accent}90`,
+        }}
+      />
+      <span
+        className="font-data text-[10px] uppercase tracking-[0.3em] font-bold"
+        style={{ color: accent }}
+      >
+        {label}
+      </span>
+      <span className="gold-line flex-1 opacity-40" />
+    </div>
+  );
+}
 
 export default async function AlumniDetailPage({ params }: Props) {
   const { slug } = await params;
@@ -154,7 +223,7 @@ export default async function AlumniDetailPage({ params }: Props) {
           {alumni.stats.map((stat) => (
             <div
               key={stat.label}
-              className="rounded-xl border bg-[var(--bg-surface)]/95 backdrop-blur-md p-5"
+              className="glass relative overflow-hidden rounded-xl border p-5"
               style={{ borderColor: `${accent}30` }}
             >
               <p className="font-data text-[10px] uppercase tracking-widest text-[var(--text-muted)]">
@@ -166,57 +235,50 @@ export default async function AlumniDetailPage({ params }: Props) {
               {stat.hint && (
                 <p className="mt-1 text-[11px] text-[var(--text-muted)]">{stat.hint}</p>
               )}
+              <CornerLosange position="tl" accent={accent} />
+              <CornerLosange position="br" accent={accent} />
             </div>
           ))}
         </div>
       </section>
 
       {/* ═══ 3. L'HISTOIRE — with drop-cap ═════════════════════════════ */}
-      <section className="mx-auto max-w-3xl px-6 py-16 md:py-20">
-        <div className="flex items-center gap-3 mb-8">
-          <span className="h-px w-12" style={{ backgroundColor: accent }} />
-          <span
-            className="font-data text-[10px] uppercase tracking-[0.3em] font-bold"
-            style={{ color: accent }}
-          >
-            L&rsquo;histoire
-          </span>
-          <span style={{ color: accent, opacity: 0.4 }} aria-hidden className="text-xs">
-            ◆
-          </span>
-        </div>
-        <p className="font-display italic text-2xl md:text-3xl font-bold leading-relaxed text-[var(--text-primary)] mb-10">
-          {alumni.subtitle}
-        </p>
-        <div className="space-y-6 text-lg md:text-xl leading-relaxed text-[var(--text-secondary)]">
-          {paragraphs.map((para, i) => {
-            const isFirst = i === 0;
-            if (!isFirst) {
-              return <p key={i} dangerouslySetInnerHTML={{ __html: para }} />;
-            }
-            // Drop-cap : first char of first paragraph rendered as a giant
-            // Cinzel-style serif glyph in the era accent color.
-            const trimmed = para.trimStart();
-            const first = trimmed.charAt(0);
-            const rest = trimmed.slice(1);
-            return (
-              <p key={i} className="alumni-dropcap">
-                <span
-                  className="float-left font-display font-black mr-3 leading-[0.8] -mt-1"
-                  style={{
-                    color: accent,
-                    fontSize: "5rem",
-                    textShadow: `0 4px 16px ${accent}40`,
-                    lineHeight: 0.8,
-                  }}
-                  aria-hidden
-                >
-                  {first}
-                </span>
-                <span dangerouslySetInnerHTML={{ __html: rest }} />
-              </p>
-            );
-          })}
+      <section className="mx-auto max-w-5xl px-6 py-16 md:py-20">
+        <div className="mx-auto max-w-3xl">
+          <SectionEyebrow label="L’histoire" accent={accent} />
+          <p className="font-display italic text-2xl md:text-3xl font-bold leading-relaxed text-[var(--text-primary)] mb-10">
+            {alumni.subtitle}
+          </p>
+          <div className="space-y-6 text-lg md:text-xl leading-relaxed text-[var(--text-secondary)]">
+            {paragraphs.map((para, i) => {
+              const isFirst = i === 0;
+              if (!isFirst) {
+                return <p key={i} dangerouslySetInnerHTML={{ __html: para }} />;
+              }
+              // Drop-cap : first char of first paragraph rendered as a giant
+              // Cinzel-style serif glyph in the era accent color.
+              const trimmed = para.trimStart();
+              const first = trimmed.charAt(0);
+              const rest = trimmed.slice(1);
+              return (
+                <p key={i} className="alumni-dropcap">
+                  <span
+                    className="float-left font-display font-black mr-3 leading-[0.8] -mt-1"
+                    style={{
+                      color: accent,
+                      fontSize: "5rem",
+                      textShadow: `0 4px 16px ${accent}40`,
+                      lineHeight: 0.8,
+                    }}
+                    aria-hidden
+                  >
+                    {first}
+                  </span>
+                  <span dangerouslySetInnerHTML={{ __html: rest }} />
+                </p>
+              );
+            })}
+          </div>
         </div>
       </section>
 
@@ -259,75 +321,33 @@ export default async function AlumniDetailPage({ params }: Props) {
 
       {/* ═══ 5. MOMENTS SIGNATURES ════════════════════════════════════ */}
       {alumni.signatureMoments && alumni.signatureMoments.length > 0 && (
-        <section className="mx-auto max-w-7xl px-6 py-16 md:py-20">
-          <div className="flex items-center gap-3 mb-8">
-            <span className="h-px w-12" style={{ backgroundColor: accent }} />
-            <span
-              className="font-data text-[10px] uppercase tracking-[0.3em] font-bold"
-              style={{ color: accent }}
-            >
-              Moments signatures
-            </span>
-            <span style={{ color: accent, opacity: 0.4 }} aria-hidden className="text-xs">
-              ◆
-            </span>
-          </div>
+        <section className="mx-auto max-w-5xl px-6 py-16 md:py-20">
+          <SectionEyebrow label="Moments signatures" accent={accent} />
           <SignatureMoments moments={alumni.signatureMoments} accent={accent} />
         </section>
       )}
 
       {/* ═══ 6. CARRIÈRE TIMELINE ════════════════════════════════════ */}
       {alumni.careerPath && alumni.careerPath.length > 0 && (
-        <section className="mx-auto max-w-3xl px-6 py-16">
-          <div className="flex items-center gap-3 mb-8">
-            <span className="h-px w-12" style={{ backgroundColor: accent }} />
-            <span
-              className="font-data text-[10px] uppercase tracking-[0.3em] font-bold"
-              style={{ color: accent }}
-            >
-              Carrière
-            </span>
-            <span style={{ color: accent, opacity: 0.4 }} aria-hidden className="text-xs">
-              ◆
-            </span>
+        <section className="mx-auto max-w-5xl px-6 py-16">
+          <div className="mx-auto max-w-3xl">
+            <SectionEyebrow label="Carrière" accent={accent} />
+            <CareerTimeline career={alumni.careerPath} accent={accent} />
           </div>
-          <CareerTimeline career={alumni.careerPath} accent={accent} />
         </section>
       )}
 
       {/* ═══ 7. ÉPOQUES TRAVERSÉES ════════════════════════════════════ */}
       {eras.length > 0 && (
         <section className="mx-auto max-w-5xl px-6 py-16">
-          <div className="flex items-center gap-3 mb-8">
-            <span className="h-px w-12" style={{ backgroundColor: accent }} />
-            <span
-              className="font-data text-[10px] uppercase tracking-[0.3em] font-bold"
-              style={{ color: accent }}
-            >
-              Époques traversées
-            </span>
-            <span style={{ color: accent, opacity: 0.4 }} aria-hidden className="text-xs">
-              ◆
-            </span>
-          </div>
+          <SectionEyebrow label="Époques traversées" accent={accent} />
           <HonorsAndEras eras={eras} accent={accent} />
         </section>
       )}
 
       {/* ═══ 8. POUR ALLER PLUS LOIN ════════════════════════════════ */}
       <section className="mx-auto max-w-5xl px-6 py-16">
-        <div className="flex items-center gap-3 mb-8">
-          <span className="h-px w-12" style={{ backgroundColor: accent }} />
-          <span
-            className="font-data text-[10px] uppercase tracking-[0.3em] font-bold"
-            style={{ color: accent }}
-          >
-            Pour aller plus loin
-          </span>
-          <span style={{ color: accent, opacity: 0.4 }} aria-hidden className="text-xs">
-            ◆
-          </span>
-        </div>
+        <SectionEyebrow label="Pour aller plus loin" accent={accent} />
 
         <ul className="space-y-2 mb-8">
           {alumni.links.map((link) => (
@@ -364,8 +384,8 @@ export default async function AlumniDetailPage({ params }: Props) {
           {anchorEraId && (
             <li>
               <a
-                href={`/#timeline-${anchorEraId}`}
-                className="flex items-center justify-between rounded-xl border bg-[var(--bg-surface)] px-5 py-3 text-sm transition-colors hover:bg-[var(--bg-elevated)] focus-visible:outline-2 focus-visible:outline-[var(--gold)] focus-visible:outline-offset-2"
+                href={`/era/${anchorEraId}`}
+                className="relative flex items-center justify-between overflow-hidden rounded-xl border bg-[var(--bg-surface)] px-5 py-3 text-sm transition-colors hover:bg-[var(--bg-elevated)] focus-visible:outline-2 focus-visible:outline-[var(--gold)] focus-visible:outline-offset-2"
                 style={{ borderColor: `${accent}40`, color: accent }}
               >
                 <span className="flex items-center gap-3">
@@ -377,9 +397,17 @@ export default async function AlumniDetailPage({ params }: Props) {
                   </span>
                   <span>Voir cet alumni dans la KC Timeline</span>
                 </span>
-                <span aria-hidden style={{ color: accent }}>
-                  ◆
-                </span>
+                <span
+                  aria-hidden
+                  className="inline-block"
+                  style={{
+                    width: 8,
+                    height: 8,
+                    transform: "rotate(45deg)",
+                    background: accent,
+                    boxShadow: `0 0 8px ${accent}90`,
+                  }}
+                />
               </a>
             </li>
           )}

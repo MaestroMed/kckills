@@ -44,7 +44,7 @@ import {
   useOptimistic,
   useTransition,
 } from "react";
-import { motion, AnimatePresence } from "motion/react";
+import { m, AnimatePresence } from "motion/react";
 
 // ─── Public types ─────────────────────────────────────────────────────
 
@@ -629,14 +629,14 @@ export function ReportButton({
       {/* ─── MOBILE BOTTOM SHEET ─────────────────────────────────── */}
       <AnimatePresence>
         {isMobile && open && reasons.length > 0 && (
-          <motion.div
+          <m.div
             className="fixed inset-0 z-[400]"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
           >
             {/* Backdrop — tap to dismiss */}
-            <motion.div
+            <m.div
               className="absolute inset-0 bg-black/60 backdrop-blur-[3px]"
               onClick={() => setOpen(false)}
               initial={{ opacity: 0 }}
@@ -645,7 +645,7 @@ export function ReportButton({
             />
 
             {/* Sheet */}
-            <motion.div
+            <m.div
               role="dialog"
               aria-modal="true"
               aria-labelledby={headingId}
@@ -847,8 +847,8 @@ export function ReportButton({
                   {submitting ? "Envoi…" : "Envoyer"}
                 </button>
               </div>
-            </motion.div>
-          </motion.div>
+            </m.div>
+          </m.div>
         )}
       </AnimatePresence>
 

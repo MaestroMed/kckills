@@ -30,7 +30,7 @@ import { JsonLd, breadcrumbLD } from "@/lib/seo/jsonld";
 export const revalidate = 60;
 
 export const metadata: Metadata = {
-  title: "Badges de la BCC — KCKILLS",
+  title: "Badges de la BCC",
   description:
     "Le catalogue complet des badges KCKILLS. Vote, commente, partage, prédis : chaque action de la BCC débloque un badge.",
   alternates: { canonical: "/achievements" },

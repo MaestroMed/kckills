@@ -3,12 +3,41 @@
 import { useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
+import { ChevronDown } from "lucide-react";
 import { KC_LOGO, TEAM_LOGOS } from "@/lib/kc-assets";
+
+/** Small rotated gold square accent — copied from the /vs hextech surfaces. */
+function CornerLosange({
+  position,
+}: {
+  position: "tl" | "tr" | "bl" | "br";
+}) {
+  const map: Record<string, string> = {
+    tl: "top-2 left-2",
+    tr: "top-2 right-2",
+    bl: "bottom-2 left-2",
+    br: "bottom-2 right-2",
+  };
+  return (
+    <span
+      aria-hidden
+      className={`absolute ${map[position]} z-10`}
+      style={{
+        width: 7,
+        height: 7,
+        transform: "rotate(45deg)",
+        background: "rgba(200,170,110,0.45)",
+      }}
+    />
+  );
+}
 
 interface MatchSummary {
   id: string;
+  // null = unknown winner (upcoming / not yet resolved) → neutral "À venir",
+  // excluded from the W/L tally and the W/L filters.
+  kc_won: boolean | null;
   opponent: { code: string; name: string };
-  kc_won: boolean;
   kc_score: number;
   opp_score: number;
   stage: string;
@@ -58,16 +87,19 @@ export function MatchesAccordion({ years }: { years: YearGroup[] }) {
       <div className="flex flex-wrap gap-2">
         <input
           type="text"
+          aria-label="Filtrer les matchs par adversaire"
           placeholder="Filtrer par adversaire..."
           value={filter}
           onChange={(e) => setFilter(e.target.value)}
-          className="flex-1 min-w-[200px] rounded-lg border border-[var(--border-gold)] bg-[var(--bg-surface)] px-3 py-2 text-sm text-[var(--text-primary)] placeholder-[var(--text-disabled)] outline-none focus:border-[var(--gold)]"
+          className="flex-1 min-w-[200px] rounded-lg border border-[var(--border-gold)] bg-[var(--bg-surface)] px-3 py-2 text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] outline-none focus:border-[var(--gold)]"
         />
         <div className="flex gap-1">
           {(["all", "win", "loss"] as const).map((v) => (
             <button
               key={v}
               onClick={() => setResultFilter(v)}
+              aria-pressed={resultFilter === v}
+              aria-label={v === "all" ? "Tous les matchs" : v === "win" ? "Victoires uniquement" : "Défaites uniquement"}
               className={`rounded-lg px-3 py-2 text-xs font-bold uppercase tracking-wider transition-colors ${
                 resultFilter === v
                   ? v === "win" ? "bg-[var(--green)]/20 text-[var(--green)] border border-[var(--green)]/40"
@@ -83,6 +115,7 @@ export function MatchesAccordion({ years }: { years: YearGroup[] }) {
         {hasAnyClips && (
           <button
             onClick={() => setClipsOnly(!clipsOnly)}
+            aria-pressed={clipsOnly}
             className={`rounded-lg px-3 py-2 text-xs font-bold transition-colors ${
               clipsOnly
                 ? "badge-glass text-[var(--gold)]"
@@ -111,83 +144,112 @@ export function MatchesAccordion({ years }: { years: YearGroup[] }) {
             m.opponent.name.toLowerCase().includes(q)
           );
         }
-        if (resultFilter === "win") filtered = filtered.filter((m) => m.kc_won);
-        if (resultFilter === "loss") filtered = filtered.filter((m) => !m.kc_won);
+        if (resultFilter === "win") filtered = filtered.filter((m) => m.kc_won === true);
+        if (resultFilter === "loss") filtered = filtered.filter((m) => m.kc_won === false);
         if (clipsOnly) filtered = filtered.filter((m) => (m.clipCount ?? 0) > 0);
 
         if (hasFilters && filtered.length === 0) return null;
 
         const isOpen = openYears.has(year);
-        const wins = filtered.filter((m) => m.kc_won).length;
-        const losses = filtered.length - wins;
+        const wins = filtered.filter((m) => m.kc_won === true).length;
+        const losses = filtered.filter((m) => m.kc_won === false).length;
 
         return (
           <section key={year}>
             <button
               onClick={() => toggle(year)}
-              className="w-full flex items-center gap-3 mb-2 group"
+              aria-expanded={isOpen}
+              className="w-full flex items-center gap-3 mb-3 group"
             >
-              <div className="h-px flex-1 bg-gradient-to-r from-transparent via-[var(--gold)]/20 to-transparent" />
+              <div className="gold-line flex-1 opacity-40" />
               <div className="flex items-center gap-2">
-                <h2 className="font-display text-lg font-bold text-[var(--gold)]">{year}</h2>
+                <h2 className="font-display text-xl font-bold text-[var(--gold)]">{year}</h2>
                 <span className="font-data text-[10px] text-[var(--text-muted)]">
                   {filtered.length} matchs &middot; {wins}W-{losses}L
                 </span>
-                <svg
+                <ChevronDown
+                  aria-hidden
                   className={`h-4 w-4 text-[var(--text-muted)] transition-transform ${isOpen ? "rotate-180" : ""}`}
-                  fill="none" stroke="currentColor" viewBox="0 0 24 24"
-                >
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                </svg>
+                />
               </div>
-              <div className="h-px flex-1 bg-gradient-to-r from-transparent via-[var(--gold)]/20 to-transparent" />
+              <div className="gold-line flex-1 opacity-40" />
             </button>
 
             {isOpen && (
-              <div className="space-y-1.5">
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 {filtered.map((match) => (
                   <Link
                     key={match.id}
                     href={`/match/${match.id}`}
-                    className="match-row flex items-center justify-between rounded-xl border border-[var(--border-gold)] bg-[var(--bg-surface)] p-3"
+                    className="group relative flex flex-col gap-3 overflow-hidden rounded-xl border border-[var(--border-gold)] glass p-4 transition-all duration-300 hover:border-[var(--gold)]/45 hover:gold-glow hover:-translate-y-0.5"
                   >
-                    <div className="flex items-center gap-3">
-                      <div className={`flex h-7 w-7 items-center justify-center rounded-lg text-[10px] font-bold ${match.kc_won ? "bg-[var(--green)]/20 text-[var(--green)]" : "bg-[var(--red)]/20 text-[var(--red)]"}`}>
-                        {match.kc_won ? "W" : "L"}
+                    <CornerLosange position="tl" />
+                    <CornerLosange position="br" />
+
+                    {/* Result accent strip — gold on win, red on loss, muted upcoming */}
+                    <span
+                      aria-hidden
+                      className={`absolute inset-y-0 left-0 w-[3px] ${
+                        match.kc_won === null
+                          ? "bg-[var(--text-disabled)]"
+                          : match.kc_won
+                            ? "bg-[var(--green)]"
+                            : "bg-[var(--red)]"
+                      }`}
+                    />
+
+                    {/* Header — teams + result */}
+                    <div className="flex items-center justify-between gap-2 pl-1">
+                      <div className="flex items-center gap-2">
+                        <Image src={KC_LOGO} alt="KC" width={26} height={26} className="rounded" />
+                        <span className="text-[10px] text-[var(--text-disabled)]">vs</span>
+                        {TEAM_LOGOS[match.opponent.code] ? (
+                          <Image src={TEAM_LOGOS[match.opponent.code]} alt={match.opponent.code} width={26} height={26} className="rounded" />
+                        ) : (
+                          <span className="text-xs font-bold text-[var(--text-muted)]">{match.opponent.code}</span>
+                        )}
                       </div>
-                      <Image src={KC_LOGO} alt="KC" width={22} height={22} className="rounded" />
-                      <span className="text-[10px] text-[var(--text-disabled)]">vs</span>
-                      {TEAM_LOGOS[match.opponent.code] ? (
-                        <Image src={TEAM_LOGOS[match.opponent.code]} alt={match.opponent.code} width={22} height={22} className="rounded" />
+                      {match.kc_won === null ? (
+                        <span className="rounded-lg border border-[var(--border-gold)] bg-[var(--bg-elevated)] px-2 py-1 text-[9px] font-bold uppercase tracking-wider text-[var(--text-muted)]">
+                          À&nbsp;venir
+                        </span>
                       ) : (
-                        <span className="text-xs font-bold text-[var(--text-muted)]">{match.opponent.code}</span>
-                      )}
-                      <div>
-                        <p className="text-sm font-medium">
-                          KC vs {match.opponent.code}
-                          <span className="ml-2 font-data text-xs text-[var(--text-muted)]">{match.kc_score}-{match.opp_score}</span>
-                        </p>
-                        <p className="text-[10px] text-[var(--text-muted)]">{match.stage} &middot; Bo{match.best_of}</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      {(match.clipCount ?? 0) > 0 && (
-                        <span className="badge-glass rounded-md px-2 py-0.5 text-[9px] font-bold text-[var(--gold)]">
-                          {match.clipCount} clips
+                        <span className={`flex h-7 w-7 items-center justify-center rounded-lg text-[11px] font-bold ${match.kc_won ? "bg-[var(--green)]/20 text-[var(--green)]" : "bg-[var(--red)]/20 text-[var(--red)]"}`}>
+                          {match.kc_won ? "W" : "L"}
                         </span>
                       )}
-                      <div className="text-right">
+                    </div>
+
+                    {/* Matchup + series score */}
+                    <div className="pl-1">
+                      <p className="font-display text-base font-bold leading-tight group-hover:text-[var(--gold)] transition-colors">
+                        KC vs {match.opponent.code}
+                        {match.kc_score + match.opp_score > 0 && (
+                          <span className="ml-2 font-data text-sm text-[var(--text-muted)]">{match.kc_score}-{match.opp_score}</span>
+                        )}
+                      </p>
+                      <p className="mt-0.5 text-[10px] uppercase tracking-wider text-[var(--text-muted)]">{match.stage} &middot; Bo{match.best_of}</p>
+                    </div>
+
+                    {/* Footer — kills tally, clips, date */}
+                    <div className="mt-auto flex items-center justify-between gap-2 border-t border-[var(--border-subtle)] pt-2.5 pl-1">
+                      <div className="flex items-center gap-2">
                         {match.hasGames && (
-                          <p className="font-data text-xs">
+                          <p className="font-data text-xs" title="Kills KC — Kills adverses">
                             <span className="text-[var(--green)]">{match.totalKc}</span>
                             <span className="text-[var(--text-muted)]">-</span>
                             <span className="text-[var(--red)]">{match.totalOpp}</span>
                           </p>
                         )}
-                        <p className="text-[10px] text-[var(--text-muted)]">
-                          {new Date(match.date).toLocaleDateString("fr-FR", { day: "numeric", month: "short" })}
-                        </p>
+                        {(match.clipCount ?? 0) > 0 && (
+                          <span className="badge-glass rounded-md px-2 py-0.5 text-[9px] font-bold text-[var(--gold)]">
+                            {match.clipCount} clips
+                          </span>
+                        )}
                       </div>
+                      <p className="font-data text-[10px] text-[var(--text-muted)]">
+                        {new Date(match.date).toLocaleDateString("fr-FR", { day: "numeric", month: "short" })}
+                      </p>
                     </div>
                   </Link>
                 ))}

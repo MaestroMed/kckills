@@ -28,7 +28,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { motion } from "motion/react";
+import { m } from "motion/react";
 // Wave 30c (2026-05-11) — BgmPlayer removed. With the wolf-player CSP
 // fix landing in Wave 30a, the wolf player now auto-plays the "scroll"
 // playlist (via lib/audio/playlists.ts → playlistForRoute("/scroll"))
@@ -41,6 +41,8 @@ import {
   FeedItemMoment,
 } from "./FeedItem";
 import { FeedPlayerPool, type PoolItem } from "./FeedPlayerPool";
+import { ScrollDesktopShell } from "./ScrollDesktopShell";
+import type { RelatedFeedCandidate } from "./ScrollContextPanel";
 import { useFeedGesture } from "./hooks/useFeedGesture";
 import { useNetworkQuality } from "./hooks/useNetworkQuality";
 import { useFeedBuffer } from "./hooks/useFeedBuffer";
@@ -68,6 +70,7 @@ import type {
   VideoFeedItem,
 } from "@/components/scroll/ScrollFeed";
 import type { RecommendedKillRow } from "@/lib/supabase/recommendations";
+import { rateKill } from "@/components/community/actions";
 import { track } from "@/lib/analytics/track";
 
 /**
@@ -228,6 +231,14 @@ export function ScrollFeedV2({
       );
   }, [itemsProp, affinity]);
   const [isDesktop, setIsDesktop] = useState(false);
+  // Wave 36 — the bounded 9:16 wide-stage shell (min-width 1024). SSR-safe
+  // default false so the server + first client paint render the sacred
+  // fixed-inset-0 mobile tree ; the matchMedia effect flips it on desktop.
+  const [isWideStage, setIsWideStage] = useState(false);
+  // Wave 36 — cinema mode (F key) : the StageFrame expands 9:16 → 16:9 and
+  // the pool swaps to the horizontal source. Only meaningful on the wide
+  // stage (the mobile/legacy paths ignore it).
+  const [cinema, setCinema] = useState(false);
   const [reducedMotion, setReducedMotion] = useState(false);
   const [brokenIds, setBrokenIds] = useState<Set<string>>(() => new Set());
 
@@ -358,16 +369,39 @@ export function ScrollFeedV2({
       const measured = el?.clientHeight ?? 0;
       // Always use a non-zero value — 0 makes videos invisible (audio-only bug)
       const h = measured > 0 ? measured : window.innerHeight;
-      setItemHeight(h);
+      setItemHeight((prev) => (prev === h ? prev : h));
     };
     update();
-    // Re-measure on next frame too (iOS Safari sometimes lies on first paint)
-    const raf = requestAnimationFrame(update);
+    // Settle loop — re-measure across several successive frames + a short
+    // timeout. Two reasons :
+    //   1. iOS Safari lies about clientHeight on first paint (dvh/svh resolve
+    //      late) — the original single-RAF case.
+    //   2. Wave 36 wide stage : containerRef is now the feedStage wrapper
+    //      (`absolute inset-0` of the StageFrame). The frame's height resolves
+    //      ASYNCHRONOUSLY (a spring MotionValue applied in an effect), so on a
+    //      fresh load the first measurement can read the not-yet-sized 0 box →
+    //      fall back to window.innerHeight (wrong: that's the viewport, not the
+    //      bounded frame). Re-measuring over a few frames captures the settled
+    //      frame height. Harmless on mobile : the value stabilises on frame 1
+    //      and the early-return in setItemHeight makes repeats free.
+    const rafs: number[] = [];
+    const scheduleSettle = (n: number) => {
+      if (n <= 0) return;
+      rafs.push(
+        requestAnimationFrame(() => {
+          update();
+          scheduleSettle(n - 1);
+        }),
+      );
+    };
+    scheduleSettle(6);
+    const settleTimeout = window.setTimeout(update, 250);
     window.addEventListener("resize", update);
     window.addEventListener("orientationchange", update);
 
     // ResizeObserver catches container height changes (including when
-    // dvh/svh values resolve after first paint on mobile)
+    // dvh/svh values resolve after first paint on mobile, AND when the wide-
+    // stage frame springs to / between its 9:16 ↔ 16:9 sizes).
     let ro: ResizeObserver | null = null;
     if (containerRef.current && typeof ResizeObserver !== "undefined") {
       ro = new ResizeObserver(() => update());
@@ -375,7 +409,8 @@ export function ScrollFeedV2({
     }
 
     return () => {
-      cancelAnimationFrame(raf);
+      rafs.forEach((id) => cancelAnimationFrame(id));
+      window.clearTimeout(settleTimeout);
       window.removeEventListener("resize", update);
       window.removeEventListener("orientationchange", update);
       ro?.disconnect();
@@ -475,8 +510,39 @@ export function ScrollFeedV2({
     const apply = () => setIsDesktop(mq.matches);
     apply();
     mq.addEventListener("change", apply);
-    return () => mq.removeEventListener("change", apply);
+    // Also re-check on raw resize : the MQ `change` event only fires on a
+    // genuine breakpoint crossing and is unreliable in some emulated /
+    // programmatic-resize environments. A resize listener re-reads
+    // mq.matches on every viewport change, so the gate is never stuck.
+    window.addEventListener("resize", apply);
+    return () => {
+      mq.removeEventListener("change", apply);
+      window.removeEventListener("resize", apply);
+    };
   }, []);
+
+  // Wave 36 — wide-stage flag (min-width 1024). This gate switches the WHOLE
+  // render tree (framed ScrollDesktopShell ↔ fixed-inset-0 mobile), so it must
+  // never get stuck. We re-read mq.matches on BOTH the MQ `change` event AND
+  // raw `resize` (the change event alone is unreliable across the boundary in
+  // some environments / on tablet rotation). SSR-safe default = false.
+  useEffect(() => {
+    const mq = window.matchMedia("(min-width: 1024px)");
+    const apply = () => setIsWideStage(mq.matches);
+    apply();
+    mq.addEventListener("change", apply);
+    window.addEventListener("resize", apply);
+    return () => {
+      mq.removeEventListener("change", apply);
+      window.removeEventListener("resize", apply);
+    };
+  }, []);
+
+  // Cinema only makes sense on the wide stage — auto-exit if the viewport
+  // drops below the wide breakpoint while cinema is on.
+  useEffect(() => {
+    if (!isWideStage && cinema) setCinema(false);
+  }, [isWideStage, cinema]);
 
   useEffect(() => {
     const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
@@ -556,15 +622,108 @@ export function ScrollFeedV2({
     }
   };
 
-  const { showHelp, setShowHelp } = useKeyboardShortcuts({
-    onNext: () => jumpTo(activeIndex + 1),
-    onPrev: () => jumpTo(activeIndex - 1),
-    onToggleMute: toggleMute,
-    onShare: shareActiveItem,
-    // L / C not yet wired — those depend on per-item handlers that
-    // live in the right sidebar (Phase 7 will hoist them up to here).
-    // Esc closes the help overlay (handled inside the hook).
-  });
+  // Toggle a bookmark for the active kill, mirroring the FeedSidebarV2
+  // onBookmark stub + the long-press menu's onSave (same localStorage store
+  // + kc:bookmarks-changed event) so a keyboard B is consistent with both.
+  const bookmarkActiveItem = useCallback(() => {
+    const active = visibleItems[activeIndex];
+    if (!active || typeof window === "undefined") return;
+    try {
+      const raw = window.localStorage.getItem("kc_bookmarks_v1");
+      const arr: string[] = raw ? JSON.parse(raw) : [];
+      const set = new Set(arr);
+      if (set.has(active.id)) set.delete(active.id);
+      else set.add(active.id);
+      window.localStorage.setItem(
+        "kc_bookmarks_v1",
+        JSON.stringify([...set].slice(-200)),
+      );
+      window.dispatchEvent(new CustomEvent("kc:bookmarks-changed"));
+    } catch {
+      /* storage disabled — best-effort */
+    }
+  }, [visibleItems, activeIndex]);
+
+  // Rate the active kill via the rateKill server action (the same one the
+  // FeedSidebarV2 ★ NOTER popover + the context-panel StarRating call). Fire-
+  // and-forget : a 401 just no-ops here (the on-stage rail still surfaces the
+  // auth prompt when the user clicks a star). We also broadcast a
+  // kc:rated event so any mounted rating UI for this kill can reflect the new
+  // aggregate without a refetch.
+  const rateActiveItem = useCallback(
+    (n: 1 | 2 | 3 | 4 | 5) => {
+      const active = visibleItems[activeIndex];
+      if (!active) return;
+      void rateKill(active.id, n)
+        .then((res) => {
+          if (res.ok && typeof window !== "undefined") {
+            try {
+              window.dispatchEvent(
+                new CustomEvent("kc:rated", {
+                  detail: { killId: active.id, score: n, avgRating: res.avgRating, ratingCount: res.ratingCount },
+                }),
+              );
+            } catch {
+              /* CustomEvent unsupported */
+            }
+          }
+        })
+        .catch(() => {
+          /* network / auth — silent ; the on-stage rail handles the prompt */
+        });
+    },
+    [visibleItems, activeIndex],
+  );
+
+  // Dispatch a kc: custom event for the active kill (mirrors the mobile
+  // gesture bridges so the same per-item listeners fire).
+  const dispatchForActive = useCallback(
+    (type: string, extra?: Record<string, unknown>) => {
+      const active = visibleItems[activeIndex];
+      if (!active || typeof window === "undefined") return;
+      try {
+        window.dispatchEvent(
+          new CustomEvent(type, { detail: { killId: active.id, itemId: active.id, ...extra } }),
+        );
+      } catch {
+        /* CustomEvent unsupported */
+      }
+    },
+    [visibleItems, activeIndex],
+  );
+
+  const { showHelp, setShowHelp } = useKeyboardShortcuts(
+    {
+      onNext: () => jumpTo(activeIndex + 1),
+      onPrev: () => jumpTo(activeIndex - 1),
+      onPlayPause: () => dispatchForActive("kc:toggle-playback"),
+      onMute: toggleMute,
+      // L (like) → the same event DoubleTapHeart fires ; LikeButton listens.
+      onLike: () => dispatchForActive("kc:double-tap-like"),
+      // C (comments) → toggle the context drawer (narrow desktop) ; the
+      // ScrollDesktopShell consumes kc:toggle-context. On the wide stage the
+      // panel is always visible so the drawer toggle is a no-op there.
+      onComment: () => dispatchForActive("kc:toggle-context"),
+      onShare: shareActiveItem,
+      // B (bookmark) → mirror the long-press menu's save : same localStorage
+      // store the FeedSidebarV2 onBookmark stub writes, then notify listeners.
+      onBookmark: () => bookmarkActiveItem(),
+      // F (cinema) → expand the StageFrame 9:16 → 16:9 (wide stage only).
+      onCinema: () => {
+        if (isWideStage) setCinema((c) => !c);
+      },
+      // 1–5 → rate the active kill.
+      onRate: rateActiveItem,
+      // ← / → (source switch) — dispatch the same events the source picker
+      // listens for ; harmless no-op when no multi-source UI is mounted.
+      onPrevSource: () => dispatchForActive("kc:prev-source"),
+      onNextSource: () => dispatchForActive("kc:next-source"),
+      // ? toggles the help overlay (internal showHelp fallback below);
+      // Esc is handled by the hook for the help overlay.
+    },
+    // Enable on the wide stage OR any desktop (so 768–1023 keeps J/K nav).
+    isWideStage || isDesktop,
+  );
 
   // V20 (Wave 21.6) — auto-advance handler. Listens for the
   // `kc:auto-advance` event the pool fires when a LIVE-slot video
@@ -676,9 +835,339 @@ export function ScrollFeedV2({
     });
   }, [recFeed.items, items.length]);
 
-  return (
+  // ─── Wide-stage context-panel data (Wave 36) ──────────────────────
+  // The active VideoFeedItem drives the ScrollContextPanel (match header,
+  // rate, full AI description, comments). Non-video active items (moments /
+  // aggregates) → null, the shell shows a quiet placeholder. NO new fetch:
+  // VideoFeedItem already carries every field the panel reads (server-fed
+  // via the items prop).
+  const activeKill: VideoFeedItem | null = useMemo(() => {
+    const it = visibleItems[activeIndex];
+    return it && it.kind === "video" ? it : null;
+  }, [visibleItems, activeIndex]);
+
+  // "À suivre" candidates — the next video items after the active one, in
+  // the already-ranked feed order, mapped to RelatedFeedCandidate with their
+  // ABSOLUTE feed index (handed back verbatim to jumpTo). Built only when the
+  // wide stage is mounted so we don't pay the map cost on mobile. No ranking
+  // change — this is a straight slice of the in-memory feed.
+  const relatedCandidates: RelatedFeedCandidate[] = useMemo(() => {
+    if (!isWideStage) return [];
+    const out: RelatedFeedCandidate[] = [];
+    for (let i = 0; i < visibleItems.length && out.length < 8; i++) {
+      if (i === activeIndex) continue;
+      const it = visibleItems[i];
+      if (it.kind !== "video") continue;
+      out.push({
+        index: i,
+        id: it.id,
+        thumbnail: it.thumbnail,
+        killerChampion: it.killerChampion,
+        victimChampion: it.victimChampion,
+        killerName: it.killerName,
+        multiKill: it.multiKill,
+        isFirstBlood: it.isFirstBlood,
+        score: it.score,
+      });
+    }
+    return out;
+  }, [isWideStage, visibleItems, activeIndex]);
+
+  // ─── The feed stage subtree (shared by both render paths) ─────────
+  // The gesture-driven items + the pool + PTR + skeleton + end-of-feed +
+  // empty state, all `absolute inset-0` of the containerRef wrapper. On the
+  // wide stage this wrapper is the StageFrame child (so inset-0 = the bounded
+  // 9:16 frame, and clientHeight = the frame height) ; on mobile it fills the
+  // fixed-inset-0 root (byte-identical to the previous tree). role="feed" +
+  // roving tabindex / data-inert are applied here off activeIndex.
+  const feedStage = (
     <div
       ref={containerRef}
+      className="absolute inset-0 overflow-hidden"
+      // Touch-action: pan-y so the browser doesn't fight the drag. (Was on
+      // the old fixed-inset-0 root ; moved here verbatim so the gesture math
+      // is identical and the wide-stage frame gets the same touch contract.)
+      style={{ touchAction: "pan-y", overscrollBehavior: "contain" }}
+    >
+      {/* Pull-to-refresh indicator — visible only when at the top of the
+          feed AND user is pulling down past 5px. */}
+      <PullToRefreshIndicator
+        containerY={y}
+        atTop={activeIndex === 0}
+        onRefresh={handleReshuffle}
+        isRefreshing={isRefreshing}
+      />
+
+      {/* Pool — anchored to the stage (inset-0 of this wrapper), follows
+          containerY. On the wide stage isWideStage/cinema drive the bounded
+          9:16 object-cover + vertical-HLS behaviour ; on mobile they're
+          false so the sacred path is unchanged. */}
+      {itemHeight > 0 && (
+        <FeedPlayerPool
+          items={poolItems}
+          activeIndex={activeIndex}
+          itemHeight={itemHeight}
+          muted={muted}
+          useLowQuality={useLowQuality}
+          quality={quality}
+          isDesktop={isDesktop}
+          isWideStage={isWideStage}
+          cinema={cinema}
+          reducedMotion={reducedMotion}
+          onError={handlePoolError}
+          containerY={y}
+          autoAdvance={settings.autoAdvance}
+          speed={settings.speed}
+        />
+      )}
+
+      {/* Items container — gesture-driven, items absolutely positioned.
+          role="feed" + aria-label per WCAG 2.2 feed pattern. The roving
+          tabindex / inert state is applied per-slide below off activeIndex. */}
+      <m.div
+        className="absolute inset-0"
+        style={{ y, willChange: "transform" }}
+        role="feed"
+        aria-label="Feed des kills Karmine Corp"
+        aria-busy={isRefreshing}
+        {...bind()}
+      >
+        {visibleItems.map((item, i) => {
+          // Skip rendering items outside the viewport window (virtualisation).
+          if (Math.abs(i - activeIndex) > VIRTUAL_WINDOW) return null;
+
+          const isActive = i === activeIndex;
+          const top = i * itemHeight;
+          // Roving tabindex + inert : only the active slide is in the tab
+          // order and interactive ; off-screen neighbours are inert so their
+          // links/buttons (champion deep-links, sidebar actions) leave the
+          // tab order cross-browser. `inert` (React 19 native boolean) also
+          // drops pointer-events via the globals.css [data-inert] rule. This
+          // is PURELY interactivity/focus — zero visual change, so the sacred
+          // <768 render stays byte-identical (off-screen mobile slides were
+          // already non-interactive; their overlays are isActive-gated).
+          const slideProps: React.HTMLAttributes<HTMLDivElement> & {
+            "data-inert"?: string;
+            inert?: boolean;
+          } = {
+            role: "article",
+            "aria-setsize": visibleItems.length,
+            "aria-posinset": i + 1,
+            tabIndex: isActive ? 0 : -1,
+            ...(isActive
+              ? {}
+              : { "data-inert": "", "aria-hidden": true, inert: true }),
+          };
+          if (item.kind === "video") {
+            return (
+              <div
+                key={`v-${item.id}`}
+                {...slideProps}
+                style={{ position: "absolute", top, left: 0, right: 0, height: itemHeight }}
+              >
+                <FeedItemVideo
+                  item={item}
+                  index={i}
+                  total={visibleItems.length}
+                  itemHeight={itemHeight}
+                  isActive={isActive}
+                  isWideStage={isWideStage}
+                  onAutoSkipNext={() => jumpTo(i + 1)}
+                />
+              </div>
+            );
+          }
+          if (item.kind === "moment") {
+            return (
+              <div
+                key={`m-${item.id}`}
+                {...slideProps}
+                style={{ position: "absolute", top, left: 0, right: 0, height: itemHeight }}
+              >
+                <FeedItemMoment
+                  item={item}
+                  index={i}
+                  total={visibleItems.length}
+                  itemHeight={itemHeight}
+                  isActive={isActive}
+                  onAutoSkipNext={() => jumpTo(i + 1)}
+                />
+              </div>
+            );
+          }
+          return (
+            <div
+              key={`a-${item.id}-${i}`}
+              {...slideProps}
+              data-feed-item
+              data-feed-index={i}
+              data-feed-id={item.id}
+              style={{
+                position: "absolute",
+                top,
+                left: 0,
+                right: 0,
+                height: itemHeight,
+              }}
+              className="flex items-center justify-center bg-[var(--bg-elevated)] text-white/40 text-sm"
+            >
+              (legacy aggregate item)
+            </div>
+          );
+        })}
+
+        {/* Skeleton placeholder — tail slot during an in-flight refresh. */}
+        {visibleItems.length > 0 &&
+          itemHeight > 0 &&
+          isRefreshing &&
+          activeIndex >= Math.max(0, visibleItems.length - 2) && (
+            <div
+              key="feed-skeleton-tail"
+              style={{
+                position: "absolute",
+                top: visibleItems.length * itemHeight,
+                left: 0,
+                right: 0,
+                height: itemHeight,
+              }}
+            >
+              <FeedItemSkeleton itemHeight={itemHeight} />
+            </div>
+          )}
+
+        {/* End-of-feed card — virtual item at index N. */}
+        {visibleItems.length > 0 && itemHeight > 0 && (
+          <div
+            key="end-of-feed"
+            style={{
+              position: "absolute",
+              top:
+                (visibleItems.length +
+                  (isRefreshing && activeIndex >= Math.max(0, visibleItems.length - 2)
+                    ? 1
+                    : 0)) *
+                itemHeight,
+              left: 0,
+              right: 0,
+              height: itemHeight,
+            }}
+          >
+            <EndOfFeedCard
+              itemHeight={itemHeight}
+              onReshuffle={handleReshuffle}
+              totalSeen={visibleItems.length}
+            />
+          </div>
+        )}
+      </m.div>
+
+      {/* Drag indicator — single thin progress rail (mapped across the full
+          feed length). */}
+      {visibleItems.length > 1 && itemHeight > 0 && (
+        <div
+          className="fixed right-1.5 top-[10%] bottom-[10%] z-50 w-0.5 rounded-full bg-white/10 pointer-events-none"
+          aria-hidden
+        >
+          <span
+            className="absolute left-0 right-0 rounded-full bg-[var(--gold)] transition-all"
+            style={{
+              top: `${(activeIndex / Math.max(1, visibleItems.length)) * 100}%`,
+              height: `${Math.max(4, (1 / visibleItems.length) * 100)}%`,
+              minHeight: 6,
+            }}
+          />
+        </div>
+      )}
+
+      {/* isDragging hint — fade overlays during active swipe */}
+      {isDragging && <div className="pointer-events-none fixed inset-0 z-30" />}
+
+      {/* Empty state */}
+      {visibleItems.length === 0 && itemHeight > 0 && (
+        <div
+          className="flex items-center justify-center"
+          style={{ height: `${itemHeight}px` }}
+        >
+          <div className="text-center max-w-md px-6">
+            <div className="text-6xl mb-6">{"⚔️"}</div>
+            <h1 className="font-display text-3xl font-black text-[var(--gold)] mb-3 uppercase">
+              Aucun clip
+            </h1>
+            <p className="text-sm text-[var(--text-muted)] mb-6">
+              Le worker travaille en background, reviens dans quelques minutes.
+            </p>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+
+  // ─── WIDE-STAGE RENDER (≥1024) ────────────────────────────────────
+  // The framed 3-zone shell. The feedStage subtree becomes the StageFrame
+  // child (so the pool + overlays resolve to the bounded 9:16 frame). The
+  // global chrome (live banner, settings drawer, onboarding, keyboard help,
+  // share toast) still renders so keyboard + live still work ; the mobile
+  // floating bars (top bar, FeedTabBar, ChipBar) are suppressed because the
+  // ScrollRail replaces them on the wide stage.
+  if (isWideStage) {
+    return (
+      <>
+        <ScrollDesktopShell
+          activeKill={activeKill}
+          clipCount={videoCount}
+          onJumpTo={(i) => jumpTo(i)}
+          related={relatedCandidates}
+          cinema={cinema}
+        >
+          {feedStage}
+        </ScrollDesktopShell>
+
+        {/* Global chrome that must escape the shell / stay route-level. */}
+        <LiveBanner
+          isLive={live.isLive}
+          matchId={live.matchId}
+          opponentCode={live.opponentCode}
+          gameNumber={live.gameNumber}
+          onTap={visibleItems.length > 0 ? () => jumpTo(0) : undefined}
+        />
+        <ScrollSettingsDrawer open={settingsOpen} onClose={() => setSettingsOpen(false)} />
+        {rosterChips && rosterChips.length > 0 && (
+          <OnboardingModal
+            roster={rosterChips.map((p) => ({ id: p.id, ign: p.ign, role: p.role }))}
+          />
+        )}
+        <OfflineBanner />
+        <KeyboardHelpOverlay open={showHelp} onClose={() => setShowHelp(false)} />
+        {shareToast && (
+          <div className="pointer-events-none fixed top-20 left-1/2 -translate-x-1/2 z-[200] rounded-full bg-black/85 backdrop-blur-sm px-4 py-2 text-xs font-bold text-[var(--gold)] shadow-lg">
+            {shareToast}
+          </div>
+        )}
+        {/* Mute toggle — kept reachable on the wide stage (the rail doesn't
+            own audio). Top-right, clear of the context column. */}
+        <button
+          onClick={toggleMute}
+          className="fixed right-5 top-5 z-[65] hidden lg:flex h-11 w-11 items-center justify-center rounded-full border border-white/10 bg-black/60 backdrop-blur-sm text-white/70 transition-colors hover:text-[var(--gold)] hover:border-[var(--gold)]/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--gold)] focus-visible:outline-offset-2"
+          aria-label={muted ? "Activer le son" : "Couper le son"}
+          style={{ right: "max(1.25rem, calc(var(--ctx) + 1.25rem))" }}
+        >
+          {muted ? (
+            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2" /></svg>
+          ) : (
+            <svg className="h-5 w-5 text-[var(--gold)]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.536 8.464a5 5 0 010 7.072M18.364 5.636a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" /></svg>
+          )}
+        </button>
+      </>
+    );
+  }
+
+  // ─── MOBILE / LEGACY RENDER (<1024) — byte-identical to before ────
+  // NOTE: containerRef now lives on the feedStage wrapper (rendered inside,
+  // `absolute inset-0` → same dimensions as this fixed-inset-0 root), so the
+  // ref is NOT on this root anymore (a single ref can't bind two elements).
+  // clientHeight measured off feedStage == the viewport, exactly as before.
+  return (
+    <div
       className="fixed inset-0 z-[60] bg-black overflow-hidden"
       // Touch-action: pan-y so the browser doesn't fight the drag.
       style={{ touchAction: "pan-y", overscrollBehavior: "contain" }}
@@ -704,8 +1193,8 @@ export function ScrollFeedV2({
         className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-4 py-3"
         style={{ paddingTop: "max(0.75rem, env(safe-area-inset-top, 0.75rem))" }}
       >
-        <Link href="/" className="flex h-9 w-9 items-center justify-center rounded-full bg-black/60 backdrop-blur-sm">
-          <svg className="h-5 w-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <Link href="/" aria-label="Accueil" className="flex h-9 w-9 items-center justify-center rounded-full bg-black/60 backdrop-blur-sm">
+          <svg className="h-5 w-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
           </svg>
         </Link>
@@ -788,204 +1277,19 @@ export function ScrollFeedV2({
         <ScrollChipBar filters={chipFilters} rosterChips={rosterChips} />
       )}
 
-      {/* Pull-to-refresh indicator (Phase 5) — visible only when at the
-          top of the feed AND user is pulling down past 5px. */}
-      <PullToRefreshIndicator
-        containerY={y}
-        atTop={activeIndex === 0}
-        onRefresh={handleReshuffle}
-        isRefreshing={isRefreshing}
-      />
-
-      {/* Pool — anchored to viewport, follows containerY */}
-      {itemHeight > 0 && (
-        <FeedPlayerPool
-          items={poolItems}
-          activeIndex={activeIndex}
-          itemHeight={itemHeight}
-          muted={muted}
-          useLowQuality={useLowQuality}
-          quality={quality}
-          isDesktop={isDesktop}
-          reducedMotion={reducedMotion}
-          onError={handlePoolError}
-          containerY={y}
-          autoAdvance={settings.autoAdvance}
-          speed={settings.speed}
-        />
-      )}
-
-      {/* Items container — gesture-driven, items absolutely positioned.
-          Wave 19.7 (2026-05-08) : viewport-bounded virtualisation.
-          Only items within ±VIRTUAL_WINDOW of activeIndex render. The
-          rest return null — their absolute-positioned slots don't need
-          DOM nodes since the gesture engine drives container Y from
-          totalItems × itemHeight, and no neighbour layout depends on
-          siblings (each item is `position: absolute` at `top:
-          i * itemHeight`).
-
-          DOM impact : pre-virtualisation we mounted ~80 items (post-
-          filter) on first paint → ~1 MB of <FeedItemVideo> trees on
-          mobile (sidebar, image, overlays per item). With WINDOW=2 the
-          mount count caps at 5 regardless of feed size, dropping the
-          mobile DOM cost by ~94 %. Pool video elements are managed
-          separately by FeedPlayerPool (5-slot fixed pool with portal-
-          like positioning) so the LIVE/warm/cold ladder stays intact —
-          virtualisation here only affects the overlay layer, not video
-          playback continuity. */}
-      <motion.div
-        className="absolute inset-0"
-        style={{ y, willChange: "transform" }}
-        {...bind()}
-      >
-        {visibleItems.map((item, i) => {
-          // Skip rendering items outside the viewport window. The map
-          // still iterates the full list (cheap) but returns null for
-          // far-away items so React's reconciler doesn't allocate
-          // fibers for them.
-          if (Math.abs(i - activeIndex) > VIRTUAL_WINDOW) return null;
-
-          const isActive = i === activeIndex;
-          const top = i * itemHeight;
-          if (item.kind === "video") {
-            return (
-              <div
-                key={`v-${item.id}`}
-                style={{ position: "absolute", top, left: 0, right: 0, height: itemHeight }}
-              >
-                <FeedItemVideo
-                  item={item}
-                  index={i}
-                  total={visibleItems.length}
-                  itemHeight={itemHeight}
-                  isActive={isActive}
-                  onAutoSkipNext={() => jumpTo(i + 1)}
-                />
-              </div>
-            );
-          }
-          if (item.kind === "moment") {
-            return (
-              <div
-                key={`m-${item.id}`}
-                style={{ position: "absolute", top, left: 0, right: 0, height: itemHeight }}
-              >
-                <FeedItemMoment
-                  item={item}
-                  index={i}
-                  total={visibleItems.length}
-                  itemHeight={itemHeight}
-                  isActive={isActive}
-                  onAutoSkipNext={() => jumpTo(i + 1)}
-                />
-              </div>
-            );
-          }
-          return (
-            <div
-              key={`a-${item.id}-${i}`}
-              data-feed-item
-              data-feed-index={i}
-              data-feed-id={item.id}
-              style={{
-                position: "absolute",
-                top,
-                left: 0,
-                right: 0,
-                height: itemHeight,
-              }}
-              className="flex items-center justify-center bg-[var(--bg-elevated)] text-white/40 text-sm"
-            >
-              (legacy aggregate item)
-            </div>
-          );
-        })}
-
-        {/* Skeleton placeholder (Wave 6 — Agent AB) — sits at the tail
-            slot WHEN the user is within the last 2 items AND a refresh
-            is in flight (isRefreshing) so the next snap doesn't drop into
-            a black void while the SSR re-fetch resolves. The
-            EndOfFeedCard renders one slot further down. */}
-        {visibleItems.length > 0 &&
-          itemHeight > 0 &&
-          isRefreshing &&
-          activeIndex >= Math.max(0, visibleItems.length - 2) && (
-            <div
-              key="feed-skeleton-tail"
-              style={{
-                position: "absolute",
-                top: visibleItems.length * itemHeight,
-                left: 0,
-                right: 0,
-                height: itemHeight,
-              }}
-            >
-              <FeedItemSkeleton itemHeight={itemHeight} />
-            </div>
-          )}
-
-        {/* End-of-feed card (Phase 5) — virtual item at index N.
-            Same gesture model as real items, the user lands here by
-            swiping past the last clip. When the skeleton is being shown
-            above (refreshing tail), we shift the EndOfFeedCard down by
-            one slot so both can coexist visibly during the brief refresh
-            window. */}
-        {visibleItems.length > 0 && itemHeight > 0 && (
-          <div
-            key="end-of-feed"
-            style={{
-              position: "absolute",
-              top:
-                (visibleItems.length +
-                  (isRefreshing && activeIndex >= Math.max(0, visibleItems.length - 2)
-                    ? 1
-                    : 0)) *
-                itemHeight,
-              left: 0,
-              right: 0,
-              height: itemHeight,
-            }}
-          >
-            <EndOfFeedCard
-              itemHeight={itemHeight}
-              onReshuffle={handleReshuffle}
-              totalSeen={visibleItems.length}
-            />
-          </div>
-        )}
-      </motion.div>
+      {/* Feed stage — the gesture-driven items + 5-slot video pool + PTR +
+          end-of-feed + drag rail + empty state. Shared verbatim with the
+          wide-stage path (where it becomes the StageFrame child). On mobile
+          this `absolute inset-0` wrapper fills the fixed-inset-0 root, so
+          containerRef.clientHeight == the viewport exactly as before — the
+          gesture / pool math is byte-identical. */}
+      {feedStage}
 
       {/* Wave 6 — bottom offline banner. Slides in when navigator.onLine
           flips false, fires feed.offline_entered/exited analytics with
           a duration_ms metric. Doesn't block any interaction (pointer-
           events: none on the wrapper). */}
       <OfflineBanner />
-
-      {/* Drag indicator — V11 (Wave 21.2) : was 5 hardcoded dots which
-          collapsed all positions of a 100+ feed into the same 5 slots.
-          Now renders a single thin progress rail with the thumb position
-          mapped linearly across the full feed length. Power-user signal :
-          quickly see "I'm at 12/87" without opening anything. */}
-      {visibleItems.length > 1 && itemHeight > 0 && (
-        <div
-          className="fixed right-1.5 top-[10%] bottom-[10%] z-50 w-0.5 rounded-full bg-white/10 pointer-events-none"
-          aria-hidden
-        >
-          <span
-            className="absolute left-0 right-0 rounded-full bg-[var(--gold)] transition-all"
-            style={{
-              top: `${(activeIndex / Math.max(1, visibleItems.length)) * 100}%`,
-              height: `${
-                Math.max(4, (1 / visibleItems.length) * 100)
-              }%`,
-              minHeight: 6,
-            }}
-          />
-        </div>
-      )}
-
-      {/* isDragging hint — fade overlays during active swipe */}
-      {isDragging && <div className="pointer-events-none fixed inset-0 z-30" />}
 
       {/* Keyboard help overlay — toggled by ? on desktop */}
       <KeyboardHelpOverlay open={showHelp} onClose={() => setShowHelp(false)} />
@@ -1011,23 +1315,7 @@ export function ScrollFeedV2({
         </button>
       )}
 
-      {/* Empty state */}
-      {visibleItems.length === 0 && itemHeight > 0 && (
-        <div
-          className="flex items-center justify-center"
-          style={{ height: `${itemHeight}px` }}
-        >
-          <div className="text-center max-w-md px-6">
-            <div className="text-6xl mb-6">{"\u2694\uFE0F"}</div>
-            <h1 className="font-display text-3xl font-black text-[var(--gold)] mb-3 uppercase">
-              Aucun clip
-            </h1>
-            <p className="text-sm text-[var(--text-muted)] mb-6">
-              Le worker travaille en background, reviens dans quelques minutes.
-            </p>
-          </div>
-        </div>
-      )}
+      {/* (Empty state now lives inside feedStage \u2014 see above.) */}
     </div>
   );
 }

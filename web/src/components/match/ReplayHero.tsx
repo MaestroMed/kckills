@@ -28,12 +28,7 @@
 import { useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import {
-  animate,
-  motion,
-  useMotionValue,
-  useTransform,
-} from "motion/react";
+import { animate, m, useMotionValue, useTransform } from "motion/react";
 
 // ─── Types ────────────────────────────────────────────────────────────
 
@@ -141,7 +136,7 @@ function ScoreNumber({
     return () => controls.stop();
   }, [target, reducedMotion, mv]);
 
-  return <motion.span className={className}>{display}</motion.span>;
+  return <m.span className={className}>{display}</m.span>;
 }
 
 // ─── Component ────────────────────────────────────────────────────────
@@ -257,7 +252,7 @@ export function ReplayHero({
         <div className="absolute inset-0 flex flex-col justify-end">
           <div className="relative z-10 mx-auto w-full max-w-7xl px-4 pb-10 sm:px-6 md:pb-14">
             {/* Top strip : tournament + stage + date */}
-            <motion.div
+            <m.div
               initial={reduced ? { opacity: 1 } : { opacity: 0, y: -10 }}
               animate={
                 reduced
@@ -293,12 +288,12 @@ export function ReplayHero({
                   </span>
                 </>
               )}
-            </motion.div>
+            </m.div>
 
             {/* Logos + score */}
             <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3 md:gap-8">
               {/* KC */}
-              <motion.div
+              <m.div
                 initial={reduced ? { opacity: 1 } : { opacity: 0, x: -24 }}
                 animate={
                   reduced
@@ -337,7 +332,7 @@ export function ReplayHero({
                     priority
                   />
                 </div>
-              </motion.div>
+              </m.div>
 
               {/* Score */}
               <div className="flex flex-col items-center gap-1">
@@ -369,7 +364,7 @@ export function ReplayHero({
               </div>
 
               {/* Opponent */}
-              <motion.div
+              <m.div
                 initial={reduced ? { opacity: 1 } : { opacity: 0, x: 24 }}
                 animate={
                   reduced
@@ -408,7 +403,7 @@ export function ReplayHero({
                     {opponentName}
                   </p>
                 </div>
-              </motion.div>
+              </m.div>
             </div>
 
             {/* Game pills */}

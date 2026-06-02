@@ -21,6 +21,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { m, useReducedMotion } from "motion/react";
+import { Crown } from "lucide-react";
 
 import { championLoadingUrl } from "@/lib/constants";
 import { winRatePct } from "@/lib/vs-roulette";
@@ -34,7 +35,6 @@ const RANK_META = [
   {
     rim: "linear-gradient(135deg, #F0E6D2, #C8AA6E, #785A28)",
     rimGlow: "rgba(240,230,210,0.55)",
-    crown: "👑",
     accent: "#C8AA6E",
     bg: "rgba(200,170,110,0.12)",
     label: "1ère place",
@@ -43,7 +43,6 @@ const RANK_META = [
   {
     rim: "linear-gradient(135deg, #E5E7EB, #9CA3AF, #4B5563)",
     rimGlow: "rgba(229,231,235,0.4)",
-    crown: "🥈",
     accent: "#D1D5DB",
     bg: "rgba(209,213,219,0.08)",
     label: "2e place",
@@ -52,7 +51,6 @@ const RANK_META = [
   {
     rim: "linear-gradient(135deg, #D97757, #A85B3E, #6B3A26)",
     rimGlow: "rgba(217,119,87,0.4)",
-    crown: "🥉",
     accent: "#E18A6A",
     bg: "rgba(217,119,87,0.10)",
     label: "3e place",
@@ -73,7 +71,7 @@ export function Podium({ kills }: PodiumProps) {
   return (
     <section
       aria-label="Top 3 du classement ELO"
-      className="mx-auto max-w-5xl px-4 pt-8 md:pt-12 pb-2"
+      className="pt-8 md:pt-12 pb-2"
     >
       {/* Desktop : three columns, 1st in centre raised */}
       <div className="hidden md:grid md:grid-cols-3 md:items-end md:gap-5 lg:gap-8">
@@ -242,12 +240,17 @@ function PodiumColumn({
                   : { y: [0, -3, 0], rotate: [-6, 6, -6] }
               }
               transition={{ duration: 2.4, repeat: Infinity, ease: "easeInOut" }}
-              className="text-2xl"
+              className="inline-flex"
               style={{
                 filter: "drop-shadow(0 0 12px rgba(240,230,210,0.6))",
               }}
             >
-              {meta.crown}
+              <Crown
+                size={26}
+                strokeWidth={2.25}
+                style={{ color: "var(--gold-bright)" }}
+                fill="var(--gold)"
+              />
             </m.span>
           )}
         </div>

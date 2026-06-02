@@ -39,7 +39,7 @@ interface Props {
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params;
   const team = await getTeamBySlug(slug);
-  if (!team) return { title: "Équipe introuvable — KCKILLS" };
+  if (!team) return { title: "Équipe introuvable" };
   const title = `${team.name} — KCKILLS`;
   const descBits = [team.code];
   if (team.league) descBits.push(team.league.toUpperCase());

@@ -470,7 +470,7 @@ export const ALUMNI: Alumni[] = [
     subtitle: "Le premier mid laner de KC, pilier LFL et EU Masters",
     tag: "MID LANER OG",
     signatureChampion: "Akali",
-    eras: ["lfl-2021-spring", "lfl-2021-summer", "lfl-2021-showmatch", "lfl-2022"],
+    eras: ["lfl-2021-spring", "lfl-2021-summer", "lfl-2021-showmatch", "lfl-2022-spring"],
     accentColor: "#2196F3",
     bio: "Saken est la dans le roster d'origine de la Karmine Corp en LFL, le mid laner qui a pose les bases du style agressif KC. Pilier du premier titre LFL et des EU Masters 2021, il evolue aux cotes de Rekkles lors de la saison mythique 2022. Son style est marque par une presence en lane dominante et une capacite a creer des avantages en solo. Il quitte KC apres la saison 2022 pour poursuivre en LFL avec d'autres equipes.",
     stats: [
@@ -651,7 +651,7 @@ export const ALUMNI: Alumni[] = [
     subtitle: "Le support francais de l'ere Rekkles",
     tag: "SUPPORT LFL",
     signatureChampion: "Nautilus",
-    eras: ["lfl-2022"],
+    eras: ["lfl-2022-spring"],
     accentColor: "#00BCD4",
     bio: "Hantera rejoint KC en 2022 comme support aux cotes de Rekkles en botlane. Joueur francais forme en LFL, il apporte une vision de jeu aggressive et une communication native avec le roster francophone. Sa synergie avec Rekkles en lane est l'une des forces du roster qui decroche le triple EU Masters. Il quitte KC a la fin de la saison 2022 quand le club prepare sa transition vers la LEC.",
     stats: [
@@ -710,7 +710,7 @@ export const ALUMNI: Alumni[] = [
     subtitle: "Le top laner francais, ex-Fnatic, showman de la LFL",
     tag: "TOP LANE SHOWMAN",
     signatureChampion: "Darius",
-    eras: ["lfl-2022", "lfl-2023"],
+    eras: ["lfl-2022-spring", "lfl-2023-summer"],
     accentColor: "#FF5722",
     bio: "Adam rejoint KC en 2022 apres son passage eclaire chez Fnatic en LEC. Joueur francais au style ultra-agressif, il est connu pour ses picks non-meta en top lane (Darius, Olaf) qui electrisent le public de la LFL. Sa personnalite forte et son style de jeu spectaculaire en font un favori de la Blue Wall. Il participe a la transition vers la LEC avec KC avant de quitter le club en 2023.",
     stats: [

@@ -4,10 +4,10 @@
     {
       "name": "loltok",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev"],
-      "port": 3000,
+      "runtimeArgs": ["run", "dev", "--", "-p", "3137"],
+      "port": 3137,
       "cwd": "web",
-      "autoPort": true
+      "autoPort": false
     }
   ]
 }

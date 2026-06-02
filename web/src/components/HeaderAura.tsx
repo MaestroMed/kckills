@@ -17,9 +17,18 @@
  *      heartbeat of the kill feed. This is the signature, tied to the
  *      product (kills = pulses), not a generic particle field.
  *
- * Performance : 2 elements, transform/opacity only, GPU-composited. No
- * will-change pinning. `contain: strict` + pointer-events-none.
- * prefers-reduced-motion → the pulse holds still, the glow stays.
+ * Wave 36 (2026-05-29) — elevation pass. The single-glow idea was right but
+ * read as "barely there" over the full-bleed video hero, so it gained
+ * presence without becoming a florilège again:
+ *   • the glow now *breathes* (slow scale + opacity, the requested vibe);
+ *   • a soft top-down scrim anchors the transparent bar over video (and
+ *     lifts legibility / contrast), fading out once the bar is condensed;
+ *   • the kill-pulse gained a layered cyan→gold bloom so it reads as a
+ *     comet of light, not an invisible hairline.
+ *
+ * Performance : 3 thin layers, transform/opacity only, GPU-composited.
+ * `contain: strict` + pointer-events-none. prefers-reduced-motion → the
+ * pulse holds still and the glow stops breathing (both stay visible).
  */
 "use client";
 
@@ -29,18 +38,35 @@ export function HeaderAura({ scrolled = false }: { scrolled?: boolean }) {
       aria-hidden
       className="header-aura pointer-events-none absolute inset-0 overflow-hidden"
     >
-      {/* 1. Single anchored depth glow — left-of-logo, blue bleeding to
-            gold. Tightens + brightens a touch when the bar condenses. */}
+      {/* 0. Legibility + presence — a soft top-down scrim so the nav row
+            reads cleanly over a bright full-bleed video hero (the bar is
+            transparent at the top of the page). Fades out once the bar
+            gains its own solid surface on scroll, to avoid double-darkening. */}
       <div
-        className="absolute top-1/2 h-48 w-[42rem] -translate-y-1/2 rounded-full transition-opacity duration-700"
+        className="absolute inset-0 transition-opacity duration-500"
         style={{
-          left: "-6rem",
-          opacity: scrolled ? 0.5 : 0.32,
-          filter: "blur(56px)",
+          opacity: scrolled ? 0 : 1,
           background:
-            "radial-gradient(ellipse 60% 100% at 30% 50%, rgba(0,87,255,0.45), transparent 70%), " +
-            "radial-gradient(ellipse 50% 90% at 55% 50%, rgba(200,170,110,0.30), transparent 70%)",
+            "linear-gradient(to bottom, rgba(1,10,19,0.55) 0%, rgba(1,10,19,0.22) 55%, rgba(1,10,19,0) 100%)",
         }}
+      />
+
+      {/* 1. Single anchored depth glow — left-of-logo, blue bleeding to gold.
+            Slowly *breathes* (scale + opacity, see .aura-glow) so the bar
+            feels alive without a particle field. Tightens + brightens when
+            the bar condenses (--glow-base lifts on scroll). */}
+      <div
+        className="aura-glow absolute top-1/2 h-52 w-[44rem] rounded-full"
+        style={
+          {
+            left: "-7rem",
+            filter: "blur(58px)",
+            background:
+              "radial-gradient(ellipse 58% 100% at 28% 50%, rgba(0,87,255,0.50), transparent 70%), " +
+              "radial-gradient(ellipse 48% 90% at 56% 50%, rgba(200,170,110,0.34), transparent 72%)",
+            ["--glow-base" as string]: scrolled ? 0.55 : 0.38,
+          } as React.CSSProperties
+        }
       />
 
       {/* 2. THE KILL PULSE — base hairline + a traveling surge. */}

@@ -26,7 +26,7 @@ import { Description } from "@/components/i18n/Description";
 export const revalidate = 600;
 
 export const metadata: Metadata = {
-  title: "Cette semaine — KCKILLS",
+  title: "Cette semaine",
   description:
     "Top des clips Karmine Corp des 7 derniers jours. Pentakills, outplays, teamfights — le best-of de la semaine LEC.",
   alternates: { canonical: "/week" },
@@ -79,7 +79,9 @@ export default async function WeekPage() {
   // pentakill spurts) while sorting by highlight_score DESC means the
   // best of the week is always in the slice. Cuts cache-miss egress
   // ~3× vs the previous 500.
-  const all = await getPublishedKills(200);
+  // buildTime: true uses the cookie-less anon client so the page keeps
+  // its `revalidate = 600` ISR (cookies() would force per-visitor SSR).
+  const all = await getPublishedKills(200, { buildTime: true });
   const data = loadRealData();
 
   // Filter: visible KC-killer clips from last 7 days

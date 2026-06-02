@@ -15,12 +15,10 @@
 
 import { loadRealData } from "@/lib/real-data";
 import { getPublishedKills } from "@/lib/supabase/kills";
-import { getPublishedMoments } from "@/lib/supabase/moments";
 import { getTrackedRoster } from "@/lib/supabase/players";
 import {
   type FeedItem,
   type VideoFeedItem,
-  type MomentFeedItem,
 } from "@/components/scroll/ScrollFeed";
 import { ScrollFeedV2 } from "@/components/scroll/v2/ScrollFeedV2";
 import type { GridAxisId } from "@/lib/grid/axis-config";
@@ -50,7 +48,7 @@ const FILTERABLE_AXES: ReadonlySet<string> = new Set<GridAxisId>([
 // halving SSR DB pressure.
 export const revalidate = 600;
 export const metadata = {
-  title: "Scroll — KCKILLS",
+  title: "Scroll",
   description:
     "Scroll les kills KC comme sur TikTok. Vrais clips vidéo des matchs LEC, générés automatiquement, classés par score IA.",
   alternates: { canonical: "/scroll" },
@@ -192,15 +190,10 @@ export default async function ScrollV2Page({ searchParams }: ScrollPageProps) {
     parseInt(process.env.SCROLL_KILLS_LIMIT ?? "250", 10) || 250,
     500,
   );
-  const MOMENTS_LIMIT = Math.min(
-    parseInt(process.env.SCROLL_MOMENTS_LIMIT ?? "150", 10) || 150,
-    300,
-  );
 
-  const [data, allKills, allMoments, roster] = await Promise.all([
+  const [data, allKills, roster] = await Promise.all([
     Promise.resolve(loadRealData()),
     getPublishedKills(KILLS_LIMIT),
-    getPublishedMoments(MOMENTS_LIMIT),
     getTrackedRoster(),
   ]);
 
@@ -311,65 +304,12 @@ export default async function ScrollV2Page({ searchParams }: ScrollPageProps) {
     };
   });
 
-  const momentItems: MomentFeedItem[] = allMoments
-    .filter(
-      (m) => !!m.clip_url_vertical && !!m.thumbnail_url && m.kc_involvement !== "kc_none",
-    )
-    .map((m) => {
-      const hl = (m.moment_score ?? 5) / 10;
-      const rt = m.rating_count > 0 ? (m.avg_rating ?? 0) / 5 : 0;
-      let score = hl * 0.7 + rt * 0.3;
-      if (m.classification === "ace") score *= 2.0;
-      else if (m.classification === "teamfight") score *= 1.5;
-      else if (m.classification === "objective_fight") score *= 1.4;
-      if (m.kc_involvement === "kc_aggressor") score *= 2.0;
-      else if (m.kc_involvement === "kc_victim") score *= 0.3;
-      score *= 15;
-      return {
-        kind: "moment" as const,
-        id: m.id,
-        score,
-        classification: m.classification,
-        killCount: m.kill_count,
-        blueKills: m.blue_kills,
-        redKills: m.red_kills,
-        kcInvolvement: m.kc_involvement,
-        goldSwing: m.gold_swing,
-        clipVertical: m.clip_url_vertical!,
-        clipVerticalLow: m.clip_url_vertical_low,
-        clipHorizontal: m.clip_url_horizontal,
-        hlsMasterUrl: m.hls_master_url ?? null,
-        // Moments don't yet have a versioned manifest column — null
-        // keeps PoolItem.pickSrc on the legacy clip* fall-through.
-        assetsManifest: null,
-        thumbnail: m.thumbnail_url,
-        momentScore: m.moment_score,
-        avgRating: m.avg_rating,
-        ratingCount: m.rating_count,
-        commentCount: m.comment_count ?? 0,
-        aiDescription: m.ai_description,
-        // Moments don't yet carry per-language descriptions — use the
-        // legacy single field. <Description> falls back to it when
-        // every aiDescriptionXx is null.
-        aiDescriptionFr: null,
-        aiDescriptionEn: null,
-        aiDescriptionKo: null,
-        aiDescriptionEs: null,
-        aiTags: m.ai_tags ?? [],
-        startTimeSeconds: m.start_time_seconds,
-        endTimeSeconds: m.end_time_seconds,
-      };
-    });
-
   let filteredVideos = filterAxis && filterValue
     ? videoItems.filter((v) => videoMatchesFilter(v, filterAxis, filterValue))
     : videoItems;
   if (hasChipFilter) {
     filteredVideos = filteredVideos.filter((v) => videoMatchesChips(v, chipFilters));
   }
-  const filteredMoments = hasChipFilter
-    ? momentItems.filter((m) => momentMatchesChips(m, chipFilters))
-    : momentItems;
 
   // Moments disabled — duplicate kills without adding value
   const allClips: FeedItem[] = [...filteredVideos];
@@ -477,6 +417,17 @@ export default async function ScrollV2Page({ searchParams }: ScrollPageProps) {
     <>
       <JsonLd data={scrollItemListJsonLd} />
       <JsonLd data={breadcrumbJsonLd} />
+      {/* Wave 36 — the desktop wide-stage ScrollContextPanel (match header,
+          rate, full AI description, "À suivre", comments) renders WITHOUT a
+          second query : every field it reads already rides on each
+          VideoFeedItem in `items` (opponentCode / matchStage / matchDate /
+          matchScore / kcWon / gameNumber + avg/ratingCount + the AI
+          descriptions), server-resolved above from kc_matches.json + the
+          Supabase rows. The "À suivre" strip is a client-side slice of this
+          same already-ranked `items` array (ScrollFeedV2 builds the
+          RelatedFeedCandidate[]) — no extra fetch, no ranking change. So the
+          existing `items` prop is the single source of truth the panel needs;
+          nothing more is threaded down here. */}
       <ScrollFeedV2
         items={items}
         videoCount={clipCount}
@@ -517,29 +468,6 @@ function videoMatchesChips(v: VideoFeedItem, c: ScrollChipFilters): boolean {
     const tags = (v.aiTags ?? []).map((t) => t.toLowerCase());
     if (!tags.includes(c.tag)) return false;
   }
-  return true;
-}
-
-function momentMatchesChips(m: MomentFeedItem, c: ScrollChipFilters): boolean {
-  if (c.multiKillsOnly) return false;
-  if (c.firstBloodsOnly) return false;
-  if (c.player) return false;
-  // V14 — tag filter excludes moments by default. The aggregate tags
-  // overlap awkwardly with kill-level tags ; keep the user's "#outplay"
-  // intent crisp by showing kills only.
-  if (c.tag) return false;
-  if (c.fight) {
-    if (c.fight === "teamfight_5v5" || c.fight === "teamfight_4v4") {
-      if (m.classification !== "teamfight" && m.classification !== "ace") return false;
-    } else if (c.fight === "solo_kill") {
-      if (m.classification !== "solo_kill") return false;
-    } else {
-      return false;
-    }
-  }
-  if (c.side === "kc" && m.kcInvolvement !== "kc_aggressor" && m.kcInvolvement !== "kc_both")
-    return false;
-  if (c.side === "vs" && m.kcInvolvement !== "kc_victim") return false;
   return true;
 }
 
@@ -633,10 +561,4 @@ function violatesAntiRepeat(next: FeedItem, out: FeedItem[]): boolean {
   }
 
   return false;
-}
-
-function clumpKey(item: FeedItem): string {
-  if (item.kind === "video") return `v:${item.killerPlayerId ?? "?"}|${item.killerChampion}`;
-  if (item.kind === "moment") return `m:${item.classification}|${item.killCount}`;
-  return `a:${item.kcPlayer.name}|${item.kcPlayer.champion}`;
 }

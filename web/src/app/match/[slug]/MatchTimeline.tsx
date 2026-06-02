@@ -28,7 +28,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
-import { motion } from "motion/react";
+import { m } from "motion/react";
 import { pickAssetUrl } from "@/lib/kill-assets";
 import type { PublishedKillRow } from "@/lib/supabase/kills";
 import { KillSidePanel } from "./KillSidePanel";
@@ -356,7 +356,7 @@ function GameStrip({
         </span>
       </div>
 
-      <motion.div
+      <m.div
         className="relative h-14 select-none px-3 sm:h-20"
         initial="hidden"
         whileInView="show"
@@ -400,7 +400,7 @@ function GameStrip({
           const isKc = k.tracked_team_involvement === "team_killer";
           const top = isKc ? "38%" : "68%";
           return (
-            <motion.div
+            <m.div
               key={k.id}
               className="absolute"
               style={{ left: `calc(${leftPct}% + 0.75rem)`, top }}
@@ -419,7 +419,7 @@ function GameStrip({
                 onFocus={() => setFocusedIdx(globalIdx)}
                 onActivate={() => setActiveIdx(globalIdx)}
               />
-            </motion.div>
+            </m.div>
           );
         })}
 
@@ -427,7 +427,7 @@ function GameStrip({
           Timeline du Game {game.number}: {gameKills.length} kills, dont{" "}
           {kcCount} pour KC et {oppCount} pour {opponentCode}.
         </div>
-      </motion.div>
+      </m.div>
     </div>
   );
 }
