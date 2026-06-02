@@ -31,7 +31,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { m, useReducedMotion } from "motion/react";
-import { Check, Crown, Swords } from "lucide-react";
+import { Check, Crown } from "lucide-react";
 
 import { Modal } from "@/components/ui/FocusTrapModal";
 import { createClient } from "@/lib/supabase/client";

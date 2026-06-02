@@ -30,6 +30,7 @@ import { m, useReducedMotion } from "motion/react";
 
 import { championLoadingUrl } from "@/lib/constants";
 import { winRatePct } from "@/lib/vs-roulette";
+import { Description } from "@/components/i18n/Description";
 import type { EloLeaderboardRow } from "@/lib/supabase/vs-leaderboard";
 
 interface LeaderboardTableProps {
@@ -227,9 +228,11 @@ function RowDesktop({
               {row.is_first_blood ? " · FB" : ""}
             </span>
             {row.ai_description && (
-              <span className="block mt-0.5 text-[11px] text-white/55 line-clamp-1">
-                {row.ai_description}
-              </span>
+              <Description
+                kill={row}
+                as="span"
+                className="block mt-0.5 text-[11px] text-white/55 line-clamp-1"
+              />
             )}
           </span>
         </Link>

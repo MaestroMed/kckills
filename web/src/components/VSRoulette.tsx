@@ -35,6 +35,7 @@ import Link from "next/link";
 import { m, AnimatePresence, useReducedMotion } from "motion/react";
 
 import { createClient } from "@/lib/supabase/client";
+import { Description } from "@/components/i18n/Description";
 import {
   cleanFiltersSide,
   formatEloDelta,
@@ -1345,11 +1346,11 @@ function ClipPanel({
             → {kill.victim_name ?? kill.victim_champion ?? "?"}{" "}
             <span className="text-white/35">({kill.victim_champion})</span>
           </p>
-          {kill.ai_description ? (
-            <p className="text-[11px] text-white/55 mt-1.5 line-clamp-2">
-              {kill.ai_description}
-            </p>
-          ) : null}
+          <Description
+            kill={kill}
+            as="p"
+            className="text-[11px] text-white/55 mt-1.5 line-clamp-2"
+          />
         </div>
       </div>
 

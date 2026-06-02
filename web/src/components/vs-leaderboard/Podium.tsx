@@ -25,6 +25,7 @@ import { Crown } from "lucide-react";
 
 import { championLoadingUrl } from "@/lib/constants";
 import { winRatePct } from "@/lib/vs-roulette";
+import { Description } from "@/components/i18n/Description";
 import type { EloLeaderboardRow } from "@/lib/supabase/vs-leaderboard";
 
 interface PodiumProps {
@@ -294,9 +295,11 @@ function PodiumColumn({
             {kill.killer_champion ?? "?"} vs {kill.victim_champion ?? "?"}
           </p>
           {kill.ai_description && rank === 0 && (
-            <p className="mt-2 text-[11px] text-white/70 line-clamp-2 leading-snug">
-              {kill.ai_description}
-            </p>
+            <Description
+              kill={kill}
+              as="p"
+              className="mt-2 text-[11px] text-white/70 line-clamp-2 leading-snug"
+            />
           )}
 
           <div className="mt-3 flex items-center gap-2.5 flex-wrap">

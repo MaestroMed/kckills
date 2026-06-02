@@ -42,6 +42,7 @@ import {
   pickAssetUrl,
   pickBestForViewport,
 } from "@/lib/kill-assets";
+import { Description } from "@/components/i18n/Description";
 import type { PublishedKillRow } from "@/lib/supabase/kills";
 
 // ─── Types ────────────────────────────────────────────────────────────
@@ -442,9 +443,7 @@ export function KillSidePanel({
                 id="kill-side-desc"
                 className="font-display text-sm leading-snug text-[var(--text-primary)]"
               >
-                {kill.ai_description ??
-                  kill.ai_description_fr ??
-                  "Description IA indisponible."}
+                <Description kill={kill} fallback="Description IA indisponible." />
               </p>
 
               {/* Score + tags */}
