@@ -15,6 +15,7 @@ import Image from "next/image";
 import { ALUMNI } from "@/lib/alumni";
 import { championSplashUrl } from "@/lib/constants";
 import { Breadcrumb } from "@/components/Breadcrumb";
+import { getServerT } from "@/lib/i18n/server-lang";
 
 export const metadata: Metadata = {
   title: "Alumni",
@@ -43,14 +44,6 @@ export const metadata: Metadata = {
     title: "Alumni KC — Hall of Legends",
     description: "Les légendes qui ont porté le maillot Karmine Corp.",
   },
-};
-
-const ROLE_LABEL: Record<string, string> = {
-  top: "TOP",
-  jungle: "JGL",
-  mid: "MID",
-  adc: "ADC",
-  support: "SUP",
 };
 
 /**
@@ -94,8 +87,17 @@ function groupByYear(alumni: typeof ALUMNI) {
   return Array.from(groups.entries()).sort((a, b) => Number(b[0]) - Number(a[0]));
 }
 
-export default function AlumniPage() {
+export default async function AlumniPage() {
+  const { t } = await getServerT();
   const grouped = groupByYear(ALUMNI);
+
+  const ROLE_LABEL: Record<string, string> = {
+    top: t("p_alumni.role_top"),
+    jungle: t("p_alumni.role_jungle"),
+    mid: t("p_alumni.role_mid"),
+    adc: t("p_alumni.role_adc"),
+    support: t("p_alumni.role_support"),
+  };
 
   return (
     <div
@@ -149,7 +151,7 @@ export default function AlumniPage() {
         />
 
         <div className="relative z-10 mx-auto max-w-7xl">
-          <Breadcrumb items={[{ label: "Accueil", href: "/" }, { label: "Alumni" }]} />
+          <Breadcrumb items={[{ label: t("p_alumni.breadcrumb_home"), href: "/" }, { label: t("p_alumni.breadcrumb_current") }]} />
 
           <div className="mt-10 text-center">
             <p className="font-data text-[10px] uppercase tracking-[0.35em] text-[var(--gold)]/70 mb-4 flex items-center justify-center gap-3">
@@ -164,23 +166,25 @@ export default function AlumniPage() {
                   boxShadow: "0 0 10px rgba(200,170,110,0.5)",
                 }}
               />
-              Hall of Legends
+              {t("p_alumni.hero_eyebrow")}
             </p>
             <h1 className="font-display text-5xl md:text-7xl lg:text-8xl font-black uppercase leading-none">
               <span className="text-shimmer">ALUMNI</span>
             </h1>
             <p className="mt-6 max-w-2xl mx-auto text-base md:text-lg text-[var(--text-secondary)] leading-relaxed">
-              De la <span className="text-[var(--gold)] font-bold">Genèse 2021</span> au{" "}
-              <span className="text-[var(--red)] font-bold">Dark Era 2024</span> — les visages
-              qui ont écrit les chapitres avant l&apos;ère LEC actuelle.
+              {t("p_alumni.hero_subtitle_pre")}{" "}
+              <span className="text-[var(--gold)] font-bold">{t("p_alumni.hero_subtitle_genesis")}</span>{" "}
+              {t("p_alumni.hero_subtitle_mid")}{" "}
+              <span className="text-[var(--red)] font-bold">{t("p_alumni.hero_subtitle_dark")}</span>{" "}
+              {t("p_alumni.hero_subtitle_post")}
             </p>
             <div className="mt-6 flex items-center justify-center gap-4 text-xs text-[var(--text-muted)]">
               <span>
-                <span className="text-[var(--gold)] font-bold">{ALUMNI.length}</span> joueurs
+                <span className="text-[var(--gold)] font-bold">{ALUMNI.length}</span> {t("p_alumni.stat_players")}
               </span>
               <span className="text-[var(--gold)]/30">◆</span>
               <span>
-                <span className="text-[var(--gold)] font-bold">{grouped.length}</span> années
+                <span className="text-[var(--gold)] font-bold">{grouped.length}</span> {t("p_alumni.stat_years")}
               </span>
               <span className="text-[var(--gold)]/30">◆</span>
               <span>2021 → 2024</span>
@@ -199,7 +203,9 @@ export default function AlumniPage() {
               </span>
               <div className="gold-line flex-1" />
               <span className="font-data text-[10px] uppercase tracking-widest text-[var(--text-muted)]">
-                {alumni.length} joueur{alumni.length > 1 ? "s" : ""}
+                {alumni.length > 1
+                  ? t("p_alumni.n_players", { n: alumni.length })
+                  : t("p_alumni.one_player", { n: alumni.length })}
               </span>
             </header>
 

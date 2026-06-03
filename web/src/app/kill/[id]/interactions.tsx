@@ -8,6 +8,7 @@ import { ReportButton } from "@/components/community/ReportButton";
 import { CommentVote } from "@/components/community/CommentVote";
 import { CommentSortToggle } from "@/components/community/CommentSortToggle";
 import { sortComments, type CommentSortMode } from "@/lib/comments";
+import { useT } from "@/lib/i18n/use-lang";
 
 // ─── Server-shape types ─────────────────────────────────────────────────
 // Minimal interfaces matching what /api/kills/[id]/comment returns. Keeping
@@ -60,6 +61,7 @@ interface Comment {
 }
 
 export function KillInteractions({ killId }: { killId: string }) {
+  const t = useT();
   const [userRating, setUserRating] = useState(0);
   const [avgRating, setAvgRating] = useState<number | null>(null);
   const [ratingCount, setRatingCount] = useState(0);
@@ -105,7 +107,7 @@ export function KillInteractions({ killId }: { killId: string }) {
             userVoteRaw === -1 || userVoteRaw === 1 ? userVoteRaw : 0;
           return {
             id: String(c.id ?? ""),
-            user: String(c.profile?.discord_username ?? c.profile?.username ?? "Anonyme"),
+            user: String(c.profile?.discord_username ?? c.profile?.username ?? t("p_kill.anonymous")),
             avatar: c.profile?.discord_avatar_url ?? undefined,
             text: String(c.content ?? c.body ?? ""),
             time: c.created_at
@@ -190,9 +192,9 @@ export function KillInteractions({ killId }: { killId: string }) {
       setComments((prev) => [
         {
           id: `local-${Date.now()}`,
-          user: "Toi",
+          user: t("p_kill.you"),
           text: trimmed,
-          time: "maintenant",
+          time: t("p_kill.now"),
           createdAtMs: Date.now(),
           upvotes: 0,
           downvoteCount: 0,
@@ -215,9 +217,9 @@ export function KillInteractions({ killId }: { killId: string }) {
     const optimisticId = `opt-${Date.now()}`;
     const optimistic: Comment = {
       id: optimisticId,
-      user: "Toi",
+      user: t("p_kill.you"),
       text: trimmed,
-      time: "maintenant",
+      time: t("p_kill.now"),
       createdAtMs: Date.now(),
       pending: true,
       upvotes: 0,
@@ -251,7 +253,7 @@ export function KillInteractions({ killId }: { killId: string }) {
         setComments((prev) => prev.filter((c) => c.id !== optimisticId));
         setCommentText(trimmed);
         setCommentStatus("error");
-        setCommentError(serverMsg ?? "Erreur du serveur");
+        setCommentError(serverMsg ?? t("p_kill.error_server"));
         commentErrorTimerRef.current = window.setTimeout(() => {
           setCommentStatus("idle");
           setCommentError(null);
@@ -265,10 +267,10 @@ export function KillInteractions({ killId }: { killId: string }) {
           c.id === optimisticId
             ? {
                 id: String(data.id ?? optimisticId),
-                user: String(data.profile?.discord_username ?? data.profile?.username ?? "Toi"),
+                user: String(data.profile?.discord_username ?? data.profile?.username ?? t("p_kill.you")),
                 avatar: data.profile?.discord_avatar_url ?? undefined,
                 text: String(data.content ?? data.body ?? trimmed),
-                time: "maintenant",
+                time: t("p_kill.now"),
                 createdAtMs: data.created_at ? new Date(data.created_at).getTime() : Date.now(),
                 upvotes: typeof data.upvotes === "number" ? data.upvotes : 0,
                 downvoteCount: typeof data.downvote_count === "number" ? data.downvote_count : 0,
@@ -282,7 +284,7 @@ export function KillInteractions({ killId }: { killId: string }) {
       setComments((prev) => prev.filter((c) => c.id !== optimisticId));
       setCommentText(trimmed);
       setCommentStatus("error");
-      setCommentError("Probleme reseau");
+      setCommentError(t("p_kill.error_network"));
       commentErrorTimerRef.current = window.setTimeout(() => {
         setCommentStatus("idle");
         setCommentError(null);
@@ -290,7 +292,7 @@ export function KillInteractions({ killId }: { killId: string }) {
     } finally {
       submittingRef.current = false;
     }
-  }, [killId, isUuid, commentText]);
+  }, [killId, isUuid, commentText, t]);
 
   // ─── Reply ───────────────────────────────────────────────────────────
   // Threads `parentId` through the same POST endpoint (which already
@@ -306,9 +308,9 @@ export function KillInteractions({ killId }: { killId: string }) {
       if (!isUuid) {
         const localReply: Comment = {
           id: `local-${Date.now()}`,
-          user: "Toi",
+          user: t("p_kill.you"),
           text: trimmed,
-          time: "maintenant",
+          time: t("p_kill.now"),
           createdAtMs: Date.now(),
           upvotes: 0,
           downvoteCount: 0,
@@ -327,9 +329,9 @@ export function KillInteractions({ killId }: { killId: string }) {
       const optimisticId = `opt-${Date.now()}`;
       const optimistic: Comment = {
         id: optimisticId,
-        user: "Toi",
+        user: t("p_kill.you"),
         text: trimmed,
-        time: "maintenant",
+        time: t("p_kill.now"),
         createdAtMs: Date.now(),
         pending: true,
         upvotes: 0,
@@ -383,11 +385,11 @@ export function KillInteractions({ killId }: { killId: string }) {
                           user: String(
                             data.profile?.discord_username ??
                               data.profile?.username ??
-                              "Toi",
+                              t("p_kill.you"),
                           ),
                           avatar: data.profile?.discord_avatar_url ?? undefined,
                           text: String(data.content ?? data.body ?? trimmed),
-                          time: "maintenant",
+                          time: t("p_kill.now"),
                           createdAtMs: data.created_at
                             ? new Date(data.created_at).getTime()
                             : Date.now(),
@@ -408,7 +410,7 @@ export function KillInteractions({ killId }: { killId: string }) {
         return false;
       }
     },
-    [killId, isUuid],
+    [killId, isUuid, t],
   );
 
   // Vote change reconciler — keeps the local list in sync after a
@@ -450,7 +452,7 @@ export function KillInteractions({ killId }: { killId: string }) {
       {/* Auth prompt */}
       {authError && (
         <div className="rounded-xl border border-[var(--gold)]/30 bg-[var(--gold)]/5 p-4 text-center">
-          <p className="text-sm text-[var(--gold)] mb-2">Connecte-toi pour noter, voter et commenter</p>
+          <p className="text-sm text-[var(--gold)] mb-2">{t("p_kill.auth_prompt")}</p>
           <Link
             href="/login"
             className="inline-flex items-center gap-2 rounded-lg bg-[#5865F2] px-4 py-2 text-sm font-semibold text-white hover:bg-[#4752C4] transition-colors"
@@ -458,7 +460,7 @@ export function KillInteractions({ killId }: { killId: string }) {
             <svg className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor">
               <path d="M20.317 4.37a19.791 19.791 0 00-4.885-1.515.074.074 0 00-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 00-5.487 0 12.64 12.64 0 00-.617-1.25.077.077 0 00-.079-.037A19.736 19.736 0 003.677 4.37a.07.07 0 00-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 00.031.057 19.9 19.9 0 005.993 3.03.078.078 0 00.084-.028c.462-.63.874-1.295 1.226-1.994a.076.076 0 00-.041-.106 13.107 13.107 0 01-1.872-.892.077.077 0 01-.008-.128 10.2 10.2 0 00.372-.292.074.074 0 01.077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 01.078.01c.12.098.246.198.373.292a.077.077 0 01-.006.127 12.299 12.299 0 01-1.873.892.077.077 0 00-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 00.084.028 19.839 19.839 0 006.002-3.03.077.077 0 00.032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 00-.031-.03z" />
             </svg>
-            Connexion Discord
+            {t("p_kill.connect_discord")}
           </Link>
         </div>
       )}
@@ -467,21 +469,21 @@ export function KillInteractions({ killId }: { killId: string }) {
       <div className="rounded-xl border border-[var(--border-gold)] bg-[var(--bg-surface)] p-5">
         <div className="flex items-center justify-between">
           <div>
-            <h3 className="font-display font-bold">Note ce kill</h3>
+            <h3 className="font-display font-bold">{t("p_kill.rate_this_kill")}</h3>
             <p className="text-xs text-[var(--text-muted)]">
               {rateStatus === "saving"
-                ? "Enregistrement..."
+                ? t("p_kill.rate_saving")
                 : rateStatus === "saved"
-                ? `${userRating}/5 enregistr\u00e9 !`
+                ? t("p_kill.rate_saved", { n: userRating })
                 : rateStatus === "error"
-                ? "Erreur"
+                ? t("p_kill.rate_error")
                 : userRating > 0
-                ? `Ta note : ${userRating}/5`
-                : "Clique pour noter"}
+                ? t("p_kill.rate_your_note", { n: userRating })
+                : t("p_kill.rate_click")}
             </p>
             {avgRating != null && ratingCount > 0 && (
               <p className="text-[10px] text-[var(--text-disabled)] mt-1">
-                Moyenne : {avgRating.toFixed(1)}/5 ({ratingCount} vote{ratingCount > 1 ? "s" : ""})
+                {t("p_kill.rate_average", { avg: avgRating.toFixed(1), n: ratingCount })}
               </p>
             )}
           </div>
@@ -492,7 +494,7 @@ export function KillInteractions({ killId }: { killId: string }) {
       {/* Comments */}
       <div className="rounded-xl border border-[var(--border-gold)] bg-[var(--bg-surface)] p-5 space-y-4">
         <div className="flex items-center justify-between gap-3 flex-wrap">
-          <h3 className="font-display font-bold">Commentaires ({comments.length})</h3>
+          <h3 className="font-display font-bold">{t("p_kill.comments_title", { n: comments.length })}</h3>
           <CommentSortToggle mode={sortMode} onChange={setSortMode} />
         </div>
 
@@ -507,7 +509,7 @@ export function KillInteractions({ killId }: { killId: string }) {
                 handleComment();
               }
             }}
-            placeholder="Ajouter un commentaire..."
+            placeholder={t("p_kill.comment_placeholder")}
             maxLength={500}
             disabled={commentStatus === "submitting"}
             className="flex-1 rounded-lg border border-[var(--border-gold)] bg-[var(--bg-primary)] px-3 py-2 text-sm text-[var(--text-primary)] placeholder-[var(--text-disabled)] outline-none focus:border-[var(--gold)] disabled:opacity-60"
@@ -517,7 +519,7 @@ export function KillInteractions({ killId }: { killId: string }) {
             disabled={!commentText.trim() || commentStatus === "submitting"}
             className="rounded-lg bg-[var(--gold)] px-4 py-2 text-sm font-semibold text-black disabled:opacity-40"
           >
-            {commentStatus === "submitting" ? "..." : "Poster"}
+            {commentStatus === "submitting" ? "..." : t("p_kill.comment_post")}
           </button>
         </div>
 
@@ -536,7 +538,7 @@ export function KillInteractions({ killId }: { killId: string }) {
 
         {!loadingComments && comments.length === 0 && (
           <p className="py-6 text-center text-sm text-[var(--text-disabled)]">
-            Aucun commentaire. Sois le premier !
+            {t("p_kill.no_comments")}
           </p>
         )}
 
@@ -558,12 +560,12 @@ export function KillInteractions({ killId }: { killId: string }) {
           Legacy aggregate IDs (slug-style) skip this entirely. */}
       {isUuid && (
         <div className="flex items-center justify-end gap-2 px-1 text-[11px] text-[var(--text-muted)]">
-          <span>Un problème avec ce clip&nbsp;?</span>
+          <span>{t("p_kill.report_clip_question")}</span>
           <ReportButton
             targetType="kill"
             targetId={killId}
             size="sm"
-            ariaLabel="Signaler ce kill"
+            ariaLabel={t("p_kill.report_kill_aria")}
           />
         </div>
       )}
@@ -582,6 +584,7 @@ interface ThreadProps {
 }
 
 function CommentThread({ comment: c, depth, onAuthRequired, onVoteChange, onReply }: ThreadProps) {
+  const t = useT();
   const maxDepth = 3;
   const indent = Math.min(depth, maxDepth);
   // Optimistic / local-only comments don't have server ids — hide the
@@ -613,7 +616,7 @@ function CommentThread({ comment: c, depth, onAuthRequired, onVoteChange, onRepl
           <span className="text-sm font-medium">{c.user}</span>
           <span className="text-[10px] text-[var(--text-disabled)]">{c.time}</span>
           {depth > 0 && (
-            <span className="text-[9px] text-[var(--text-disabled)]">&middot; r&eacute;ponse</span>
+            <span className="text-[9px] text-[var(--text-disabled)]">&middot; {t("p_kill.reply_label")}</span>
           )}
           {reportable && (
             <span className="ml-auto">
@@ -645,7 +648,7 @@ function CommentThread({ comment: c, depth, onAuthRequired, onVoteChange, onRepl
                 aria-expanded={showReply}
                 className="rounded text-[11px] font-medium text-[var(--text-muted)] hover:text-[var(--gold)] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gold)]"
               >
-                {showReply ? "Annuler" : "Répondre"}
+                {showReply ? t("p_kill.reply_cancel") : t("p_kill.reply_button")}
               </button>
             )}
           </div>
@@ -692,6 +695,7 @@ function CommentReplyComposer({
   onReply: (parentId: string, text: string) => Promise<boolean>;
   onDone: () => void;
 }) {
+  const t = useT();
   const [text, setText] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
@@ -722,10 +726,10 @@ function CommentReplyComposer({
           }
           if (e.key === "Escape") onDone();
         }}
-        placeholder="Répondre..."
+        placeholder={t("p_kill.reply_placeholder")}
         maxLength={500}
         disabled={submitting}
-        aria-label="Répondre à ce commentaire"
+        aria-label={t("p_kill.reply_aria")}
         className="flex-1 rounded-lg border border-[var(--border-gold)] bg-[var(--bg-primary)] px-3 py-1.5 text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] outline-none focus:border-[var(--gold)] disabled:opacity-60"
       />
       <button
@@ -734,7 +738,7 @@ function CommentReplyComposer({
         disabled={!text.trim() || submitting}
         className="rounded-lg bg-[var(--gold)] px-3 py-1.5 text-xs font-semibold text-black disabled:opacity-40"
       >
-        {submitting ? "..." : "Poster"}
+        {submitting ? "..." : t("p_kill.comment_post")}
       </button>
     </div>
   );

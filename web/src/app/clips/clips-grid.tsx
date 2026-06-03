@@ -9,7 +9,7 @@ import { TEAM_LOGOS } from "@/lib/kc-assets";
 import { isDescriptionClean } from "@/lib/scroll/sanitize-description";
 import { Breadcrumb } from "@/components/Breadcrumb";
 import { Description } from "@/components/i18n/Description";
-import { useCurrentLang } from "@/lib/i18n/use-lang";
+import { useCurrentLang, useT } from "@/lib/i18n/use-lang";
 import type { Lang } from "@/lib/i18n/lang";
 
 /**
@@ -77,11 +77,13 @@ export interface InitialFilters {
   search: string;
 }
 
-const SORT_LABELS: Record<SortKey, string> = {
-  recent: "Récents",
-  score: "Meilleurs",
-  rating: "Mieux notés",
-  impressions: "Populaires",
+const SORT_KEYS: SortKey[] = ["recent", "score", "rating", "impressions"];
+
+const SORT_LABEL_KEYS: Record<SortKey, string> = {
+  recent: "p_clips.sort_recent",
+  score: "p_clips.sort_score",
+  rating: "p_clips.sort_rating",
+  impressions: "p_clips.sort_impressions",
 };
 
 const FIGHT_TYPE_LABELS: Record<string, string> = {
@@ -127,6 +129,7 @@ export function ClipsGrid({ initialCards, initialFilters }: { initialCards: Clip
   // Active language drives which ai_description_* field each card renders;
   // the search filter matches that same localized text (see cardDescription).
   const lang = useCurrentLang();
+  const t = useT();
 
   // Sync filter/sort/search state to the URL so /clips views are
   // bookmarkable, shareable and back-button-restorable. The server
@@ -225,8 +228,8 @@ export function ClipsGrid({ initialCards, initialFilters }: { initialCards: Clip
     <div className="space-y-6">
       <Breadcrumb
         items={[
-          { label: "Accueil", href: "/" },
-          { label: "Clips" },
+          { label: t("p_clips.breadcrumb_home"), href: "/" },
+          { label: t("p_clips.breadcrumb_clips") },
         ]}
       />
 
@@ -234,10 +237,10 @@ export function ClipsGrid({ initialCards, initialFilters }: { initialCards: Clip
       <header className="flex items-end justify-between gap-4 flex-wrap">
         <div>
           <h1 className="font-display text-3xl font-black uppercase">
-            Tous les <span className="text-gold-gradient">clips</span>
+            {t("p_clips.hero_title_pre")} <span className="text-gold-gradient">{t("p_clips.hero_title_accent")}</span>
           </h1>
           <p className="text-sm text-[var(--text-muted)] mt-2">
-            {filtered.length} clips {hasActiveFilter ? "filtrés" : "publiés"} · {initialCards.length} au total
+            {filtered.length} {hasActiveFilter ? t("p_clips.count_filtered") : t("p_clips.count_published")} · {initialCards.length} {t("p_clips.count_total")}
           </p>
         </div>
         {/* Hall-of-Fame cross-link — discoverability from the main catalog.
@@ -247,7 +250,7 @@ export function ClipsGrid({ initialCards, initialFilters }: { initialCards: Clip
           href="/records"
           className="group rounded-xl border border-[var(--gold)]/30 bg-[var(--gold)]/5 px-4 py-2 text-xs font-display font-bold uppercase tracking-widest text-[var(--gold)] hover:bg-[var(--gold)]/15 hover:border-[var(--gold)]/60 transition-all inline-flex items-center gap-2"
         >
-          <span>★ Records Absolus</span>
+          <span>★ {t("p_clips.records_link")}</span>
           <svg className="h-3 w-3 transition-transform group-hover:translate-x-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M9 5l7 7-7 7" />
           </svg>
@@ -265,12 +268,12 @@ export function ClipsGrid({ initialCards, initialFilters }: { initialCards: Clip
               setSearch(e.target.value);
               setVisibleCount(60);
             }}
-            placeholder="Filtrer par champion ou description..."
-            aria-label="Filtrer les clips par champion ou description"
+            placeholder={t("p_clips.search_placeholder")}
+            aria-label={t("p_clips.search_aria")}
             className="flex-1 rounded-lg border border-[var(--border-gold)] bg-[var(--bg-surface)] px-3 py-2 text-sm focus:border-[var(--gold)] outline-none"
           />
           <div className="flex gap-1">
-            {(Object.keys(SORT_LABELS) as SortKey[]).map((k) => (
+            {SORT_KEYS.map((k) => (
               <button
                 key={k}
                 onClick={() => setSortKey(k)}
@@ -281,7 +284,7 @@ export function ClipsGrid({ initialCards, initialFilters }: { initialCards: Clip
                     : "border-[var(--border-gold)] text-[var(--text-muted)] hover:text-[var(--gold)]"
                 }`}
               >
-                {SORT_LABELS[k]}
+                {t(SORT_LABEL_KEYS[k])}
               </button>
             ))}
           </div>
@@ -298,7 +301,7 @@ export function ClipsGrid({ initialCards, initialFilters }: { initialCards: Clip
                 : "border-[var(--border-gold)] text-[var(--text-muted)] hover:text-[var(--gold)]"
             }`}
           >
-            Tous adversaires
+            {t("p_clips.all_opponents")}
           </button>
           {opponents.map((code) => (
             <button
@@ -330,7 +333,7 @@ export function ClipsGrid({ initialCards, initialFilters }: { initialCards: Clip
                 : "border-[var(--border-gold)]/50 text-[var(--text-muted)]"
             }`}
           >
-            Tous fights
+            {t("p_clips.all_fights")}
           </button>
           {fightTypes.map((ft) => (
             <button
@@ -355,7 +358,7 @@ export function ClipsGrid({ initialCards, initialFilters }: { initialCards: Clip
                 : "border-[var(--border-gold)]/50 text-[var(--text-muted)] hover:text-[var(--orange)]"
             }`}
           >
-            ⚡ Multi-kills
+            ⚡ {t("p_clips.flag_multikills")}
           </button>
           <button
             onClick={() => setFirstBloodOnly((v) => !v)}
@@ -366,7 +369,7 @@ export function ClipsGrid({ initialCards, initialFilters }: { initialCards: Clip
                 : "border-[var(--border-gold)]/50 text-[var(--text-muted)] hover:text-[var(--red)]"
             }`}
           >
-            🩸 First Blood
+            🩸 {t("p_clips.flag_first_blood")}
           </button>
         </div>
       </div>
@@ -374,7 +377,7 @@ export function ClipsGrid({ initialCards, initialFilters }: { initialCards: Clip
       {/* Cards grid */}
       {filtered.length === 0 ? (
         <p className="text-center py-16 text-[var(--text-muted)]">
-          Aucun clip ne correspond aux filtres.
+          {t("p_clips.empty")}
         </p>
       ) : (
         <>
@@ -390,7 +393,7 @@ export function ClipsGrid({ initialCards, initialFilters }: { initialCards: Clip
                 onClick={() => setVisibleCount((n) => n + 60)}
                 className="rounded-lg border border-[var(--gold)]/30 bg-[var(--gold)]/10 px-6 py-2.5 text-sm font-bold text-[var(--gold)] hover:bg-[var(--gold)]/20"
               >
-                Charger plus ({filtered.length - visibleCount} restants)
+                {t("p_clips.load_more", { n: filtered.length - visibleCount })}
               </button>
             </div>
           )}
@@ -401,6 +404,7 @@ export function ClipsGrid({ initialCards, initialFilters }: { initialCards: Clip
 }
 
 function ClipCardComponent({ card }: { card: ClipCard }) {
+  const t = useT();
   const gtMin = Math.floor(card.gameTimeSeconds / 60);
   const gtSec = card.gameTimeSeconds % 60;
   const dateStr = card.matchDate
@@ -418,7 +422,7 @@ function ClipCardComponent({ card }: { card: ClipCard }) {
 
   // Mandated accessible kill phrasing — "{champion} élimine {champion}".
   // Reused for both the card link's accessible name and the thumbnail alt.
-  const killAlt = `${card.killerChampion} élimine ${card.victimChampion}`;
+  const killAlt = t("p_clips.kill_alt", { killer: card.killerChampion, victim: card.victimChampion });
 
   return (
     <Link
@@ -482,7 +486,7 @@ function ClipCardComponent({ card }: { card: ClipCard }) {
             a stats-only entry without a clip. */}
         {card.isDataOnly && (
           <span className="absolute top-1.5 right-1.5 z-20 rounded bg-black/70 backdrop-blur-sm px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-[var(--text-muted)]">
-            data
+            {t("p_clips.badge_data")}
           </span>
         )}
 

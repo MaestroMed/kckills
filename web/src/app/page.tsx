@@ -7,6 +7,7 @@ import { PLAYER_PHOTOS, TEAM_LOGOS, KC_LOGO } from "@/lib/kc-assets";
 import { getPublishedKills } from "@/lib/supabase/kills";
 import { loadHeroVideos } from "@/lib/hero-videos/storage";
 import { getEraRosters } from "@/lib/era-rosters";
+import { getServerT } from "@/lib/i18n/server-lang";
 import { DesktopOnly } from "@/components/DesktopOnly";
 // 🔴 2026-04-28 — heavy desktop-only sections live in a client wrapper
 // file (`homepage-desktop-sections.tsx`) because Next.js 15 forbids
@@ -175,6 +176,7 @@ const YOUTUBE_HERO_CLIPS = [
 export const revalidate = 1800;
 
 export default async function HomePage() {
+  const { t } = await getServerT();
   const data = loadRealData();
   const roster = getCurrentRoster(data);
   const stats = getTeamStats(data);
@@ -270,13 +272,13 @@ export default async function HomePage() {
                 href="/scroll"
                 className="rounded-xl bg-[var(--gold)] px-8 py-4 font-display text-sm font-black uppercase tracking-widest text-[var(--bg-primary)] transition-all hover:bg-[var(--gold-bright)] hover:shadow-2xl hover:shadow-[var(--gold)]/30 hover:scale-[1.03] active:scale-95"
               >
-                Scroll les kills
+                {t("p_home.cta_scroll_kills")}
               </Link>
               <Link
                 href="/matches"
                 className="rounded-xl border border-[var(--border-gold)] bg-black/30 backdrop-blur-sm px-8 py-4 font-display text-sm font-bold uppercase tracking-widest text-[var(--text-secondary)] transition-all hover:border-[var(--gold)]/50 hover:text-[var(--gold)]"
               >
-                Matchs
+                {t("p_home.cta_matches")}
               </Link>
               <Link
                 href="/clips"
@@ -284,7 +286,7 @@ export default async function HomePage() {
               >
                 <span className="inline-flex items-center gap-2">
                   <span className="text-[var(--gold)]">&#9658;</span>
-                  Tous les clips
+                  {t("p_home.cta_all_clips")}
                 </span>
               </Link>
             </div>
@@ -293,7 +295,7 @@ export default async function HomePage() {
             {roster.length > 0 && (
               <div className="mt-10 hidden md:flex items-center gap-3">
                 <span className="font-data text-[9px] uppercase tracking-[0.25em] text-white/40">
-                  Roster Spring 2026
+                  {t("p_home.roster_spring_2026")}
                 </span>
                 <div className="flex -space-x-2">
                   {roster.slice(0, 5).map((p) => {
@@ -363,16 +365,16 @@ export default async function HomePage() {
           Surfaces kills played on today's calendar date in past years.
           Wave 28 (2026-05-11). Renders nothing when no historical match
           exists, so doesn't bloat the homepage on calendar holes. */}
-      <Suspense fallback={<SectionSkeleton size="md" label="Souvenirs du jour en cours de chargement" />}>
+      <Suspense fallback={<SectionSkeleton size="md" label={t("p_home.loading_on_this_day")} />}>
         <OnThisDay />
       </Suspense>
 
-      <Suspense fallback={<SectionSkeleton size="lg" label="Meilleurs clips du week-end en cours de chargement" />}>
+      <Suspense fallback={<SectionSkeleton size="lg" label={t("p_home.loading_weekend_best")} />}>
         <HomeWeekendBestClips />
       </Suspense>
 
       {/* ═══ KILL OF THE WEEK — surface the featured clip first ═════════ */}
-      <Suspense fallback={<SectionSkeleton size="md" label="Kill de la semaine en cours de chargement" />}>
+      <Suspense fallback={<SectionSkeleton size="md" label={t("p_home.loading_kill_of_week")} />}>
         <KillOfTheWeek />
       </Suspense>
 
@@ -412,7 +414,7 @@ export default async function HomePage() {
           state lives client-side so the heavy homepage RSC never
           re-renders on selection. */}
       <HomeTimelineFeed>
-        <Suspense fallback={<SectionSkeleton size="xl" label="Clips récents en cours de chargement" />}>
+        <Suspense fallback={<SectionSkeleton size="xl" label={t("p_home.loading_recent_clips")} />}>
           <HomeRecentClips />
         </Suspense>
       </HomeTimelineFeed>
@@ -427,10 +429,10 @@ export default async function HomePage() {
             <span className="text-2xl">▽</span>
             <div className="flex-1 min-w-0">
               <p className="font-data text-[9px] uppercase tracking-[0.25em] text-[var(--cyan)]/70">
-                Hebdomadaire
+                {t("p_home.disco_weekly_kicker")}
               </p>
               <p className="font-display text-sm font-bold text-white group-hover:text-[var(--cyan)] transition-colors">
-                Cette semaine
+                {t("p_home.disco_this_week")}
               </p>
             </div>
             <svg className="h-4 w-4 text-[var(--cyan)]/40 group-hover:text-[var(--cyan)] group-hover:translate-x-0.5 transition-all" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -444,10 +446,10 @@ export default async function HomePage() {
             <span className="text-2xl">★</span>
             <div className="flex-1 min-w-0">
               <p className="font-data text-[9px] uppercase tracking-[0.25em] text-[var(--gold)]/70">
-                Hall of Fame
+                {t("p_home.disco_hall_of_fame")}
               </p>
               <p className="font-display text-sm font-bold text-white group-hover:text-[var(--gold)] transition-colors">
-                Records Absolus
+                {t("p_home.disco_records")}
               </p>
             </div>
             <svg className="h-4 w-4 text-[var(--gold)]/40 group-hover:text-[var(--gold)] group-hover:translate-x-0.5 transition-all" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -461,10 +463,10 @@ export default async function HomePage() {
             <span className="text-2xl">⚡</span>
             <div className="flex-1 min-w-0">
               <p className="font-data text-[9px] uppercase tracking-[0.25em] text-[var(--orange)]/70">
-                Highlights
+                {t("p_home.disco_highlights")}
               </p>
               <p className="font-display text-sm font-bold text-white group-hover:text-[var(--orange)] transition-colors">
-                Pentakills & Multi
+                {t("p_home.disco_pentas_multi")}
               </p>
             </div>
             <svg className="h-4 w-4 text-[var(--orange)]/40 group-hover:text-[var(--orange)] group-hover:translate-x-0.5 transition-all" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -484,7 +486,7 @@ export default async function HomePage() {
       <HomeQuoteRotatorSection quotes={QUOTES} />
 
       {/* ═══ CARTES LEGENDAIRES — TCG visual layer en showcase home ═════ */}
-      <Suspense fallback={<SectionSkeleton size="lg" label="Cartes légendaires en cours de chargement" />}>
+      <Suspense fallback={<SectionSkeleton size="lg" label={t("p_home.loading_legendary_cards")} />}>
         <HomeRareCards />
       </Suspense>
 
@@ -493,7 +495,7 @@ export default async function HomePage() {
           all the curated YouTube thumbnails were the heaviest single
           mobile-hostile section. Skipped entirely on mobile. */}
       <DesktopOnly>
-        <Suspense fallback={<SectionSkeleton size="xl" label="Showcase YouTube en cours de chargement" />}>
+        <Suspense fallback={<SectionSkeleton size="xl" label={t("p_home.loading_youtube_showcase")} />}>
           <HomeYouTubeShowcase />
         </Suspense>
       </DesktopOnly>
@@ -554,7 +556,7 @@ export default async function HomePage() {
             />
             <div className="relative z-10 px-4 max-w-7xl mx-auto space-y-4">
               <h2 className="font-display text-xl font-bold">
-                Dernier <span className="text-gold-gradient">match</span>
+                {t("p_home.last_match_pre")} <span className="text-gold-gradient">{t("p_home.last_match_accent")}</span>
               </h2>
 
               <Link href={`/match/${match.id}`} className="flex items-center gap-4 rounded-xl border border-[var(--border-gold)] bg-[var(--bg-surface)]/80 backdrop-blur-sm p-5 hover:border-[var(--gold)]/40 transition-colors">
@@ -565,7 +567,7 @@ export default async function HomePage() {
                   <p className="font-display text-lg font-bold">
                     KC vs {match.opponent.code}
                     <span className={`ml-2 ${match.kc_won ? "text-[var(--green)]" : "text-[var(--red)]"}`}>
-                      {match.kc_won ? "Victoire" : "D\u00e9faite"} {match.kc_score}-{match.opp_score}
+                      {match.kc_won ? t("p_home.victory") : t("p_home.defeat")} {match.kc_score}-{match.opp_score}
                     </span>
                   </p>
                   <p className="text-xs text-[var(--text-muted)]">{match.stage}</p>
@@ -575,7 +577,7 @@ export default async function HomePage() {
               {match.games.map((game) => (
                 <div key={game.id} className="rounded-xl border border-[var(--border-gold)] bg-[var(--bg-surface)]/80 backdrop-blur-sm overflow-hidden">
                   <div className="flex items-center justify-between border-b border-[var(--border-gold)] px-5 py-3 bg-[var(--bg-primary)]/60">
-                    <p className="font-display font-semibold">Game {game.number}</p>
+                    <p className="font-display font-semibold">{t("p_home.game_n", { n: game.number })}</p>
                     <p className="font-data text-sm">
                       <span className="text-[var(--green)] font-bold">{game.kc_kills}</span>
                       <span className="text-[var(--text-disabled)]"> - </span>

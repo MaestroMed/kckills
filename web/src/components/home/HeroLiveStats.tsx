@@ -17,6 +17,7 @@
 
 import Link from "next/link";
 import Image from "next/image";
+import { getServerT } from "@/lib/i18n/server-lang";
 import { type RealData, type RosterPlayer, displayRole } from "@/lib/real-data";
 import { PLAYER_PHOTOS, TEAM_LOGOS, KC_LOGO } from "@/lib/kc-assets";
 // Wave 13n (2026-05-07) — switched from raw fetchers to unstable_cache-
@@ -47,6 +48,7 @@ export async function HeroLiveStats({
   stats,
   allMatches,
 }: HeroLiveStatsProps) {
+  const { t } = await getServerT();
   // ─── Live data fetch — parallel ───────────────────────────────────
   // `buildTime: true` opts into the cookie-less anon Supabase client so
   // the page stays cacheable per its `revalidate` ISR setting. Each
@@ -103,19 +105,26 @@ export async function HeroLiveStats({
   const carouselPlayers: RosterPlayerStat[] = top5.map((p, i) => {
     const isLiveTop = !!liveTopIgn && p.name.toLowerCase().includes(liveTopIgn);
     const kda = computeKda(p);
-    let achievementLabel = "Titulaire";
-    let achievement = `${displayRole(p.role)} · ${p.gamesPlayed} games`;
+    let achievementLabel = t("p_home.ach_starter");
+    let achievement = t("p_home.ach_starter_desc", {
+      role: displayRole(p.role),
+      games: p.gamesPlayed,
+    });
     if (isLiveTop && liveTopScorer) {
-      achievementLabel = "Top kills";
-      achievement = `${liveTopScorer.totalKills} kills sur ${
-        liveTopScorer.gamesPlayed || p.gamesPlayed
-      } games — la machine offensive`;
+      achievementLabel = t("p_home.ach_top_kills");
+      achievement = t("p_home.ach_offensive_machine", {
+        kills: liveTopScorer.totalKills,
+        games: liveTopScorer.gamesPlayed || p.gamesPlayed,
+      });
     } else if (kda >= 4) {
-      achievementLabel = "KDA Champion";
-      achievement = `KDA ${kda.toFixed(2)} — le métronome`;
+      achievementLabel = t("p_home.ach_kda_champion");
+      achievement = t("p_home.ach_metronome", { kda: kda.toFixed(2) });
     } else if (i === 0) {
-      achievementLabel = "Sniper";
-      achievement = `${p.totalKills} kills sur ${p.gamesPlayed} games — la machine offensive`;
+      achievementLabel = t("p_home.ach_sniper");
+      achievement = t("p_home.ach_offensive_machine", {
+        kills: p.totalKills,
+        games: p.gamesPlayed,
+      });
     }
     return {
       ign: p.name,
@@ -146,7 +155,7 @@ export async function HeroLiveStats({
           >
             <div className="flex items-center justify-between mb-2">
               <span className="font-data text-[9px] uppercase tracking-[0.25em] text-[var(--gold)]/60">
-                Dernier match
+                {t("p_home.last_match")}
               </span>
               <span className="text-[9px] text-white/40 font-data">
                 {date.toLocaleDateString("fr-FR", { day: "numeric", month: "short" })}
@@ -183,7 +192,7 @@ export async function HeroLiveStats({
               </span>
             </div>
             <p className="mt-2 text-[10px] text-white/40 uppercase tracking-wider">
-              {lastMatch.stage} &middot; Bo{lastMatch.best_of} &middot; Voir le d&eacute;tail &rarr;
+              {lastMatch.stage} &middot; {t("p_home.bo_n", { n: lastMatch.best_of })} &middot; {t("p_home.see_detail")}
             </p>
           </Link>
         );
@@ -193,7 +202,7 @@ export async function HeroLiveStats({
       {!isEmpty && (
         <div className="rounded-xl bg-black/55 backdrop-blur-md border border-[var(--gold)]/20 px-5 py-4">
           <p className="font-data text-[9px] uppercase tracking-[0.25em] text-[var(--gold)]/60 mb-2">
-            Carri&egrave;re LEC &middot; {heroCareerYearStart} &rarr; {heroCareerYearEnd}
+            {t("p_home.career_lec")} &middot; {heroCareerYearStart} &rarr; {heroCareerYearEnd}
           </p>
           <div className="flex items-baseline gap-2 mb-2">
             <AnimatedNumber
@@ -201,22 +210,22 @@ export async function HeroLiveStats({
               duration={2}
               className="font-data text-5xl lg:text-6xl font-black text-[var(--gold)] tabular-nums leading-none"
             />
-            <span className="text-xs text-white/50 uppercase tracking-widest font-semibold">kills</span>
+            <span className="text-xs text-white/50 uppercase tracking-widest font-semibold">{t("p_home.unit_kills")}</span>
           </div>
           <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-xs font-data">
             <span className="flex items-baseline gap-1 flex-shrink-0">
               <AnimatedNumber value={heroCareerWins} duration={1.6} className="text-[var(--green)] font-bold text-lg" />
-              <span className="text-[9px] uppercase tracking-wider text-white/40">W</span>
+              <span className="text-[9px] uppercase tracking-wider text-white/40">{t("p_home.unit_w")}</span>
             </span>
             <span className="text-white/15 flex-shrink-0">&bull;</span>
             <span className="flex items-baseline gap-1 flex-shrink-0">
               <AnimatedNumber value={heroCareerLosses} duration={1.6} className="text-[var(--red)] font-bold text-lg" />
-              <span className="text-[9px] uppercase tracking-wider text-white/40">L</span>
+              <span className="text-[9px] uppercase tracking-wider text-white/40">{t("p_home.unit_l")}</span>
             </span>
             <span className="text-white/15 flex-shrink-0">&bull;</span>
             <span className="flex items-baseline gap-1 flex-shrink-0">
               <AnimatedNumber value={heroCareerGames} duration={1.6} className="font-bold text-lg text-white" />
-              <span className="text-[9px] uppercase tracking-wider text-white/40">G</span>
+              <span className="text-[9px] uppercase tracking-wider text-white/40">{t("p_home.unit_g")}</span>
             </span>
             <span className="text-white/15 flex-shrink-0">&bull;</span>
             <span className="flex items-baseline gap-1 flex-shrink-0">
@@ -226,14 +235,14 @@ export async function HeroLiveStats({
                 format="percent1"
                 className="text-[var(--gold)] font-bold text-lg"
               />
-              <span className="text-[9px] uppercase tracking-wider text-white/40">WR</span>
+              <span className="text-[9px] uppercase tracking-wider text-white/40">{t("p_home.unit_wr")}</span>
             </span>
             {heroCareerClips > 0 && (
               <>
                 <span className="text-white/15 flex-shrink-0">&bull;</span>
                 <span className="flex items-baseline gap-1 flex-shrink-0">
                   <AnimatedNumber value={heroCareerClips} duration={1.8} className="text-[var(--cyan)] font-bold text-lg" />
-                  <span className="text-[9px] uppercase tracking-wider text-white/40">CLIPS</span>
+                  <span className="text-[9px] uppercase tracking-wider text-white/40">{t("p_home.unit_clips")}</span>
                 </span>
               </>
             )}
@@ -269,14 +278,14 @@ export async function HeroLiveStats({
                     {carouselPlayers[0].ign}
                   </p>
                   <p className="text-[10px] text-white/50 font-data uppercase tracking-wider">
-                    {carouselPlayers[0].role} · {carouselPlayers[0].gamesPlayed} games
+                    {t("p_home.role_games", { role: carouselPlayers[0].role, games: carouselPlayers[0].gamesPlayed })}
                   </p>
                 </div>
                 <div className="text-right">
                   <p className="font-data text-2xl font-black text-[var(--gold)] tabular-nums leading-none">
                     {carouselPlayers[0].totalKills}
                   </p>
-                  <p className="text-[9px] text-white/40 uppercase tracking-wider mt-1">kills</p>
+                  <p className="text-[9px] text-white/40 uppercase tracking-wider mt-1">{t("p_home.unit_kills")}</p>
                 </div>
               </div>
             </Link>

@@ -19,6 +19,7 @@
 
 import type { Metadata } from "next";
 import { JsonLd } from "@/lib/seo/jsonld";
+import { getServerT } from "@/lib/i18n/server-lang";
 import { searchKills, type SearchFilters } from "@/lib/supabase/search";
 import { SearchBar } from "@/components/search/SearchBar";
 import { FilterChips } from "@/components/search/FilterChips";
@@ -161,6 +162,7 @@ export default async function SearchPage({
   searchParams: Promise<SearchParams>;
 }) {
   const sp = await searchParams;
+  const { t } = await getServerT();
   const { q, filters } = parseFilters(sp);
   const filtered = hasAnyFilter(filters);
 
@@ -211,7 +213,7 @@ export default async function SearchPage({
       <section className="relative -mx-4 mb-6 border-b border-[var(--border-gold)] bg-[var(--bg-surface)]/80 px-4 pb-4 pt-2 backdrop-blur-sm">
         <div className="mx-auto max-w-7xl">
           <h1 className="mb-3 font-display text-2xl font-black tracking-wide text-[var(--gold-bright)]">
-            Recherche
+            {t("p_search.heading")}
           </h1>
           <SearchBar initialQuery={q} autoFocus={isEmpty} />
         </div>
@@ -242,10 +244,10 @@ export default async function SearchPage({
                 />
               </svg>
               <p className="mt-4 max-w-xs text-sm text-[var(--text-secondary)]">
-                Cherche un kill ou utilise les filtres ci-dessus.
+                {t("p_search.empty_prompt")}
               </p>
               <p className="mt-2 text-xs text-[var(--text-muted)]">
-                Astuce : tape <kbd className="rounded border border-[var(--border-gold)] bg-[var(--bg-elevated)] px-1.5 py-0.5 font-mono text-[10px]">/</kbd> de n&apos;importe ou pour focus.
+                {t("p_search.tip_before")} <kbd className="rounded border border-[var(--border-gold)] bg-[var(--bg-elevated)] px-1.5 py-0.5 font-mono text-[10px]">/</kbd> {t("p_search.tip_after")}
               </p>
             </div>
           ) : (

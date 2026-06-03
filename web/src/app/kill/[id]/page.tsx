@@ -11,6 +11,7 @@ import { SimilarClipsCarousel } from "@/components/kill/SimilarClipsCarousel";
 import { KillQuotesPanel } from "@/components/quotes/KillQuotesPanel";
 import { getAssetMetadata, pickAssetUrl } from "@/lib/kill-assets";
 import { JsonLd, breadcrumbLD } from "@/lib/seo/jsonld";
+import { getServerT } from "@/lib/i18n/server-lang";
 import type { Metadata } from "next";
 
 // ISR: pre-render the top N clips at build time, regenerate every 10 min
@@ -376,7 +377,8 @@ export default async function KillDetailPage({ params }: Props) {
 
 // ─── Legacy aggregate detail view ──────────────────────────────────────
 
-function LegacyKillDetail({ kill, id }: { kill: LegacyKill; id: string }) {
+async function LegacyKillDetail({ kill, id }: { kill: LegacyKill; id: string }) {
+  const { t } = await getServerT();
   const kda = kill.deaths > 0
     ? ((kill.kills + kill.assists) / kill.deaths).toFixed(1)
     : "Perfect";
@@ -384,13 +386,13 @@ function LegacyKillDetail({ kill, id }: { kill: LegacyKill; id: string }) {
   return (
     <div className="mx-auto max-w-3xl space-y-6">
       <nav className="flex items-center gap-2 text-sm text-[var(--text-muted)]">
-        <Link href="/" className="hover:text-[var(--gold)]">Accueil</Link>
+        <Link href="/" className="hover:text-[var(--gold)]">{t("p_kill.breadcrumb_home")}</Link>
         <span className="text-[var(--gold)]/30">{"\u25C6"}</span>
         <Link href={`/match/${kill.matchId}`} className="hover:text-[var(--gold)]">
           KC vs {kill.opponent}
         </Link>
         <span className="text-[var(--gold)]/30">{"\u25C6"}</span>
-        <span>Game {kill.gameNumber}</span>
+        <span>{t("p_kill.game_n", { n: kill.gameNumber })}</span>
       </nav>
 
       <div className="relative aspect-video w-full overflow-hidden rounded-xl border border-[var(--border-gold)]">
@@ -421,7 +423,7 @@ function LegacyKillDetail({ kill, id }: { kill: LegacyKill; id: string }) {
         </div>
         <div className="absolute bottom-3 left-0 right-0 text-center">
           <span className="rounded-full bg-black/60 backdrop-blur-sm px-3 py-1 text-[10px] text-[var(--text-muted)]">
-            Clip bient&ocirc;t disponible
+            {t("p_kill.clip_soon")}
           </span>
         </div>
       </div>
@@ -477,27 +479,27 @@ function LegacyKillDetail({ kill, id }: { kill: LegacyKill; id: string }) {
             <span className="font-data text-lg font-black text-[var(--gold)]">{kill.score}</span>
             <span className="text-[10px] text-[var(--text-muted)]">pts</span>
           </div>
-          <span className="text-[10px] text-[var(--text-muted)]">Score composite (KDA, kill participation, victoire)</span>
+          <span className="text-[10px] text-[var(--text-muted)]">{t("p_kill.composite_score_note")}</span>
         </div>
 
         <div className="grid grid-cols-4 gap-3">
           <div className="stat-card rounded-lg border border-[var(--border-gold)] bg-[var(--bg-primary)] p-3 text-center">
             <p className="font-data text-lg font-bold text-[var(--gold)]">{kill.score}</p>
-            <p className="text-[10px] text-[var(--text-muted)]">Score</p>
+            <p className="text-[10px] text-[var(--text-muted)]">{t("p_kill.stat_score")}</p>
           </div>
           <div className="stat-card rounded-lg border border-[var(--border-gold)] bg-[var(--bg-primary)] p-3 text-center">
             <p className="font-data text-lg font-bold">{(kill.gold / 1000).toFixed(1)}k</p>
-            <p className="text-[10px] text-[var(--text-muted)]">Gold</p>
+            <p className="text-[10px] text-[var(--text-muted)]">{t("p_kill.stat_gold")}</p>
           </div>
           <div className="stat-card rounded-lg border border-[var(--border-gold)] bg-[var(--bg-primary)] p-3 text-center">
             <p className="font-data text-lg font-bold">{kill.cs}</p>
-            <p className="text-[10px] text-[var(--text-muted)]">CS</p>
+            <p className="text-[10px] text-[var(--text-muted)]">{t("p_kill.stat_cs")}</p>
           </div>
           <div className="stat-card rounded-lg border border-[var(--border-gold)] bg-[var(--bg-primary)] p-3 text-center">
             <p className={`font-data text-lg font-bold ${kill.kcWon ? "text-[var(--green)]" : "text-[var(--red)]"}`}>
               {kill.kcWon ? "W" : "L"}
             </p>
-            <p className="text-[10px] text-[var(--text-muted)]">Result</p>
+            <p className="text-[10px] text-[var(--text-muted)]">{t("p_kill.stat_result")}</p>
           </div>
         </div>
 
@@ -505,7 +507,7 @@ function LegacyKillDetail({ kill, id }: { kill: LegacyKill; id: string }) {
           className="block rounded-lg bg-[var(--bg-primary)] border border-[var(--border-gold)] p-3 text-sm hover:border-[var(--gold)]/40 transition-colors">
           <p className="font-medium">KC vs {kill.opponentFull}</p>
           <p className="text-xs text-[var(--text-muted)]">
-            {kill.stage} &middot; Game {kill.gameNumber} &middot;{" "}
+            {kill.stage} &middot; {t("p_kill.game_n", { n: kill.gameNumber })} &middot;{" "}
             <span className="font-data">{kill.gameKcKills}-{kill.gameOppKills}</span> &middot;{" "}
             {new Date(kill.matchDate).toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" })}
           </p>

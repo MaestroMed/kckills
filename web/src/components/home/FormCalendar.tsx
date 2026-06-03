@@ -30,6 +30,7 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { m, useReducedMotion } from "motion/react";
 
+import { useT, type TranslateFn } from "@/lib/i18n/use-lang";
 import type { RealMatch } from "@/lib/real-data";
 
 interface Props {
@@ -152,11 +153,14 @@ const dayLabelLongFmt = new Intl.DateTimeFormat("fr-FR", {
   month: "long",
 });
 
-const WEEKDAY_LABELS = ["L", "M", "M", "J", "V", "S", "D"];
-
 export function FormCalendar({ matches, days = 84 }: Props) {
+  const t = useT();
   const reduced = useReducedMotion();
   const [activeDate, setActiveDate] = useState<string | null>(null);
+
+  // Weekday axis initials (L M M J V S D in FR) — comma-joined in the
+  // dict so each locale can supply its own 7-letter sequence.
+  const weekdayLabels = t("p_home.weekday_initials").split(",");
 
   const buckets = useMemo(() => buildBuckets(matches, days), [matches, days]);
 
@@ -245,18 +249,16 @@ export function FormCalendar({ matches, days = 84 }: Props) {
       <header className="flex flex-wrap items-end justify-between gap-3 mb-6 md:mb-8">
         <div>
           <p className="font-data text-[10px] md:text-[11px] uppercase tracking-[0.35em] text-[var(--gold)]">
-            {days} jours de forme
+            {t("p_home.cal_days_of_form", { days })}
           </p>
           <h2
             id="form-calendar-heading"
             className="font-display text-3xl md:text-5xl font-black uppercase tracking-tight text-white mt-1"
           >
-            La forme <span className="text-gold-gradient">KC</span>
+            {t("p_home.cal_heading_pre")} <span className="text-gold-gradient">{t("p_home.cal_heading_accent")}</span>
           </h2>
           <p className="text-xs md:text-sm text-[var(--text-muted)] mt-2 max-w-xl">
-            Chaque carré = un jour. Or saturé = victoire, rouge = défaite,
-            sombre = pas de match. Survole une case pour voir les
-            matchups du jour.
+            {t("p_home.cal_description")}
           </p>
         </div>
 
@@ -268,7 +270,7 @@ export function FormCalendar({ matches, days = 84 }: Props) {
               className="h-2.5 w-2.5 rounded-sm"
               style={{ backgroundColor: "rgba(200,170,110,0.04)", borderColor: "rgba(200,170,110,0.2)", borderWidth: 1 }}
             />
-            Repos
+            {t("p_home.cal_legend_rest")}
           </span>
           <span className="flex items-center gap-1.5">
             <span
@@ -276,7 +278,7 @@ export function FormCalendar({ matches, days = 84 }: Props) {
               className="h-2.5 w-2.5 rounded-sm"
               style={{ backgroundColor: "rgba(200,170,110,0.7)" }}
             />
-            Win day
+            {t("p_home.cal_legend_win")}
           </span>
           <span className="flex items-center gap-1.5">
             <span
@@ -284,7 +286,7 @@ export function FormCalendar({ matches, days = 84 }: Props) {
               className="h-2.5 w-2.5 rounded-sm"
               style={{ backgroundColor: "rgba(232,64,87,0.7)" }}
             />
-            Loss day
+            {t("p_home.cal_legend_loss")}
           </span>
         </div>
       </header>
@@ -293,7 +295,7 @@ export function FormCalendar({ matches, days = 84 }: Props) {
         {/* Grid */}
         <div
           role="grid"
-          aria-label={`Calendrier KC sur les ${days} derniers jours`}
+          aria-label={t("p_home.cal_grid_aria", { days })}
           className="relative overflow-x-auto"
           style={{ WebkitOverflowScrolling: "touch" }}
         >
@@ -303,7 +305,7 @@ export function FormCalendar({ matches, days = 84 }: Props) {
               className="flex flex-col gap-1.5 pt-1 pr-1 shrink-0"
               aria-hidden
             >
-              {WEEKDAY_LABELS.map((d, i) => (
+              {weekdayLabels.map((d, i) => (
                 <span
                   key={i}
                   className="h-3.5 leading-none text-[9px] font-data text-[var(--text-disabled)] flex items-center"
@@ -324,11 +326,20 @@ export function FormCalendar({ matches, days = 84 }: Props) {
                     const labelDate = empty
                       ? ""
                       : dayLabelLongFmt.format(new Date(b.date + "T00:00:00Z"));
+                    const winWord = b.wins > 1 ? t("p_home.cal_wins_plural") : t("p_home.cal_wins_singular");
+                    const lossWord = b.losses > 1 ? t("p_home.cal_losses_plural") : t("p_home.cal_losses_singular");
                     const aria = empty
                       ? undefined
                       : b.played
-                        ? `${labelDate} — ${b.wins} victoire${b.wins > 1 ? "s" : ""}, ${b.losses} défaite${b.losses > 1 ? "s" : ""}, ${b.kills} kills`
-                        : `${labelDate} — Pas de match`;
+                        ? t("p_home.cal_cell_played_aria", {
+                            date: labelDate,
+                            wins: b.wins,
+                            winWord,
+                            losses: b.losses,
+                            lossWord,
+                            kills: b.kills,
+                          })
+                        : t("p_home.cal_cell_no_match_aria", { date: labelDate });
                     return (
                       <m.button
                         key={`${wi}-${di}`}
@@ -371,9 +382,9 @@ export function FormCalendar({ matches, days = 84 }: Props) {
 
           {/* Aggregate stats below the grid */}
           <div className="mt-6 grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
-            <KpiBlock label="Jours joués" value={String(agg.played)} />
+            <KpiBlock label={t("p_home.cal_kpi_days_played")} value={String(agg.played)} />
             <KpiBlock
-              label="Bilan"
+              label={t("p_home.cal_kpi_record")}
               value={
                 <>
                   <span className="text-[var(--green)]">{agg.totalWins}</span>
@@ -383,7 +394,7 @@ export function FormCalendar({ matches, days = 84 }: Props) {
               }
             />
             <KpiBlock
-              label="Winrate"
+              label={t("p_home.cal_kpi_winrate")}
               value={
                 <span
                   style={{
@@ -400,7 +411,7 @@ export function FormCalendar({ matches, days = 84 }: Props) {
               }
             />
             <KpiBlock
-              label="Best day · kills"
+              label={t("p_home.cal_kpi_best_day")}
               value={
                 agg.bestDay
                   ? `${agg.bestDay.kills}`
@@ -418,9 +429,9 @@ export function FormCalendar({ matches, days = 84 }: Props) {
         {/* Hover/click panel — shows active day's matches */}
         <aside className="rounded-2xl border border-[var(--border-gold)] bg-[var(--bg-surface)] p-4 self-start sticky top-4">
           {activeBucket ? (
-            <ActiveDayPanel bucket={activeBucket} />
+            <ActiveDayPanel bucket={activeBucket} t={t} />
           ) : (
-            <EmptyHint />
+            <EmptyHint t={t} />
           )}
         </aside>
       </div>
@@ -458,7 +469,7 @@ function KpiBlock({
   );
 }
 
-function ActiveDayPanel({ bucket }: { bucket: DayBucket }) {
+function ActiveDayPanel({ bucket, t }: { bucket: DayBucket; t: TranslateFn }) {
   const date = new Date(bucket.date + "T00:00:00Z");
   return (
     <div>
@@ -467,7 +478,7 @@ function ActiveDayPanel({ bucket }: { bucket: DayBucket }) {
       </p>
       {!bucket.played ? (
         <p className="mt-2 text-sm italic text-[var(--text-muted)]">
-          Aucun match ce jour. La meute dort.
+          {t("p_home.cal_panel_no_match")}
         </p>
       ) : (
         <>
@@ -476,13 +487,13 @@ function ActiveDayPanel({ bucket }: { bucket: DayBucket }) {
               {bucket.kills}
             </span>
             <span className="text-xs text-[var(--text-muted)] uppercase tracking-widest">
-              kills · {bucket.games} game{bucket.games > 1 ? "s" : ""}
+              {t("p_home.cal_panel_kills_games", { games: bucket.games })}
             </span>
           </div>
           <p className="mt-1 text-[11px] text-[var(--text-secondary)]">
-            <span className="text-[var(--green)] font-bold">{bucket.wins} W</span>
+            <span className="text-[var(--green)] font-bold">{t("p_home.cal_panel_wins", { n: bucket.wins })}</span>
             <span className="mx-1 text-[var(--text-disabled)]">·</span>
-            <span className="text-[var(--red)] font-bold">{bucket.losses} L</span>
+            <span className="text-[var(--red)] font-bold">{t("p_home.cal_panel_losses", { n: bucket.losses })}</span>
           </p>
           <ul className="mt-3 space-y-1">
             {bucket.matches.map((m) => (
@@ -493,7 +504,7 @@ function ActiveDayPanel({ bucket }: { bucket: DayBucket }) {
                 >
                   <span className="text-[var(--text-secondary)]">
                     <span className="text-[var(--gold)] font-bold">KC</span>{" "}
-                    <span className="text-[var(--text-muted)]">vs</span>{" "}
+                    <span className="text-[var(--text-muted)]">{t("p_home.cal_vs")}</span>{" "}
                     <span className="font-semibold">{m.opponent}</span>
                   </span>
                   <span
@@ -514,17 +525,17 @@ function ActiveDayPanel({ bucket }: { bucket: DayBucket }) {
   );
 }
 
-function EmptyHint() {
+function EmptyHint({ t }: { t: TranslateFn }) {
   return (
     <div>
       <p className="text-[10px] uppercase tracking-widest text-[var(--text-muted)]">
-        Détail du jour
+        {t("p_home.cal_empty_title")}
       </p>
       <p className="mt-2 text-sm italic text-[var(--text-muted)]">
-        Survole une case du calendrier pour voir les matchs du jour.
+        {t("p_home.cal_empty_body")}
       </p>
       <p className="mt-3 text-[10px] text-[var(--text-disabled)]">
-        Astuce : sur mobile, tape une case pour épingler le détail.
+        {t("p_home.cal_empty_tip")}
       </p>
     </div>
   );

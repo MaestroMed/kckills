@@ -33,6 +33,7 @@ import { useRef } from "react";
 
 import type { RealMatch } from "@/lib/real-data";
 import { championIconUrl } from "@/lib/constants";
+import { useT } from "@/lib/i18n/use-lang";
 
 interface Props {
   matches: RealMatch[];
@@ -90,6 +91,7 @@ function topVictimChampions(matches: RealMatch[], top: number): ChampionRow[] {
 }
 
 export function ChampionLadders({ matches, top = 10 }: Props) {
+  const t = useT();
   const picked = useMemo(() => topPickedKc(matches, top), [matches, top]);
   const victims = useMemo(() => topVictimChampions(matches, top), [matches, top]);
 
@@ -102,33 +104,31 @@ export function ChampionLadders({ matches, top = 10 }: Props) {
     >
       <header className="mb-6 md:mb-8">
         <p className="font-data text-[10px] md:text-[11px] uppercase tracking-[0.35em] text-[var(--gold)]">
-          Méta KC
+          {t("p_home.b_meta_kc")}
         </p>
         <h2
           id="champion-ladders-heading"
           className="font-display text-3xl md:text-5xl font-black uppercase tracking-tight text-white mt-1"
         >
-          Les <span className="text-gold-gradient">favoris</span> et les{" "}
-          <span style={{ color: "var(--cyan)" }}>cibles</span>
+          {t("p_home.b_ladders_title_pre")} <span className="text-gold-gradient">{t("p_home.b_ladders_title_favoris")}</span> {t("p_home.b_ladders_title_mid")}{" "}
+          <span style={{ color: "var(--cyan)" }}>{t("p_home.b_ladders_title_cibles")}</span>
         </h2>
         <p className="text-xs md:text-sm text-[var(--text-muted)] mt-2 max-w-xl">
-          À gauche : les champions que les joueurs KC sortent le plus souvent.
-          À droite : les champions adverses qui crèvent le plus contre KC.
-          Tape une rangée pour filtrer le scroll sur ce champion.
+          {t("p_home.b_ladders_intro")}
         </p>
       </header>
 
       <div className="grid gap-6 md:grid-cols-2">
         <Ladder
-          title="Champions KC favoris"
-          subtitle="Triés par games jouées"
+          title={t("p_home.b_ladder_picks_title")}
+          subtitle={t("p_home.b_ladder_picks_subtitle")}
           rows={picked}
           tone="gold"
           linkPrefix="/champion/"
         />
         <Ladder
-          title="Cibles préférées"
-          subtitle="Adversaires qui meurent le plus"
+          title={t("p_home.b_ladder_victims_title")}
+          subtitle={t("p_home.b_ladder_victims_subtitle")}
           rows={victims}
           tone="cyan"
           linkPrefix="/champion/"
@@ -151,6 +151,7 @@ interface LadderProps {
 }
 
 function Ladder({ title, subtitle, rows, tone, linkPrefix }: LadderProps) {
+  const t = useT();
   const ref = useRef<HTMLDivElement>(null);
   const inView = useInView(ref, { once: true, amount: 0.2 });
   const reduced = useReducedMotion();
@@ -177,7 +178,7 @@ function Ladder({ title, subtitle, rows, tone, linkPrefix }: LadderProps) {
 
       {rows.length === 0 ? (
         <p className="text-sm text-[var(--text-muted)] italic text-center py-8">
-          Pas encore de données.
+          {t("p_home.b_ladder_empty")}
         </p>
       ) : (
         <ol className="space-y-1.5">
@@ -187,7 +188,7 @@ function Ladder({ title, subtitle, rows, tone, linkPrefix }: LadderProps) {
               <li key={c.name}>
                 <Link
                   href={`${linkPrefix}${encodeURIComponent(c.name)}`}
-                  aria-label={`${c.name} — ${c.count} ${tone === "gold" ? "games" : "kills subis"}`}
+                  aria-label={`${c.name} — ${c.count} ${tone === "gold" ? t("p_home.b_ladder_unit_games") : t("p_home.b_ladder_unit_kills_taken")}`}
                   className="group relative flex items-center gap-3 rounded-lg overflow-hidden px-2 py-1.5 transition-all hover:bg-[var(--bg-elevated)]/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--gold)]"
                 >
                   {/* Bar fill behind everything */}

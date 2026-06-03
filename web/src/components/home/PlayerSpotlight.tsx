@@ -41,6 +41,7 @@ import type { RealMatch } from "@/lib/real-data";
 import { PLAYER_PHOTOS } from "@/lib/kc-assets";
 import { championSplashUrl, championIconUrl } from "@/lib/constants";
 import { AnimatedNumber } from "@/components/AnimatedNumber";
+import { useT } from "@/lib/i18n/use-lang";
 
 interface Props {
   matches: RealMatch[];
@@ -150,6 +151,7 @@ function pickSpotlight(matches: RealMatch[], windowSize: number): PlayerScore | 
 }
 
 export function PlayerSpotlight({ matches, windowSize = 5 }: Props) {
+  const t = useT();
   const ref = useRef<HTMLDivElement>(null);
   const inView = useInView(ref, { once: true, amount: 0.25 });
   const reduced = useReducedMotion();
@@ -184,13 +186,13 @@ export function PlayerSpotlight({ matches, windowSize = 5 }: Props) {
     >
       <header className="mb-6 md:mb-8">
         <p className="font-data text-[10px] md:text-[11px] uppercase tracking-[0.35em] text-[var(--gold)]">
-          Player Spotlight · {windowSize} dernières séries
+          {t("p_home.b_spotlight_eyebrow", { n: windowSize })}
         </p>
         <h2
           id="player-spotlight-heading"
           className="font-display text-3xl md:text-5xl font-black uppercase tracking-tight text-white mt-1"
         >
-          Le <span className="text-gold-gradient">carry</span> du moment
+          {t("p_home.b_spotlight_title_pre")} <span className="text-gold-gradient">{t("p_home.b_spotlight_title_carry")}</span> {t("p_home.b_spotlight_title_post")}
         </h2>
       </header>
 
@@ -198,7 +200,14 @@ export function PlayerSpotlight({ matches, windowSize = 5 }: Props) {
         initial={reduced ? false : { opacity: 0, y: 24 }}
         animate={inView ? { opacity: 1, y: 0 } : undefined}
         transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
-        aria-label={`${spotlight.name}, ${roleLabel} — ${spotlight.kills} kills, ${kda.toFixed(1)} de KDA, ${winRate}% de winrate sur ${spotlight.games} games`}
+        aria-label={t("p_home.b_spotlight_card_aria", {
+          name: spotlight.name,
+          role: roleLabel,
+          kills: spotlight.kills,
+          kda: kda.toFixed(1),
+          wr: winRate,
+          games: spotlight.games,
+        })}
         className="relative overflow-hidden rounded-3xl border-2 border-[var(--gold)]/40 bg-gradient-to-br from-[var(--bg-elevated)] via-[var(--bg-surface)] to-[var(--bg-primary)]"
         style={{
           boxShadow:
@@ -287,7 +296,7 @@ export function PlayerSpotlight({ matches, windowSize = 5 }: Props) {
                 {spotlight.name}
               </h3>
               <p className="font-data text-[10px] uppercase tracking-widest text-[var(--text-muted)] mt-1">
-                {roleLabel} · Roster {new Date().getUTCFullYear()}
+                {roleLabel} · {t("p_home.b_spotlight_roster", { year: new Date().getUTCFullYear() })}
               </p>
             </div>
           </div>
@@ -301,12 +310,12 @@ export function PlayerSpotlight({ matches, windowSize = 5 }: Props) {
               <p className="font-data text-xs uppercase tracking-widest text-[var(--text-muted)] mt-1">
                 <span style={{ color: "var(--gold)" }}>{roleLabel}</span>
                 <span className="mx-2 text-[var(--text-disabled)]">·</span>
-                Roster Spring {new Date().getUTCFullYear()}
+                {t("p_home.b_spotlight_roster_spring", { year: new Date().getUTCFullYear() })}
                 {spotlight.topChampion && (
                   <>
                     <span className="mx-2 text-[var(--text-disabled)]">·</span>
                     <span style={{ color: "var(--text-secondary)" }}>
-                      Champion fétiche : {spotlight.topChampion}
+                      {t("p_home.b_spotlight_signature_champ")} {spotlight.topChampion}
                     </span>
                   </>
                 )}
@@ -315,26 +324,26 @@ export function PlayerSpotlight({ matches, windowSize = 5 }: Props) {
 
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 md:gap-4">
               <StatTile
-                label="Kills"
+                label={t("p_home.b_stat_kills")}
                 value={spotlight.kills}
                 tone="gold"
                 inView={inView}
               />
               <StatTile
-                label="KDA"
+                label={t("p_home.b_stat_kda")}
                 value={Number(kda.toFixed(1))}
                 tone="gold"
                 format="decimal1"
                 inView={inView}
               />
               <StatTile
-                label="Games"
+                label={t("p_home.b_stat_games")}
                 value={spotlight.games}
                 tone="neutral"
                 inView={inView}
               />
               <StatTile
-                label="Winrate"
+                label={t("p_home.b_stat_winrate")}
                 value={winRate}
                 tone={winRate >= 60 ? "win" : winRate >= 40 ? "neutral" : "loss"}
                 format="percent0"
@@ -346,7 +355,7 @@ export function PlayerSpotlight({ matches, windowSize = 5 }: Props) {
             {spotlight.topChampion && (
               <div className="mt-5 flex items-center gap-3">
                 <span className="font-data text-[10px] uppercase tracking-widest text-[var(--text-muted)] shrink-0">
-                  Champion fétiche
+                  {t("p_home.b_spotlight_signature_champ_label")}
                 </span>
                 <span className="relative h-7 w-7 md:h-8 md:w-8 rounded-md overflow-hidden border border-[var(--gold)]/40 shrink-0">
                   <Image
@@ -371,15 +380,15 @@ export function PlayerSpotlight({ matches, windowSize = 5 }: Props) {
                 href={`/player/${encodeURIComponent(spotlight.name)}`}
                 className="inline-flex items-center gap-2 rounded-lg border border-[var(--gold)] bg-[var(--gold)]/15 px-5 py-2.5 font-display text-xs font-black uppercase tracking-widest text-[var(--gold)] hover:bg-[var(--gold)]/25 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--gold)]"
               >
-                Voir son profil
+                {t("p_home.b_spotlight_cta_profile")}
                 <span aria-hidden>→</span>
               </Link>
               <Link
                 href={`/player/${encodeURIComponent(spotlight.name)}`}
-                aria-label={`Voir tous les kills de ${spotlight.name}`}
+                aria-label={t("p_home.b_spotlight_cta_all_kills_aria", { name: spotlight.name })}
                 className="inline-flex items-center gap-2 rounded-lg border border-[var(--border-gold)] bg-[var(--bg-surface)] px-5 py-2.5 font-display text-xs font-bold uppercase tracking-widest text-[var(--text-secondary)] hover:border-[var(--gold)]/50 hover:text-[var(--gold)] transition-colors"
               >
-                Tous ses kills
+                {t("p_home.b_spotlight_cta_all_kills")}
                 <span aria-hidden>→</span>
               </Link>
             </div>

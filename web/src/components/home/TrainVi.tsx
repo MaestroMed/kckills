@@ -41,6 +41,7 @@ import { m, useReducedMotion } from "motion/react";
 
 import { TEAM_LOGOS } from "@/lib/kc-assets";
 import Image from "next/image";
+import { useT } from "@/lib/i18n/use-lang";
 
 interface TrainMatch {
   id: string;
@@ -63,7 +64,7 @@ interface StreakInfo {
   /** Whether the active streak is a win streak. False = loss streak.
    *  Meaningless when count === 0. */
   isWin: boolean;
-  /** Best/worst contextual label for the locomotive headline. */
+  /** Translation key for the locomotive headline (resolved via t()). */
   label: string;
   /** Tone of the locomotive (drives accent color). */
   tone: "hype" | "neutral" | "danger";
@@ -71,7 +72,7 @@ interface StreakInfo {
 
 function computeStreak(matches: TrainMatch[]): StreakInfo {
   if (matches.length === 0) {
-    return { count: 0, isWin: false, label: "GARE", tone: "neutral" };
+    return { count: 0, isWin: false, label: "p_home.b_train_label_gare", tone: "neutral" };
   }
   const first = matches[0]!.kc_won;
   let count = 1;
@@ -85,10 +86,10 @@ function computeStreak(matches: TrainMatch[]): StreakInfo {
       isWin: true,
       label:
         count >= 5
-          ? "ROULEAU COMPRESSEUR"
+          ? "p_home.b_train_label_steamroller"
           : count >= 3
-            ? "LE TRAIN ROULE"
-            : "EN MARCHE",
+            ? "p_home.b_train_label_rolling"
+            : "p_home.b_train_label_moving",
       tone: "hype",
     };
   }
@@ -96,7 +97,7 @@ function computeStreak(matches: TrainMatch[]): StreakInfo {
     count,
     isWin: false,
     label:
-      count >= 3 ? "EN PANNE" : count >= 2 ? "RALENTI" : "BUMP",
+      count >= 3 ? "p_home.b_train_label_broken" : count >= 2 ? "p_home.b_train_label_slow" : "p_home.b_train_label_bump",
     tone: "danger",
   };
 }
@@ -107,6 +108,7 @@ const dateFmt = new Intl.DateTimeFormat("fr-FR", {
 });
 
 export function TrainVi({ matches }: Props) {
+  const t = useT();
   const reduced = useReducedMotion();
   const wagons = useMemo(() => matches.slice(0, 10), [matches]);
   const streak = useMemo(() => computeStreak(wagons), [wagons]);
@@ -138,27 +140,25 @@ export function TrainVi({ matches }: Props) {
             className="font-data text-[10px] md:text-[11px] uppercase tracking-[0.35em]"
             style={{ color: accent }}
           >
-            Momentum tracker
+            {t("p_home.b_train_eyebrow")}
           </p>
           <h2
             id="train-vi-heading"
             className="font-display text-3xl md:text-5xl font-black uppercase tracking-tight text-white mt-1"
           >
-            Le Train{" "}
-            <span style={{ color: accent }}>Vi</span>
+            {t("p_home.b_train_title_pre")}{" "}
+            <span style={{ color: accent }}>{t("p_home.b_train_title_vi")}</span>
           </h2>
           <p className="text-xs md:text-sm text-[var(--text-muted)] mt-2 max-w-xl">
-            10 dernières séries KC. La locomotive carbure à la victoire. Quand
-            le train roule, c&apos;est rouleau compresseur. Quand il déraille,
-            la gare est trop calme.
+            {t("p_home.b_train_intro")}
           </p>
         </div>
 
         {/* Form snapshot pills */}
         <div className="flex items-center gap-2 text-xs">
-          <Pill label="V" value={wins} tone="hype" />
-          <Pill label="D" value={losses} tone="danger" />
-          <Pill label="WR" value={`${winRate}%`} tone={winRate >= 50 ? "hype" : "danger"} />
+          <Pill label={t("p_home.b_train_pill_wins")} value={wins} tone="hype" />
+          <Pill label={t("p_home.b_train_pill_losses")} value={losses} tone="danger" />
+          <Pill label={t("p_home.b_train_pill_wr")} value={`${winRate}%`} tone={winRate >= 50 ? "hype" : "danger"} />
         </div>
       </header>
 
@@ -175,7 +175,7 @@ export function TrainVi({ matches }: Props) {
           <ol
             role="list"
             className="flex items-stretch gap-2"
-            aria-label="Les 10 dernières séries KC, de la plus récente à la plus ancienne"
+            aria-label={t("p_home.b_train_wagons_aria")}
           >
             {wagons.map((match, idx) => (
               <Wagon
@@ -207,17 +207,19 @@ export function TrainVi({ matches }: Props) {
           <span aria-hidden className="inline-block h-1.5 w-1.5 rounded-full" style={{ backgroundColor: accent }} />
           <span>
             {streak.count === 0
-              ? "Aucune série enregistrée"
+              ? t("p_home.b_train_status_none")
               : streak.isWin
-                ? `${streak.count} victoire${streak.count > 1 ? "s" : ""} d'affilée. Le train ${streak.tone === "hype" ? "carbure" : "roule"}.`
-                : `${streak.count} défaite${streak.count > 1 ? "s" : ""} d'affilée. Sortie de voie.`}
+                ? streak.tone === "hype"
+                  ? t("p_home.b_train_status_win_hype", { count: streak.count, s: streak.count > 1 ? "s" : "" })
+                  : t("p_home.b_train_status_win_rolling", { count: streak.count, s: streak.count > 1 ? "s" : "" })
+                : t("p_home.b_train_status_loss", { count: streak.count, s: streak.count > 1 ? "s" : "" })}
           </span>
         </p>
         <Link
           href="/matches"
           className="inline-flex items-center gap-1.5 text-[var(--text-secondary)] hover:text-[var(--gold)] uppercase tracking-widest font-bold"
         >
-          Voir tous les matchs <span aria-hidden>→</span>
+          {t("p_home.b_train_see_all_matches")} <span aria-hidden>→</span>
         </Link>
       </div>
     </section>
@@ -237,6 +239,7 @@ function Locomotive({
   accent: string;
   reduced: boolean;
 }) {
+  const t = useT();
   return (
     <m.div
       initial={reduced ? false : { x: -40, opacity: 0 }}
@@ -247,7 +250,7 @@ function Locomotive({
         borderColor: `${accent}80`,
         boxShadow: `0 0 0 1px ${accent}33, 0 0 60px -10px ${accent}aa, inset 0 0 30px ${accent}15`,
       }}
-      aria-label={`Locomotive Vi — ${streak.label}, série de ${streak.count}`}
+      aria-label={t("p_home.b_train_loco_aria", { label: t(streak.label), count: streak.count })}
     >
       {/* Hextech core — pulsing hexagon */}
       <m.div
@@ -311,7 +314,7 @@ function Locomotive({
           {streak.count}
         </m.p>
         <p className="mt-2 font-display text-[10px] md:text-[11px] font-bold uppercase tracking-[0.18em] text-[var(--text-secondary)]">
-          {streak.label}
+          {t(streak.label)}
         </p>
 
         {/* Dots — one per match in the streak, lit by tone */}
@@ -389,6 +392,7 @@ function Wagon({
   index: number;
   reduced: boolean;
 }) {
+  const t = useT();
   const won = match.kc_won;
   const accent = won ? "var(--gold)" : "var(--red)";
   const logo = TEAM_LOGOS[match.opponent.code];
@@ -419,7 +423,13 @@ function Wagon({
             ? `inset 0 0 0 1px ${accent}30, 0 0 24px -16px ${accent}aa`
             : `inset 0 0 0 1px ${accent}20`,
         }}
-        aria-label={`${dateLabel} — ${match.kc_won ? "Victoire" : "Défaite"} ${match.kc_score}-${match.opp_score} contre ${match.opponent.code}`}
+        aria-label={t("p_home.b_train_wagon_aria", {
+          date: dateLabel,
+          result: match.kc_won ? t("p_home.b_train_result_win") : t("p_home.b_train_result_loss"),
+          kc: match.kc_score,
+          opp: match.opp_score,
+          code: match.opponent.code,
+        })}
       >
         {/* W / L stamp */}
         <span

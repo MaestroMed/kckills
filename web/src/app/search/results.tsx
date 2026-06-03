@@ -26,6 +26,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import type { PublishedKillRow } from "@/lib/supabase/kills";
 import { championIconUrl } from "@/lib/constants";
 import { ERAS } from "@/lib/eras";
+import { useT } from "@/lib/i18n/use-lang";
 
 interface Props {
   initialRows: PublishedKillRow[];
@@ -53,6 +54,7 @@ function buildApiUrl(sp: URLSearchParams, cursor: string | null): string {
 }
 
 export function SearchResults({ initialRows, initialCursor }: Props) {
+  const t = useT();
   const searchParams = useSearchParams();
 
   const [rows, setRows] = useState<PublishedKillRow[]>(initialRows);
@@ -93,7 +95,7 @@ export function SearchResults({ initialRows, initialCursor }: Props) {
         const res = await fetch(url);
         if (!res.ok) {
           if (!cancelled) {
-            setError("Erreur de recherche. Reessaie dans un instant.");
+            setError(t("p_search.error_search"));
             setLoading(false);
           }
           return;
@@ -106,7 +108,7 @@ export function SearchResults({ initialRows, initialCursor }: Props) {
         setLoading(false);
       } catch {
         if (!cancelled) {
-          setError("Erreur reseau. Reessaie dans un instant.");
+          setError(t("p_search.error_network"));
           setLoading(false);
         }
       }
@@ -125,7 +127,7 @@ export function SearchResults({ initialRows, initialCursor }: Props) {
       const url = buildApiUrl(new URLSearchParams(searchParams.toString()), cursor);
       const res = await fetch(url);
       if (!res.ok) {
-        setError("Impossible de charger la suite.");
+        setError(t("p_search.error_load_more"));
         setLoading(false);
         return;
       }
@@ -141,10 +143,10 @@ export function SearchResults({ initialRows, initialCursor }: Props) {
       setExhausted(data.nextCursor === null);
       setLoading(false);
     } catch {
-      setError("Erreur reseau. Reessaie.");
+      setError(t("p_search.error_network_retry"));
       setLoading(false);
     }
-  }, [cursor, exhausted, loading, searchParams]);
+  }, [cursor, exhausted, loading, searchParams, t]);
 
   // IntersectionObserver-driven auto-load. The sentinel sits below
   // the last row. When it scrolls into view, we fire loadMore.
@@ -200,14 +202,14 @@ export function SearchResults({ initialRows, initialCursor }: Props) {
             disabled={loading}
             className="rounded-lg border border-[var(--border-gold)] bg-[var(--bg-surface)] px-4 py-2 text-sm font-medium text-[var(--text-secondary)] transition-colors hover:border-[var(--gold)]/50 hover:text-[var(--gold)] disabled:opacity-40"
           >
-            {loading ? "Chargement..." : "Charger plus"}
+            {loading ? t("p_search.loading") : t("p_search.load_more")}
           </button>
         </div>
       )}
 
       {exhausted && rows.length > 0 && (
         <p className="mt-8 text-center text-xs text-[var(--text-muted)]">
-          Fin des resultats - {rows.length} kill{rows.length > 1 ? "s" : ""}
+          {t("p_search.results_end", { n: rows.length, s: rows.length > 1 ? "s" : "" })}
         </p>
       )}
     </div>
@@ -217,6 +219,7 @@ export function SearchResults({ initialRows, initialCursor }: Props) {
 // ─── Card sub-component ───────────────────────────────────────────────
 
 function SearchResultCard({ kill }: { kill: PublishedKillRow }) {
+  const t = useT();
   const killerChamp = kill.killer_champion ?? "?";
   const victimChamp = kill.victim_champion ?? "?";
   const score = kill.highlight_score;
@@ -240,7 +243,7 @@ function SearchResultCard({ kill }: { kill: PublishedKillRow }) {
           />
         ) : (
           <div className="flex h-full w-full items-center justify-center bg-[var(--bg-elevated)] text-xs text-[var(--text-muted)]">
-            Pas d&apos;apercu
+            {t("p_search.no_preview")}
           </div>
         )}
 
@@ -309,22 +312,26 @@ interface ActiveFilter {
   label: string;
 }
 
-const FILTER_LABELS: Record<string, (value: string) => string> = {
-  multi: (v) => `Multi-kill : ${v}`,
-  fb: () => "First Blood",
-  tag: (v) => `Tag : ${v}`,
-  era: (v) => `Époque : ${labelForEraId(v)}`,
-  player: (v) => `Joueur : ${capitalizeWord(v)}`,
-  kc_role: (v) =>
-    v === "team_killer"
-      ? "KC kill"
-      : v === "team_victim"
-        ? "KC death"
-        : `KC : ${v}`,
-  min_score: (v) => `Score IA ≥ ${v}`,
-  min_rating: (v) => `Note ≥ ${v}★`,
-  match: (v) => `Match : ${v}`,
-};
+function buildFilterLabels(
+  t: ReturnType<typeof useT>,
+): Record<string, (value: string) => string> {
+  return {
+    multi: (v) => t("p_search.chip_multi", { v }),
+    fb: () => t("p_search.chip_first_blood"),
+    tag: (v) => t("p_search.chip_tag", { v }),
+    era: (v) => t("p_search.chip_era", { v: labelForEraId(v) }),
+    player: (v) => t("p_search.chip_player", { v: capitalizeWord(v) }),
+    kc_role: (v) =>
+      v === "team_killer"
+        ? t("p_search.chip_kc_kill")
+        : v === "team_victim"
+          ? t("p_search.chip_kc_death")
+          : t("p_search.chip_kc_other", { v }),
+    min_score: (v) => t("p_search.chip_min_score", { v }),
+    min_rating: (v) => t("p_search.chip_min_rating", { v }),
+    match: (v) => t("p_search.chip_match", { v }),
+  };
+}
 
 function labelForEraId(id: string): string {
   const era = ERAS.find((e) => e.id === id);
@@ -338,6 +345,8 @@ function capitalizeWord(s: string): string {
 
 function EmptyResults({ searchParams }: { searchParams: URLSearchParams }) {
   const router = useRouter();
+  const t = useT();
+  const filterLabels = buildFilterLabels(t);
 
   // Collect active filters in the order users typically apply them.
   const active: ActiveFilter[] = [];
@@ -356,7 +365,7 @@ function EmptyResults({ searchParams }: { searchParams: URLSearchParams }) {
     const raw = searchParams.get(key);
     if (!raw || raw === "0") continue;
     if (key === "fb" && raw !== "1" && raw !== "true") continue;
-    const labeller = FILTER_LABELS[key];
+    const labeller = filterLabels[key];
     if (!labeller) continue;
     active.push({ key, label: labeller(raw) });
   }
@@ -404,13 +413,13 @@ function EmptyResults({ searchParams }: { searchParams: URLSearchParams }) {
 
       <p className="mt-4 max-w-md text-sm text-[var(--text-secondary)]">
         {active.length > 0 || q
-          ? "Aucun kill ne matche cette combinaison."
-          : "Tape un nom de champion, un tag ou un joueur pour commencer."}
+          ? t("p_search.no_match_combo")
+          : t("p_search.start_hint")}
       </p>
 
       {(active.length > 0 || q) && (
         <p className="mt-2 text-xs text-[var(--text-muted)]">
-          Essaie de retirer un filtre pour élargir la recherche.
+          {t("p_search.widen_hint")}
         </p>
       )}
 
@@ -421,11 +430,11 @@ function EmptyResults({ searchParams }: { searchParams: URLSearchParams }) {
             <button
               type="button"
               onClick={clearQuery}
-              aria-label={`Retirer la recherche "${q}"`}
+              aria-label={t("p_search.remove_query_aria", { q })}
               className="group inline-flex items-center gap-1.5 rounded-full border border-[var(--border-gold)] bg-[var(--bg-surface)] px-3 py-1.5 text-xs text-[var(--text-secondary)] transition-colors hover:border-[var(--red)]/40 hover:text-[var(--red)]"
             >
               <span className="font-data text-[10px] uppercase tracking-widest text-[var(--text-muted)] group-hover:text-[var(--red)]/70">
-                Mot-clé
+                {t("p_search.keyword_label")}
               </span>
               <span className="text-[var(--text-primary)] group-hover:text-[var(--red)]">
                 {q}
@@ -441,7 +450,7 @@ function EmptyResults({ searchParams }: { searchParams: URLSearchParams }) {
               key={f.key}
               type="button"
               onClick={() => removeFilter(f.key)}
-              aria-label={`Retirer le filtre ${f.label}`}
+              aria-label={t("p_search.remove_filter_aria", { label: f.label })}
               className="inline-flex items-center gap-1.5 rounded-full border border-[var(--gold)]/40 bg-[var(--gold)]/10 px-3 py-1.5 text-xs text-[var(--gold)] transition-colors hover:border-[var(--red)]/40 hover:bg-[var(--red)]/10 hover:text-[var(--red)]"
             >
               <span>{f.label}</span>
@@ -457,7 +466,7 @@ function EmptyResults({ searchParams }: { searchParams: URLSearchParams }) {
               onClick={clearAll}
               className="inline-flex items-center gap-1.5 rounded-full border border-[var(--red)]/30 bg-[var(--red)]/5 px-3 py-1.5 text-xs text-[var(--red)] transition-colors hover:bg-[var(--red)]/15"
             >
-              Tout retirer
+              {t("p_search.clear_all")}
             </button>
           )}
         </div>
@@ -470,19 +479,19 @@ function EmptyResults({ searchParams }: { searchParams: URLSearchParams }) {
             href="/scroll"
             className="rounded-full border border-[var(--gold)]/40 bg-[var(--gold)]/10 px-4 py-2 text-xs text-[var(--gold)] hover:bg-[var(--gold)]/20"
           >
-            Découvrir dans le scroll
+            {t("p_search.discover_scroll")}
           </Link>
           <Link
             href="/top"
             className="rounded-full border border-[var(--border-gold)] bg-[var(--bg-surface)] px-4 py-2 text-xs text-[var(--text-secondary)] hover:border-[var(--gold)]/40 hover:text-[var(--gold)]"
           >
-            Top kills
+            {t("p_search.top_kills")}
           </Link>
           <Link
             href="/face-off"
             className="rounded-full border border-[var(--border-gold)] bg-[var(--bg-surface)] px-4 py-2 text-xs text-[var(--text-secondary)] hover:border-[var(--gold)]/40 hover:text-[var(--gold)]"
           >
-            Face-off
+            {t("p_search.face_off")}
           </Link>
         </div>
       )}

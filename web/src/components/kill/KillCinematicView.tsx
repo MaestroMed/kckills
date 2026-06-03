@@ -31,6 +31,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { championIconUrl } from "@/lib/constants";
 import { Description } from "@/components/i18n/Description";
+import { useT } from "@/lib/i18n/use-lang";
 import {
   getAssetMetadata,
   pickAssetUrl,
@@ -113,6 +114,7 @@ export function KillCinematicView({
   relatedKills = [],
   similarSlot,
 }: CinematicKillProps) {
+  const t = useT();
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -271,7 +273,7 @@ export function KillCinematicView({
         <div className="relative z-10 max-w-6xl mx-auto px-6 pt-10 pb-14 md:pt-14 md:pb-20">
           {/* Breadcrumb */}
           <nav className="flex items-center gap-2 text-xs text-[var(--text-muted)]">
-            <Link href="/" className="hover:text-[var(--gold)] transition-colors">Accueil</Link>
+            <Link href="/" className="hover:text-[var(--gold)] transition-colors">{t("p_kill.breadcrumb_home")}</Link>
             <span className="text-[var(--gold)]/40">{"\u25C6"}</span>
             {matchExternalId ? (
               <Link href={`/match/${matchExternalId}`} className="hover:text-[var(--gold)] transition-colors">
@@ -281,16 +283,16 @@ export function KillCinematicView({
               <span>KC vs {opponent.code}</span>
             )}
             <span className="text-[var(--gold)]/40">{"\u25C6"}</span>
-            <span>Game {gameNumber}</span>
+            <span>{t("p_kill.game_n", { n: gameNumber })}</span>
           </nav>
 
           {/* Duel header */}
           <div className="mt-8 flex flex-col items-center gap-5 md:gap-7">
             {/* Kicker line */}
             <p className="font-data text-[10px] uppercase tracking-[0.4em] text-[var(--gold)]/80">
-              {kill.is_first_blood && "★ First Blood · "}
-              {kill.multi_kill ? `★ ${kill.multi_kill.toUpperCase()} KILL · ` : ""}
-              {isKcKill ? "Karmine Corp prend le kill" : "Karmine Corp encaisse"}
+              {kill.is_first_blood && `★ ${t("p_kill.first_blood")} · `}
+              {kill.multi_kill ? `★ ${t("p_kill.multi_kill_label", { kind: kill.multi_kill.toUpperCase() })} · ` : ""}
+              {isKcKill ? t("p_kill.kc_takes_kill") : t("p_kill.kc_takes_death")}
             </p>
 
             <div className="flex items-center gap-4 md:gap-7">
@@ -383,7 +385,7 @@ export function KillCinematicView({
                     animation: "kc-shimmer-text 4s linear infinite",
                   }}
                 >
-                  Score IA · {kill.highlight_score.toFixed(1)}/10
+                  {t("p_kill.ai_score")} · {kill.highlight_score.toFixed(1)}/10
                 </span>
               </div>
             )}
@@ -433,7 +435,7 @@ export function KillCinematicView({
               <button
                 type="button"
                 onClick={togglePlay}
-                aria-label={isPlaying ? "Pause" : "Lecture"}
+                aria-label={isPlaying ? t("p_kill.pause") : t("p_kill.play")}
                 aria-pressed={isPlaying}
                 className="absolute bottom-3 right-3 z-10 grid h-11 w-11 place-items-center rounded-full border border-[var(--gold)]/50 bg-black/60 text-[var(--gold)] backdrop-blur-sm
                            transition-colors hover:border-[var(--gold)] hover:bg-black/40
@@ -513,11 +515,11 @@ export function KillCinematicView({
       <section className="max-w-5xl mx-auto px-6 py-10">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           {kill.highlight_score != null && (
-            <StatTile label="Score IA" value={kill.highlight_score.toFixed(1)} suffix="/10" accent="gold" />
+            <StatTile label={t("p_kill.ai_score")} value={kill.highlight_score.toFixed(1)} suffix="/10" accent="gold" />
           )}
           {kill.avg_rating != null && (kill.rating_count ?? 0) > 0 && (
             <StatTile
-              label={`${kill.rating_count} votes`}
+              label={t("p_kill.stat_votes", { n: kill.rating_count ?? 0 })}
               value={kill.avg_rating.toFixed(1)}
               suffix="/5"
               accent="cyan"
@@ -525,14 +527,14 @@ export function KillCinematicView({
           )}
           {kill.impression_count != null && (kill.impression_count > 0) && (
             <StatTile
-              label="Vues"
+              label={t("p_kill.stat_views")}
               value={formatCount(kill.impression_count)}
               accent="white"
             />
           )}
           {kill.comment_count != null && kill.comment_count > 0 && (
             <StatTile
-              label="Commentaires"
+              label={t("p_kill.stat_comments")}
               value={String(kill.comment_count)}
               accent="white"
             />
@@ -551,13 +553,13 @@ export function KillCinematicView({
             <div className="flex items-center justify-between gap-4">
               <div>
                 <p className="font-data text-[10px] uppercase tracking-[0.3em] text-[var(--cyan)]/70 mb-2">
-                  ▽ Match complet
+                  ▽ {t("p_kill.full_match")}
                 </p>
                 <h2 className="font-display text-xl md:text-2xl font-black text-white">
                   KC <span className="text-[var(--text-muted)]">vs</span> {opponent.name}
                 </h2>
                 <p className="text-xs text-[var(--text-muted)] mt-1">
-                  {stage} · Game {gameNumber}
+                  {stage} · {t("p_kill.game_n", { n: gameNumber })}
                   {matchScheduled && (
                     <>
                       {" "}·{" "}
@@ -590,10 +592,10 @@ export function KillCinematicView({
           <header className="flex items-end justify-between mb-6">
             <div>
               <p className="font-data text-[10px] uppercase tracking-[0.3em] text-[var(--gold)]/70 mb-2">
-                ▽ Du même match
+                ▽ {t("p_kill.from_same_match")}
               </p>
               <h2 className="font-display text-2xl md:text-3xl font-black text-white">
-                Autres moments
+                {t("p_kill.other_moments")}
               </h2>
             </div>
             {matchExternalId && (
@@ -601,7 +603,7 @@ export function KillCinematicView({
                 href={`/match/${matchExternalId}`}
                 className="text-[11px] uppercase tracking-widest text-[var(--text-muted)] hover:text-[var(--gold)] transition"
               >
-                Voir le match →
+                {t("p_kill.see_match")} →
               </Link>
             )}
           </header>

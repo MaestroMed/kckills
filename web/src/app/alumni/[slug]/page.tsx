@@ -28,6 +28,7 @@ import type { Metadata } from "next";
 import { getAlumniBySlug, getAllAlumniSlugs, ALUMNI } from "@/lib/alumni";
 import { getEraById } from "@/lib/eras";
 import { championSplashUrl } from "@/lib/constants";
+import { getServerT } from "@/lib/i18n/server-lang";
 import { PLAYER_PHOTOS } from "@/lib/kc-assets";
 import { AntreTrigger } from "@/components/AntreTrigger";
 
@@ -147,6 +148,7 @@ function SectionEyebrow({ label, accent }: { label: string; accent: string }) {
 
 export default async function AlumniDetailPage({ params }: Props) {
   const { slug } = await params;
+  const { t } = await getServerT();
   const alumni = getAlumniBySlug(slug);
   if (!alumni) notFound();
 
@@ -245,7 +247,7 @@ export default async function AlumniDetailPage({ params }: Props) {
       {/* ═══ 3. L'HISTOIRE — with drop-cap ═════════════════════════════ */}
       <section className="mx-auto max-w-5xl px-6 py-16 md:py-20">
         <div className="mx-auto max-w-3xl">
-          <SectionEyebrow label="L’histoire" accent={accent} />
+          <SectionEyebrow label={t("p_alumni.section_history")} accent={accent} />
           <p className="font-display italic text-2xl md:text-3xl font-bold leading-relaxed text-[var(--text-primary)] mb-10">
             {alumni.subtitle}
           </p>
@@ -289,7 +291,7 @@ export default async function AlumniDetailPage({ params }: Props) {
           aria-labelledby="alumni-testamentary-quote"
         >
           <h2 id="alumni-testamentary-quote" className="sr-only">
-            Citation testamentaire
+            {t("p_alumni.testamentary_quote")}
           </h2>
           <div
             className="relative rounded-3xl bg-[var(--bg-elevated)] border-t-2 overflow-hidden"
@@ -322,7 +324,7 @@ export default async function AlumniDetailPage({ params }: Props) {
       {/* ═══ 5. MOMENTS SIGNATURES ════════════════════════════════════ */}
       {alumni.signatureMoments && alumni.signatureMoments.length > 0 && (
         <section className="mx-auto max-w-5xl px-6 py-16 md:py-20">
-          <SectionEyebrow label="Moments signatures" accent={accent} />
+          <SectionEyebrow label={t("p_alumni.section_moments")} accent={accent} />
           <SignatureMoments moments={alumni.signatureMoments} accent={accent} />
         </section>
       )}
@@ -331,7 +333,7 @@ export default async function AlumniDetailPage({ params }: Props) {
       {alumni.careerPath && alumni.careerPath.length > 0 && (
         <section className="mx-auto max-w-5xl px-6 py-16">
           <div className="mx-auto max-w-3xl">
-            <SectionEyebrow label="Carrière" accent={accent} />
+            <SectionEyebrow label={t("p_alumni.section_career")} accent={accent} />
             <CareerTimeline career={alumni.careerPath} accent={accent} />
           </div>
         </section>
@@ -340,14 +342,14 @@ export default async function AlumniDetailPage({ params }: Props) {
       {/* ═══ 7. ÉPOQUES TRAVERSÉES ════════════════════════════════════ */}
       {eras.length > 0 && (
         <section className="mx-auto max-w-5xl px-6 py-16">
-          <SectionEyebrow label="Époques traversées" accent={accent} />
+          <SectionEyebrow label={t("p_alumni.section_eras")} accent={accent} />
           <HonorsAndEras eras={eras} accent={accent} />
         </section>
       )}
 
       {/* ═══ 8. POUR ALLER PLUS LOIN ════════════════════════════════ */}
       <section className="mx-auto max-w-5xl px-6 py-16">
-        <SectionEyebrow label="Pour aller plus loin" accent={accent} />
+        <SectionEyebrow label={t("p_alumni.section_more")} accent={accent} />
 
         <ul className="space-y-2 mb-8">
           {alumni.links.map((link) => (
@@ -393,9 +395,9 @@ export default async function AlumniDetailPage({ params }: Props) {
                     className="font-data text-[10px] uppercase tracking-widest"
                     style={{ color: accent, opacity: 0.7 }}
                   >
-                    timeline
+                    {t("p_alumni.timeline_eyebrow")}
                   </span>
-                  <span>Voir cet alumni dans la KC Timeline</span>
+                  <span>{t("p_alumni.timeline_cta")}</span>
                 </span>
                 <span
                   aria-hidden

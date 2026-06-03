@@ -25,6 +25,7 @@ import { Film, Clock, Link2 } from "lucide-react";
 
 import { getPublishedKills } from "@/lib/supabase/kills";
 import { pickAssetUrl } from "@/lib/kill-assets";
+import { getServerT } from "@/lib/i18n/server-lang";
 import { Breadcrumb } from "@/components/Breadcrumb";
 import { CompilationBuilder } from "./CompilationBuilder";
 import type { BuilderKill } from "./CompilationBuilder";
@@ -62,6 +63,8 @@ export const metadata = {
 };
 
 export default async function CompilationPage() {
+  const { t } = await getServerT();
+
   // Top 200 published KC kills. We filter to team_killer = KC and
   // require a horizontal clip (the worker concatenates the 16:9
   // source). Mirrors the gates used by /scroll except we DON'T
@@ -155,8 +158,8 @@ export default async function CompilationPage() {
           <div className="flex justify-center">
             <Breadcrumb
               items={[
-                { label: "Accueil", href: "/" },
-                { label: "Compilation" },
+                { label: t("p_compil.breadcrumb_home"), href: "/" },
+                { label: t("p_compil.breadcrumb_current") },
               ]}
             />
           </div>
@@ -173,29 +176,27 @@ export default async function CompilationPage() {
                 boxShadow: "0 0 10px rgba(200,170,110,0.5)",
               }}
             />
-            Studio de montage KC
+            {t("p_compil.hero_eyebrow")}
           </p>
           <h1
             className="mt-3 font-display font-black tracking-tight leading-[0.9] text-5xl md:text-7xl lg:text-[7rem]"
             style={{ letterSpacing: "-0.015em" }}
           >
-            <span className="text-shimmer">COMPILATION</span>
+            <span className="text-shimmer">{t("p_compil.hero_title")}</span>
           </h1>
           <p className="mt-5 mx-auto max-w-2xl text-base md:text-lg text-[var(--text-muted)] font-medium">
-            Choisis 3 à 10 clips, réordonne-les, ajoute une intro et un outro.
-            Notre pipeline assemble le MP4 1080p en quelques minutes et te donne
-            un lien partageable.
+            {t("p_compil.hero_subtitle")}
           </p>
 
           <div className="mt-7 flex flex-wrap items-center justify-center gap-2.5">
             <SpecChip icon={<Film className="size-3.5" aria-hidden />} accent="var(--gold)">
-              1080p H.264
+              {t("p_compil.spec_format")}
             </SpecChip>
             <SpecChip icon={<Clock className="size-3.5" aria-hidden />} accent="var(--cyan)">
-              Rendu 2–5 min
+              {t("p_compil.spec_render_time")}
             </SpecChip>
             <SpecChip icon={<Link2 className="size-3.5" aria-hidden />} accent="var(--blue-kc)">
-              Lien court /c/…
+              {t("p_compil.spec_short_link")}
             </SpecChip>
           </div>
         </div>

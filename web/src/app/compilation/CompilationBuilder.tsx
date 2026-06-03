@@ -29,6 +29,7 @@ import { m, AnimatePresence, Reorder, useReducedMotion } from "motion/react";
 import { Check, X, GripHorizontal, Loader2 } from "lucide-react";
 
 import { championIconUrl } from "@/lib/constants";
+import { useT } from "@/lib/i18n/use-lang";
 
 // ─── Public types (consumed by page.tsx) ────────────────────────────────
 
@@ -120,6 +121,7 @@ interface PollState {
 }
 
 export function CompilationBuilder({ pool }: CompilationBuilderProps) {
+  const t = useT();
   const reduced = useReducedMotion();
 
   // ── State ──────────────────────────────────────────────────────
@@ -229,7 +231,7 @@ export function CompilationBuilder({ pool }: CompilationBuilderProps) {
         | { ok: true; shortCode: string; id: string; viewerUrl: string }
         | { ok: false; error: string };
       if (!res.ok || !json.ok) {
-        const msg = "error" in json ? json.error : "Échec de la création.";
+        const msg = "error" in json ? json.error : t("p_compil.error_create_failed");
         setSubmitError(msg);
         setSubmitting(false);
         return;
@@ -239,7 +241,7 @@ export function CompilationBuilder({ pool }: CompilationBuilderProps) {
       setStep("success");
     } catch (err) {
       setSubmitError(
-        err instanceof Error ? err.message : "Erreur réseau — réessaie dans un instant.",
+        err instanceof Error ? err.message : t("p_compil.error_network"),
       );
     } finally {
       setSubmitting(false);
@@ -314,7 +316,7 @@ export function CompilationBuilder({ pool }: CompilationBuilderProps) {
                 <span className="text-sm">
                   <span className="font-mono text-[var(--gold)]">{selected.length}</span>
                   <span className="text-[var(--text-muted)]">
-                    /{MIN_CLIPS}–{MAX_CLIPS} clips
+                    {t("p_compil.clip_range", { min: MIN_CLIPS, max: MAX_CLIPS })}
                   </span>
                 </span>
               }
@@ -325,7 +327,7 @@ export function CompilationBuilder({ pool }: CompilationBuilderProps) {
                   onClick={() => setStep(2)}
                   className={PRIMARY_CTA}
                 >
-                  Suivant — Réordonner
+                  {t("p_compil.next_reorder")}
                 </button>
               }
             />
@@ -356,7 +358,7 @@ export function CompilationBuilder({ pool }: CompilationBuilderProps) {
                   onClick={() => setStep(1)}
                   className="text-sm text-[var(--text-secondary)] hover:text-[var(--gold)]"
                 >
-                  ← Retour au picker
+                  {t("p_compil.back_to_picker")}
                 </button>
               }
               right={
@@ -366,7 +368,7 @@ export function CompilationBuilder({ pool }: CompilationBuilderProps) {
                   onClick={() => setStep(3)}
                   className={PRIMARY_CTA}
                 >
-                  Suivant — Titre
+                  {t("p_compil.next_title")}
                 </button>
               }
             />
@@ -398,7 +400,7 @@ export function CompilationBuilder({ pool }: CompilationBuilderProps) {
                   onClick={() => setStep(2)}
                   className="text-sm text-[var(--text-secondary)] hover:text-[var(--gold)]"
                 >
-                  ← Retour
+                  {t("p_compil.back")}
                 </button>
               }
               right={
@@ -411,10 +413,10 @@ export function CompilationBuilder({ pool }: CompilationBuilderProps) {
                   {submitting ? (
                     <>
                       <Loader2 className="size-4 animate-spin" aria-hidden />
-                      Lancement…
+                      {t("p_compil.launching")}
                     </>
                   ) : (
-                    "Lancer le rendu"
+                    t("p_compil.launch_render")
                   )}
                 </button>
               }
@@ -446,10 +448,11 @@ export function CompilationBuilder({ pool }: CompilationBuilderProps) {
 // ════════════════════════════════════════════════════════════════════
 
 function StepIndicator({ step }: { step: Step }) {
+  const t = useT();
   const labels = [
-    { id: 1, label: "Clips" },
-    { id: 2, label: "Ordre" },
-    { id: 3, label: "Titre" },
+    { id: 1, label: t("p_compil.step_clips") },
+    { id: 2, label: t("p_compil.step_order") },
+    { id: 3, label: t("p_compil.step_title") },
   ] as const;
   const numericStep = step === "success" ? 4 : step;
   return (
@@ -518,17 +521,18 @@ function PickerStep({
   removeAt,
   playerChips,
 }: PickerStepProps) {
+  const t = useT();
   return (
     <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
       <div>
         <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center">
           <input
             type="search"
-            placeholder="Champion, joueur, tag…"
+            placeholder={t("p_compil.search_placeholder")}
             value={filters.q}
             onChange={(e) => setFilters((f) => ({ ...f, q: e.target.value }))}
             className="flex-1 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)]/60 px-3 py-2 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-[var(--gold)]/40 focus:outline-none"
-            aria-label="Rechercher un clip"
+            aria-label={t("p_compil.search_aria")}
           />
           <select
             value={filters.multi}
@@ -536,17 +540,17 @@ function PickerStep({
               setFilters((f) => ({ ...f, multi: e.target.value as MultiKillFilter }))
             }
             className="rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)]/60 px-3 py-2 text-sm text-[var(--text-primary)] focus:border-[var(--gold)]/40 focus:outline-none"
-            aria-label="Filtrer par type"
+            aria-label={t("p_compil.filter_type_aria")}
           >
-            <option value="any">Tous</option>
-            <option value="fb">First Blood</option>
-            <option value="double">Double</option>
-            <option value="triple">Triple</option>
-            <option value="quadra">Quadra</option>
-            <option value="penta">Penta</option>
+            <option value="any">{t("p_compil.filter_all")}</option>
+            <option value="fb">{t("p_compil.filter_first_blood")}</option>
+            <option value="double">{t("p_compil.filter_double")}</option>
+            <option value="triple">{t("p_compil.filter_triple")}</option>
+            <option value="quadra">{t("p_compil.filter_quadra")}</option>
+            <option value="penta">{t("p_compil.filter_penta")}</option>
           </select>
           <label className="flex items-center gap-2 text-xs text-[var(--text-muted)]">
-            <span className="hidden sm:inline">Score ≥</span>
+            <span className="hidden sm:inline">{t("p_compil.score_min_label")}</span>
             <input
               type="range"
               min={0}
@@ -557,7 +561,7 @@ function PickerStep({
                 setFilters((f) => ({ ...f, minScore: Number(e.target.value) }))
               }
               className="h-1 w-20 accent-[var(--gold)]"
-              aria-label="Score minimum"
+              aria-label={t("p_compil.score_min_aria")}
             />
             <span className="font-mono text-[var(--gold)]">{filters.minScore}</span>
           </label>
@@ -569,7 +573,7 @@ function PickerStep({
               active={filters.player === ""}
               onClick={() => setFilters((f) => ({ ...f, player: "" }))}
             >
-              Tous joueurs
+              {t("p_compil.all_players")}
             </ChipButton>
             {playerChips.map((p) => (
               <ChipButton
@@ -584,13 +588,16 @@ function PickerStep({
         ) : null}
 
         <div className="text-xs text-[var(--text-muted)]">
-          {filtered.length}/{pool.length} clip{filtered.length === 1 ? "" : "s"} affiché
-          {filtered.length === 1 ? "" : "s"}
+          {t("p_compil.shown_count", {
+            shown: filtered.length,
+            total: pool.length,
+            s: filtered.length === 1 ? "" : "s",
+          })}
         </div>
 
         <ul
           role="listbox"
-          aria-label="Clips disponibles"
+          aria-label={t("p_compil.available_clips_aria")}
           aria-multiselectable
           className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4"
         >
@@ -611,7 +618,7 @@ function PickerStep({
 
         {filtered.length === 0 ? (
           <p className="glass mt-6 rounded-lg border border-[var(--border-gold)] px-4 py-6 text-center text-sm text-[var(--text-muted)]">
-            Aucun clip ne matche ces filtres. Élargis la recherche.
+            {t("p_compil.empty_filters")}
           </p>
         ) : null}
 
@@ -626,16 +633,16 @@ function PickerStep({
           <CornerLosange position="br" gold />
           <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-4 py-3">
             <span className="flex items-center gap-2 font-display text-sm font-bold uppercase tracking-[0.2em] text-[var(--gold)]">
-              Ta sélection
+              {t("p_compil.your_selection")}
               <span className="rounded-full bg-[var(--gold)]/15 px-2 py-0.5 font-mono text-[11px] text-[var(--gold)]">
                 {selected.length}
               </span>
             </span>
             <span className="text-[10px] uppercase tracking-widest text-[var(--text-muted)] transition group-open:hidden">
-              Voir
+              {t("p_compil.show")}
             </span>
             <span className="hidden text-[10px] uppercase tracking-widest text-[var(--text-muted)] group-open:inline">
-              Réduire
+              {t("p_compil.collapse")}
             </span>
           </summary>
           <div className="px-4 pb-4">
@@ -649,7 +656,7 @@ function PickerStep({
         <CornerLosange position="tl" gold />
         <CornerLosange position="br" gold />
         <h2 className="mb-1 font-display text-sm font-bold uppercase tracking-[0.2em] text-[var(--gold)]">
-          Ta sélection
+          {t("p_compil.your_selection")}
         </h2>
         <SelectionList selected={selected} removeAt={removeAt} />
       </aside>
@@ -670,12 +677,16 @@ function SelectionList({
   selected: BuilderKill[];
   removeAt: (id: string) => void;
 }) {
+  const t = useT();
   return (
     <>
       <p className="mb-3 text-[11px] text-[var(--text-muted)]">
         {selected.length === 0
-          ? "Clique un clip pour le sélectionner."
-          : `${selected.length} clip${selected.length === 1 ? "" : "s"} — ordre modifiable à l'étape suivante.`}
+          ? t("p_compil.selection_empty_hint")
+          : t("p_compil.selection_count_hint", {
+              n: selected.length,
+              s: selected.length === 1 ? "" : "s",
+            })}
       </p>
       {selected.length > 0 ? (
         <ol className="space-y-2">
@@ -707,7 +718,10 @@ function SelectionList({
               <button
                 type="button"
                 onClick={() => removeAt(k.id)}
-                aria-label={`Retirer ${k.killerChampion} → ${k.victimChampion}`}
+                aria-label={t("p_compil.remove_clip_aria", {
+                  killer: k.killerChampion ?? "?",
+                  victim: k.victimChampion ?? "?",
+                })}
                 className="rounded p-1 text-[var(--text-muted)] transition hover:bg-black/20 hover:text-[var(--red)]"
               >
                 <X className="size-4" aria-hidden />
@@ -755,6 +769,7 @@ function PickerCard({
   orderBadge: number | null;
   onClick: () => void;
 }) {
+  const t = useT();
   return (
     <li>
       <button
@@ -795,7 +810,7 @@ function PickerCard({
           </span>
         ) : kill.isFirstBlood ? (
           <span className="absolute right-1.5 top-1.5 rounded-md bg-[var(--gold)]/30 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-[var(--gold-bright)]">
-            FB
+            {t("p_compil.fb_badge")}
           </span>
         ) : null}
 
@@ -815,7 +830,7 @@ function PickerCard({
         {selected && orderBadge !== null ? (
           <span
             className="absolute left-1.5 bottom-1.5 flex size-7 items-center justify-center rounded-full bg-[var(--gold)] font-mono text-xs font-bold text-black shadow"
-            aria-label={`Position ${orderBadge}`}
+            aria-label={t("p_compil.position_aria", { n: orderBadge })}
           >
             {orderBadge}
           </span>
@@ -853,22 +868,22 @@ function ReorderStep({
   setOutroText,
   reducedMotion,
 }: ReorderStepProps) {
+  const t = useT();
   return (
     <section>
       <header className="mb-4">
         <h2 className="font-display text-xl font-black text-[var(--gold)]">
-          Compose ta séquence
+          {t("p_compil.compose_heading")}
         </h2>
         <p className="mt-1 text-sm text-[var(--text-muted)]">
-          Glisse les vignettes pour les réordonner. Ajoute un titre d&apos;intro et un
-          mot de fin si tu veux signer ton best-of.
+          {t("p_compil.compose_subtitle")}
         </p>
       </header>
 
       {/* Intro */}
       <TextCard
-        eyebrow="Titre d'intro"
-        placeholder="Ex. — Best of Caliste 2026 Spring"
+        eyebrow={t("p_compil.intro_eyebrow")}
+        placeholder={t("p_compil.intro_placeholder")}
         value={introText}
         onChange={setIntroText}
         max={160}
@@ -885,7 +900,7 @@ function ReorderStep({
           onReorder={setSelected}
           className="flex gap-3 overflow-x-auto pb-2"
           role="list"
-          aria-label="Séquence des clips — glisse pour réordonner"
+          aria-label={t("p_compil.sequence_aria")}
         >
           {selected.map((k, i) => (
             <Reorder.Item
@@ -899,7 +914,11 @@ function ReorderStep({
               }
               transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
               className="group relative size-32 shrink-0 cursor-grab overflow-hidden rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-elevated)] active:cursor-grabbing sm:size-40"
-              aria-label={`${i + 1}. ${k.killerChampion} → ${k.victimChampion}`}
+              aria-label={t("p_compil.sequence_item_aria", {
+                n: i + 1,
+                killer: k.killerChampion ?? "?",
+                victim: k.victimChampion ?? "?",
+              })}
             >
               {k.thumbnailUrl ? (
                 <Image
@@ -916,7 +935,7 @@ function ReorderStep({
               </span>
               <span className="absolute right-1.5 top-1.5 flex items-center gap-1 rounded bg-black/45 px-1 py-0.5 text-[9px] uppercase tracking-wider text-white/85 backdrop-blur-sm">
                 <GripHorizontal className="size-3" aria-hidden />
-                Drag
+                {t("p_compil.drag_badge")}
               </span>
               <div className="absolute inset-x-1.5 bottom-1.5 text-[10px] text-white">
                 <p className="truncate font-bold">
@@ -927,15 +946,17 @@ function ReorderStep({
           ))}
         </Reorder.Group>
         <p className="mt-2 text-[10px] text-[var(--text-muted)]">
-          Astuce : tu peux aussi utiliser le tab + flèche pour réordonner au clavier.
-          Total {selected.length} clip{selected.length === 1 ? "" : "s"}.
+          {t("p_compil.reorder_tip", {
+            n: selected.length,
+            s: selected.length === 1 ? "" : "s",
+          })}
         </p>
       </div>
 
       {/* Outro */}
       <TextCard
-        eyebrow="Mot de fin"
-        placeholder="Ex. — GG WP — KCKILLS"
+        eyebrow={t("p_compil.outro_eyebrow")}
+        placeholder={t("p_compil.outro_placeholder")}
         value={outroText}
         onChange={setOutroText}
         max={160}
@@ -960,6 +981,7 @@ function TextCard({
   max: number;
   accent: "gold" | "cyan";
 }) {
+  const t = useT();
   const accentClass = accent === "cyan" ? "text-[var(--cyan)]" : "text-[var(--gold)]";
   return (
     <label
@@ -968,7 +990,7 @@ function TextCard({
       <span
         className={`mb-2 block text-[10px] uppercase tracking-[0.24em] ${accentClass}`}
       >
-        {eyebrow} <span className="text-[var(--text-muted)]">(optionnel)</span>
+        {eyebrow} <span className="text-[var(--text-muted)]">{t("p_compil.optional")}</span>
       </span>
       <input
         type="text"
@@ -1008,15 +1030,15 @@ function TitleStep({
   selected: BuilderKill[];
   submitError: string | null;
 }) {
+  const t = useT();
   return (
     <section className="grid gap-6 lg:grid-cols-[1fr_320px]">
       <div>
         <h2 className="font-display text-xl font-black text-[var(--gold)]">
-          Titre &amp; description
+          {t("p_compil.title_desc_heading")}
         </h2>
         <p className="mt-1 text-sm text-[var(--text-muted)]">
-          Choisis un titre court et percutant — il s&apos;affichera sur la page de
-          partage et dans les cartes Discord / Twitter.
+          {t("p_compil.title_desc_subtitle")}
         </p>
 
         <div className="mt-5 space-y-4">
@@ -1025,7 +1047,7 @@ function TitleStep({
               htmlFor={titleInputId}
               className="mb-1 block text-[10px] uppercase tracking-[0.24em] text-[var(--gold)]"
             >
-              Titre <span className="text-[var(--text-muted)]">(obligatoire, 80 max)</span>
+              {t("p_compil.title_label")} <span className="text-[var(--text-muted)]">{t("p_compil.title_hint")}</span>
             </label>
             <input
               id={titleInputId}
@@ -1033,7 +1055,7 @@ function TitleStep({
               value={title}
               maxLength={80}
               onChange={(e) => setTitle(e.target.value)}
-              placeholder="Best of Caliste — Spring 2026"
+              placeholder={t("p_compil.title_placeholder")}
               className="w-full rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)]/60 px-3 py-2 text-base text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-[var(--gold)]/40 focus:outline-none"
               autoFocus
             />
@@ -1047,8 +1069,8 @@ function TitleStep({
               htmlFor={descInputId}
               className="mb-1 block text-[10px] uppercase tracking-[0.24em] text-[var(--gold)]"
             >
-              Description{" "}
-              <span className="text-[var(--text-muted)]">(optionnelle, 400 max)</span>
+              {t("p_compil.description_label")}{" "}
+              <span className="text-[var(--text-muted)]">{t("p_compil.description_hint")}</span>
             </label>
             <textarea
               id={descInputId}
@@ -1056,7 +1078,7 @@ function TitleStep({
               maxLength={400}
               rows={4}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="Sa carrière en 5 minutes : du first Sumail à la finale Worlds."
+              placeholder={t("p_compil.description_placeholder")}
               className="w-full rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)]/60 px-3 py-2 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-[var(--gold)]/40 focus:outline-none"
             />
             <p className="mt-1 text-right text-[10px] text-[var(--text-muted)]">
@@ -1077,7 +1099,7 @@ function TitleStep({
 
       <aside className="hidden h-fit rounded-2xl border border-[var(--border-gold)] bg-[var(--bg-surface)]/40 p-4 lg:block">
         <h3 className="font-display text-sm font-bold uppercase tracking-[0.2em] text-[var(--gold)]">
-          Aperçu de la séquence
+          {t("p_compil.sequence_preview")}
         </h3>
         <ol className="mt-3 space-y-2">
           {selected.map((k, i) => (
@@ -1097,8 +1119,7 @@ function TitleStep({
           ))}
         </ol>
         <p className="mt-4 text-[10px] text-[var(--text-muted)]">
-          Le worker téléchargera chaque clip, les concaténera dans cet ordre et
-          ajoutera ton intro/outro en surimpression.
+          {t("p_compil.preview_note")}
         </p>
       </aside>
     </section>
@@ -1118,6 +1139,7 @@ function SuccessStep({
   poll: PollState | null;
   clipCount: number;
 }) {
+  const t = useT();
   const viewerPath = `/c/${shortCode}`;
   const fullUrl = typeof window !== "undefined" ? `${window.location.origin}${viewerPath}` : viewerPath;
   const status = poll?.status ?? "pending";
@@ -1135,14 +1157,13 @@ function SuccessStep({
     <section className="rounded-3xl border border-[var(--border-gold)] bg-gradient-to-br from-[var(--bg-elevated)]/40 to-[var(--bg-surface)]/30 p-6 sm:p-10">
       <div className="mx-auto max-w-2xl text-center">
         <p className="mb-2 text-[11px] uppercase tracking-[0.32em] text-[var(--gold)]">
-          Compilation envoyée
+          {t("p_compil.success_eyebrow")}
         </p>
         <h2 className="font-display text-3xl font-black text-[var(--text-primary)] sm:text-4xl">
-          Ton best-of est en cuisine.
+          {t("p_compil.success_heading")}
         </h2>
         <p className="mt-3 text-sm text-[var(--text-secondary)]">
-          {clipCount} clips · rendu 1080p H.264 · environ 2 à 5 minutes selon la
-          longueur totale.
+          {t("p_compil.success_summary", { count: clipCount })}
         </p>
 
         {/* Short URL row */}
@@ -1155,7 +1176,7 @@ function SuccessStep({
             onClick={copy}
             className="rounded-lg bg-[var(--gold)] px-4 py-3 text-sm font-bold text-black transition hover:bg-[var(--gold-bright)]"
           >
-            {copied ? "Copié ✓" : "Copier"}
+            {copied ? t("p_compil.copied") : t("p_compil.copy")}
           </button>
         </div>
 
@@ -1168,13 +1189,13 @@ function SuccessStep({
             href={viewerPath}
             className="rounded-lg border border-[var(--gold)]/40 px-4 py-2 text-sm font-bold text-[var(--gold)] transition hover:border-[var(--gold)] hover:bg-[var(--gold)]/10"
           >
-            Ouvrir la page de partage →
+            {t("p_compil.open_share_page")}
           </Link>
           <Link
             href="/compilation"
             className="text-xs text-[var(--text-muted)] hover:text-[var(--text-secondary)]"
           >
-            Créer une autre compilation
+            {t("p_compil.create_another")}
           </Link>
         </div>
       </div>
@@ -1189,6 +1210,7 @@ function StatusPill({
   status: PollState["status"];
   renderError: string | null;
 }) {
+  const t = useT();
   const styles =
     status === "done"
       ? "border-[var(--green)]/40 bg-[var(--green)]/10 text-[var(--green)]"
@@ -1197,12 +1219,12 @@ function StatusPill({
         : "border-[var(--cyan)]/40 bg-[var(--cyan)]/10 text-[var(--cyan)]";
   const label =
     status === "done"
-      ? "Rendu terminé — prêt à partager"
+      ? t("p_compil.status_done")
       : status === "failed"
-        ? "Échec du rendu"
+        ? t("p_compil.status_failed")
         : status === "rendering"
-          ? "Rendu en cours — patiente quelques minutes"
-          : "En file d'attente — démarrage imminent";
+          ? t("p_compil.status_rendering")
+          : t("p_compil.status_pending");
   return (
     <div
       role="status"
