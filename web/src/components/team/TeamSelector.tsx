@@ -34,6 +34,7 @@ import { useState, useEffect, useRef, useMemo, useCallback, useId } from "react"
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { m, AnimatePresence } from "motion/react";
+import { useT } from "@/lib/i18n/use-lang";
 
 interface WireTeam {
   slug: string;
@@ -56,7 +57,7 @@ export interface TeamSelectorProps {
   /** Visual variant. "chip" matches the LeagueNav strip ; "button"
    *  is a standalone CTA used by /league/[slug]. */
   variant?: "chip" | "button";
-  /** Override the trigger label (defaults to "Équipes"). */
+  /** Override the trigger label (defaults to the localized "Équipes"). */
   triggerLabel?: string;
   /** When provided, only teams in this league slug are shown — useful
    *  for the "More teams in LEC" link on the LEC chip. */
@@ -70,10 +71,12 @@ const DISMISS_VELOCITY = 600;
 export function TeamSelector({
   className,
   variant = "chip",
-  triggerLabel = "Équipes",
+  triggerLabel,
   filterLeague,
 }: TeamSelectorProps) {
+  const t = useT();
   const router = useRouter();
+  const resolvedTriggerLabel = triggerLabel ?? t("p_pteam.ts_teams");
   const [open, setOpen] = useState(false);
   const [teams, setTeams] = useState<WireTeam[] | null>(null);
   const [loading, setLoading] = useState(false);
@@ -238,7 +241,7 @@ export function TeamSelector({
       onClick={() => setOpen((v) => !v)}
       className={triggerClass}
     >
-      {triggerLabel}
+      {resolvedTriggerLabel}
       <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
       </svg>
@@ -254,7 +257,7 @@ export function TeamSelector({
         <div
           id={headingId}
           role="dialog"
-          aria-label="Sélectionner une équipe"
+          aria-label={t("p_pteam.ts_select_team")}
           className="absolute right-0 top-full mt-2 z-[400] w-[340px] max-h-[70vh] flex flex-col rounded-xl border border-[var(--border-gold)] bg-[var(--bg-surface)] shadow-[0_18px_48px_rgba(0,0,0,0.65)] overflow-hidden"
         >
           <div className="p-3 border-b border-white/5">
@@ -266,8 +269,8 @@ export function TeamSelector({
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               onKeyDown={onListKeyDown}
-              placeholder="Rechercher une équipe…"
-              aria-label="Rechercher une équipe"
+              placeholder={t("p_pteam.ts_search_placeholder")}
+              aria-label={t("p_pteam.ts_search_aria")}
               className="w-full rounded-lg bg-[var(--bg-elevated)] border border-white/5 px-3 py-2 text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] outline-none focus:border-[var(--gold)]/40"
             />
           </div>
@@ -329,11 +332,11 @@ export function TeamSelector({
               </div>
               <div className="flex items-center justify-between px-5 pb-3 border-b border-white/5">
                 <h3 id={headingId} className="font-display text-lg font-bold text-white leading-none">
-                  Équipes
+                  {t("p_pteam.ts_teams")}
                 </h3>
                 <button
                   onClick={() => setOpen(false)}
-                  aria-label="Fermer"
+                  aria-label={t("p_pteam.ts_close")}
                   className="flex h-9 w-9 items-center justify-center rounded-full bg-white/8 hover:bg-white/15 transition-colors outline-none focus-visible:ring-2 focus-visible:ring-[var(--gold)]"
                 >
                   <svg className="h-4 w-4 text-white/75" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -350,8 +353,8 @@ export function TeamSelector({
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
                   onKeyDown={onListKeyDown}
-                  placeholder="Rechercher une équipe…"
-                  aria-label="Rechercher une équipe"
+                  placeholder={t("p_pteam.ts_search_placeholder")}
+                  aria-label={t("p_pteam.ts_search_aria")}
                   className="w-full rounded-lg bg-[var(--bg-elevated)] border border-white/5 px-3 py-3 text-base text-[var(--text-primary)] placeholder-[var(--text-muted)] outline-none focus:border-[var(--gold)]/40"
                 />
               </div>
@@ -383,17 +386,18 @@ interface ListBodyProps {
 }
 
 function ListBody({ loading, grouped, filtered, activeIndex, onSelect, onMouseEnter }: ListBodyProps) {
+  const translate = useT();
   if (loading) {
     return (
       <div className="flex-1 overflow-y-auto px-3 py-6">
-        <p className="text-center text-sm text-[var(--text-muted)]">Chargement…</p>
+        <p className="text-center text-sm text-[var(--text-muted)]">{translate("p_pteam.ts_loading")}</p>
       </div>
     );
   }
   if (filtered.length === 0) {
     return (
       <div className="flex-1 overflow-y-auto px-3 py-6">
-        <p className="text-center text-sm text-[var(--text-muted)]">Aucune équipe trouvée.</p>
+        <p className="text-center text-sm text-[var(--text-muted)]">{translate("p_pteam.ts_no_team_found")}</p>
       </div>
     );
   }
@@ -403,12 +407,12 @@ function ListBody({ loading, grouped, filtered, activeIndex, onSelect, onMouseEn
   let cursor = 0;
 
   return (
-    <div role="listbox" aria-label="Liste des équipes" className="flex-1 overflow-y-auto px-2 py-2">
+    <div role="listbox" aria-label={translate("p_pteam.ts_team_list")} className="flex-1 overflow-y-auto px-2 py-2">
       {grouped ? (
         grouped.map(([leagueSlug, items]) => (
           <div key={leagueSlug} className="mb-2">
             <p className="px-3 py-1.5 font-display text-[10px] font-bold uppercase tracking-widest text-[var(--gold)]/70">
-              {prettyLeague(leagueSlug)}
+              {prettyLeague(leagueSlug, translate("p_pteam.ts_other_leagues"))}
             </p>
             {items.map((t) => {
               const i = cursor++;
@@ -497,9 +501,9 @@ const LEAGUE_LABELS: Record<string, string> = {
   worlds: "Worlds",
   msi: "MSI",
   first_stand: "First Stand",
-  other: "Autres ligues",
 };
 
-function prettyLeague(slug: string): string {
+function prettyLeague(slug: string, otherLabel: string): string {
+  if (slug === "other") return otherLabel;
   return LEAGUE_LABELS[slug] ?? slug.toUpperCase();
 }

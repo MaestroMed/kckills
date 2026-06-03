@@ -43,6 +43,7 @@ import { rateKill } from "./actions";
 import { PLAYER_PHOTOS } from "@/lib/kc-assets";
 import { championIconUrl } from "@/lib/constants";
 import { track } from "@/lib/analytics/track";
+import { useT } from "@/lib/i18n/use-lang";
 
 // Long-press duration to open the report sheet directly. 500ms is the
 // industry-standard threshold (iOS context menus, Android long-press).
@@ -117,6 +118,7 @@ export function FeedSidebarV2({
   onBookmark,
   visible,
 }: Props) {
+  const t = useT();
   const [authPromptIntent, setAuthPromptIntent] = useState<
     "like" | "comment" | "rate" | "share" | null
   >(null);
@@ -239,7 +241,7 @@ export function FeedSidebarV2({
                 metadata: { kind: "player", target: killerPlayerId ?? playerSlug, source: "rail" },
               });
             }}
-            aria-label={`Voir le profil de ${playerSlug}`}
+            aria-label={t("p_comm.rail_view_profile", { name: playerSlug })}
             className="group relative hidden lg:flex h-14 w-14 items-center justify-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gold)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg-primary)]"
           >
             <span className="relative block h-14 w-14 overflow-hidden rounded-full ring-2 ring-[var(--gold)] shadow-[0_8px_24px_rgba(0,0,0,0.55),0_0_24px_rgba(200,170,110,0.25)] transition-transform duration-300 group-hover:scale-[1.06]">
@@ -253,7 +255,7 @@ export function FeedSidebarV2({
             </span>
             {/* "+suivre" badge */}
             <span className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 flex h-5 min-w-5 items-center justify-center rounded-full border border-[var(--bg-primary)] bg-[var(--gold)] px-1.5 text-[9px] font-data font-bold uppercase tracking-wide text-[var(--bg-primary)] shadow-[0_2px_8px_rgba(0,0,0,0.5)]">
-              +suivre
+              {t("p_comm.rail_follow_badge")}
             </span>
           </Link>
         )}
@@ -306,7 +308,7 @@ export function FeedSidebarV2({
             });
             setShowComments(true);
           }}
-          aria-label={`Commentaires (${initialCommentCount})`}
+          aria-label={t("p_comm.rail_comments_aria", { n: initialCommentCount })}
           className="group flex flex-col items-center gap-1.5 lg:gap-[5px] select-none"
         >
           <div
@@ -333,7 +335,7 @@ export function FeedSidebarV2({
         <button
           type="button"
           onClick={handleShare}
-          aria-label="Partager"
+          aria-label={t("p_comm.share")}
           className="group flex flex-col items-center gap-1.5 lg:gap-[5px] select-none"
         >
           <div
@@ -353,7 +355,7 @@ export function FeedSidebarV2({
               />
             </svg>
           </div>
-          <span className={SECONDARY_LABEL}>Partager</span>
+          <span className={SECONDARY_LABEL}>{t("p_comm.share")}</span>
         </button>
 
         {/* Bookmark — SECONDARY save-to-collection. Hidden <lg (the
@@ -365,7 +367,7 @@ export function FeedSidebarV2({
             type="button"
             onClick={handleBookmark}
             aria-pressed={bookmarked}
-            aria-label={bookmarked ? "Retirer des favoris" : "Enregistrer"}
+            aria-label={bookmarked ? t("p_comm.bookmark_remove") : t("p_comm.bookmark_add")}
             className="group hidden lg:flex flex-col items-center gap-[5px] select-none"
           >
             <span
@@ -387,7 +389,7 @@ export function FeedSidebarV2({
                 />
               </svg>
             </span>
-            <span className={SECONDARY_LABEL}>{bookmarked ? "Gardé" : "Garder"}</span>
+            <span className={SECONDARY_LABEL}>{bookmarked ? t("p_comm.bookmark_saved") : t("p_comm.bookmark_save")}</span>
           </button>
         )}
 
@@ -396,7 +398,7 @@ export function FeedSidebarV2({
           href={`/kill/${killId}`}
           onClick={(e) => e.stopPropagation()}
           className="flex flex-col items-center gap-1.5 mt-1 select-none"
-          aria-label="Voir le détail"
+          aria-label={t("p_comm.rail_view_detail")}
         >
           <div className="flex h-10 w-10 lg:h-12 lg:w-12 2xl:h-14 2xl:w-14 items-center justify-center rounded-full bg-black/45 backdrop-blur-sm border border-white/10 transition-all hover:bg-black/65 active:scale-90">
             <svg
@@ -442,7 +444,7 @@ export function FeedSidebarV2({
             targetType="kill"
             targetId={killId}
             size="md"
-            ariaLabel="Signaler ce kill"
+            ariaLabel={t("p_comm.report_kill_aria")}
             controllerRef={reportControllerRef}
           />
         </span>
@@ -522,12 +524,13 @@ function RateHeroButton({
   active: boolean;
   onOpen: (e: React.MouseEvent) => void;
 }) {
+  const t = useT();
   return (
     <button
       type="button"
       onClick={onOpen}
       aria-haspopup="dialog"
-      aria-label={active ? "Modifier ta note" : "Noter ce kill"}
+      aria-label={active ? t("p_comm.rate_edit_aria") : t("p_comm.rate_kill_aria")}
       className="group relative hidden lg:flex flex-col items-center gap-[5px] select-none focus-visible:outline-none"
     >
       <span
@@ -565,7 +568,7 @@ function RateHeroButton({
         </svg>
       </span>
       <span className="font-data text-[13px] 2xl:text-sm font-black uppercase tracking-[0.18em] text-[var(--gold-bright)] [text-shadow:0_1px_3px_rgba(0,0,0,0.7)]">
-        Noter
+        {t("p_comm.rate_label")}
       </span>
       <style jsx>{`
         @keyframes vs-sweep {
@@ -601,6 +604,7 @@ function StarRatingPopover({
   onClose: () => void;
   onAuthRequired: () => void;
 }) {
+  const t = useT();
   const [score, setScore] = useState(initialScore);
   const [hover, setHover] = useState(0);
   const [pending, setPending] = useState(false);
@@ -636,7 +640,7 @@ function StarRatingPopover({
     <Modal
       open={isOpen}
       onClose={onClose}
-      label="Noter ce kill"
+      label={t("p_comm.rate_kill_aria")}
       showCloseButton={false}
       zIndexClassName="z-[350]"
       overlayClassName="items-end justify-center p-4 md:items-center"
@@ -644,10 +648,10 @@ function StarRatingPopover({
       panelClassName="w-full max-w-xs rounded-3xl border border-[var(--gold)]/30 bg-[var(--bg-surface)] p-6 text-center shadow-[0_40px_120px_rgba(0,0,0,0.7)]"
     >
       <h3 className="font-display text-lg font-black text-[var(--gold-bright)]">
-        Note ce kill
+        {t("p_comm.rate_heading")}
       </h3>
       <p className="mt-1 mb-5 text-xs text-white/55">
-        De routine à exceptionnel — ta note alimente le feed.
+        {t("p_comm.rate_subtitle")}
       </p>
       <div
         className="star-rating flex items-center justify-center gap-2"
@@ -664,7 +668,7 @@ function StarRatingPopover({
               onFocus={() => setHover(n)}
               onBlur={() => setHover(0)}
               onClick={() => void submit(n)}
-              aria-label={`${n} étoile${n > 1 ? "s" : ""}`}
+              aria-label={n > 1 ? t("p_comm.stars_many", { n }) : t("p_comm.stars_one", { n })}
               aria-pressed={n <= score}
               className="star flex h-12 w-12 items-center justify-center rounded-full bg-black/30 transition-colors hover:bg-black/45 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gold)] disabled:opacity-70"
             >
@@ -681,7 +685,7 @@ function StarRatingPopover({
       </div>
       {score > 0 && (
         <p className="mt-4 font-data text-xs text-white/60">
-          Ta note : <span className="font-bold text-[var(--gold)]">{score}/5</span>
+          {t("p_comm.rate_your_note")} <span className="font-bold text-[var(--gold)]">{score}/5</span>
         </p>
       )}
     </Modal>
@@ -699,6 +703,7 @@ function ShareFallbackSheet({
   title: string;
   onClose: () => void;
 }) {
+  const t = useT();
   const copyLink = async () => {
     try {
       await navigator.clipboard.writeText(url);
@@ -712,11 +717,11 @@ function ShareFallbackSheet({
       <div className="absolute inset-0 bg-black/55" onClick={onClose} />
       <div className="relative w-full max-w-sm rounded-3xl bg-[var(--bg-surface)] border border-[var(--gold)]/25 p-5 shadow-[0_30px_80px_rgba(0,0,0,0.7)]">
         <div className="flex items-center justify-between mb-4">
-          <h3 className="font-display text-base font-bold text-white">Partager</h3>
+          <h3 className="font-display text-base font-bold text-white">{t("p_comm.share")}</h3>
           <button
             onClick={onClose}
             className="flex h-8 w-8 items-center justify-center rounded-full bg-white/10 hover:bg-white/15"
-            aria-label="Fermer"
+            aria-label={t("p_comm.close")}
           >
             <svg className="h-4 w-4 text-white/70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
@@ -724,7 +729,7 @@ function ShareFallbackSheet({
           </button>
         </div>
         <div className="grid grid-cols-4 gap-3">
-          <ShareTile label="Copier" onClick={copyLink}>
+          <ShareTile label={t("p_comm.copy")} onClick={copyLink}>
             <svg className="h-5 w-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
             </svg>

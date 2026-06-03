@@ -2,6 +2,7 @@
 
 import { useState, useCallback } from "react";
 import Link from "next/link";
+import { useT, type TranslateFn } from "@/lib/i18n/use-lang";
 
 interface ReviewItem {
   id: string;
@@ -32,14 +33,25 @@ interface Review {
 }
 
 const CRITERIA = [
-  { key: "timing", label: "Timing", desc: "Le clip montre le bon moment du kill ?" },
-  { key: "action", label: "Action visible", desc: "On voit clairement le kill se produire ?" },
-  { key: "description", label: "Description", desc: "La description AI est factuelle et correcte ?" },
-  { key: "quality", label: "Qualit\u00e9 vid\u00e9o", desc: "R\u00e9solution, fluidit\u00e9, pas de freeze ?" },
-  { key: "hype", label: "Hype / Partage", desc: "Ce clip donne envie de le partager ?" },
+  { key: "timing" },
+  { key: "action" },
+  { key: "description" },
+  { key: "quality" },
+  { key: "hype" },
 ] as const;
 
+/** Resolve the localized label for a review criterion key. */
+function criterionLabel(t: TranslateFn, key: string): string {
+  return t(`p_pubpages.review_criteria_${key}_label`);
+}
+
+/** Resolve the localized description for a review criterion key. */
+function criterionDesc(t: TranslateFn, key: string): string {
+  return t(`p_pubpages.review_criteria_${key}_desc`);
+}
+
 export function ReviewClient({ items }: { items: ReviewItem[] }) {
+  const t = useT();
   const [currentIdx, setCurrentIdx] = useState(0);
   const [reviews, setReviews] = useState<Review[]>([]);
   const [scores, setScores] = useState<Record<string, number>>({});
@@ -81,7 +93,7 @@ export function ReviewClient({ items }: { items: ReviewItem[] }) {
   const avgScores = reviews.length > 0
     ? CRITERIA.map((c) => ({
         key: c.key,
-        label: c.label,
+        label: criterionLabel(t, c.key),
         avg: +(reviews.reduce((a, r) => a + (r as unknown as Record<string, number>)[c.key], 0) / reviews.length).toFixed(1),
       }))
     : [];
@@ -92,10 +104,10 @@ export function ReviewClient({ items }: { items: ReviewItem[] }) {
   if (!current) {
     return (
       <div className="mx-auto max-w-3xl py-16 text-center">
-        <h1 className="font-display text-3xl font-bold text-[var(--gold)]">Review termin\u00e9e</h1>
-        <p className="mt-4 text-[var(--text-muted)]">{reviewed} clips not\u00e9s</p>
-        {avgScores.length > 0 && <ScoreSummary scores={avgScores} global={globalAvg} />}
-        <ExportButton reviews={reviews} />
+        <h1 className="font-display text-3xl font-bold text-[var(--gold)]">{t("p_pubpages.review_done_title")}</h1>
+        <p className="mt-4 text-[var(--text-muted)]">{t("p_pubpages.review_n_rated", { n: reviewed })}</p>
+        {avgScores.length > 0 && <ScoreSummary scores={avgScores} global={globalAvg} t={t} />}
+        <ExportButton reviews={reviews} label={t("p_pubpages.review_export_button")} />
       </div>
     );
   }
@@ -108,7 +120,7 @@ export function ReviewClient({ items }: { items: ReviewItem[] }) {
       {/* Header */}
       <div className="flex items-center justify-between">
         <Link href="/" className="text-sm text-[var(--text-muted)] hover:text-[var(--gold)]">
-          &larr; Retour au site
+          {t("p_pubpages.review_back_to_site")}
         </Link>
         <div className="text-right">
           <p className="font-data text-sm text-[var(--gold)]">
@@ -148,9 +160,9 @@ export function ReviewClient({ items }: { items: ReviewItem[] }) {
             <span className="text-white/80">{current.victimChampion}</span>
           </p>
           <p className="text-xs text-[var(--text-muted)]">
-            {current.matchStage} &middot; Game {current.gameNumber} &middot; T+{gtStr}
-            {current.multiKill && <span className="ml-2 text-[var(--orange)]">{current.multiKill} kill</span>}
-            {current.isFirstBlood && <span className="ml-2 text-[var(--red)]">First Blood</span>}
+            {current.matchStage} &middot; {t("p_pubpages.review_game_n", { n: current.gameNumber })} &middot; T+{gtStr}
+            {current.multiKill && <span className="ml-2 text-[var(--orange)]">{t("p_pubpages.review_multikill_suffix", { kind: current.multiKill })}</span>}
+            {current.isFirstBlood && <span className="ml-2 text-[var(--red)]">{t("p_pubpages.review_first_blood")}</span>}
           </p>
         </div>
         {current.highlightScore != null && (
@@ -163,7 +175,7 @@ export function ReviewClient({ items }: { items: ReviewItem[] }) {
       {/* AI description under review */}
       {current.aiDescription && (
         <div className="rounded-xl border-l-2 border-[var(--gold)]/40 bg-[var(--bg-surface)] px-5 py-3">
-          <p className="text-[10px] text-[var(--text-muted)] uppercase tracking-widest mb-1">Description IA</p>
+          <p className="text-[10px] text-[var(--text-muted)] uppercase tracking-widest mb-1">{t("p_pubpages.review_ai_description")}</p>
           <p className="text-sm italic text-white/90">
             &laquo; {current.aiDescription} &raquo;
           </p>
@@ -183,8 +195,8 @@ export function ReviewClient({ items }: { items: ReviewItem[] }) {
       <div className="grid gap-3 md:grid-cols-5">
         {CRITERIA.map((c) => (
           <div key={c.key} className="rounded-xl border border-[var(--border-gold)] bg-[var(--bg-surface)] p-4 text-center">
-            <p className="font-display text-xs font-bold mb-1">{c.label}</p>
-            <p className="text-[9px] text-[var(--text-muted)] mb-3">{c.desc}</p>
+            <p className="font-display text-xs font-bold mb-1">{criterionLabel(t, c.key)}</p>
+            <p className="text-[9px] text-[var(--text-muted)] mb-3">{criterionDesc(t, c.key)}</p>
             <div className="flex justify-center gap-1">
               {[1, 2, 3, 4, 5].map((s) => (
                 <button
@@ -208,7 +220,7 @@ export function ReviewClient({ items }: { items: ReviewItem[] }) {
       <textarea
         value={notes}
         onChange={(e) => setNotes(e.target.value)}
-        placeholder="Notes libres (optionnel) — ex: 'le kill arrive trop tard', 'description fausse: c'est un 2v1 pas un solo'..."
+        placeholder={t("p_pubpages.review_notes_placeholder")}
         className="w-full rounded-xl border border-[var(--border-gold)] bg-[var(--bg-primary)] px-4 py-3 text-sm text-[var(--text-primary)] placeholder-[var(--text-disabled)] outline-none focus:border-[var(--gold)] resize-none h-20"
       />
 
@@ -218,13 +230,13 @@ export function ReviewClient({ items }: { items: ReviewItem[] }) {
           onClick={submitReview}
           className="flex-1 rounded-xl bg-[var(--gold)] py-3 font-display text-sm font-bold text-black uppercase tracking-widest hover:bg-[var(--gold-bright)] transition-colors"
         >
-          Valider &amp; Suivant
+          {t("p_pubpages.review_validate_next")}
         </button>
         <button
           onClick={skip}
           className="rounded-xl border border-[var(--border-gold)] px-6 py-3 text-sm text-[var(--text-muted)] hover:bg-[var(--bg-elevated)] transition-colors"
         >
-          Skip
+          {t("p_pubpages.review_skip")}
         </button>
       </div>
 
@@ -232,7 +244,7 @@ export function ReviewClient({ items }: { items: ReviewItem[] }) {
       {avgScores.length > 0 && (
         <div className="rounded-xl border border-[var(--border-gold)] bg-[var(--bg-surface)] p-4">
           <p className="text-[10px] text-[var(--text-muted)] uppercase tracking-widest mb-2">
-            Moyenne sur {reviewed} clips not\u00e9s
+            {t("p_pubpages.review_avg_over", { n: reviewed })}
           </p>
           <div className="flex justify-between">
             {avgScores.map((s) => (
@@ -243,7 +255,7 @@ export function ReviewClient({ items }: { items: ReviewItem[] }) {
             ))}
             <div className="text-center border-l border-[var(--border-gold)] pl-4">
               <p className="font-data text-lg font-bold text-[var(--cyan)]">{globalAvg}</p>
-              <p className="text-[9px] text-[var(--text-muted)]">Global</p>
+              <p className="text-[9px] text-[var(--text-muted)]">{t("p_pubpages.review_global")}</p>
             </div>
           </div>
         </div>
@@ -252,10 +264,10 @@ export function ReviewClient({ items }: { items: ReviewItem[] }) {
   );
 }
 
-function ScoreSummary({ scores, global }: { scores: { key: string; label: string; avg: number }[]; global: number }) {
+function ScoreSummary({ scores, global, t }: { scores: { key: string; label: string; avg: number }[]; global: number; t: TranslateFn }) {
   return (
     <div className="mt-8 rounded-2xl border border-[var(--border-gold)] bg-[var(--bg-surface)] p-6">
-      <h2 className="font-display text-lg font-bold mb-4">R\u00e9sultat QA</h2>
+      <h2 className="font-display text-lg font-bold mb-4">{t("p_pubpages.review_qa_result")}</h2>
       <div className="grid grid-cols-5 gap-4 mb-4">
         {scores.map((s) => (
           <div key={s.key} className="text-center">
@@ -270,13 +282,13 @@ function ScoreSummary({ scores, global }: { scores: { key: string; label: string
         <p className={`font-data text-4xl font-bold ${global >= 4 ? "text-[var(--green)]" : global >= 3 ? "text-[var(--gold)]" : "text-[var(--red)]"}`}>
           {global}/5
         </p>
-        <p className="text-sm text-[var(--text-muted)]">Score global qualit\u00e9 clips</p>
+        <p className="text-sm text-[var(--text-muted)]">{t("p_pubpages.review_global_quality")}</p>
       </div>
     </div>
   );
 }
 
-function ExportButton({ reviews }: { reviews: Review[] }) {
+function ExportButton({ reviews, label }: { reviews: Review[]; label: string }) {
   return (
     <button
       onClick={() => {
@@ -290,7 +302,7 @@ function ExportButton({ reviews }: { reviews: Review[] }) {
       }}
       className="mt-6 inline-flex items-center gap-2 rounded-xl border border-[var(--gold)]/30 bg-[var(--gold)]/10 px-6 py-3 text-sm font-bold text-[var(--gold)] hover:bg-[var(--gold)]/20 transition-colors"
     >
-      Exporter les r\u00e9sultats QA (JSON)
+      {label}
     </button>
   );
 }

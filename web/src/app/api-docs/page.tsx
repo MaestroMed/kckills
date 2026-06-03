@@ -1,18 +1,25 @@
 import Link from "next/link";
 import type { Metadata } from "next";
+import { getServerT } from "@/lib/i18n/server-lang";
 
 export const metadata: Metadata = {
   title: "API Documentation",
   description: "Documentation de l'API publique KCKILLS pour acc\u00e9der aux kills, joueurs et matchs KC.",
 };
 
-export default function ApiDocsPage() {
+export default async function ApiDocsPage() {
+  const { t } = await getServerT();
+  const endpointLabels = {
+    params: t("p_pubpages.apidocs_label_params"),
+    example: t("p_pubpages.apidocs_label_example"),
+    response: t("p_pubpages.apidocs_label_response"),
+  };
   return (
     <div className="mx-auto max-w-4xl space-y-8 py-8">
       <nav className="flex items-center gap-2 text-sm text-[var(--text-muted)]">
-        <Link href="/" className="hover:text-[var(--gold)]">Accueil</Link>
+        <Link href="/" className="hover:text-[var(--gold)]">{t("p_pubpages.apidocs_breadcrumb_home")}</Link>
         <span className="text-[var(--gold)]/30">{"\u25C6"}</span>
-        <span>API</span>
+        <span>{t("p_pubpages.apidocs_breadcrumb_current")}</span>
       </nav>
 
       <div>
@@ -20,20 +27,20 @@ export default function ApiDocsPage() {
           API <span className="text-gold-gradient">Documentation</span>
         </h1>
         <p className="mt-2 text-sm text-[var(--text-muted)]">
-          Endpoints publics pour acc&eacute;der aux kills, joueurs et matchs KC.
-          CORS ouvert, cach&eacute;, gratuit.
+          {t("p_pubpages.apidocs_intro")}
         </p>
       </div>
 
       <Endpoint
+        labels={endpointLabels}
         method="GET"
         path="/api/v1/kills"
-        description="Liste des kills KC publi\u00e9s avec clips vid\u00e9o, scores et descriptions AI."
+        description={t("p_pubpages.apidocs_kills_desc")}
         params={[
           { name: "limit", type: "int", def: "20", desc: "Max results (1-100)" },
           { name: "offset", type: "int", def: "0", desc: "Pagination offset" },
-          { name: "champion", type: "string", desc: "Filtrer par killer_champion (ex: Aurora)" },
-          { name: "involvement", type: "string", desc: "team_killer ou team_victim" },
+          { name: "champion", type: "string", desc: t("p_pubpages.apidocs_kills_param_champion") },
+          { name: "involvement", type: "string", desc: t("p_pubpages.apidocs_kills_param_involvement") },
           { name: "sort", type: "string", def: "highlight_score", desc: "highlight_score, created_at, game_time_seconds" },
         ]}
         example="/api/v1/kills?limit=5&champion=Aurora&involvement=team_killer"
@@ -60,9 +67,10 @@ export default function ApiDocsPage() {
       />
 
       <Endpoint
+        labels={endpointLabels}
         method="GET"
         path="/api/v1/players"
-        description="Roster KC avec stats agr\u00e9g\u00e9es (KDA, games, champions)."
+        description={t("p_pubpages.apidocs_players_desc")}
         params={[]}
         example="/api/v1/players"
         response={`{
@@ -81,12 +89,13 @@ export default function ApiDocsPage() {
       />
 
       <Endpoint
+        labels={endpointLabels}
         method="GET"
         path="/api/v1/matches"
-        description="Historique des matchs KC avec scores et r\u00e9sultats."
+        description={t("p_pubpages.apidocs_matches_desc")}
         params={[
           { name: "limit", type: "int", def: "20", desc: "Max results (1-100)" },
-          { name: "year", type: "int", desc: "Filtrer par ann\u00e9e (2024, 2025, 2026)" },
+          { name: "year", type: "int", desc: t("p_pubpages.apidocs_matches_param_year") },
         ]}
         example="/api/v1/matches?year=2026&limit=10"
         response={`{
@@ -108,11 +117,10 @@ export default function ApiDocsPage() {
 
       <div className="rounded-xl border border-[var(--border-gold)] bg-[var(--bg-surface)] p-6 text-center">
         <p className="text-sm text-[var(--text-muted)]">
-          Tous les endpoints sont en lecture seule, CORS ouvert (*),
-          et cach&eacute;s (60s kills, 1h players/matches).
+          {t("p_pubpages.apidocs_footer_caching")}
         </p>
         <p className="mt-2 text-[10px] text-[var(--text-disabled)]">
-          Rate limit: pas de limite explicite. Soyez raisonnables.
+          {t("p_pubpages.apidocs_footer_ratelimit")}
         </p>
       </div>
     </div>
@@ -126,6 +134,7 @@ function Endpoint({
   params,
   example,
   response,
+  labels,
 }: {
   method: string;
   path: string;
@@ -133,6 +142,7 @@ function Endpoint({
   params: { name: string; type: string; def?: string; desc: string }[];
   example: string;
   response: string;
+  labels: { params: string; example: string; response: string };
 }) {
   return (
     <div className="rounded-xl border border-[var(--border-gold)] bg-[var(--bg-surface)] overflow-hidden">
@@ -148,7 +158,7 @@ function Endpoint({
         {params.length > 0 && (
           <div>
             <p className="font-data text-[10px] uppercase tracking-widest text-[var(--text-muted)] mb-2">
-              Param&egrave;tres
+              {labels.params}
             </p>
             <div className="space-y-1">
               {params.map((p) => (
@@ -165,7 +175,7 @@ function Endpoint({
 
         <div>
           <p className="font-data text-[10px] uppercase tracking-widest text-[var(--text-muted)] mb-2">
-            Exemple
+            {labels.example}
           </p>
           <code className="block rounded-lg bg-[var(--bg-primary)] border border-[var(--border-gold)] px-4 py-2 font-data text-xs text-[var(--gold)] overflow-x-auto">
             {example}
@@ -174,7 +184,7 @@ function Endpoint({
 
         <details>
           <summary className="cursor-pointer font-data text-[10px] uppercase tracking-widest text-[var(--text-muted)] hover:text-[var(--gold)]">
-            R&eacute;ponse exemple
+            {labels.response}
           </summary>
           <pre className="mt-2 rounded-lg bg-[var(--bg-primary)] border border-[var(--border-gold)] p-4 font-data text-[11px] text-[var(--text-secondary)] overflow-x-auto whitespace-pre-wrap">
             {response}

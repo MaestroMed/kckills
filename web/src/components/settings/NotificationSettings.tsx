@@ -31,6 +31,7 @@
 
 import { useEffect, useState } from "react";
 import { track } from "@/lib/analytics/track";
+import { useT } from "@/lib/i18n/use-lang";
 
 const VAPID = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ?? "";
 
@@ -93,13 +94,13 @@ const DEFAULT_PREFS: Preferences = {
   system: true,
 };
 
-const KIND_LABELS: Array<{ key: keyof Preferences; label: string; desc: string }> = [
-  { key: "kill_of_the_week", label: "Kill of the Week", desc: "Pick éditorial du dimanche soir." },
-  { key: "kill", label: "Highlights", desc: "Pentakills, quadras, plays exceptionnelles." },
-  { key: "live_match", label: "Live KC", desc: "Quand KC entre en game live LEC." },
-  { key: "editorial_pin", label: "Pick éditorial", desc: "Quand on épingle un clip à l'accueil." },
-  { key: "broadcast", label: "Annonces", desc: "Événements, anniversaires, etc." },
-  { key: "system", label: "Système", desc: "Maintenance, downtime (rare)." },
+const KIND_LABELS: Array<{ key: keyof Preferences; labelKey: string; descKey: string }> = [
+  { key: "kill_of_the_week", labelKey: "p_setcard.kind_kotw_label", descKey: "p_setcard.kind_kotw_desc" },
+  { key: "kill", labelKey: "p_setcard.kind_highlights_label", descKey: "p_setcard.kind_highlights_desc" },
+  { key: "live_match", labelKey: "p_setcard.kind_live_label", descKey: "p_setcard.kind_live_desc" },
+  { key: "editorial_pin", labelKey: "p_setcard.kind_pin_label", descKey: "p_setcard.kind_pin_desc" },
+  { key: "broadcast", labelKey: "p_setcard.kind_broadcast_label", descKey: "p_setcard.kind_broadcast_desc" },
+  { key: "system", labelKey: "p_setcard.kind_system_label", descKey: "p_setcard.kind_system_desc" },
 ];
 
 function urlBase64ToUint8Array(base64: string): Uint8Array {
@@ -112,6 +113,7 @@ function urlBase64ToUint8Array(base64: string): Uint8Array {
 }
 
 export function NotificationSettings() {
+  const t = useT();
   const [permission, setPermission] = useState<Permission>("default");
   const [endpoint, setEndpoint] = useState<string | null>(null);
   const [prefs, setPrefs] = useState<Preferences>(DEFAULT_PREFS);
@@ -162,17 +164,18 @@ export function NotificationSettings() {
           }
         }
       } catch (e) {
-        if (!cancelled) setError(e instanceof Error ? e.message : "Erreur");
+        if (!cancelled) setError(e instanceof Error ? e.message : t("p_setcard.err_generic"));
       }
     })();
     return () => {
       cancelled = true;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const subscribe = async () => {
     if (!VAPID) {
-      setError("Push notifications non configurées (VAPID key manquante)");
+      setError(t("p_setcard.err_vapid_missing"));
       return;
     }
     setBusy("subscribe");
@@ -215,7 +218,7 @@ export function NotificationSettings() {
         metadata: { endpoint_host: safeHost(sub.endpoint) },
       });
     } catch (e) {
-      const msg = e instanceof Error ? e.message : "Erreur d'abonnement";
+      const msg = e instanceof Error ? e.message : t("p_setcard.err_subscribe");
       setError(msg);
       // Treat NotAllowedError as a permission denial — the browser may
       // throw this when the user rejected an OS-level prompt that we
@@ -251,7 +254,7 @@ export function NotificationSettings() {
       track("push.preferences_updated", { metadata: { flipped } });
     } catch (e) {
       setPrefs(previous); // rollback
-      setError(e instanceof Error ? e.message : "Erreur");
+      setError(e instanceof Error ? e.message : t("p_setcard.err_generic"));
     } finally {
       setBusy(null);
     }
@@ -263,7 +266,7 @@ export function NotificationSettings() {
 
   const unsubscribe = async () => {
     if (!endpoint) return;
-    if (!confirm("Désactiver les notifications ? Tu ne recevras plus rien depuis ce navigateur.")) return;
+    if (!confirm(t("p_setcard.unsub_confirm"))) return;
     setBusy("unsubscribe");
     setError(null);
     try {
@@ -285,7 +288,7 @@ export function NotificationSettings() {
         metadata: { endpoint_host: safeHost(endpoint) },
       });
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Erreur");
+      setError(e instanceof Error ? e.message : t("p_setcard.err_generic"));
     } finally {
       setBusy(null);
     }
@@ -296,9 +299,9 @@ export function NotificationSettings() {
   if (permission === "unsupported") {
     return (
       <Card>
-        <h2 className="font-display font-semibold">Notifications</h2>
+        <h2 className="font-display font-semibold">{t("p_setcard.notif_title")}</h2>
         <p className="text-sm text-[var(--text-muted)]" role="status" aria-live="polite">
-          Ton navigateur ne supporte pas les notifications push.
+          {t("p_setcard.unsupported")}
         </p>
       </Card>
     );
@@ -307,18 +310,18 @@ export function NotificationSettings() {
   if (permission === "ios_needs_install") {
     return (
       <Card>
-        <h2 className="font-display font-semibold">Notifications</h2>
+        <h2 className="font-display font-semibold">{t("p_setcard.notif_title")}</h2>
         <div className="space-y-2" role="status" aria-live="polite">
           <p className="text-sm text-[var(--text-muted)]">
-            Sur iOS, installe d&apos;abord l&apos;app sur ton écran d&apos;accueil pour activer les notifications.
+            {t("p_setcard.ios_intro")}
           </p>
           <ol className="text-xs text-[var(--text-muted)] space-y-1 list-decimal list-inside pl-1">
-            <li>Touche le bouton <strong>Partager</strong> en bas de Safari.</li>
-            <li>Choisis <strong>« Sur l&apos;écran d&apos;accueil »</strong>.</li>
-            <li>Ouvre KCKILLS depuis l&apos;icône, puis reviens ici.</li>
+            <li>{t("p_setcard.ios_step1_pre")} <strong>{t("p_setcard.ios_step1_share")}</strong> {t("p_setcard.ios_step1_post")}</li>
+            <li>{t("p_setcard.ios_step2_pre")} <strong>{t("p_setcard.ios_step2_action")}</strong>.</li>
+            <li>{t("p_setcard.ios_step3")}</li>
           </ol>
           <p className="text-[10px] text-[var(--text-muted)] opacity-70">
-            iOS 16.4 ou plus récent requis.
+            {t("p_setcard.ios_version_req")}
           </p>
         </div>
       </Card>
@@ -328,26 +331,26 @@ export function NotificationSettings() {
   if (!endpoint || permission !== "granted") {
     return (
       <Card>
-        <h2 className="font-display font-semibold">Notifications</h2>
+        <h2 className="font-display font-semibold">{t("p_setcard.notif_title")}</h2>
         <p className="text-sm text-[var(--text-muted)]">
-          Reçois une notif quand un pentakill, un quadra, ou le Kill of the Week tombe.
+          {t("p_setcard.notif_pitch")}
         </p>
         <div role="status" aria-live="polite" className="space-y-2">
         {permission === "denied" ? (
           <div className="space-y-2">
             <p className="text-xs text-[var(--red)]">
-              Les notifications sont bloquées dans ton navigateur. Réactive-les depuis :
+              {t("p_setcard.blocked_intro")}
             </p>
             <ul className="text-xs text-[var(--text-muted)] space-y-1 list-disc list-inside pl-1">
-              <li><strong>Chrome / Edge</strong> : icône cadenas (barre d&apos;adresse) → Notifications → Autoriser</li>
-              <li><strong>Firefox</strong> : icône cadenas → Permissions → Notifications</li>
-              <li><strong>Safari</strong> : Réglages &gt; Sites web &gt; Notifications</li>
+              <li><strong>Chrome / Edge</strong> {t("p_setcard.blocked_chrome")}</li>
+              <li><strong>Firefox</strong> {t("p_setcard.blocked_firefox")}</li>
+              <li><strong>Safari</strong> {t("p_setcard.blocked_safari")}</li>
             </ul>
             <button
               disabled
               className="w-full md:w-auto rounded-lg border border-[var(--border-gold)] px-4 py-3 text-sm text-[var(--text-muted)] opacity-50 cursor-not-allowed min-h-[44px]"
             >
-              Bloquées par le navigateur
+              {t("p_setcard.blocked_button")}
             </button>
           </div>
         ) : (
@@ -356,7 +359,7 @@ export function NotificationSettings() {
             disabled={busy === "subscribe" || !VAPID}
             className="w-full md:w-auto rounded-lg bg-[var(--gold)] px-4 py-3 text-sm font-bold text-black disabled:opacity-50 min-h-[44px]"
           >
-            {busy === "subscribe" ? "Activation…" : !VAPID ? "Indisponible" : "Activer les notifications"}
+            {busy === "subscribe" ? t("p_setcard.activating") : !VAPID ? t("p_setcard.unavailable") : t("p_setcard.activate")}
           </button>
         )}
         {error && (
@@ -371,13 +374,13 @@ export function NotificationSettings() {
   return (
     <Card>
       <div className="flex items-center justify-between">
-        <h2 className="font-display font-semibold">Notifications</h2>
+        <h2 className="font-display font-semibold">{t("p_setcard.notif_title")}</h2>
         <span
           className="text-[10px] uppercase tracking-widest text-[var(--green)]"
           role="status"
           aria-live="polite"
         >
-          ● Actif
+          {t("p_setcard.status_active")}
         </span>
       </div>
 
@@ -392,10 +395,10 @@ export function NotificationSettings() {
         />
         <div className="flex-1">
           <div className="text-sm font-bold text-[var(--gold)]">
-            Master switch
+            {t("p_setcard.master_switch")}
           </div>
           <div className="text-xs text-[var(--text-muted)]">
-            Désactive tout sans te désabonner. Tu peux réactiver kind par kind plus bas.
+            {t("p_setcard.master_switch_desc")}
           </div>
         </div>
       </label>
@@ -420,9 +423,9 @@ export function NotificationSettings() {
             />
             <div className="flex-1">
               <div className="text-sm font-medium text-[var(--text-primary)]">
-                {k.label}
+                {t(k.labelKey)}
               </div>
-              <div className="text-xs text-[var(--text-muted)]">{k.desc}</div>
+              <div className="text-xs text-[var(--text-muted)]">{t(k.descKey)}</div>
             </div>
           </label>
         ))}
@@ -435,7 +438,7 @@ export function NotificationSettings() {
           disabled={busy === "unsubscribe"}
           className="inline-flex items-center min-h-[44px] py-2 text-xs text-[var(--text-muted)] hover:text-[var(--red)] underline"
         >
-          {busy === "unsubscribe" ? "Désactivation…" : "Désactiver complètement les notifications"}
+          {busy === "unsubscribe" ? t("p_setcard.unsub_busy") : t("p_setcard.unsub_full")}
         </button>
       </div>
 

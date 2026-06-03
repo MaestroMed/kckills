@@ -31,6 +31,7 @@
  */
 
 import { useEffect, useState } from "react";
+import { useT } from "@/lib/i18n/use-lang";
 
 interface Props {
   /** PushSubscription endpoint URL — null while we don't yet know
@@ -63,6 +64,7 @@ function localTimeStringToUtcHour(timeStr: string): number {
 }
 
 export function QuietHoursCard({ endpoint }: Props) {
+  const t = useT();
   const [startUtc, setStartUtc] = useState<number>(DEFAULT_START_UTC);
   const [endUtc, setEndUtc] = useState<number>(DEFAULT_END_UTC);
   const [busy, setBusy] = useState<boolean>(false);
@@ -116,7 +118,7 @@ export function QuietHoursCard({ endpoint }: Props) {
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
       setSavedAt(Date.now());
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Erreur");
+      setError(e instanceof Error ? e.message : t("p_setcard.err_generic"));
     } finally {
       setBusy(false);
     }
@@ -131,26 +133,25 @@ export function QuietHoursCard({ endpoint }: Props) {
   return (
     <section className="rounded-xl border border-[var(--border-gold)] bg-[var(--bg-surface)] p-5 space-y-3">
       <div className="flex items-center justify-between">
-        <h2 className="font-display font-semibold">Heures de silence</h2>
+        <h2 className="font-display font-semibold">{t("p_setcard.quiet_title")}</h2>
         {savedAt !== null && !busy && !error && (
           <span
             className="text-[10px] uppercase tracking-widest text-[var(--green)]"
             role="status"
             aria-live="polite"
           >
-            ● Enregistré
+            {t("p_setcard.quiet_saved")}
           </span>
         )}
       </div>
 
       <p className="text-sm text-[var(--text-muted)]">
-        Pendant cette tranche horaire, on ne t&apos;envoie aucune notif —
-        sauf les alertes système (maintenance, downtime).
+        {t("p_setcard.quiet_desc")}
       </p>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <label className="flex flex-col gap-1">
-          <span className="text-xs text-[var(--text-muted)]">Début</span>
+          <span className="text-xs text-[var(--text-muted)]">{t("p_setcard.quiet_start")}</span>
           <input
             type="time"
             value={startLocal}
@@ -162,11 +163,11 @@ export function QuietHoursCard({ endpoint }: Props) {
               void save(u, endUtc);
             }}
             className="rounded-lg border border-[var(--border-gold)] bg-[var(--bg-elevated)] px-3 py-2 text-sm text-[var(--text-primary)] min-h-[44px] focus:outline-none focus:ring-2 focus:ring-[var(--gold)]"
-            aria-label="Début des heures de silence"
+            aria-label={t("p_setcard.quiet_start_aria")}
           />
         </label>
         <label className="flex flex-col gap-1">
-          <span className="text-xs text-[var(--text-muted)]">Fin</span>
+          <span className="text-xs text-[var(--text-muted)]">{t("p_setcard.quiet_end")}</span>
           <input
             type="time"
             value={endLocal}
@@ -178,14 +179,13 @@ export function QuietHoursCard({ endpoint }: Props) {
               void save(startUtc, u);
             }}
             className="rounded-lg border border-[var(--border-gold)] bg-[var(--bg-elevated)] px-3 py-2 text-sm text-[var(--text-primary)] min-h-[44px] focus:outline-none focus:ring-2 focus:ring-[var(--gold)]"
-            aria-label="Fin des heures de silence"
+            aria-label={t("p_setcard.quiet_end_aria")}
           />
         </label>
       </div>
 
       <p className="text-[10px] text-[var(--text-muted)] opacity-70">
-        Les horaires sont affichés dans ton fuseau local. Ils s&apos;appliquent
-        au navigateur où tu les configures.
+        {t("p_setcard.quiet_tz_note")}
       </p>
 
       {error && (

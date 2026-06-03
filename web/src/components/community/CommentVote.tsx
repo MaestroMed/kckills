@@ -21,6 +21,7 @@
 import { useCallback, useOptimistic, useState, useTransition } from "react";
 import { track } from "@/lib/analytics/track";
 import { voteOnComment } from "./actions";
+import { useT } from "@/lib/i18n/use-lang";
 
 interface VoteState {
   upvotes: number;
@@ -57,6 +58,7 @@ export function CommentVote({
   onChange,
   className,
 }: Props) {
+  const t = useT();
   // The "truth" we commit after each successful Server Action — useOptimistic
   // automatically falls back to this whenever a transition finishes (success
   // or error). React 19 handles the snapshot/revert under the hood.
@@ -145,19 +147,19 @@ export function CommentVote({
   const upActive = userVote === 1;
   const downActive = userVote === -1;
   const disabled = !isAuthenticated;
-  const tooltip = disabled ? "Connecte-toi pour voter" : undefined;
+  const tooltip = disabled ? t("p_comm.vote_sign_in") : undefined;
 
   return (
     <div
       className={`inline-flex items-center gap-0.5 ${className ?? ""}`}
       role="group"
-      aria-label="Voter sur ce commentaire"
+      aria-label={t("p_comm.vote_group_aria")}
     >
       <button
         type="button"
         onClick={() => submit(1)}
         disabled={isPending && !upActive}
-        aria-label={upActive ? "Retirer le vote positif" : "Voter positivement"}
+        aria-label={upActive ? t("p_comm.vote_up_remove") : t("p_comm.vote_up")}
         aria-pressed={upActive}
         title={tooltip}
         className={`
@@ -181,7 +183,7 @@ export function CommentVote({
           ${upActive ? "text-[var(--gold)]" : downActive ? "text-[var(--red)]" : "text-white/65"}
           ${upvotes === 0 && downvotes === 0 ? "hidden xs:inline" : ""}
         `.replace(/\s+/g, " ").trim()}
-        aria-label={`Score : ${upvotes}, ${downvotes} vote${downvotes > 1 ? "s" : ""} négatif${downvotes > 1 ? "s" : ""}`}
+        aria-label={downvotes > 1 ? t("p_comm.vote_score_aria_many", { score: upvotes, down: downvotes }) : t("p_comm.vote_score_aria_one", { score: upvotes, down: downvotes })}
       >
         {formatScore(upvotes)}
       </span>
@@ -190,7 +192,7 @@ export function CommentVote({
         type="button"
         onClick={() => submit(-1)}
         disabled={isPending && !downActive}
-        aria-label={downActive ? "Retirer le vote négatif" : "Voter négativement"}
+        aria-label={downActive ? t("p_comm.vote_down_remove") : t("p_comm.vote_down")}
         aria-pressed={downActive}
         title={tooltip}
         className={`

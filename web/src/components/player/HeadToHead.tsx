@@ -33,6 +33,7 @@ import {
   getMostKilledOpponent,
   getMostVictimizedBy,
 } from "@/lib/supabase/face-off";
+import { getServerT } from "@/lib/i18n/server-lang";
 
 interface HeadToHeadProps {
   playerSlug: string;
@@ -41,6 +42,7 @@ interface HeadToHeadProps {
 }
 
 export async function HeadToHead({ playerSlug, playerName }: HeadToHeadProps) {
+  const { t } = await getServerT();
   // Both calls in parallel — the data layer's cache() makes the second
   // call free if the same RPC fires later in the render tree.
   const [mostKilled, victimizedBy] = await Promise.all([
@@ -63,42 +65,54 @@ export async function HeadToHead({ playerSlug, playerName }: HeadToHeadProps) {
         id="player-head-to-head-heading"
         className="font-display text-[10px] uppercase tracking-[0.3em] text-[var(--text-muted)] mb-6"
       >
-        Head-to-head
+        {t("p_pteam.h2h_heading")}
       </h2>
 
       <div className="grid gap-4 md:grid-cols-2">
         {mostKilled ? (
           <Card
-            label="Sa victime préférée"
+            label={t("p_pteam.h2h_favourite_victim")}
             icon="⚔"
             iconColor="var(--gold)"
             opponentIgn={mostKilled.victim_ign}
             opponentChampion={mostKilled.victim_champion}
             count={mostKilled.count}
-            countLabel="kills"
+            countLabel={t("p_pteam.h2h_kills")}
             deeplinkA={playerSlugLow}
             deeplinkB={encodeURIComponent(mostKilled.victim_ign.toLowerCase())}
-            cta="Voir le duel"
+            cta={t("p_pteam.h2h_see_duel")}
+            ariaLabel={t("p_pteam.h2h_see_duel_against", {
+              opponent: mostKilled.victim_ign,
+            })}
           />
         ) : (
-          <Placeholder label="Sa victime préférée" />
+          <Placeholder
+            label={t("p_pteam.h2h_favourite_victim")}
+            body={t("p_pteam.h2h_not_enough_data")}
+          />
         )}
 
         {victimizedBy ? (
           <Card
-            label="Sa nemesis"
+            label={t("p_pteam.h2h_nemesis")}
             icon="💀"
             iconColor="var(--red)"
             opponentIgn={victimizedBy.victim_ign}
             opponentChampion={victimizedBy.victim_champion}
             count={victimizedBy.count}
-            countLabel="morts"
+            countLabel={t("p_pteam.h2h_deaths")}
             deeplinkA={playerSlugLow}
             deeplinkB={encodeURIComponent(victimizedBy.victim_ign.toLowerCase())}
-            cta="Voir le duel"
+            cta={t("p_pteam.h2h_see_duel")}
+            ariaLabel={t("p_pteam.h2h_see_duel_against", {
+              opponent: victimizedBy.victim_ign,
+            })}
           />
         ) : (
-          <Placeholder label="Sa nemesis" />
+          <Placeholder
+            label={t("p_pteam.h2h_nemesis")}
+            body={t("p_pteam.h2h_not_enough_data")}
+          />
         )}
       </div>
     </section>
@@ -120,6 +134,7 @@ interface CardProps {
   deeplinkA: string;
   deeplinkB: string;
   cta: string;
+  ariaLabel: string;
 }
 
 function Card({
@@ -133,11 +148,12 @@ function Card({
   deeplinkA,
   deeplinkB,
   cta,
+  ariaLabel,
 }: CardProps) {
   return (
     <Link
       href={`/face-off?a=${deeplinkA}&b=${deeplinkB}`}
-      aria-label={`${cta} contre ${opponentIgn}`}
+      aria-label={ariaLabel}
       className="group block rounded-2xl border border-[var(--border-gold)] bg-[var(--bg-surface)] p-6 transition-all hover:scale-[1.01] hover:border-[var(--gold)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--gold)] motion-reduce:hover:scale-100 motion-reduce:transition-none"
     >
       <div className="flex items-start justify-between gap-4">
@@ -185,14 +201,14 @@ function Card({
   );
 }
 
-function Placeholder({ label }: { label: string }) {
+function Placeholder({ label, body }: { label: string; body: string }) {
   return (
     <div className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-6 opacity-60">
       <p className="text-[10px] uppercase tracking-[0.3em] text-[var(--text-muted)]">
         {label}
       </p>
       <p className="mt-2 text-sm italic text-[var(--text-muted)]">
-        Pas encore assez de data pour ce duel.
+        {body}
       </p>
     </div>
   );

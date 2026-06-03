@@ -18,6 +18,8 @@ import {
   getTodayMonthDay,
   type OnThisDayKill,
 } from "@/lib/supabase/on-this-day";
+import { getServerT } from "@/lib/i18n/server-lang";
+import type { ServerTranslateFn } from "@/lib/i18n/getServerLang";
 
 const MULTI_KILL_LABEL: Record<string, string> = {
   penta:  "PENTAKILL",
@@ -46,7 +48,8 @@ function frenchOrdinalDay(): string {
 function MatchupCard({
   kill,
   hero = false,
-}: { kill: OnThisDayKill; hero?: boolean }) {
+  t,
+}: { kill: OnThisDayKill; hero?: boolean; t: ServerTranslateFn }) {
   const matchup = `${kill.killer_ign || kill.killer_champion || "?"} → ${kill.victim_ign || kill.victim_champion || "?"}`;
   const championLine = `${kill.killer_champion || "?"} vs ${kill.victim_champion || "?"}`;
   // The RPC projects the legacy `thumbnail_url` column directly. We
@@ -63,14 +66,14 @@ function MatchupCard({
     return (
       <Link
         href={`/scroll?kill=${kill.id}`}
-        aria-label={`Lire le clip d'il y a ${kill.years_ago} ans : ${matchup}`}
+        aria-label={t("p_homex.play_clip_years_aria", { years: kill.years_ago, matchup })}
         className="group relative block overflow-hidden rounded-2xl border-2 border-[var(--gold)]/40 bg-black transition-all hover:border-[var(--gold)] hover:shadow-2xl hover:shadow-[var(--gold)]/30"
         style={{ aspectRatio: "16 / 9" }}
       >
         {thumb ? (
           <Image
             src={thumb}
-            alt={`Clip ${matchup}`}
+            alt={t("p_homex.clip_alt", { matchup })}
             fill
             sizes="(max-width: 768px) 100vw, 60vw"
             className="object-cover transition-transform duration-700 group-hover:scale-105"
@@ -90,7 +93,7 @@ function MatchupCard({
           <div className="absolute left-4 top-4 z-10">
             <div className="inline-flex items-center gap-2 rounded-full border border-[var(--gold)] bg-black/85 backdrop-blur px-3 py-1.5 font-display text-xs uppercase tracking-[0.25em] text-[var(--gold-bright)]">
               <span>◆</span>
-              <span>{years === 1 ? "Il y a 1 an" : `Il y a ${years} ans`}</span>
+              <span>{years === 1 ? t("p_homex.years_ago_one") : t("p_homex.years_ago_many", { years })}</span>
             </div>
           </div>
         )}
@@ -105,7 +108,7 @@ function MatchupCard({
             )}
             {kill.is_first_blood && (
               <span className="rounded-md bg-[var(--red)]/90 backdrop-blur px-2 py-0.5 font-data text-[10px] font-bold uppercase tracking-widest text-white">
-                FIRST BLOOD
+                {t("p_homex.first_blood_badge")}
               </span>
             )}
           </div>
@@ -130,13 +133,13 @@ function MatchupCard({
           <div className="mt-3 flex items-center gap-4 text-[11px] font-data">
             {score > 0 && (
               <span className="text-[var(--gold)]">
-                IA <strong className="text-[var(--gold-bright)]">{score.toFixed(1)}</strong>/10
+                {t("p_homex.ai_label")} <strong className="text-[var(--gold-bright)]">{score.toFixed(1)}</strong>/10
               </span>
             )}
             {(kill.avg_rating ?? 0) > 0 && (
               <span className="text-[var(--gold)]/80">
                 ★ {(kill.avg_rating ?? 0).toFixed(1)}
-                <span className="text-[var(--text-disabled)]"> · {kill.rating_count ?? 0} votes</span>
+                <span className="text-[var(--text-disabled)]"> · {t("p_homex.votes", { n: kill.rating_count ?? 0 })}</span>
               </span>
             )}
           </div>
@@ -153,7 +156,7 @@ function MatchupCard({
   return (
     <Link
       href={`/scroll?kill=${kill.id}`}
-      aria-label={`Lire le clip d'il y a ${kill.years_ago} ans : ${matchup}`}
+      aria-label={t("p_homex.play_clip_years_aria", { years: kill.years_ago, matchup })}
       className="group relative shrink-0 snap-start w-[55vw] max-w-[200px] sm:w-auto sm:max-w-none overflow-hidden rounded-xl border border-[var(--border-gold)] bg-black transition-all hover:border-[var(--gold)]/70 hover:scale-[1.02] hover:-translate-y-0.5"
       style={{ aspectRatio: "9 / 16" }}
     >
@@ -175,7 +178,7 @@ function MatchupCard({
       {years !== null && (
         <div className="absolute left-2 top-2 z-10">
           <span className="rounded-md border border-[var(--gold)]/60 bg-black/80 backdrop-blur px-1.5 py-0.5 font-data text-[9px] uppercase tracking-[0.18em] text-[var(--gold-bright)]">
-            -{years} an{years > 1 ? "s" : ""}
+            {t("p_homex.years_ago_chip", { years, s: years > 1 ? "s" : "" })}
           </span>
         </div>
       )}
@@ -210,6 +213,7 @@ function MatchupCard({
 }
 
 export async function OnThisDay() {
+  const { t } = await getServerT();
   const { month, day } = getTodayMonthDay();
   const kills = await getOnThisDayKills(month, day, 12);
 
@@ -229,15 +233,15 @@ export async function OnThisDay() {
       <div className="mb-5 flex items-end justify-between gap-4">
         <div>
           <p className="font-data text-[10px] uppercase tracking-[0.4em] text-[var(--gold)] mb-1.5">
-            Aujourd&apos;hui · {frenchOrdinalDay()}
+            {t("p_homex.today_eyebrow", { day: frenchOrdinalDay() })}
           </p>
           <h2 className="font-display text-3xl md:text-4xl text-[var(--gold-bright)] tracking-tight">
-            Ce jour-là dans l&apos;histoire KC
+            {t("p_homex.on_this_day_title")}
           </h2>
           <p className="mt-1 max-w-2xl text-sm text-[var(--text-secondary)]">
             {kills.length === 1
-              ? `Un kill marquant joué un ${frenchOrdinalDay()} d'une année passée.`
-              : `${kills.length} kills marquants joués un ${frenchOrdinalDay()} dans les années précédentes.`}
+              ? t("p_homex.on_this_day_subtitle_one", { day: frenchOrdinalDay() })
+              : t("p_homex.on_this_day_subtitle_many", { n: kills.length, day: frenchOrdinalDay() })}
           </p>
         </div>
         {/* Decorative gold rule */}
@@ -245,17 +249,17 @@ export async function OnThisDay() {
       </div>
 
       {/* Hero card */}
-      <MatchupCard kill={hero} hero />
+      <MatchupCard kill={hero} hero t={t} />
 
       {/* Strip of additional matches */}
       {rest.length > 0 && (
         <>
           <div className="mt-6 mb-2 flex items-baseline justify-between">
             <p className="font-data text-[10px] uppercase tracking-[0.3em] text-[var(--gold)]/70">
-              Autres souvenirs du jour
+              {t("p_homex.other_memories")}
             </p>
             <span className="font-data text-[10px] text-[var(--text-disabled)]">
-              {rest.length} kill{rest.length > 1 ? "s" : ""}
+              {t("p_homex.kill_count", { n: rest.length, s: rest.length > 1 ? "s" : "" })}
             </span>
           </div>
           <div
@@ -263,7 +267,7 @@ export async function OnThisDay() {
             role="list"
           >
             {rest.map((k) => (
-              <MatchupCard key={k.id} kill={k} />
+              <MatchupCard key={k.id} kill={k} t={t} />
             ))}
           </div>
         </>

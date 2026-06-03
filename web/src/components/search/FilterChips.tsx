@@ -30,20 +30,21 @@
 import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { ERAS } from "@/lib/eras";
+import { useT } from "@/lib/i18n/use-lang";
 
 // ─── Static config ────────────────────────────────────────────────────
 
-const MULTI_OPTIONS: { id: "double" | "triple" | "quadra" | "penta"; label: string }[] = [
-  { id: "double", label: "Double" },
-  { id: "triple", label: "Triple" },
-  { id: "quadra", label: "Quadra" },
-  { id: "penta", label: "Penta" },
+const MULTI_OPTIONS: { id: "double" | "triple" | "quadra" | "penta"; labelKey: string }[] = [
+  { id: "double", labelKey: "p_qsearch.multi_double" },
+  { id: "triple", labelKey: "p_qsearch.multi_triple" },
+  { id: "quadra", labelKey: "p_qsearch.multi_quadra" },
+  { id: "penta", labelKey: "p_qsearch.multi_penta" },
 ];
 
-const KC_ROLE_OPTIONS: { id: "team_killer" | "team_victim" | ""; label: string }[] = [
-  { id: "", label: "Tous" },
-  { id: "team_killer", label: "KC kill" },
-  { id: "team_victim", label: "KC death" },
+const KC_ROLE_OPTIONS: { id: "team_killer" | "team_victim" | ""; labelKey: string }[] = [
+  { id: "", labelKey: "p_qsearch.kc_all" },
+  { id: "team_killer", labelKey: "p_qsearch.kc_kill" },
+  { id: "team_victim", labelKey: "p_qsearch.kc_death" },
 ];
 
 const SCORE_STEPS = [0, 4, 6, 7, 8, 9];
@@ -108,6 +109,7 @@ export function FilterChips() {
 }
 
 function FilterChipsInner() {
+  const t = useT();
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -196,7 +198,7 @@ function FilterChipsInner() {
               key={opt.id || "all"}
               active={current.kcRole === opt.id}
               onClick={() => setParam("kc_role", opt.id || null)}
-              label={opt.label}
+              label={t(opt.labelKey)}
             />
           ))}
 
@@ -206,7 +208,7 @@ function FilterChipsInner() {
               key={m.id}
               active={current.multi === m.id}
               onClick={() => setParam("multi", current.multi === m.id ? null : m.id)}
-              label={m.label}
+              label={t(m.labelKey)}
             />
           ))}
 
@@ -214,13 +216,13 @@ function FilterChipsInner() {
           <ChipToggle
             active={current.fb}
             onClick={() => setParam("fb", current.fb ? null : "1")}
-            label="First Blood"
+            label={t("p_qsearch.first_blood")}
           />
 
           {/* Era dropdown trigger */}
           <DropdownChip
             active={!!current.era}
-            label={current.era ? labelForEra(current.era) : "Epoque"}
+            label={current.era ? labelForEra(current.era, t("p_qsearch.era")) : t("p_qsearch.era")}
             open={eraDropdownOpen}
             onToggle={() => {
               setEraDropdownOpen((v) => !v);
@@ -232,7 +234,7 @@ function FilterChipsInner() {
           {/* Tag dropdown trigger */}
           <DropdownChip
             active={!!current.tag}
-            label={current.tag ? `#${current.tag}` : "Tag"}
+            label={current.tag ? `#${current.tag}` : t("p_qsearch.tag")}
             open={tagDropdownOpen}
             onToggle={() => {
               setTagDropdownOpen((v) => !v);
@@ -244,7 +246,7 @@ function FilterChipsInner() {
           {/* Player dropdown trigger */}
           <DropdownChip
             active={!!current.player}
-            label={current.player ? capitalize(current.player) : "Joueur"}
+            label={current.player ? capitalize(current.player) : t("p_qsearch.player")}
             open={playerDropdownOpen}
             onToggle={() => {
               setPlayerDropdownOpen((v) => !v);
@@ -258,9 +260,9 @@ function FilterChipsInner() {
               type="button"
               onClick={resetAll}
               className="shrink-0 snap-start rounded-full border border-[var(--red)]/30 bg-[var(--red)]/5 px-3 py-1.5 text-xs text-[var(--red)] transition-colors hover:bg-[var(--red)]/15"
-              aria-label="Reinitialiser tous les filtres"
+              aria-label={t("p_qsearch.reset_all_aria")}
             >
-              Reset
+              {t("p_qsearch.reset")}
             </button>
           )}
         </div>
@@ -268,7 +270,7 @@ function FilterChipsInner() {
         {/* Score slider (separate row on mobile to avoid horizontal-scroll slider weirdness) */}
         <div className="mt-2">
           <p className="mb-1 text-[10px] uppercase tracking-[0.2em] text-[var(--text-muted)]">
-            Score IA min
+            {t("p_qsearch.score_ai_min")}
           </p>
           <ScoreSliderChips
             value={current.minScore}
@@ -279,7 +281,7 @@ function FilterChipsInner() {
         {/* Wave 31a — community rating filter, mobile row */}
         <div className="mt-2">
           <p className="mb-1 text-[10px] uppercase tracking-[0.2em] text-[var(--text-muted)]">
-            Note communauté min
+            {t("p_qsearch.rating_community_min")}
           </p>
           <RatingSliderChips
             value={current.minRating}
@@ -327,48 +329,48 @@ function FilterChipsInner() {
 
       {/* Desktop : vertical sidebar */}
       <aside className="hidden md:block w-full">
-        <FilterSection title="KC">
+        <FilterSection title={t("p_qsearch.section_kc")}>
           <div className="flex flex-wrap gap-1.5">
             {KC_ROLE_OPTIONS.map((opt) => (
               <ChipToggle
                 key={opt.id || "all"}
                 active={current.kcRole === opt.id}
                 onClick={() => setParam("kc_role", opt.id || null)}
-                label={opt.label}
+                label={t(opt.labelKey)}
               />
             ))}
           </div>
         </FilterSection>
 
-        <FilterSection title="Multi-kill">
+        <FilterSection title={t("p_qsearch.section_multi")}>
           <div className="flex flex-wrap gap-1.5">
             {MULTI_OPTIONS.map((m) => (
               <ChipToggle
                 key={m.id}
                 active={current.multi === m.id}
                 onClick={() => setParam("multi", current.multi === m.id ? null : m.id)}
-                label={m.label}
+                label={t(m.labelKey)}
               />
             ))}
           </div>
         </FilterSection>
 
-        <FilterSection title="Special">
+        <FilterSection title={t("p_qsearch.section_special")}>
           <ChipToggle
             active={current.fb}
             onClick={() => setParam("fb", current.fb ? null : "1")}
-            label="First Blood"
+            label={t("p_qsearch.first_blood")}
           />
         </FilterSection>
 
-        <FilterSection title="Epoque">
+        <FilterSection title={t("p_qsearch.section_era")}>
           <select
             value={current.era}
             onChange={(e) => setParam("era", e.target.value || null)}
             className="w-full rounded-lg border border-[var(--border-gold)] bg-[var(--bg-surface)] px-3 py-2 text-sm text-[var(--text-secondary)] outline-none focus:border-[var(--gold)]/60"
-            aria-label="Filtrer par epoque"
+            aria-label={t("p_qsearch.era_filter_aria")}
           >
-            <option value="">Toutes les epoques</option>
+            <option value="">{t("p_qsearch.era_all")}</option>
             {ERAS.map((era) => (
               <option key={era.id} value={era.id}>
                 {era.label} ({era.period})
@@ -377,14 +379,14 @@ function FilterChipsInner() {
           </select>
         </FilterSection>
 
-        <FilterSection title="Tag IA">
+        <FilterSection title={t("p_qsearch.section_tag_ai")}>
           <select
             value={current.tag}
             onChange={(e) => setParam("tag", e.target.value || null)}
             className="w-full rounded-lg border border-[var(--border-gold)] bg-[var(--bg-surface)] px-3 py-2 text-sm text-[var(--text-secondary)] outline-none focus:border-[var(--gold)]/60"
-            aria-label="Filtrer par tag IA"
+            aria-label={t("p_qsearch.tag_filter_aria")}
           >
-            <option value="">Tous les tags</option>
+            <option value="">{t("p_qsearch.tag_all")}</option>
             {facets.tags.map((t) => (
               <option key={t.tag} value={t.tag}>
                 #{t.tag} ({t.count})
@@ -393,14 +395,14 @@ function FilterChipsInner() {
           </select>
         </FilterSection>
 
-        <FilterSection title="Joueur">
+        <FilterSection title={t("p_qsearch.section_player")}>
           <select
             value={current.player}
             onChange={(e) => setParam("player", e.target.value || null)}
             className="w-full rounded-lg border border-[var(--border-gold)] bg-[var(--bg-surface)] px-3 py-2 text-sm text-[var(--text-secondary)] outline-none focus:border-[var(--gold)]/60"
-            aria-label="Filtrer par joueur"
+            aria-label={t("p_qsearch.player_filter_aria")}
           >
-            <option value="">Tous les joueurs</option>
+            <option value="">{t("p_qsearch.player_all")}</option>
             {facets.players.map((p) => (
               <option key={p.slug} value={p.slug}>
                 {p.ign}
@@ -411,14 +413,14 @@ function FilterChipsInner() {
           </select>
         </FilterSection>
 
-        <FilterSection title="Score IA min">
+        <FilterSection title={t("p_qsearch.score_ai_min")}>
           <ScoreSliderChips
             value={current.minScore}
             onChange={(v) => setParam("min_score", v > 0 ? String(v) : null)}
           />
         </FilterSection>
 
-        <FilterSection title="Note communauté min">
+        <FilterSection title={t("p_qsearch.rating_community_min")}>
           <RatingSliderChips
             value={current.minRating}
             onChange={(v) => setParam("min_rating", v > 0 ? String(v) : null)}
@@ -431,7 +433,7 @@ function FilterChipsInner() {
             onClick={resetAll}
             className="mt-4 w-full rounded-lg border border-[var(--red)]/30 bg-[var(--red)]/5 py-2 text-sm font-medium text-[var(--red)] transition-colors hover:bg-[var(--red)]/15"
           >
-            Reinitialiser tous les filtres
+            {t("p_qsearch.reset_all")}
           </button>
         )}
       </aside>
@@ -517,11 +519,12 @@ function ScoreSliderChips({
   value: number;
   onChange: (v: number) => void;
 }) {
+  const t = useT();
   return (
     <div className="flex flex-wrap items-center gap-1.5">
       {SCORE_STEPS.map((step) => {
         const active = value === step;
-        const label = step === 0 ? "Tous" : `${step}+`;
+        const label = step === 0 ? t("p_qsearch.step_all") : `${step}+`;
         return (
           <button
             key={step}
@@ -552,12 +555,15 @@ function RatingSliderChips({
   value: number;
   onChange: (v: number) => void;
 }) {
+  const t = useT();
   return (
     <div className="flex flex-wrap items-center gap-1.5">
       {RATING_STEPS.map((step) => {
         const active = value === step;
         const label =
-          step === 0 ? "Tous" : `${step.toString().replace(".", ",")}★+`;
+          step === 0
+            ? t("p_qsearch.step_all")
+            : `${step.toString().replace(".", ",")}★+`;
         return (
           <button
             key={step}
@@ -566,8 +572,8 @@ function RatingSliderChips({
             aria-pressed={active}
             aria-label={
               step === 0
-                ? "Toutes notes"
-                : `Note minimum ${step} étoiles sur 5`
+                ? t("p_qsearch.rating_all_aria")
+                : t("p_qsearch.rating_min_aria", { step })
             }
             className={`rounded-md border px-2.5 py-1 text-xs font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--gold)] ${
               active
@@ -625,6 +631,7 @@ function EraOptions({
   current: string;
   onPick: (eraId: string) => void;
 }) {
+  const t = useT();
   return (
     <ul role="listbox" className="space-y-1">
       <li>
@@ -637,7 +644,7 @@ function EraOptions({
               : "text-[var(--text-secondary)] hover:bg-[var(--bg-elevated)]"
           }`}
         >
-          Toutes les epoques
+          {t("p_qsearch.era_all")}
         </button>
       </li>
       {ERAS.map((era) => (
@@ -669,6 +676,7 @@ function TagOptions({
   current: string;
   onPick: (tag: string) => void;
 }) {
+  const t = useT();
   return (
     <ul role="listbox" className="grid grid-cols-2 gap-1.5">
       <li className="col-span-2">
@@ -681,7 +689,7 @@ function TagOptions({
               : "text-[var(--text-secondary)] hover:bg-[var(--bg-elevated)]"
           }`}
         >
-          Tous les tags
+          {t("p_qsearch.tag_all")}
         </button>
       </li>
       {tags.map((t) => (
@@ -713,6 +721,7 @@ function PlayerOptions({
   current: string;
   onPick: (slug: string) => void;
 }) {
+  const t = useT();
   return (
     <ul role="listbox" className="space-y-1">
       <li>
@@ -725,7 +734,7 @@ function PlayerOptions({
               : "text-[var(--text-secondary)] hover:bg-[var(--bg-elevated)]"
           }`}
         >
-          Tous les joueurs
+          {t("p_qsearch.player_all")}
         </button>
       </li>
       {players.map((p) => (
@@ -752,9 +761,9 @@ function PlayerOptions({
 
 // ─── Helpers ──────────────────────────────────────────────────────────
 
-function labelForEra(eraId: string): string {
+function labelForEra(eraId: string, fallback: string): string {
   const era = ERAS.find((e) => e.id === eraId);
-  return era?.label ?? "Epoque";
+  return era?.label ?? fallback;
 }
 
 function capitalize(s: string): string {

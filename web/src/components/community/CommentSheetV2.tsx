@@ -40,6 +40,7 @@ import { ReportButton } from "./ReportButton";
 import { CommentVote } from "./CommentVote";
 import { CommentSortToggle } from "./CommentSortToggle";
 import { sortComments, type CommentSortMode } from "@/lib/comments";
+import { useT, type TranslateFn } from "@/lib/i18n/use-lang";
 
 interface ApiProfile {
   id?: string;
@@ -106,6 +107,7 @@ const DISMISS_VELOCITY = 500; // px/sec — fast flick down also closes
 
 
 export function CommentSheetV2({ killId, isOpen, onClose, onAuthRequired, mode = "sheet" }: Props) {
+  const t = useT();
   const isPanel = mode === "panel";
   // Honour prefers-reduced-motion for the panel chevron (the sheet's own
   // motion is part of the untouched mobile path). When reduced, the chevron
@@ -158,17 +160,17 @@ export function CommentSheetV2({ killId, isOpen, onClose, onAuthRequired, mode =
       .then((r) => (r.ok ? r.json() : []))
       .then((data: unknown) => {
         if (ac.signal.aborted) return;
-        const mapped = Array.isArray(data) ? (data as ApiComment[]).map(toUi) : [];
+        const mapped = Array.isArray(data) ? (data as ApiComment[]).map((c) => toUi(c, t)) : [];
         setComments(mapped);
         setLoading(false);
       })
       .catch((err) => {
         if ((err as { name?: string })?.name === "AbortError") return;
         setLoading(false);
-        setErrorMsg("Impossible de charger les commentaires");
+        setErrorMsg(t("p_comm.load_error"));
       });
     return () => ac.abort();
-  }, [killId, active]);
+  }, [killId, active, t]);
 
   // Cleanup timers on unmount
   useEffect(() => () => {
@@ -190,9 +192,9 @@ export function CommentSheetV2({ killId, isOpen, onClose, onAuthRequired, mode =
     const optimisticId = `opt-${Date.now()}`;
     const optimistic: UiComment = {
       id: optimisticId,
-      user: "Toi",
+      user: t("p_comm.you"),
       text: trimmed,
-      time: "maintenant",
+      time: t("p_comm.now"),
       createdAtMs: Date.now(),
       pending: true,
       upvotes: 0,
@@ -227,21 +229,21 @@ export function CommentSheetV2({ killId, isOpen, onClose, onAuthRequired, mode =
         }
         setComments((prev) => prev.filter((c) => c.id !== optimisticId));
         setPostText(trimmed);
-        flashError(serverMsg ?? "Erreur du serveur");
+        flashError(serverMsg ?? t("p_comm.error_server"));
         return;
       }
       const data: ApiComment = await res.json();
-      const real = toUi(data);
+      const real = toUi(data, t);
       // Replace optimistic with canonical
       setComments((prev) => prev.map((c) => (c.id === optimisticId ? real : c)));
     } catch {
       setComments((prev) => prev.filter((c) => c.id !== optimisticId));
       setPostText(trimmed);
-      flashError("Probleme reseau");
+      flashError(t("p_comm.error_network"));
     } finally {
       setPosting(false);
     }
-  }, [killId, posting, postText, onAuthRequired, flashError]);
+  }, [killId, posting, postText, onAuthRequired, flashError, t]);
 
   /** Update vote state for a single comment (top-level OR reply) without
    *  re-fetching. The CommentVote children call this on successful POST. */
@@ -333,7 +335,7 @@ export function CommentSheetV2({ killId, isOpen, onClose, onAuthRequired, mode =
               submit();
             }
           }}
-          placeholder={"Ajoute un commentaire…"}
+          placeholder={t("p_comm.composer_placeholder")}
           maxLength={500}
           disabled={posting}
           className="flex-1 rounded-full bg-white/8 border border-white/10 px-4 py-2.5 text-sm text-white placeholder-white/30 outline-none focus:border-[var(--gold)]/55 focus:bg-white/12 disabled:opacity-60"
@@ -343,7 +345,7 @@ export function CommentSheetV2({ killId, isOpen, onClose, onAuthRequired, mode =
           onClick={submit}
           disabled={!postText.trim() || posting}
           className="flex h-10 w-10 items-center justify-center rounded-full bg-[var(--gold)] text-black font-bold transition-transform active:scale-90 disabled:opacity-30 disabled:scale-100"
-          aria-label="Envoyer"
+          aria-label={t("p_comm.send")}
         >
           {posting ? (
             <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
@@ -369,7 +371,7 @@ export function CommentSheetV2({ killId, isOpen, onClose, onAuthRequired, mode =
     return (
       <section
         role="region"
-        aria-label="Commentaires"
+        aria-label={t("p_comm.title")}
         className="glass flex flex-col overflow-hidden rounded-2xl border border-[var(--gold)]/15 bg-[var(--bg-surface)]/60"
       >
         {/* Collapsed summary header — click / Enter / Space toggles the
@@ -384,10 +386,10 @@ export function CommentSheetV2({ killId, isOpen, onClose, onAuthRequired, mode =
         >
           <div className="min-w-0">
             <h3 className="font-display text-base font-bold text-white leading-none">
-              Commentaires
+              {t("p_comm.title")}
             </h3>
             <p className="font-data text-[10px] uppercase tracking-widest text-white/45 mt-1.5">
-              {totalComments} {totalComments <= 1 ? "message" : "messages"}
+              {totalComments <= 1 ? t("p_comm.message_one", { n: totalComments }) : t("p_comm.message_many", { n: totalComments })}
             </p>
           </div>
           <m.svg
@@ -479,10 +481,10 @@ export function CommentSheetV2({ killId, isOpen, onClose, onAuthRequired, mode =
             <div className="flex items-center justify-between gap-3 px-5 pb-3 border-b border-white/5">
               <div className="min-w-0">
                 <h3 className="font-display text-lg font-bold text-white leading-none">
-                  Commentaires
+                  {t("p_comm.title")}
                 </h3>
                 <p className="font-data text-[10px] uppercase tracking-widest text-white/45 mt-1">
-                  {totalComments} {totalComments <= 1 ? "message" : "messages"}
+                  {totalComments <= 1 ? t("p_comm.message_one", { n: totalComments }) : t("p_comm.message_many", { n: totalComments })}
                 </p>
               </div>
               <div className="flex items-center gap-2">
@@ -490,7 +492,7 @@ export function CommentSheetV2({ killId, isOpen, onClose, onAuthRequired, mode =
                 <button
                   onClick={onClose}
                   className="flex h-9 w-9 items-center justify-center rounded-full bg-white/8 hover:bg-white/15 transition-colors"
-                  aria-label="Fermer"
+                  aria-label={t("p_comm.close")}
                 >
                   <svg className="h-4 w-4 text-white/75" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
@@ -523,6 +525,7 @@ interface RowProps {
 }
 
 function CommentRow({ comment, depth, onAuthRequired, onVoteChange }: RowProps) {
+  const t = useT();
   const indent = Math.min(depth, MAX_DEPTH);
   // Optimistic + pending comments don't have a real server id yet —
   // skip the report + vote buttons so we don't POST against `opt-…` ids.
@@ -546,11 +549,11 @@ function CommentRow({ comment, depth, onAuthRequired, onVoteChange }: RowProps) 
             </span>
             <span className="text-[10px] text-white/40">{comment.time}</span>
             {comment.pending && (
-              <span className="text-[9px] text-[var(--gold)]/70 italic">envoi…</span>
+              <span className="text-[9px] text-[var(--gold)]/70 italic">{t("p_comm.sending")}</span>
             )}
             {comment.modPending && (
               <span className="rounded-full bg-[var(--gold)]/15 border border-[var(--gold)]/30 px-1.5 py-px text-[9px] font-bold uppercase tracking-wider text-[var(--gold)]">
-                modération
+                {t("p_comm.moderation")}
               </span>
             )}
           </div>
@@ -629,14 +632,15 @@ function CommentSkeletons() {
 }
 
 function EmptyState() {
+  const t = useT();
   return (
     <div className="flex flex-col items-center justify-center py-12 text-center">
       <div className="text-4xl mb-3 opacity-50">{"\uD83D\uDCAC"}</div>
       <p className="font-display text-base font-bold text-white/85">
-        Aucun commentaire
+        {t("p_comm.empty_title")}
       </p>
       <p className="text-[12px] text-white/45 mt-1 max-w-xs">
-        Sois le premier à réagir. C'est plus fun à plusieurs.
+        {t("p_comm.empty_body")}
       </p>
     </div>
   );
@@ -644,32 +648,32 @@ function EmptyState() {
 
 // ─── Mappers ──────────────────────────────────────────────────────────
 
-function toUi(c: ApiComment): UiComment {
+function toUi(c: ApiComment, t: TranslateFn): UiComment {
   const createdAtMs = c.created_at ? new Date(c.created_at).getTime() : Date.now();
   const userVoteRaw = c.user_vote;
   const userVote: -1 | 0 | 1 =
     userVoteRaw === -1 || userVoteRaw === 1 ? userVoteRaw : 0;
   return {
     id: String(c.id ?? ""),
-    user: String(c.profile?.discord_username ?? c.profile?.username ?? "Anonyme"),
+    user: String(c.profile?.discord_username ?? c.profile?.username ?? t("p_comm.anonymous")),
     avatar: c.profile?.discord_avatar_url ?? undefined,
     text: String(c.content ?? c.body ?? ""),
-    time: c.created_at ? formatTimeAgo(c.created_at) : "",
+    time: c.created_at ? formatTimeAgo(c.created_at, t) : "",
     createdAtMs,
     modPending: c.moderation_status === "pending",
     upvotes: typeof c.upvotes === "number" ? c.upvotes : 0,
     downvoteCount: typeof c.downvote_count === "number" ? c.downvote_count : 0,
     userVote,
-    replies: Array.isArray(c.replies) ? c.replies.map(toUi) : undefined,
+    replies: Array.isArray(c.replies) ? c.replies.map((r) => toUi(r, t)) : undefined,
   };
 }
 
-function formatTimeAgo(iso: string): string {
+function formatTimeAgo(iso: string, t: TranslateFn): string {
   const ms = Date.now() - new Date(iso).getTime();
   const s = Math.floor(ms / 1000);
-  if (s < 60) return "à l'instant";
-  if (s < 3600) return `${Math.floor(s / 60)} min`;
-  if (s < 86400) return `${Math.floor(s / 3600)} h`;
-  if (s < 604800) return `${Math.floor(s / 86400)} j`;
+  if (s < 60) return t("p_comm.time_just_now");
+  if (s < 3600) return t("p_comm.time_minutes", { n: Math.floor(s / 60) });
+  if (s < 86400) return t("p_comm.time_hours", { n: Math.floor(s / 3600) });
+  if (s < 604800) return t("p_comm.time_days", { n: Math.floor(s / 86400) });
   return new Date(iso).toLocaleDateString("fr-FR", { day: "numeric", month: "short" });
 }

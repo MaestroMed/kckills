@@ -2,6 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { championIconUrl } from "@/lib/constants";
 import { PLAYER_PHOTOS } from "@/lib/kc-assets";
+import { getServerT } from "@/lib/i18n/server-lang";
 
 /**
  * MatchSummaryCard — 3-column premium summary under the hero.
@@ -64,7 +65,7 @@ function formatMinSec(seconds: number | null): string {
 
 // ─── Component ────────────────────────────────────────────────────────
 
-export function MatchSummaryCard({
+export async function MatchSummaryCard({
   bestOf,
   format,
   stage,
@@ -77,9 +78,10 @@ export function MatchSummaryCard({
   patch,
   mvp,
 }: MatchSummaryCardProps) {
+  const { t } = await getServerT();
   return (
     <section
-      aria-label="Résumé du match"
+      aria-label={t("p_matchx.summary_aria")}
       className="grid grid-cols-1 gap-3 md:grid-cols-3"
     >
       {/* Col 1 — Format */}
@@ -91,7 +93,7 @@ export function MatchSummaryCard({
           ◆
         </span>
         <p className="font-data text-[10px] uppercase tracking-[0.3em] text-[var(--gold)]/80">
-          Format
+          {t("p_matchx.format")}
         </p>
         <p className="mt-2 font-display text-3xl font-black text-[var(--text-primary)]">
           Bo{bestOf}
@@ -102,7 +104,7 @@ export function MatchSummaryCard({
         <dl className="mt-4 space-y-2 border-t border-[var(--border-gold)]/40 pt-3">
           <div className="flex items-baseline justify-between gap-3 text-xs">
             <dt className="text-[var(--text-muted)] uppercase tracking-widest text-[10px]">
-              Durée totale
+              {t("p_matchx.total_duration")}
             </dt>
             <dd className="font-data font-bold text-[var(--text-primary)]">
               {formatDuration(totalDurationSeconds)}
@@ -110,7 +112,7 @@ export function MatchSummaryCard({
           </div>
           <div className="flex items-baseline justify-between gap-3 text-xs">
             <dt className="text-[var(--text-muted)] uppercase tracking-widest text-[10px]">
-              Stage
+              {t("p_matchx.stage")}
             </dt>
             <dd className="font-data font-bold text-[var(--text-primary)] truncate">
               {stage ?? "—"}
@@ -119,7 +121,7 @@ export function MatchSummaryCard({
           {patch && (
             <div className="flex items-baseline justify-between gap-3 text-xs">
               <dt className="text-[var(--text-muted)] uppercase tracking-widest text-[10px]">
-                Patch
+                {t("p_matchx.patch")}
               </dt>
               <dd className="font-data font-bold text-[var(--cyan)]">
                 {patch}
@@ -138,7 +140,7 @@ export function MatchSummaryCard({
           ◆
         </span>
         <p className="font-data text-[10px] uppercase tracking-[0.3em] text-[var(--gold)]/80">
-          Kills totaux
+          {t("p_matchx.total_kills")}
         </p>
         <p className="mt-2 font-display text-4xl font-black tabular-nums text-[var(--text-primary)]">
           {totalKills}
@@ -168,7 +170,7 @@ export function MatchSummaryCard({
         </div>
         {firstBloodSeconds != null && (
           <p className="mt-4 border-t border-[var(--border-gold)]/40 pt-3 text-xs text-[var(--text-muted)]">
-            Premier sang à{" "}
+            {t("p_matchx.first_blood_at")}{" "}
             <span className="font-data font-bold text-[var(--text-primary)]">
               T+{formatMinSec(firstBloodSeconds)}
             </span>
@@ -180,7 +182,7 @@ export function MatchSummaryCard({
                   : "text-[var(--red)] font-bold"
               }
             >
-              {firstBloodByKc ? "par KC" : "contre KC"}
+              {firstBloodByKc ? t("p_matchx.fb_by_kc") : t("p_matchx.fb_against_kc")}
             </span>
           </p>
         )}
@@ -195,7 +197,7 @@ export function MatchSummaryCard({
           ◆
         </span>
         <p className="font-data text-[10px] uppercase tracking-[0.3em] text-[var(--gold)]/80">
-          MVP du match
+          {t("p_matchx.mvp")}
         </p>
         {mvp ? (
           <Link
@@ -227,21 +229,21 @@ export function MatchSummaryCard({
                 {mvp.ign}
               </p>
               <p className="text-xs text-[var(--text-muted)] truncate">
-                Signature : {mvp.signatureChampion}
+                {t("p_matchx.signature", { champion: mvp.signatureChampion })}
               </p>
               <div className="mt-1 flex items-center gap-3 font-data text-[11px]">
                 <span className="rounded-full border border-[var(--gold)]/40 bg-[var(--gold)]/10 px-1.5 py-0.5 text-[var(--gold)] font-bold">
                   IA {mvp.aggregateScore.toFixed(1)}
                 </span>
                 <span className="text-[var(--text-secondary)]">
-                  {mvp.killCount} kills clippés
+                  {t("p_matchx.kills_clipped", { n: mvp.killCount })}
                 </span>
               </div>
             </div>
           </Link>
         ) : (
           <p className="mt-3 text-sm italic text-[var(--text-muted)]">
-            Pas encore assez de kills clippés pour désigner le MVP.
+            {t("p_matchx.mvp_empty")}
           </p>
         )}
       </div>

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import dynamic from "next/dynamic";
+import { useT } from "@/lib/i18n/use-lang";
 
 // Wave 18 (2026-05-08) — motion/react extracted into a lazy child.
 // HeroClipMotionLayer is a `next/dynamic({ ssr: false })` import so
@@ -73,6 +74,7 @@ const LS_AUDIO_OPTED = "kc_audio_enabled";
  * owns the video/image layers.
  */
 export function HeroClipBackground({ clips, posterSrc = "/images/hero-bg.jpg" }: HeroClipBackgroundProps) {
+  const t = useT();
   const [index, setIndex] = useState(0);
   const [reducedMotion, setReducedMotion] = useState(false);
   const [audioEnabled, setAudioEnabled] = useState(false);
@@ -301,11 +303,11 @@ export function HeroClipBackground({ clips, posterSrc = "/images/hero-bg.jpg" }:
         <button
           type="button"
           onClick={enableAudio}
-          aria-label="Activer le son du hero"
+          aria-label={t("p_pteam.hero_enable_sound_aria")}
           className="absolute bottom-4 right-4 md:bottom-8 md:right-8 z-30 rounded-full border border-[var(--gold)]/40 bg-black/65 backdrop-blur-md px-4 py-2 text-xs font-display font-bold uppercase tracking-widest text-[var(--gold-bright)] hover:border-[var(--gold)] hover:bg-black/80 transition-all"
         >
           <span className="mr-1.5" aria-hidden="true">&#128266;</span>
-          Activer le son
+          {t("p_pteam.hero_enable_sound")}
         </button>
       )}
 

@@ -6,6 +6,7 @@ import { championLoadingUrl, championSplashUrl, championIconUrl } from "@/lib/co
 import { ClipReel } from "@/components/ClipReel";
 import { PortraitCubeMorph } from "@/components/PortraitCubeMorph";
 import { getClipsFiltered } from "@/lib/supabase/clips";
+import { getServerT } from "@/lib/i18n/server-lang";
 
 export const revalidate = 600;
 
@@ -40,6 +41,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 }
 
 export default async function ChampionPage({ params }: Props) {
+  const { t } = await getServerT();
   const { name } = await params;
   const champ = decodeURIComponent(name);
 
@@ -141,12 +143,14 @@ export default async function ChampionPage({ params }: Props) {
 
         <nav
           className="absolute top-6 left-6 right-6 z-20 flex items-center justify-between text-xs text-white/55"
-          aria-label="Fil d'Ariane"
+          aria-label={t("p_pubpages.champ_breadcrumb_aria")}
         >
           <Link href="/" className="hover:text-[var(--gold)] transition-colors">
-            Accueil
+            {t("p_pubpages.champ_breadcrumb_home")}
           </Link>
-          <span className="font-data uppercase tracking-widest text-white/40">Champion</span>
+          <span className="font-data uppercase tracking-widest text-white/40">
+            {t("p_pubpages.champ_breadcrumb_current")}
+          </span>
         </nav>
 
         <div className="relative z-10 mx-auto max-w-7xl h-full flex flex-col justify-end px-6 pb-12">
@@ -162,7 +166,7 @@ export default async function ChampionPage({ params }: Props) {
             </div>
             <div>
               <p className="font-data text-[10px] uppercase tracking-[0.3em] text-[var(--gold)]/70 mb-2">
-                Plays par champion
+                {t("p_pubpages.champ_eyebrow")}
               </p>
               <h1
                 className="font-display font-black uppercase leading-[0.9] text-5xl md:text-7xl lg:text-8xl text-white"
@@ -182,7 +186,7 @@ export default async function ChampionPage({ params }: Props) {
               <span className="rounded-xl border border-[var(--gold)]/45 bg-[var(--gold)]/12 backdrop-blur-md px-4 py-2.5 font-display">
                 <span className="text-2xl font-black text-[var(--gold)]">{totalAsKiller}</span>
                 <span className="ml-2 text-xs uppercase tracking-widest text-[var(--gold)]/80">
-                  kills donnes
+                  {t("p_pubpages.champ_kills_given")}
                 </span>
               </span>
             )}
@@ -190,7 +194,7 @@ export default async function ChampionPage({ params }: Props) {
               <span className="rounded-xl border border-[var(--red)]/45 bg-[var(--red)]/12 backdrop-blur-md px-4 py-2.5 font-display">
                 <span className="text-2xl font-black text-[var(--red)]">{totalAsVictim}</span>
                 <span className="ml-2 text-xs uppercase tracking-widest text-[var(--red)]/80">
-                  kills subis
+                  {t("p_pubpages.champ_kills_taken")}
                 </span>
               </span>
             )}
@@ -202,9 +206,9 @@ export default async function ChampionPage({ params }: Props) {
       <section className="max-w-7xl mx-auto px-6 py-16 space-y-14">
         {totalAsKiller > 0 && (
           <ClipReel
-            kicker={`${champ} en KC`}
-            title={`Top kills sur ${champ}`}
-            subtitle={`Plays cot\u00e9 KC ou ce champion termine l'adversaire. Class\u00e9s par score IA + rating communaut\u00e9.`}
+            kicker={t("p_pubpages.champ_reel_top_kicker", { champ })}
+            title={t("p_pubpages.champ_reel_top_title", { champ })}
+            subtitle={t("p_pubpages.champ_reel_top_subtitle")}
             filter={{
               killerChampion: champ,
               trackedTeamInvolvement: "team_killer",
@@ -212,16 +216,16 @@ export default async function ChampionPage({ params }: Props) {
             }}
             limit={9}
             ctaHref={`/clips?q=${encodeURIComponent(champ)}&sort=score`}
-            ctaLabel="Tout voir dans /clips"
+            ctaLabel={t("p_pubpages.champ_reel_cta")}
             emptyState={null}
           />
         )}
 
         {totalAsKiller > 0 && (
           <ClipReel
-            kicker="Carry mode"
-            title={`Multi-kills + clutch sur ${champ}`}
-            subtitle="First Bloods, doubles+ et plays au score IA \u2265 7.5."
+            kicker={t("p_pubpages.champ_reel_carry_kicker")}
+            title={t("p_pubpages.champ_reel_carry_title", { champ })}
+            subtitle={t("p_pubpages.champ_reel_carry_subtitle")}
             filter={{
               killerChampion: champ,
               trackedTeamInvolvement: "team_killer",
@@ -234,9 +238,9 @@ export default async function ChampionPage({ params }: Props) {
 
         {totalAsVictim > 0 && (
           <ClipReel
-            kicker="L'envers du d\u00e9cor"
-            title={`Quand ${champ} se fait piquer`}
-            subtitle="Kills cote adversaire. Utile pour comprendre les counter-picks et les death patterns."
+            kicker={t("p_pubpages.champ_reel_behind_kicker")}
+            title={t("p_pubpages.champ_reel_behind_title", { champ })}
+            subtitle={t("p_pubpages.champ_reel_behind_subtitle")}
             filter={{
               victimChampion: champ,
               trackedTeamInvolvement: "team_victim",
@@ -251,14 +255,13 @@ export default async function ChampionPage({ params }: Props) {
           <section className="space-y-5">
             <header>
               <p className="font-data text-[10px] uppercase tracking-[0.3em] text-[var(--gold)]/70 mb-2">
-                Matchups frequents
+                {t("p_pubpages.champ_matchups_eyebrow")}
               </p>
               <h2 className="font-display text-2xl md:text-3xl font-black text-[var(--text-primary)]">
-                {champ} face a...
+                {t("p_pubpages.champ_matchups_title", { champ })}
               </h2>
               <p className="mt-1 text-sm text-[var(--text-muted)] max-w-2xl">
-                Les champions que {champ} croise le plus souvent dans le catalogue. Click pour
-                voir tous les clips de ce match-up.
+                {t("p_pubpages.champ_matchups_body", { champ })}
               </p>
             </header>
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -277,7 +280,9 @@ export default async function ChampionPage({ params }: Props) {
                       className="object-cover"
                     />
                   </div>
-                  <span className="text-[var(--gold)]/55 text-2xl font-display">vs</span>
+                  <span className="text-[var(--gold)]/55 text-2xl font-display">
+                    {t("p_pubpages.champ_vs")}
+                  </span>
                   <div className="relative h-14 w-14 rounded-xl overflow-hidden border border-[var(--red)]/40 flex-shrink-0">
                     <Image
                       src={championIconUrl(opp)}
@@ -292,7 +297,9 @@ export default async function ChampionPage({ params }: Props) {
                       {opp}
                     </p>
                     <p className="font-data text-[10px] uppercase tracking-widest text-white/50">
-                      {count} confrontation{count > 1 ? "s" : ""}
+                      {count > 1
+                        ? t("p_pubpages.champ_confrontations_many", { n: count })
+                        : t("p_pubpages.champ_confrontations_one", { n: count })}
                     </p>
                   </div>
                   <svg

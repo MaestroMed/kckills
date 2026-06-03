@@ -5,6 +5,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { m, AnimatePresence, useReducedMotion } from "motion/react";
 import { useToast } from "./Toast";
+import { useT } from "@/lib/i18n/use-lang";
 import {
   getActivePushSubscription,
   getPushPermissionState,
@@ -57,6 +58,7 @@ export function LiveHotNow() {
   const lastMatchIdRef = useRef<string | null>(null);
   const reducedMotion = useReducedMotion();
   const toast = useToast();
+  const t = useT();
 
   // ─── Dismiss persistence ─────────────────────────────────────────
   // We persist the dismiss decision PER MATCH. A new match wipes the
@@ -153,22 +155,22 @@ export function LiveHotNow() {
         await unsubscribeFromPush();
         setHasSubscription(false);
         setPushState(getPushPermissionState());
-        toast("Notifications désactivées", "info");
+        toast(t("p_homex.push_disabled"), "info");
         return;
       }
       const result = await subscribeToPush("/api/live/subscribe");
       if (result.ok) {
         setHasSubscription(true);
         setPushState("granted");
-        toast("Notifications live activées 🔔", "success");
+        toast(t("p_homex.push_enabled"), "success");
       } else if (result.reason === "permission-denied") {
-        toast("Permission refusée — active depuis les réglages", "error");
+        toast(t("p_homex.push_denied"), "error");
       } else if (result.reason === "missing-vapid") {
-        toast("Push pas encore configuré (VAPID)", "error");
+        toast(t("p_homex.push_no_vapid"), "error");
       } else if (result.reason === "unsupported") {
-        toast("Push non supporté sur ce navigateur", "error");
+        toast(t("p_homex.push_unsupported"), "error");
       } else {
-        toast("Activation impossible — réessaie", "error");
+        toast(t("p_homex.push_failed"), "error");
       }
     } finally {
       setPushBusy(false);
@@ -203,7 +205,7 @@ export function LiveHotNow() {
         type="button"
         onClick={onReopen}
         className="fixed bottom-4 left-4 z-[90] flex items-center gap-2 rounded-full bg-[var(--red)]/95 px-3 py-2 text-xs font-bold uppercase tracking-widest text-white shadow-2xl backdrop-blur-md hover:bg-[var(--red)] transition-colors"
-        aria-label="Réouvrir la bannière live"
+        aria-label={t("p_homex.reopen_live_banner")}
       >
         <span className="relative flex h-2 w-2">
           {!reducedMotion && (
@@ -211,20 +213,20 @@ export function LiveHotNow() {
           )}
           <span className="relative inline-flex h-2 w-2 rounded-full bg-white" />
         </span>
-        Live
+        {t("p_homex.live")}
       </button>
     );
   }
 
   const pushLabel = (() => {
     if (pushBusy) return "...";
-    if (pushState === "unsupported") return "Indispo";
-    if (pushState === "denied") return "Bloqué";
-    if (hasSubscription) return "🔔 ON";
-    return "🔔 Activer";
+    if (pushState === "unsupported") return t("p_homex.push_label_unavailable");
+    if (pushState === "denied") return t("p_homex.push_label_blocked");
+    if (hasSubscription) return t("p_homex.push_label_on");
+    return t("p_homex.push_label_activate");
   })();
 
-  const matchupLabel = match.matchup_label ?? "KC en live";
+  const matchupLabel = match.matchup_label ?? t("p_homex.kc_live_fallback");
   const formatLabel = match.format ? match.format.toUpperCase() : null;
 
   return (
@@ -243,7 +245,7 @@ export function LiveHotNow() {
         }
         exit={reducedMotion ? { opacity: 0 } : { opacity: 0, y: 80 }}
         className="fixed bottom-0 left-0 right-0 z-[90] border-t border-[var(--red)]/40 bg-gradient-to-t from-black via-[#170305] to-black/95 shadow-[0_-12px_40px_rgba(232,64,87,0.25)] backdrop-blur-md"
-        aria-label="Bandeau live KC"
+        aria-label={t("p_homex.live_banner_aria")}
         role="region"
         style={{ paddingBottom: "env(safe-area-inset-bottom, 0)" }}
       >
@@ -261,7 +263,7 @@ export function LiveHotNow() {
               <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-[var(--red)]" />
             </span>
             <span className="font-display tracking-widest text-[10px] uppercase text-[var(--red)]">
-              KC EN LIVE
+              {t("feed.mode_live")}
             </span>
             <span className="font-display text-sm font-bold text-[var(--text-primary)] truncate">
               {matchupLabel}
@@ -282,11 +284,11 @@ export function LiveHotNow() {
           <div className="flex min-w-0 flex-1 items-center gap-2 overflow-x-auto py-0.5 scrollbar-hide">
             {top3.length === 0 && (
               <span className="text-xs italic text-[var(--text-muted)]">
-                Match en cours — clips à venir...
+                {t("p_homex.match_in_progress")}
               </span>
             )}
             {top3.map((kill) => (
-              <LiveKillChip key={kill.id} kill={kill} reducedMotion={Boolean(reducedMotion)} />
+              <LiveKillChip key={kill.id} kill={kill} reducedMotion={Boolean(reducedMotion)} t={t} />
             ))}
           </div>
 
@@ -296,7 +298,7 @@ export function LiveHotNow() {
               href={`/live`}
               className="rounded-full bg-[var(--red)] px-3 py-1.5 text-[11px] font-bold uppercase tracking-widest text-white shadow hover:bg-[#FF3B5C] transition-colors"
             >
-              Voir le live
+              {t("p_homex.watch_live")}
             </Link>
             <button
               type="button"
@@ -305,7 +307,7 @@ export function LiveHotNow() {
                 pushBusy || pushState === "unsupported" || pushState === "denied"
               }
               className="rounded-full border border-[var(--border-gold)] bg-white/5 px-2.5 py-1.5 text-[11px] font-bold uppercase tracking-widest text-[var(--gold-bright)] hover:bg-[var(--gold)]/15 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              aria-label={hasSubscription ? "Désactiver les notifications live" : "Activer les notifications live"}
+              aria-label={hasSubscription ? t("p_homex.push_toggle_off_aria") : t("p_homex.push_toggle_on_aria")}
             >
               {pushLabel}
             </button>
@@ -313,7 +315,7 @@ export function LiveHotNow() {
               type="button"
               onClick={onDismiss}
               className="grid h-7 w-7 place-items-center rounded-full text-[var(--text-muted)] hover:bg-white/5 hover:text-[var(--text-primary)] transition-colors"
-              aria-label="Fermer la bannière"
+              aria-label={t("p_homex.close_banner")}
             >
               <span className="text-base leading-none">×</span>
             </button>
@@ -329,9 +331,10 @@ export function LiveHotNow() {
 interface LiveKillChipProps {
   kill: LiveKillRow;
   reducedMotion: boolean;
+  t: ReturnType<typeof useT>;
 }
 
-function LiveKillChip({ kill, reducedMotion }: LiveKillChipProps) {
+function LiveKillChip({ kill, reducedMotion, t }: LiveKillChipProps) {
   const matchup = useMemo(() => {
     const k = kill.killer_champion ?? "?";
     const v = kill.victim_champion ?? "?";
@@ -375,7 +378,7 @@ function LiveKillChip({ kill, reducedMotion }: LiveKillChipProps) {
         )}
         <span className="flex flex-col leading-tight">
           <span className="font-data text-[10px] uppercase tracking-wide text-[var(--text-muted)]">
-            {isFirstBlood ? "First Blood" : isMulti ? kill.multi_kill : isKcKill ? "Kill KC" : "Death"}
+            {isFirstBlood ? t("p_homex.chip_first_blood") : isMulti ? kill.multi_kill : isKcKill ? t("p_homex.chip_kc_kill") : t("p_homex.chip_death")}
           </span>
           <span className="font-display text-xs font-semibold text-[var(--text-primary)] truncate max-w-[14ch]">
             {matchup}

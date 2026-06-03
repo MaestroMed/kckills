@@ -35,6 +35,7 @@ import {
 } from "@/lib/supabase/compilations";
 import { championIconUrl } from "@/lib/constants";
 import { visitorNameFromHash } from "@/components/bcc/visitor-names";
+import { getServerT } from "@/lib/i18n/server-lang";
 import { CompilationPlayer } from "./CompilationPlayer";
 
 const SITE_URL =
@@ -117,6 +118,7 @@ function estimateChapterOffset(
 // ─── Page ──────────────────────────────────────────────────────────────
 
 export default async function CompilationViewerPage({ params }: Props) {
+  const { t } = await getServerT();
   const { shortCode } = await params;
   if (!/^[0-9A-Za-z]{6,12}$/.test(shortCode)) notFound();
 
@@ -144,7 +146,7 @@ export default async function CompilationViewerPage({ params }: Props) {
 
   const authorAlias = row.authorHash
     ? visitorNameFromHash(row.authorHash)
-    : "BCC anonyme";
+    : t("p_pubpages.short_author_anon");
 
   const fullShareUrl = `${SITE_URL}/c/${row.shortCode}`;
 
@@ -175,15 +177,20 @@ export default async function CompilationViewerPage({ params }: Props) {
       {/* Hero — title + author */}
       <header className="mx-auto max-w-5xl pt-6 pb-4">
         <div className="flex flex-wrap items-center gap-2 text-[11px] uppercase tracking-[0.24em] text-[var(--text-muted)]">
-          <span className="text-[var(--gold)]">Compilation</span>
+          <span className="text-[var(--gold)]">{t("p_pubpages.short_eyebrow")}</span>
           <span aria-hidden>•</span>
-          <span>{kills.length} clips</span>
+          <span>{t("p_pubpages.short_clip_count", { n: kills.length })}</span>
           <span aria-hidden>•</span>
           <span>{formatDuration(row.outputDurationSeconds)}</span>
           <span aria-hidden>•</span>
           <span>
-            {row.viewCount.toLocaleString("fr-FR")} vue
-            {row.viewCount === 1 ? "" : "s"}
+            {row.viewCount === 1
+              ? t("p_pubpages.short_view_count_one", {
+                  n: row.viewCount.toLocaleString("fr-FR"),
+                })
+              : t("p_pubpages.short_view_count_many", {
+                  n: row.viewCount.toLocaleString("fr-FR"),
+                })}
           </span>
         </div>
         <h1 className="mt-2 font-display text-3xl font-black tracking-tight text-[var(--text-primary)] sm:text-5xl">
@@ -195,7 +202,8 @@ export default async function CompilationViewerPage({ params }: Props) {
           </p>
         ) : null}
         <p className="mt-3 text-xs text-[var(--text-muted)]">
-          Par <span className="text-[var(--gold)]">{authorAlias}</span>
+          {t("p_pubpages.short_by")}{" "}
+          <span className="text-[var(--gold)]">{authorAlias}</span>
         </p>
       </header>
 
@@ -214,11 +222,11 @@ export default async function CompilationViewerPage({ params }: Props) {
 
       {/* Share */}
       <section
-        aria-label="Partager cette compilation"
+        aria-label={t("p_pubpages.short_share_section_aria")}
         className="mx-auto mt-6 flex max-w-5xl flex-wrap items-center gap-2"
       >
         <span className="text-xs uppercase tracking-[0.2em] text-[var(--text-muted)]">
-          Partager
+          {t("p_pubpages.short_share")}
         </span>
         <ShareLink
           href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(
@@ -230,23 +238,31 @@ export default async function CompilationViewerPage({ params }: Props) {
           href={`https://discord.com/channels/@me?content=${encodeURIComponent(fullShareUrl)}`}
           label="Discord"
         />
-        <CopyLinkButton url={fullShareUrl} />
+        <CopyLinkButton
+          url={fullShareUrl}
+          label={t("p_pubpages.short_copy_link")}
+          copiedLabel={t("p_pubpages.short_copied")}
+        />
       </section>
 
       {/* Chapter markers */}
       <section
-        aria-label="Sommaire des clips"
+        aria-label={t("p_pubpages.short_summary_aria")}
         className="mx-auto mt-8 max-w-5xl"
       >
         <h2 className="font-display text-sm uppercase tracking-[0.24em] text-[var(--gold)]">
-          Sommaire
+          {t("p_pubpages.short_summary")}
         </h2>
         <p className="mt-1 text-[11px] text-[var(--text-muted)]">
-          Cette compil contient {kills.length} clip{kills.length === 1 ? "" : "s"}
+          {kills.length === 1
+            ? t("p_pubpages.short_summary_count_one", { n: kills.length })
+            : t("p_pubpages.short_summary_count_many", { n: kills.length })}
           {row.outputDurationSeconds
-            ? ` · durée ${formatDuration(row.outputDurationSeconds)}`
+            ? t("p_pubpages.short_summary_duration", {
+                duration: formatDuration(row.outputDurationSeconds),
+              })
             : ""}
-          . Clique pour sauter au chapitre.
+          {t("p_pubpages.short_summary_click_hint")}
         </p>
 
         <ol className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -323,20 +339,19 @@ export default async function CompilationViewerPage({ params }: Props) {
       {/* CTA */}
       <section className="mx-auto mt-12 max-w-5xl rounded-3xl border border-[var(--border-gold)] bg-gradient-to-br from-[var(--bg-elevated)]/30 to-[var(--bg-surface)]/20 p-6 text-center sm:p-10">
         <p className="text-[11px] uppercase tracking-[0.32em] text-[var(--gold)]">
-          À toi
+          {t("p_pubpages.short_cta_eyebrow")}
         </p>
         <h2 className="mt-2 font-display text-2xl font-black sm:text-3xl">
-          Crée ta propre compilation.
+          {t("p_pubpages.short_cta_title")}
         </h2>
         <p className="mt-2 text-sm text-[var(--text-secondary)]">
-          Pick 3 à 10 clips, donne-leur un ordre, ajoute ta signature. Lien
-          partageable en moins de 5 minutes.
+          {t("p_pubpages.short_cta_body")}
         </p>
         <Link
           href="/compilation"
           className="mt-5 inline-flex items-center gap-2 rounded-lg bg-[var(--gold)] px-5 py-2.5 text-sm font-bold text-black transition hover:bg-[var(--gold-bright)]"
         >
-          Lancer le builder →
+          {t("p_pubpages.short_cta_button")}
         </Link>
       </section>
     </article>
@@ -358,7 +373,15 @@ function ShareLink({ href, label }: { href: string; label: string }) {
   );
 }
 
-function CopyLinkButton({ url }: { url: string }) {
+function CopyLinkButton({
+  url,
+  label,
+  copiedLabel,
+}: {
+  url: string;
+  label: string;
+  copiedLabel: string;
+}) {
   // Server-rendered : we attach a tiny inline script that wires the
   // click handler. Keeps this page free of client-component overhead
   // for one button.
@@ -371,7 +394,7 @@ function CopyLinkButton({ url }: { url: string }) {
         data-url={url}
         className="rounded-full border border-[var(--gold)]/40 px-3 py-1 text-xs text-[var(--gold)] transition hover:bg-[var(--gold)]/10"
       >
-        Copier le lien
+        {label}
       </button>
       <script
         dangerouslySetInnerHTML={{
@@ -383,7 +406,7 @@ function CopyLinkButton({ url }: { url: string }) {
               try {
                 if (navigator.clipboard) await navigator.clipboard.writeText(url);
                 const t = b.textContent;
-                b.textContent = "Copié ✓";
+                b.textContent = ${JSON.stringify(copiedLabel)};
                 setTimeout(() => { b.textContent = t; }, 2000);
               } catch (_) {}
             });
@@ -396,7 +419,7 @@ function CopyLinkButton({ url }: { url: string }) {
 
 // ─── Status splashes ───────────────────────────────────────────────────
 
-function RenderingSplash({
+async function RenderingSplash({
   status,
   title,
   clipCount,
@@ -407,6 +430,7 @@ function RenderingSplash({
   clipCount: number;
   author: string;
 }) {
+  const { t } = await getServerT();
   return (
     <>
       {/* Auto-refresh every 20 s so a fresh share-link visitor sees the
@@ -418,30 +442,32 @@ function RenderingSplash({
           className="inline-block size-2 animate-pulse rounded-full bg-[var(--cyan)]"
         />
         <p className="mt-3 text-[11px] uppercase tracking-[0.32em] text-[var(--cyan)]">
-          {status === "pending" ? "En file d'attente" : "Rendu en cours"}
+          {status === "pending"
+            ? t("p_pubpages.short_status_pending")
+            : t("p_pubpages.short_status_rendering")}
         </p>
         <h1 className="mt-3 font-display text-2xl font-black text-[var(--text-primary)] sm:text-4xl">
           {title}
         </h1>
         <p className="mt-3 text-sm text-[var(--text-secondary)]">
-          {clipCount} clips · environ 2 à 5 minutes selon la longueur totale. Tu
-          peux fermer cet onglet — le lien restera valide.
+          {t("p_pubpages.short_rendering_body", { n: clipCount })}
         </p>
         <p className="mt-6 text-[11px] text-[var(--text-muted)]">
-          Par <span className="text-[var(--gold)]">{author}</span>
+          {t("p_pubpages.short_by")}{" "}
+          <span className="text-[var(--gold)]">{author}</span>
         </p>
         <Link
           href="/compilation"
           className="mt-8 text-xs text-[var(--text-muted)] hover:text-[var(--gold)]"
         >
-          ← Retour au builder
+          {t("p_pubpages.short_back_to_builder")}
         </Link>
       </div>
     </>
   );
 }
 
-function FailedSplash({
+async function FailedSplash({
   title,
   renderError,
   author,
@@ -450,29 +476,31 @@ function FailedSplash({
   renderError: string | null;
   author: string;
 }) {
+  const { t } = await getServerT();
   return (
     <div className="mx-auto flex min-h-[60vh] max-w-2xl flex-col items-center justify-center px-4 text-center">
       <span aria-hidden className="text-3xl text-[var(--red)]">
         ✕
       </span>
       <p className="mt-2 text-[11px] uppercase tracking-[0.32em] text-[var(--red)]">
-        Échec du rendu
+        {t("p_pubpages.short_render_failed")}
       </p>
       <h1 className="mt-3 font-display text-2xl font-black text-[var(--text-primary)] sm:text-4xl">
         {title}
       </h1>
       <p className="mt-3 max-w-md text-sm text-[var(--text-secondary)]">
-        Notre worker n&apos;a pas réussi à assembler cette compilation.{" "}
+        {t("p_pubpages.short_failed_body")}{" "}
         {renderError ? <span className="text-[var(--text-muted)]">({renderError})</span> : null}
       </p>
       <p className="mt-6 text-[11px] text-[var(--text-muted)]">
-        Par <span className="text-[var(--gold)]">{author}</span>
+        {t("p_pubpages.short_by")}{" "}
+        <span className="text-[var(--gold)]">{author}</span>
       </p>
       <Link
         href="/compilation"
         className="mt-6 inline-flex items-center gap-2 rounded-lg bg-[var(--gold)] px-5 py-2.5 text-sm font-bold text-black transition hover:bg-[var(--gold-bright)]"
       >
-        Recommencer
+        {t("p_pubpages.short_restart")}
       </Link>
     </div>
   );

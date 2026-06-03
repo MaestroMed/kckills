@@ -39,6 +39,7 @@ import { AnimatePresence, m } from "motion/react";
 import { pickAssetUrl, pickBestForViewport } from "@/lib/kill-assets";
 import { track } from "@/lib/analytics/track";
 import { StarRating } from "@/components/star-rating";
+import { useT } from "@/lib/i18n/use-lang";
 import type { PublishedKillRow } from "@/lib/supabase/kills";
 
 // ─── Types ────────────────────────────────────────────────────────────
@@ -122,6 +123,7 @@ export function KillLightbox({
   onClose,
   onChange,
 }: KillLightboxProps) {
+  const t = useT();
   const reducedMotion = usePrefersReducedMotion();
   const isDesktop = useIsDesktop();
   const saveData = useSaveData();
@@ -295,7 +297,11 @@ export function KillLightbox({
                   </span>
                 ) : null}
                 {kill.is_first_blood ? (
-                  <span className="mr-1.5 text-xs" aria-label="Premier sang" title="Premier sang">
+                  <span
+                    className="mr-1.5 text-xs"
+                    aria-label={t("p_matchx.first_blood_fr")}
+                    title={t("p_matchx.first_blood_fr")}
+                  >
                     {"\uD83E\uDE78"}
                   </span>
                 ) : null}
@@ -308,15 +314,16 @@ export function KillLightbox({
                 </span>
               </p>
               <p className="mt-0.5 truncate text-[10px] uppercase tracking-widest text-[var(--text-muted)] sm:text-[11px]">
-                Game {kill.games?.game_number ?? "?"} ·{" "}
-                T+{formatGameTime(kill.game_time_seconds)} · vs {opponentName}
+                {t("p_matchx.game_n", { n: kill.games?.game_number ?? "?" })} ·{" "}
+                T+{formatGameTime(kill.game_time_seconds)} · {t("p_matchx.vs")}{" "}
+                {opponentName}
               </p>
             </div>
             <button
               ref={closeBtnRef}
               type="button"
               onClick={onClose}
-              aria-label="Fermer le clip"
+              aria-label={t("p_matchx.close_clip")}
               className="ml-2 flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full border border-[var(--border-gold)] bg-[var(--bg-surface)] text-[var(--gold)] transition-colors hover:bg-[var(--gold)]/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gold)]"
             >
               <svg
@@ -352,13 +359,19 @@ export function KillLightbox({
                 playsInline
                 controls
                 preload="metadata"
-                aria-label={`Clip vidéo : ${kill.killer_champion ?? "?"} élimine ${kill.victim_champion ?? "?"}`}
+                aria-label={t("p_matchx.clip_video_aria", {
+                  killer: kill.killer_champion ?? "?",
+                  victim: kill.victim_champion ?? "?",
+                })}
               />
             ) : poster ? (
               <div className="relative mx-auto aspect-video max-h-[55vh] w-full">
                 <Image
                   src={poster}
-                  alt={`${kill.killer_champion ?? "?"} élimine ${kill.victim_champion ?? "?"}`}
+                  alt={t("p_matchx.kill_alt", {
+                    killer: kill.killer_champion ?? "?",
+                    victim: kill.victim_champion ?? "?",
+                  })}
                   fill
                   sizes="(max-width: 768px) 100vw, 768px"
                   className="object-contain"
@@ -366,14 +379,14 @@ export function KillLightbox({
                 />
                 <div className="absolute inset-0 flex items-center justify-center bg-black/50">
                   <p className="rounded-md bg-black/70 px-3 py-1.5 text-xs text-[var(--text-muted)]">
-                    Aucun clip vidéo disponible
+                    {t("p_matchx.no_video_clip")}
                   </p>
                 </div>
               </div>
             ) : (
               <div className="flex aspect-video items-center justify-center bg-[var(--bg-surface)]">
                 <p className="text-xs text-[var(--text-muted)]">
-                  Clip non disponible
+                  {t("p_matchx.clip_unavailable")}
                 </p>
               </div>
             )}
@@ -383,7 +396,7 @@ export function KillLightbox({
               type="button"
               onClick={goPrev}
               disabled={!hasPrev}
-              aria-label="Clip précédent"
+              aria-label={t("p_matchx.clip_prev")}
               className="absolute left-2 top-1/2 -translate-y-1/2 flex h-10 w-10 items-center justify-center rounded-full border border-[var(--border-gold)] bg-black/60 text-[var(--gold)] backdrop-blur transition-opacity hover:bg-black/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gold)] disabled:cursor-not-allowed disabled:opacity-30"
             >
               <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2.4} viewBox="0 0 24 24">
@@ -394,7 +407,7 @@ export function KillLightbox({
               type="button"
               onClick={goNext}
               disabled={!hasNext}
-              aria-label="Clip suivant"
+              aria-label={t("p_matchx.clip_next")}
               className="absolute right-2 top-1/2 -translate-y-1/2 flex h-10 w-10 items-center justify-center rounded-full border border-[var(--border-gold)] bg-black/60 text-[var(--gold)] backdrop-blur transition-opacity hover:bg-black/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gold)] disabled:cursor-not-allowed disabled:opacity-30"
             >
               <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2.4} viewBox="0 0 24 24">
@@ -417,7 +430,7 @@ export function KillLightbox({
                 id="kill-lightbox-desc"
                 className="text-xs italic text-[var(--text-muted)]"
               >
-                Description IA indisponible.
+                {t("p_matchx.ai_desc_unavailable")}
               </p>
             )}
 
@@ -427,7 +440,9 @@ export function KillLightbox({
                   <svg className="h-3 w-3" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
                     <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
                   </svg>
-                  Score {kill.highlight_score.toFixed(1)}/10
+                  {t("p_matchx.score_out_of_10", {
+                    score: kill.highlight_score.toFixed(1),
+                  })}
                 </span>
               )}
               {kill.ai_tags.slice(0, 5).map((tag) => (
@@ -450,7 +465,10 @@ export function KillLightbox({
                 <span className="font-data text-[11px] text-[var(--text-muted)]">
                   {kill.avg_rating != null ? kill.avg_rating.toFixed(1) : "—"}
                   {" · "}
-                  {kill.rating_count} note{kill.rating_count > 1 ? "s" : ""}
+                  {t("p_matchx.n_ratings", {
+                    n: kill.rating_count,
+                    s: kill.rating_count > 1 ? "s" : "",
+                  })}
                 </span>
               </div>
               <div className="flex items-center gap-3">
@@ -469,7 +487,7 @@ export function KillLightbox({
                     onClose();
                   }}
                 >
-                  Voir la fiche
+                  {t("p_matchx.view_detail")}
                   <svg className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth={2.4} viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
                   </svg>

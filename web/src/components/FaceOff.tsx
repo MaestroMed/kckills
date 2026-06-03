@@ -35,6 +35,7 @@ import { useRouter } from "next/navigation";
 import { m, useInView, useReducedMotion } from "motion/react";
 
 import { createClient } from "@/lib/supabase/client";
+import { useT } from "@/lib/i18n/use-lang";
 import type {
   FaceOffPlayerStats,
   FaceOffTally,
@@ -167,6 +168,7 @@ export function FaceOff(props: FaceOffProps) {
 // ════════════════════════════════════════════════════════════════════
 
 function FaceOffSelector({ players, presets }: FaceOffProps) {
+  const t = useT();
   const router = useRouter();
   const [a, setA] = useState<string>("");
   const [b, setB] = useState<string>("");
@@ -213,17 +215,16 @@ function FaceOffSelector({ players, presets }: FaceOffProps) {
       {/* Picker headline */}
       <div className="text-center mb-8 md:mb-12">
         <p className="font-data text-[11px] uppercase tracking-[0.4em] text-[var(--gold)]/70 mb-3">
-          Le duel ultime · Settle the debate
+          {t("p_vsgame.fo_eyebrow")}
         </p>
         <h2
           className="font-display font-black tracking-tight text-3xl md:text-5xl text-[var(--text-primary)]"
           style={{ letterSpacing: "-0.01em" }}
         >
-          Choisis tes deux joueurs
+          {t("p_vsgame.fo_pick_heading")}
         </h2>
         <p className="mt-3 text-sm md:text-base text-white/65 max-w-xl mx-auto">
-          Compare les stats, les meilleurs kills, et fais voter la
-          communauté. Roster 2026 ou alumni — tout est sur la table.
+          {t("p_vsgame.fo_pick_subtitle")}
         </p>
       </div>
 
@@ -231,7 +232,7 @@ function FaceOffSelector({ players, presets }: FaceOffProps) {
       <div className="grid gap-6 md:grid-cols-[1fr_auto_1fr] items-stretch">
         <SelectorColumn
           accent="var(--gold)"
-          sideLabel="Gauche"
+          sideLabel={t("p_vsgame.left")}
           value={a}
           setValue={(slug) => {
             setA(slug);
@@ -253,7 +254,7 @@ function FaceOffSelector({ players, presets }: FaceOffProps) {
         </div>
         <SelectorColumn
           accent="var(--cyan)"
-          sideLabel="Droite"
+          sideLabel={t("p_vsgame.right")}
           value={b}
           setValue={(slug) => {
             setB(slug);
@@ -273,7 +274,7 @@ function FaceOffSelector({ players, presets }: FaceOffProps) {
           type="button"
           onClick={() => launch(a, b)}
           disabled={!ready}
-          aria-label="Lancer le duel"
+          aria-label={t("p_vsgame.fo_launch_aria")}
           className="relative group inline-flex items-center justify-center font-display text-base font-black uppercase tracking-[0.3em] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gold)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg-primary)] disabled:cursor-not-allowed disabled:opacity-60"
           style={{
             padding: "18px 42px",
@@ -285,7 +286,7 @@ function FaceOffSelector({ players, presets }: FaceOffProps) {
               "0 18px 38px rgba(200,170,110,0.4), 0 0 60px rgba(0,87,255,0.25), inset 0 1px 0 rgba(255,255,255,0.5), inset 0 -2px 0 rgba(0,0,0,0.3)",
           }}
         >
-          Lancer le duel
+          {t("p_vsgame.fo_launch")}
         </button>
       </div>
 
@@ -294,7 +295,7 @@ function FaceOffSelector({ players, presets }: FaceOffProps) {
         <div className="flex items-center gap-3 mb-4">
           <span className="h-px w-12 bg-[var(--gold)]" />
           <span className="font-data text-[10px] uppercase tracking-[0.3em] font-bold text-[var(--gold)]">
-            Duels suggérés
+            {t("p_vsgame.fo_suggested_duels")}
           </span>
           <span className="text-[var(--gold)]/40 text-xs" aria-hidden>
             ◆
@@ -333,6 +334,7 @@ function SelectorColumn({
   options: FaceOffPlayerOption[];
   disallowed: string;
 }) {
+  const t = useT();
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
 
@@ -364,7 +366,7 @@ function SelectorColumn({
         {sideLabel}
       </p>
       <label className="block">
-        <span className="sr-only">Joueur {sideLabel}</span>
+        <span className="sr-only">{t("p_vsgame.fo_player_side", { side: sideLabel })}</span>
         <input
           type="text"
           value={query}
@@ -381,8 +383,8 @@ function SelectorColumn({
             }
           }}
           onFocus={() => setOpen(true)}
-          placeholder="Tape un nom ou un rôle…"
-          aria-label={`Rechercher joueur ${sideLabel}`}
+          placeholder={t("p_vsgame.fo_search_placeholder")}
+          aria-label={t("p_vsgame.fo_search_player_aria", { side: sideLabel })}
           className="w-full rounded-xl bg-black/40 border border-white/15 px-4 py-3 text-sm text-[var(--text-primary)] placeholder:text-white/35 focus:outline-none focus:border-[var(--gold)]/60 focus:ring-2 focus:ring-[var(--gold)]/20 transition-colors"
         />
       </label>
@@ -390,7 +392,7 @@ function SelectorColumn({
       {open && options.length > 0 && (
         <ul
           role="listbox"
-          aria-label={`Suggestions ${sideLabel}`}
+          aria-label={t("p_vsgame.fo_suggestions_aria", { side: sideLabel })}
           className="absolute left-5 right-5 z-30 mt-2 max-h-72 overflow-auto rounded-xl border border-white/15 bg-[var(--bg-elevated)]/95 backdrop-blur-md shadow-2xl"
         >
           {options.map((p) => {
@@ -432,7 +434,7 @@ function SelectorColumn({
                   </span>
                   {blocked && (
                     <span className="font-data text-[9px] uppercase tracking-widest text-[var(--red)]/80">
-                      Déjà choisi
+                      {t("p_vsgame.fo_already_picked")}
                     </span>
                   )}
                 </button>
@@ -444,7 +446,7 @@ function SelectorColumn({
 
       {value && (
         <p className="mt-3 font-data text-[10px] uppercase tracking-widest text-white/55">
-          Sélectionné :{" "}
+          {t("p_vsgame.fo_selected")}{" "}
           <span style={{ color: accent }} className="font-bold">
             {options.find((p) => p.slug === value)?.name ?? value}
           </span>
@@ -461,11 +463,12 @@ function PresetCard({
   preset: FaceOffPresetDuel;
   onClick: () => void;
 }) {
+  const t = useT();
   return (
     <button
       type="button"
       onClick={onClick}
-      aria-label={`Lancer le duel ${preset.label}`}
+      aria-label={t("p_vsgame.fo_launch_duel_aria", { label: preset.label })}
       className="group relative overflow-hidden rounded-xl border border-[var(--border-gold)] bg-[var(--bg-surface)]/60 px-4 py-4 text-left transition-all hover:border-[var(--gold)]/60 hover:bg-[var(--bg-surface)] hover:-translate-y-0.5"
       style={{
         boxShadow: "0 10px 26px rgba(0,0,0,0.35)",
@@ -500,6 +503,7 @@ function FaceOffResult({
   topDuels,
   playersBySlug,
 }: FaceOffProps & { bundleA: FaceOffBundle; bundleB: FaceOffBundle }) {
+  const t = useT();
   const prefersReducedMotion = useReducedMotion() ?? false;
 
   // ─── Vote state ─────────────────────────────────────────────────
@@ -544,12 +548,12 @@ function FaceOffResult({
           setVotedChoice(choice);
         }
       } catch (err) {
-        setVoteError(err instanceof Error ? err.message : "Erreur réseau");
+        setVoteError(err instanceof Error ? err.message : t("p_vsgame.error_network"));
       } finally {
         setVoting(false);
       }
     },
-    [bundleA, bundleB, voting],
+    [bundleA, bundleB, voting, t],
   );
 
   // ─── Share / copy URL ──────────────────────────────────────────
@@ -560,8 +564,8 @@ function FaceOffResult({
     try {
       if (navigator.share) {
         await navigator.share({
-          title: `${bundleA.player.name} vs ${bundleB.player.name} — KCKILLS`,
-          text: `Qui est le meilleur ? ${bundleA.player.name} ou ${bundleB.player.name} ?`,
+          title: t("p_vsgame.fo_share_title", { a: bundleA.player.name, b: bundleB.player.name }),
+          text: t("p_vsgame.fo_share_text", { a: bundleA.player.name, b: bundleB.player.name }),
           url,
         });
       } else {
@@ -635,6 +639,7 @@ function VersusCard({
   onShare: () => void;
   shared: boolean;
 }) {
+  const t = useT();
   return (
     <section
       className="relative overflow-hidden rounded-3xl border border-[var(--border-gold)] bg-[var(--bg-surface)]/60 backdrop-blur-md mt-4 mb-10 md:mb-14"
@@ -721,11 +726,11 @@ function VersusCard({
         <button
           type="button"
           onClick={onShare}
-          aria-label="Partager ce duel"
+          aria-label={t("p_vsgame.fo_share_duel")}
           className="inline-flex items-center gap-2 rounded-xl border border-[var(--border-gold)] bg-black/30 px-5 py-2.5 font-display text-xs font-bold uppercase tracking-[0.25em] text-[var(--gold)] hover:border-[var(--gold)]/70 hover:bg-[var(--gold)]/10 transition-all"
         >
           <span aria-hidden>{shared ? "✓" : "◆"}</span>
-          {shared ? "Lien copié" : "Partager ce duel"}
+          {shared ? t("p_vsgame.fo_link_copied") : t("p_vsgame.fo_share_duel")}
         </button>
       </div>
 
@@ -747,6 +752,7 @@ function FaceCard({
   accent: string;
   prefersReducedMotion: boolean;
 }) {
+  const t = useT();
   const portraitX = side === "left" ? -120 : 120;
   return (
     <m.div
@@ -809,9 +815,9 @@ function FaceCard({
 
       {/* Quick stat strip */}
       <div className="mt-5 grid grid-cols-3 gap-2 w-full max-w-xs">
-        <FaceStat label="Kills" value={formatNumber(bundle.stats.totalKills)} accent={accent} />
-        <FaceStat label="Clips" value={formatNumber(bundle.stats.publishedClipCount)} accent={accent} />
-        <FaceStat label="Best" value={formatScore(bundle.stats.bestClipScore)} accent={accent} />
+        <FaceStat label={t("p_vsgame.fo_stat_kills")} value={formatNumber(bundle.stats.totalKills)} accent={accent} />
+        <FaceStat label={t("p_vsgame.fo_stat_clips")} value={formatNumber(bundle.stats.publishedClipCount)} accent={accent} />
+        <FaceStat label={t("p_vsgame.fo_stat_best")} value={formatScore(bundle.stats.bestClipScore)} accent={accent} />
       </div>
     </m.div>
   );
@@ -853,64 +859,65 @@ interface MetricDef {
   higherIsBetter?: boolean;
 }
 
+// `label`/`sublabel` hold i18n keys (p_vsgame.*) resolved via t() in StatRow.
 const METRICS: MetricDef[] = [
   {
     key: "kills",
-    label: "Total kills tracked",
+    label: "p_vsgame.metric_kills",
     value: (b) => b.stats.totalKills,
     format: (n) => formatNumber(n),
   },
   {
     key: "deaths",
-    label: "Total deaths tracked",
-    sublabel: "Plus bas = mieux",
+    label: "p_vsgame.metric_deaths",
+    sublabel: "p_vsgame.metric_deaths_sub",
     value: (b) => b.stats.totalDeaths,
     format: (n) => formatNumber(n),
     higherIsBetter: false,
   },
   {
     key: "multi",
-    label: "Multi-kills (triple+)",
+    label: "p_vsgame.metric_multi",
     value: (b) => b.stats.multiKillCount,
     format: (n) => formatNumber(n),
   },
   {
     key: "fb",
-    label: "First bloods",
+    label: "p_vsgame.metric_fb",
     value: (b) => b.stats.firstBloods,
     format: (n) => formatNumber(n),
   },
   {
     key: "highlight",
-    label: "Avg highlight score IA",
-    sublabel: "Gemini · 0-10",
+    label: "p_vsgame.metric_highlight",
+    sublabel: "p_vsgame.metric_highlight_sub",
     value: (b) => b.stats.avgHighlightScore,
     format: (n) => formatScore(n),
   },
   {
     key: "community",
-    label: "Avg note communauté",
-    sublabel: "0-5",
+    label: "p_vsgame.metric_community",
+    sublabel: "p_vsgame.metric_community_sub",
     value: (b) => b.stats.avgCommunityRating,
     format: (n) => formatScore(n),
   },
   {
     key: "best",
-    label: "Meilleur clip",
-    sublabel: "Highlight score max",
+    label: "p_vsgame.metric_best",
+    sublabel: "p_vsgame.metric_best_sub",
     value: (b) => b.stats.bestClipScore,
     format: (n) => formatScore(n),
   },
   {
     key: "champions",
-    label: "Diversité champions",
-    sublabel: "Champions distincts",
+    label: "p_vsgame.metric_champions",
+    sublabel: "p_vsgame.metric_champions_sub",
     value: (b) => b.stats.championsCount,
     format: (n) => formatNumber(n),
   },
   {
     key: "clips",
-    label: "Clips publiés",
+    label: "p_vsgame.metric_clips",
     value: (b) => b.stats.publishedClipCount,
     format: (n) => formatNumber(n),
   },
@@ -925,9 +932,10 @@ function StatsComparison({
   bundleB: FaceOffBundle;
   prefersReducedMotion: boolean;
 }) {
+  const t = useT();
   return (
     <section className="mb-12 md:mb-16" aria-labelledby="face-off-stats">
-      <SectionHeader id="face-off-stats" kicker="Stats comparées" />
+      <SectionHeader id="face-off-stats" kicker={t("p_vsgame.fo_section_stats")} />
       <div className="grid gap-3 md:gap-4">
         {METRICS.map((metric) => (
           <StatRow
@@ -940,13 +948,13 @@ function StatsComparison({
         ))}
         {/* Most killed / most-killed-by — non-bar rows */}
         <MatchupRow
-          label="Vict ime préférée"
+          label={t("p_vsgame.fo_favorite_victim")}
           subA={bundleA.mostKilled}
           subB={bundleB.mostKilled}
           mode="killer"
         />
         <MatchupRow
-          label="Bête noire"
+          label={t("p_vsgame.fo_nemesis")}
           subA={bundleA.mostVictimizedBy}
           subB={bundleB.mostVictimizedBy}
           mode="victim"
@@ -967,6 +975,7 @@ function StatRow({
   bundleB: FaceOffBundle;
   prefersReducedMotion: boolean;
 }) {
+  const t = useT();
   const rowRef = useRef<HTMLDivElement>(null);
   const inView = useInView(rowRef, { once: true, amount: 0.4 });
 
@@ -1000,11 +1009,11 @@ function StatRow({
     >
       <div className="flex items-baseline justify-between mb-3 gap-3">
         <p className="font-display text-sm md:text-base font-bold text-[var(--text-primary)] leading-tight">
-          {metric.label}
+          {t(metric.label)}
         </p>
         {metric.sublabel && (
           <span className="font-data text-[9px] uppercase tracking-[0.25em] text-white/40">
-            {metric.sublabel}
+            {t(metric.sublabel)}
           </span>
         )}
       </div>
@@ -1060,6 +1069,7 @@ function Bar({
   prefersReducedMotion: boolean;
   name: string;
 }) {
+  const t = useT();
   const fillAnim = prefersReducedMotion
     ? { width: `${pct}%` }
     : { width: inView ? `${pct}%` : "0%" };
@@ -1076,10 +1086,10 @@ function Bar({
           <span
             className="inline-flex items-center gap-1 font-bold"
             style={{ color: accent }}
-            aria-label={`${name} gagne cette mesure`}
+            aria-label={t("p_vsgame.fo_wins_metric_aria", { name })}
           >
             <span aria-hidden>♛</span>
-            <span>Gagnant</span>
+            <span>{t("p_vsgame.fo_winner")}</span>
           </span>
         )}
         <span className="truncate" style={{ color: accent }}>
@@ -1166,13 +1176,14 @@ function OpponentChip({
   opponent: MostKilledOpponent | null;
   accent: string;
 }) {
+  const t = useT();
   if (!opponent) {
     return (
       <div
         className="rounded-xl border bg-black/25 px-4 py-3 font-data text-xs uppercase tracking-widest text-white/40"
         style={{ borderColor: `${accent}25` }}
       >
-        Pas de données
+        {t("p_vsgame.fo_no_data")}
       </div>
     );
   }
@@ -1213,17 +1224,18 @@ function TopKillsGrid({
   bundleA: FaceOffBundle;
   bundleB: FaceOffBundle;
 }) {
+  const t = useT();
   const [mobileSide, setMobileSide] = useState<"a" | "b">("a");
 
   return (
     <section className="mb-12 md:mb-16" aria-labelledby="face-off-top-kills">
-      <SectionHeader id="face-off-top-kills" kicker="Top 10 kills" />
+      <SectionHeader id="face-off-top-kills" kicker={t("p_vsgame.fo_section_top_kills")} />
 
       {/* Mobile toggle */}
       <div
         className="md:hidden mb-4 flex rounded-xl border border-[var(--border-gold)] bg-[var(--bg-surface)]/70 backdrop-blur-md p-1"
         role="tablist"
-        aria-label="Sélectionner le joueur"
+        aria-label={t("p_vsgame.fo_select_player_aria")}
       >
         <button
           type="button"
@@ -1278,13 +1290,14 @@ function TopKillsColumn({
   accent: string;
   className?: string;
 }) {
+  const t = useT();
   if (bundle.topKills.length === 0) {
     return (
       <div
         className={`${className ?? ""} rounded-2xl border bg-[var(--bg-surface)]/55 p-8 text-center font-data text-xs uppercase tracking-widest text-white/40`}
         style={{ borderColor: `${accent}25` }}
       >
-        Pas encore de clips publiés pour {bundle.player.name}.
+        {t("p_vsgame.fo_no_clips_yet", { name: bundle.player.name })}
       </div>
     );
   }
@@ -1320,6 +1333,7 @@ function KillCardRow({
   rank: number;
   accent: string;
 }) {
+  const t = useT();
   return (
     <Link
       href={`/kill/${kill.id}`}
@@ -1391,10 +1405,10 @@ function KillCardRow({
         </div>
         <p
           className="font-display text-sm font-bold text-[var(--text-primary)] leading-tight truncate"
-          title={`${kill.killer_champion} vs ${kill.victim_name ?? kill.victim_champion}`}
+          title={t("p_vsgame.fo_matchup_title", { killer: kill.killer_champion ?? "?", victim: kill.victim_name ?? kill.victim_champion ?? "?" })}
         >
           <span style={{ color: accent }}>{kill.killer_champion ?? "?"}</span>{" "}
-          <span className="text-white/40">vs</span>{" "}
+          <span className="text-white/40">{t("p_vsgame.vs")}</span>{" "}
           {kill.victim_name ?? kill.victim_champion ?? "?"}
         </p>
         {kill.ai_description && (
@@ -1442,6 +1456,7 @@ function CommunityVote({
   onVote: (choice: "a" | "b" | "tie") => void;
   prefersReducedMotion: boolean;
 }) {
+  const t = useT();
   const total = tally.votes_a + tally.votes_b + tally.votes_draw;
   const pctA = total > 0 ? (tally.votes_a / total) * 100 : 0;
   const pctB = total > 0 ? (tally.votes_b / total) * 100 : 0;
@@ -1449,10 +1464,10 @@ function CommunityVote({
 
   return (
     <section className="mb-12 md:mb-16" aria-labelledby="face-off-vote">
-      <SectionHeader id="face-off-vote" kicker="Vote communauté" />
+      <SectionHeader id="face-off-vote" kicker={t("p_vsgame.fo_section_vote")} />
       <div className="rounded-2xl border border-[var(--border-gold)] bg-[var(--bg-surface)]/70 backdrop-blur-md p-5 md:p-7">
         <p className="font-display text-2xl md:text-3xl font-black text-center text-[var(--text-primary)] mb-6 leading-tight">
-          Qui est le meilleur ?
+          {t("p_vsgame.fo_who_is_best")}
         </p>
 
         {/* Buttons */}
@@ -1462,7 +1477,7 @@ function CommunityVote({
             disabled={voting || votedChoice !== null}
             active={votedChoice === "a"}
             accent="var(--gold)"
-            ariaLabel={`Vote pour ${bundleA.player.name}`}
+            ariaLabel={t("p_vsgame.fo_vote_for", { name: bundleA.player.name })}
             label={bundleA.player.name}
             icon="👈"
             iconPos="left"
@@ -1472,8 +1487,8 @@ function CommunityVote({
             disabled={voting || votedChoice !== null}
             active={votedChoice === "tie"}
             accent="var(--text-muted)"
-            ariaLabel="Vote égalité"
-            label="Égalité"
+            ariaLabel={t("p_vsgame.fo_vote_tie_aria")}
+            label={t("p_vsgame.tie")}
             small
           />
           <VoteButton
@@ -1481,7 +1496,7 @@ function CommunityVote({
             disabled={voting || votedChoice !== null}
             active={votedChoice === "b"}
             accent="var(--cyan)"
-            ariaLabel={`Vote pour ${bundleB.player.name}`}
+            ariaLabel={t("p_vsgame.fo_vote_for", { name: bundleB.player.name })}
             label={bundleB.player.name}
             icon="👉"
             iconPos="right"
@@ -1498,7 +1513,7 @@ function CommunityVote({
             <span style={{ color: "var(--gold)" }}>
               {bundleA.player.name} · {pctA.toFixed(0)}%
             </span>
-            <span>Égalité · {pctDraw.toFixed(0)}%</span>
+            <span>{t("p_vsgame.tie")} · {pctDraw.toFixed(0)}%</span>
             <span style={{ color: "var(--cyan)" }}>
               {bundleB.player.name} · {pctB.toFixed(0)}%
             </span>
@@ -1531,9 +1546,9 @@ function CommunityVote({
             />
           </div>
           <p className="mt-2 text-center font-data text-[10px] uppercase tracking-widest text-white/40">
-            Total {total.toLocaleString("fr-FR")} vote{total > 1 ? "s" : ""}{" "}
+            {t("p_vsgame.fo_total_votes", { n: total.toLocaleString("fr-FR"), s: total > 1 ? "s" : "" })}{" "}
             {votedChoice && (
-              <span className="ml-2 text-[var(--gold)]">· Merci pour ton vote</span>
+              <span className="ml-2 text-[var(--gold)]">{t("p_vsgame.fo_thanks_vote")}</span>
             )}
           </p>
         </div>
@@ -1619,6 +1634,7 @@ function PopularDuelsFooter({
   currentA: string;
   currentB: string;
 }) {
+  const t = useT();
   const filtered = duels.filter((d) => {
     const ids = [d.player_a_slug, d.player_b_slug].sort();
     const current = [currentA, currentB].sort();
@@ -1627,11 +1643,10 @@ function PopularDuelsFooter({
 
   return (
     <section aria-labelledby="face-off-popular">
-      <SectionHeader id="face-off-popular" kicker="Duels populaires" />
+      <SectionHeader id="face-off-popular" kicker={t("p_vsgame.fo_section_popular")} />
       {filtered.length === 0 ? (
         <p className="text-sm text-white/45 px-4 py-6 text-center rounded-2xl border border-[var(--border-gold)] bg-[var(--bg-surface)]/40">
-          Personne n&apos;a encore voté sur d&apos;autres duels.
-          Lance-toi !
+          {t("p_vsgame.fo_popular_empty")}
         </p>
       ) : (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -1656,13 +1671,13 @@ function PopularDuelsFooter({
           href="/face-off"
           className="rounded-xl border border-[var(--gold)]/45 bg-black/30 px-5 py-2.5 font-display text-xs font-bold uppercase tracking-[0.25em] text-[var(--gold)] hover:border-[var(--gold)] hover:bg-[var(--gold)]/10 transition-all"
         >
-          Nouveau duel
+          {t("p_vsgame.fo_new_duel")}
         </Link>
         <Link
           href="/vs"
           className="rounded-xl border border-white/20 bg-black/25 px-5 py-2.5 font-display text-xs font-bold uppercase tracking-[0.25em] text-white/75 hover:border-white/45 hover:text-white transition-all"
         >
-          VS Roulette
+          {t("p_vsgame.vs_roulette")}
         </Link>
       </div>
     </section>
@@ -1682,6 +1697,7 @@ function DuelCard({
   aPhoto: string | null;
   bPhoto: string | null;
 }) {
+  const t = useT();
   const params = new URLSearchParams();
   params.set("a", duel.player_a_slug);
   params.set("b", duel.player_b_slug);
@@ -1700,11 +1716,11 @@ function DuelCard({
         <DuelAvatar src={bPhoto} name={bName} accent="var(--cyan)" />
       </div>
       <p className="mt-3 font-display text-sm font-black text-[var(--text-primary)]">
-        {aName} <span className="text-white/40">vs</span> {bName}
+        {aName} <span className="text-white/40">{t("p_vsgame.vs")}</span> {bName}
       </p>
       <div className="mt-2 flex items-center justify-between font-data text-[10px] uppercase tracking-widest text-white/45">
         <span style={{ color: "var(--gold)" }}>{pctA}%</span>
-        <span>{total} votes</span>
+        <span>{t("p_vsgame.fo_votes_count", { n: total })}</span>
         <span style={{ color: "var(--cyan)" }}>{pctB}%</span>
       </div>
     </Link>

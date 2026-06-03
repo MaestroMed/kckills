@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import Image from "next/image";
+import { useT, type TranslateFn } from "@/lib/i18n/use-lang";
 
 interface Comment {
   id: string;
@@ -21,6 +22,7 @@ interface CommentPanelProps {
 }
 
 export function CommentPanel({ killId, isOpen, onClose }: CommentPanelProps) {
+  const t = useT();
   const [comments, setComments] = useState<Comment[]>([]);
   const [loading, setLoading] = useState(true);
   const [postText, setPostText] = useState("");
@@ -43,13 +45,13 @@ export function CommentPanel({ killId, isOpen, onClose }: CommentPanelProps) {
       })
       .catch((e) => {
         if (e.name !== "AbortError") {
-          setError("Impossible de charger les commentaires");
+          setError(t("p_comm.load_error"));
           setLoading(false);
         }
       });
 
     return () => controller.abort();
-  }, [isOpen, killId]);
+  }, [isOpen, killId, t]);
 
   // Drag-to-dismiss
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
@@ -75,7 +77,7 @@ export function CommentPanel({ killId, isOpen, onClose }: CommentPanelProps) {
         body: JSON.stringify({ text: postText.trim() }),
       });
       if (res.status === 401) {
-        setError("Connecte-toi avec Discord pour commenter");
+        setError(t("p_comm.sign_in_discord"));
         setPosting(false);
         return;
       }
@@ -89,7 +91,7 @@ export function CommentPanel({ killId, isOpen, onClose }: CommentPanelProps) {
         setError(null);
       }
     } catch {
-      setError("Erreur lors de l'envoi");
+      setError(t("p_comm.send_error"));
     }
     setPosting(false);
   };
@@ -122,12 +124,12 @@ export function CommentPanel({ killId, isOpen, onClose }: CommentPanelProps) {
         {/* Header */}
         <div className="flex items-center justify-between px-4 pb-3 border-b border-white/5">
           <h3 className="text-sm font-bold text-white">
-            {totalComments} commentaire{totalComments !== 1 ? "s" : ""}
+            {totalComments !== 1 ? t("p_comm.count_many", { n: totalComments }) : t("p_comm.count_one", { n: totalComments })}
           </h3>
           <button
             type="button"
             onClick={onClose}
-            aria-label="Fermer le panneau de commentaires"
+            aria-label={t("p_comm.close_panel")}
             className="flex h-7 w-7 items-center justify-center rounded-full bg-white/10"
           >
             <svg aria-hidden className="h-4 w-4 text-white/70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -153,7 +155,7 @@ export function CommentPanel({ killId, isOpen, onClose }: CommentPanelProps) {
             </>
           ) : comments.length === 0 ? (
             <p className="text-center text-sm text-[var(--text-muted)] py-8">
-              Aucun commentaire. Sois le premier !
+              {t("p_comm.empty_be_first")}
             </p>
           ) : (
             comments.map((comment) => (
@@ -173,7 +175,7 @@ export function CommentPanel({ killId, isOpen, onClose }: CommentPanelProps) {
               value={postText}
               onChange={(e) => setPostText(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && handlePost()}
-              placeholder="Ajoute un commentaire..."
+              placeholder={t("p_comm.composer_placeholder_v1")}
               maxLength={500}
               className="flex-1 rounded-full bg-white/5 border border-white/10 px-4 py-2 text-sm text-white placeholder-white/30 outline-none focus:border-[var(--gold)]/50"
             />
@@ -181,7 +183,7 @@ export function CommentPanel({ killId, isOpen, onClose }: CommentPanelProps) {
               type="button"
               onClick={handlePost}
               disabled={!postText.trim() || posting}
-              aria-label="Envoyer le commentaire"
+              aria-label={t("p_comm.send_comment")}
               className="flex h-9 w-9 items-center justify-center rounded-full bg-[var(--gold)]/20 text-[var(--gold)] disabled:opacity-30"
             >
               <svg aria-hidden className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -196,15 +198,16 @@ export function CommentPanel({ killId, isOpen, onClose }: CommentPanelProps) {
 }
 
 function CommentItem({ comment }: { comment: Comment }) {
-  const username = comment.profile?.username ?? "Anonyme";
+  const t = useT();
+  const username = comment.profile?.username ?? t("p_comm.anonymous");
   const avatar = comment.profile?.avatar_url;
-  const timeAgo = getTimeAgo(comment.created_at);
+  const timeAgo = getTimeAgo(comment.created_at, t);
   const [reported, setReported] = useState(false);
   const [reporting, setReporting] = useState(false);
 
   const handleReport = async () => {
     if (reported || reporting) return;
-    if (!confirm("Signaler ce commentaire comme inapproprié ?")) return;
+    if (!confirm(t("p_comm.report_confirm"))) return;
     setReporting(true);
     try {
       const r = await fetch(`/api/comments/${comment.id}/report`, {
@@ -237,18 +240,18 @@ function CommentItem({ comment }: { comment: Comment }) {
           <span className="text-[10px] text-[var(--text-muted)]">{timeAgo}</span>
           {comment._pending && (
             <span className="rounded-full bg-[var(--gold)]/15 border border-[var(--gold)]/30 px-1.5 py-px text-[9px] font-bold uppercase tracking-wider text-[var(--gold)]">
-              modération…
+              {t("p_comm.moderation_ellipsis")}
             </span>
           )}
           <button
             type="button"
             onClick={handleReport}
             disabled={reported || reporting}
-            aria-label={reported ? "Commentaire signalé" : "Signaler ce commentaire"}
+            aria-label={reported ? t("p_comm.reported") : t("p_comm.report_comment_aria")}
             className="ml-auto text-[10px] text-[var(--text-muted)] hover:text-[var(--red)] opacity-0 group-hover:opacity-100 transition-opacity disabled:opacity-50"
-            title="Signaler"
+            title={t("p_comm.report_title")}
           >
-            {reported ? "✓ signalé" : "⚐"}
+            {reported ? t("p_comm.reported_check") : "⚐"}
           </button>
         </div>
         <p className={`text-sm mt-0.5 break-words ${comment._pending ? "text-white/40 italic" : "text-white/70"}`}>{comment.content}</p>
@@ -266,14 +269,14 @@ function CommentItem({ comment }: { comment: Comment }) {
   );
 }
 
-function getTimeAgo(dateStr: string): string {
+function getTimeAgo(dateStr: string, t: TranslateFn): string {
   const now = Date.now();
   const then = new Date(dateStr).getTime();
   const diff = Math.floor((now - then) / 1000);
 
-  if (diff < 60) return "maintenant";
-  if (diff < 3600) return `${Math.floor(diff / 60)}m`;
-  if (diff < 86400) return `${Math.floor(diff / 3600)}h`;
-  if (diff < 604800) return `${Math.floor(diff / 86400)}j`;
+  if (diff < 60) return t("p_comm.time_now");
+  if (diff < 3600) return t("p_comm.time_minutes_short", { n: Math.floor(diff / 60) });
+  if (diff < 86400) return t("p_comm.time_hours_short", { n: Math.floor(diff / 3600) });
+  if (diff < 604800) return t("p_comm.time_days_short", { n: Math.floor(diff / 86400) });
   return new Date(dateStr).toLocaleDateString("fr-FR", { day: "numeric", month: "short" });
 }

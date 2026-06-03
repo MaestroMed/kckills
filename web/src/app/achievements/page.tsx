@@ -26,6 +26,7 @@ import {
   getUserPointsSummary,
 } from "@/lib/supabase/achievements";
 import { JsonLd, breadcrumbLD } from "@/lib/seo/jsonld";
+import { getServerT } from "@/lib/i18n/server-lang";
 
 export const revalidate = 60;
 
@@ -51,6 +52,8 @@ export const metadata: Metadata = {
 };
 
 export default async function AchievementsPage() {
+  const { t } = await getServerT();
+
   // First-render pass : no session hash because we're on the server with
   // no localStorage access. The client refreshes once it knows the hash.
   const [rows, recent, summary] = await Promise.all([
@@ -88,12 +91,12 @@ export default async function AchievementsPage() {
       {/* Riot legal disclaimer — required on every public page
           (CLAUDE.md PARTIE 7.6). */}
       <p className="mx-auto mt-16 max-w-3xl text-center text-[10px] uppercase tracking-widest text-[var(--text-disabled)] px-6">
-        Les badges récompensent l&apos;activité de la communauté KCKILLS.
+        {t("p_ach.disclaimer_lead")}{" "}
         KCKILLS was created under Riot Games&apos; &laquo; Legal Jibber
         Jabber &raquo; policy using assets owned by Riot Games. Riot Games
         does not endorse or sponsor this project.{" "}
         <Link href="/privacy" className="underline hover:text-[var(--gold)]">
-          Politique
+          {t("p_ach.disclaimer_policy")}
         </Link>
         .
       </p>

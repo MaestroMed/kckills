@@ -25,6 +25,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { getBCCSessionHash } from "@/lib/bcc-state";
+import { useT } from "@/lib/i18n/use-lang";
 import {
   type AchievementCategory,
   type AchievementRarity,
@@ -87,6 +88,7 @@ export function AchievementsCatalog({
   const [rarityFilter, setRarityFilter] = useState<AchievementRarity | "all">("all");
   const [focused, setFocused] = useState<string | null>(null);
   const focusedRowRef = useRef<HTMLDivElement | null>(null);
+  const t = useT();
 
   // Re-fetch with the BCC session hash once we're on the client.
   // We hit the same anon-safe Supabase endpoint the server used.
@@ -154,12 +156,10 @@ export function AchievementsCatalog({
       <header className="mb-8 grid gap-6 md:grid-cols-[1fr_auto] md:items-end">
         <div>
           <h1 className="font-display text-4xl md:text-5xl font-bold tracking-tight text-[var(--text-primary)]">
-            Badges de la BCC
+            {t("p_ach.hero_title")}
           </h1>
           <p className="mt-3 max-w-2xl text-sm md:text-base text-[var(--text-secondary)]">
-            Chaque action sur KCKILLS débloque un badge. Vote, commente,
-            partage, prédis : la BCC récompense l&apos;activité. 20 badges
-            au total, du commun au légendaire.
+            {t("p_ach.hero_subtitle")}
           </p>
         </div>
         <ScoreCard summary={summary} />
@@ -169,23 +169,23 @@ export function AchievementsCatalog({
       <div className="mb-8 flex flex-wrap items-center gap-2">
         <FilterChip
           active={earnedFilter === "all"}
-          label={`Tous (${rows.length})`}
+          label={t("p_ach.filter_all", { n: rows.length })}
           onClick={() => setEarnedFilter("all")}
         />
         <FilterChip
           active={earnedFilter === "earned"}
-          label={`Débloqués (${summary.earned_count})`}
+          label={t("p_ach.filter_earned", { n: summary.earned_count })}
           onClick={() => setEarnedFilter("earned")}
         />
         <FilterChip
           active={earnedFilter === "locked"}
-          label={`À débloquer (${Math.max(0, rows.length - summary.earned_count)})`}
+          label={t("p_ach.filter_locked", { n: Math.max(0, rows.length - summary.earned_count) })}
           onClick={() => setEarnedFilter("locked")}
         />
         <span className="mx-2 hidden h-4 w-px bg-[var(--border-gold)] sm:inline-block" />
         <FilterChip
           active={rarityFilter === "all"}
-          label="Toutes raretés"
+          label={t("p_ach.filter_all_rarities")}
           onClick={() => setRarityFilter("all")}
         />
         {RARITY_ORDER.map((rar) => (
@@ -203,7 +203,7 @@ export function AchievementsCatalog({
       {grouped.length === 0 ? (
         <div className="rounded-xl border border-[var(--border-gold)] bg-[var(--bg-surface)] p-12 text-center">
           <p className="text-sm text-[var(--text-muted)]">
-            Aucun badge ne correspond à ce filtre.
+            {t("p_ach.empty_filter")}
           </p>
         </div>
       ) : (
@@ -245,6 +245,7 @@ export function AchievementsCatalog({
 // ════════════════════════════════════════════════════════════════════
 
 function ScoreCard({ summary }: { summary: UserPointsSummary }) {
+  const t = useT();
   const tierColor = (() => {
     switch (summary.tier) {
       case "Bronze":   return "#C97A4B";
@@ -259,25 +260,25 @@ function ScoreCard({ summary }: { summary: UserPointsSummary }) {
     <div
       className="rounded-xl border bg-[var(--bg-surface)] p-5 min-w-[14rem]"
       style={{ borderColor: `${tierColor}55` }}
-      aria-label={`Mon score : ${summary.total_points} points, palier ${summary.tier}`}
+      aria-label={t("p_ach.score_aria", { points: summary.total_points, tier: summary.tier })}
     >
       <p className="text-[10px] uppercase tracking-[0.18em] text-[var(--text-muted)]">
-        Mon score
+        {t("p_ach.score_label")}
       </p>
       <p
         className="mt-1 font-display text-3xl font-bold tabular-nums"
         style={{ color: tierColor }}
       >
-        {summary.total_points} pts
+        {t("p_ach.score_pts", { n: summary.total_points })}
       </p>
       <p className="mt-2 text-xs font-semibold uppercase tracking-wider" style={{ color: tierColor }}>
-        Palier {summary.tier}
+        {t("p_ach.tier_label", { tier: summary.tier })}
       </p>
       <p className="mt-1 text-[10px] text-[var(--text-muted)]">
-        {summary.earned_count} / {summary.total_count} badges
+        {t("p_ach.badges_count", { earned: summary.earned_count, total: summary.total_count })}
         {summary.points_to_next > 0
-          ? ` · ${summary.points_to_next} pts au prochain palier`
-          : " · Palier max atteint"}
+          ? t("p_ach.points_to_next", { n: summary.points_to_next })
+          : t("p_ach.tier_max")}
       </p>
     </div>
   );
@@ -295,6 +296,7 @@ interface AchievementCardProps {
 }
 
 function AchievementCard({ row, expanded, onClick, expandedRef }: AchievementCardProps) {
+  const t = useT();
   const earned = Boolean(row.earned_at);
   const color = RARITY_COLOR[row.rarity];
   const percent = computeProgressPercent(row.criteria, row.progress);
@@ -314,7 +316,7 @@ function AchievementCard({ row, expanded, onClick, expandedRef }: AchievementCar
         }
       }}
       aria-pressed={expanded}
-      aria-label={`${row.name} — ${earned ? "débloqué" : "à débloquer"}`}
+      aria-label={`${row.name} — ${earned ? t("p_ach.state_unlocked") : t("p_ach.state_locked")}`}
       className={`group relative cursor-pointer rounded-xl border bg-[var(--bg-surface)] p-4 transition-all duration-200 hover:scale-[1.01] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--gold)] motion-reduce:hover:scale-100 motion-reduce:transition-none ${
         earned ? "" : "opacity-70"
       }`}
@@ -366,7 +368,7 @@ function AchievementCard({ row, expanded, onClick, expandedRef }: AchievementCar
       <div className="mt-4">
         {earned && earnedAt ? (
           <p className="text-[11px] text-[var(--text-secondary)]">
-            Tu as débloqué le{" "}
+            {t("p_ach.unlocked_on_prefix")}{" "}
             <span className="text-[var(--gold)]">{dateFmt.format(earnedAt)}</span>
           </p>
         ) : percent !== null && counter ? (
@@ -390,7 +392,7 @@ function AchievementCard({ row, expanded, onClick, expandedRef }: AchievementCar
           </div>
         ) : (
           <p className="text-[10px] text-[var(--text-muted)] italic">
-            Action déclenchée par un événement
+            {t("p_ach.event_triggered")}
           </p>
         )}
       </div>
@@ -398,7 +400,7 @@ function AchievementCard({ row, expanded, onClick, expandedRef }: AchievementCar
       {expanded && (
         <div className="mt-3 border-t border-[var(--border-subtle)] pt-3 text-[11px] text-[var(--text-muted)]">
           <p className="font-semibold uppercase tracking-wider text-[var(--text-secondary)]">
-            Comment l&apos;obtenir
+            {t("p_ach.how_to_unlock")}
           </p>
           <p className="mt-1">{row.description}</p>
         </div>
@@ -465,14 +467,15 @@ function RarityBadge({ rarity }: { rarity: AchievementRarity }) {
 }
 
 function RecentUnlocksFeed({ recent }: { recent: RecentUnlockRow[] }) {
+  const t = useT();
   if (recent.length === 0) return null;
   return (
     <section className="mt-16">
       <h2 className="font-display text-xl md:text-2xl font-semibold text-[var(--gold)]">
-        Récemment débloqués par la BCC
+        {t("p_ach.recent_title")}
       </h2>
       <p className="mt-1 text-xs text-[var(--text-muted)]">
-        Les 10 derniers badges débloqués par la communauté.
+        {t("p_ach.recent_subtitle")}
       </p>
       <ul className="mt-4 divide-y divide-[var(--border-subtle)] rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)]">
         {recent.map((unlock, idx) => {
@@ -496,9 +499,9 @@ function RecentUnlocksFeed({ recent }: { recent: RecentUnlockRow[] }) {
               <div className="min-w-0 flex-1">
                 <p className="text-sm text-[var(--text-primary)]">
                   <span className="font-semibold">
-                    {unlock.display_name ?? "Un membre BCC"}
+                    {unlock.display_name ?? t("p_ach.member_fallback")}
                   </span>{" "}
-                  a débloqué{" "}
+                  {t("p_ach.unlocked_verb")}{" "}
                   <span style={{ color }}>{unlock.name}</span>
                 </p>
                 <p className="text-[10px] uppercase tracking-wider text-[var(--text-muted)]">

@@ -3,6 +3,7 @@ import { fetchAllChannelVideos } from "@/lib/youtube-rss";
 import { rankAndCap } from "@/lib/youtube-scoring";
 import { getSeedVideos } from "@/lib/youtube-seed";
 import { YouTubeParallaxCarousel } from "./YouTubeParallaxCarousel";
+import { getServerT } from "@/lib/i18n/server-lang";
 
 /**
  * Server component that builds the homepage YouTube parallax showcase.
@@ -21,6 +22,7 @@ import { YouTubeParallaxCarousel } from "./YouTubeParallaxCarousel";
  * Cached for 10 minutes via Next's `fetch` cache (set in `youtube-rss.ts`).
  */
 export async function HomeYouTubeShowcase() {
+  const { t } = await getServerT();
   const liveChannels = getActiveChannels();
   const [rss, seed] = await Promise.all([
     fetchAllChannelVideos(liveChannels, 10),
@@ -40,22 +42,20 @@ export async function HomeYouTubeShowcase() {
     <section className="relative py-16 md:py-24">
       <div className="px-4 md:px-8 max-w-7xl mx-auto mb-10 text-center">
         <p className="font-data text-[10px] uppercase tracking-[0.3em] text-[var(--gold)]/70 mb-3">
-          Chaînes YouTube de l&apos;écosystème KC
+          {t("p_homex.yt_eyebrow")}
         </p>
         <h2 className="font-display text-4xl md:text-5xl font-black mb-4">
-          <span className="text-shimmer">VIDEOS DU MOMENT</span>
+          <span className="text-shimmer">{t("p_homex.yt_title")}</span>
         </h2>
         <p className="max-w-2xl mx-auto text-sm md:text-base text-white/65 leading-relaxed">
-          Les derniers uploads des chaînes officielles, des fondateurs et
-          des créateurs qui couvrent la KC. Mis à jour automatiquement,
-          classés par fraîcheur et popularité.
+          {t("p_homex.yt_description")}
         </p>
       </div>
 
       <YouTubeParallaxCarousel videos={ranked} />
 
       <p className="mt-10 text-center text-[10px] font-data uppercase tracking-[0.25em] text-white/35">
-        {liveCount}/{totalChannels} chaînes connectées · Données YouTube RSS
+        {t("p_homex.yt_footer", { live: liveCount, total: totalChannels })}
       </p>
     </section>
   );

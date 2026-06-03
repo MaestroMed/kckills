@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import type { Comment, Profile } from "@/types";
+import { useT, type TranslateFn } from "@/lib/i18n/use-lang";
 
 interface CommentSectionProps {
   killId: string;
@@ -16,6 +17,7 @@ export function CommentSection({
   currentUserId,
   onPost,
 }: CommentSectionProps) {
+  const t = useT();
   const [body, setBody] = useState("");
   const [replyTo, setReplyTo] = useState<string | null>(null);
   const [replyBody, setReplyBody] = useState("");
@@ -39,7 +41,7 @@ export function CommentSection({
   return (
     <div className="space-y-4">
       <h3 className="text-lg font-semibold">
-        Commentaires ({comments.length})
+        {t("p_comm.title_count", { n: comments.length })}
       </h3>
 
       {/* Post form */}
@@ -49,7 +51,7 @@ export function CommentSection({
             type="text"
             value={body}
             onChange={(e) => setBody(e.target.value)}
-            placeholder="Ajouter un commentaire..."
+            placeholder={t("p_comm.composer_placeholder_form")}
             maxLength={2000}
             className="flex-1 rounded-lg border border-[var(--border-gold)] bg-[var(--bg-surface)] px-3 py-2 text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] outline-none focus:border-[var(--gold)]"
           />
@@ -58,12 +60,12 @@ export function CommentSection({
             disabled={!body.trim()}
             className="rounded-lg bg-[var(--gold)] px-4 py-2 text-sm font-medium text-black disabled:opacity-50"
           >
-            Poster
+            {t("p_comm.post")}
           </button>
         </form>
       ) : (
         <p className="text-sm text-[var(--text-muted)]">
-          Connectez-vous pour commenter.
+          {t("p_comm.sign_in_formal")}
         </p>
       )}
 
@@ -71,7 +73,7 @@ export function CommentSection({
       <div className="space-y-3">
         {topLevel.length === 0 && (
           <p className="py-8 text-center text-sm text-[var(--text-muted)]">
-            Aucun commentaire. Soyez le premier !
+            {t("p_comm.empty_be_first_formal")}
           </p>
         )}
         {topLevel.map((comment) => (
@@ -108,7 +110,8 @@ function CommentItem({
   onSetReplyBody: (body: string) => void;
   onReply: (parentId: string) => void;
 }) {
-  const timeAgo = getTimeAgo(comment.created_at);
+  const t = useT();
+  const timeAgo = getTimeAgo(comment.created_at, t);
 
   return (
     <div className="rounded-lg border border-[var(--border-gold)] bg-[var(--bg-surface)] p-3">
@@ -117,11 +120,11 @@ function CommentItem({
           {(comment.profile?.username ?? "?")[0].toUpperCase()}
         </div>
         <span className="text-sm font-medium">
-          {comment.profile?.username ?? "Anonyme"}
+          {comment.profile?.username ?? t("p_comm.anonymous")}
         </span>
         <span className="text-xs text-[var(--text-muted)]">{timeAgo}</span>
         {comment.is_edited && (
-          <span className="text-xs text-[var(--text-muted)]">(modifié)</span>
+          <span className="text-xs text-[var(--text-muted)]">{t("p_comm.edited")}</span>
         )}
       </div>
 
@@ -138,7 +141,7 @@ function CommentItem({
               onSetReplyTo(replyTo === comment.id ? null : comment.id)
             }
           >
-            Répondre
+            {t("p_comm.reply")}
           </button>
         )}
       </div>
@@ -150,7 +153,7 @@ function CommentItem({
             type="text"
             value={replyBody}
             onChange={(e) => onSetReplyBody(e.target.value)}
-            placeholder="Répondre..."
+            placeholder={t("p_comm.reply_placeholder")}
             maxLength={2000}
             className="flex-1 rounded-lg border border-[var(--border-gold)] bg-[var(--bg-primary)] px-3 py-1.5 text-sm text-[var(--text-primary)] outline-none focus:border-[var(--gold)]"
             autoFocus
@@ -160,7 +163,7 @@ function CommentItem({
             disabled={!replyBody.trim()}
             className="rounded-lg bg-[var(--gold)] px-3 py-1.5 text-xs font-medium text-black disabled:opacity-50"
           >
-            Envoyer
+            {t("p_comm.send")}
           </button>
         </div>
       )}
@@ -172,10 +175,10 @@ function CommentItem({
             <div key={reply.id}>
               <div className="flex items-center gap-2">
                 <span className="text-sm font-medium">
-                  {reply.profile?.username ?? "Anonyme"}
+                  {reply.profile?.username ?? t("p_comm.anonymous")}
                 </span>
                 <span className="text-xs text-[var(--text-muted)]">
-                  {getTimeAgo(reply.created_at)}
+                  {getTimeAgo(reply.created_at, t)}
                 </span>
               </div>
               <p className="mt-0.5 text-sm">{reply.content}</p>
@@ -187,14 +190,14 @@ function CommentItem({
   );
 }
 
-function getTimeAgo(dateStr: string): string {
+function getTimeAgo(dateStr: string, t: TranslateFn): string {
   const diff = Date.now() - new Date(dateStr).getTime();
   const minutes = Math.floor(diff / 60000);
-  if (minutes < 1) return "maintenant";
-  if (minutes < 60) return `il y a ${minutes}min`;
+  if (minutes < 1) return t("p_comm.time_now");
+  if (minutes < 60) return t("p_comm.time_ago_minutes", { n: minutes });
   const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `il y a ${hours}h`;
+  if (hours < 24) return t("p_comm.time_ago_hours", { n: hours });
   const days = Math.floor(hours / 24);
-  if (days < 30) return `il y a ${days}j`;
+  if (days < 30) return t("p_comm.time_ago_days", { n: days });
   return new Date(dateStr).toLocaleDateString("fr-FR");
 }

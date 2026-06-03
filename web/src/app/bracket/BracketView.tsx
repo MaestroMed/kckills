@@ -34,6 +34,7 @@ import { m, useReducedMotion } from "motion/react";
 import { Check, Crown } from "lucide-react";
 
 import { Modal } from "@/components/ui/FocusTrapModal";
+import { useT } from "@/lib/i18n/use-lang";
 import { createClient } from "@/lib/supabase/client";
 import type {
   BracketBundle,
@@ -251,30 +252,30 @@ function groupByRound(matches: BracketMatch[]): Map<number, BracketMatch[]> {
 // ════════════════════════════════════════════════════════════════════
 
 function EmptyState() {
+  const t = useT();
   return (
     <section className="mx-auto max-w-5xl px-4 py-16 md:py-24 text-center">
       <p className="font-data text-[10px] uppercase tracking-[0.3em] text-[var(--gold)]/70 mb-4">
-        Aucun tournoi en cours
+        {t("p_bracketv.empty_eyebrow")}
       </p>
       <h2 className="font-display text-3xl md:text-5xl font-black text-[var(--text-primary)] leading-tight mb-3">
-        Le prochain tournoi arrive
+        {t("p_bracketv.empty_heading")}
       </h2>
       <p className="mx-auto max-w-xl text-sm md:text-base text-white/65">
-        Le bracket mensuel se relance le premier de chaque mois. En attendant,
-        continue de scroller — tes votes nourrissent le seeding du prochain GOAT du Mois.
+        {t("p_bracketv.empty_body")}
       </p>
       <div className="mt-7 flex justify-center gap-3 flex-wrap">
         <Link
           href="/scroll"
           className="rounded-xl bg-[var(--gold)] px-6 py-3 font-display text-xs font-black uppercase tracking-[0.25em] text-[var(--bg-primary)] hover:bg-[var(--gold-bright)] transition-colors"
         >
-          Aller au feed
+          {t("p_bracketv.empty_cta_feed")}
         </Link>
         <Link
           href="/vs"
           className="rounded-xl border border-[var(--gold)]/45 bg-black/30 px-6 py-3 font-display text-xs font-bold uppercase tracking-[0.25em] text-[var(--gold)] hover:bg-[var(--gold)]/10 transition-colors"
         >
-          VS Roulette
+          {t("p_bracketv.empty_cta_vs")}
         </Link>
       </div>
     </section>
@@ -302,6 +303,7 @@ function HeroBand({
   champion: BracketMatch | null;
   readOnly: boolean;
 }) {
+  const t = useT();
   const isClosed = tournament.status !== "open";
   const dateRange = formatDateRange(tournament.start_date, tournament.end_date);
   const headline = tournament.name.toUpperCase();
@@ -349,7 +351,7 @@ function HeroBand({
 
       <div className="relative z-10 mx-auto max-w-6xl px-5 pt-10 pb-8 md:pt-16 md:pb-12 text-center">
         <p className="font-data text-[11px] uppercase tracking-[0.4em] text-[var(--gold)]/70 mb-3">
-          GOAT du Mois · {tournament.bracket_size} kills · {totalRounds} rounds
+          {t("p_bracketv.hero_eyebrow", { kills: tournament.bracket_size, rounds: totalRounds })}
         </p>
         <h1
           className="font-display font-black tracking-tight leading-[0.85] text-4xl md:text-6xl lg:text-7xl"
@@ -369,25 +371,27 @@ function HeroBand({
         <div className="mt-6 flex items-center justify-center gap-3 flex-wrap text-[11px] font-data uppercase tracking-[0.25em]">
           {isClosed ? (
             <span className="rounded-full border border-[var(--gold)]/45 bg-black/30 px-4 py-2 text-[var(--gold)]">
-              Tournoi clôturé
+              {t("p_bracketv.hero_closed")}
             </span>
           ) : activeRound != null ? (
             <>
               <span className="rounded-full border border-[var(--cyan)]/45 bg-[var(--cyan)]/8 px-4 py-2 text-[var(--cyan)]">
-                Round actuel · {roundLabel(activeRound, totalRounds)}
+                {t("p_bracketv.hero_current_round", { label: roundLabel(activeRound, totalRounds) })}
               </span>
               <span className="rounded-full border border-[var(--gold)]/45 bg-black/30 px-4 py-2 text-[var(--gold)]/85">
-                {openCount} match{openCount > 1 ? "s" : ""} ouvert{openCount > 1 ? "s" : ""}
+                {openCount > 1
+                  ? t("p_bracketv.hero_open_matches_many", { n: openCount })
+                  : t("p_bracketv.hero_open_matches_one", { n: openCount })}
               </span>
               {nextClose && (
                 <span className="rounded-full border border-white/15 bg-black/25 px-4 py-2 text-white/65">
-                  Clôture {formatRelative(nextClose)}
+                  {t("p_bracketv.hero_closes", { when: formatRelative(nextClose, t) })}
                 </span>
               )}
             </>
           ) : (
             <span className="rounded-full border border-[var(--gold)]/45 bg-black/30 px-4 py-2 text-[var(--gold)]">
-              Aucun match ouvert
+              {t("p_bracketv.hero_no_open_match")}
             </span>
           )}
         </div>
@@ -401,6 +405,7 @@ function HeroBand({
 }
 
 function ChampionBanner({ champion, readOnly }: { champion: BracketMatch; readOnly: boolean }) {
+  const t = useT();
   const championKillId = champion.winner_kill_id;
   if (!championKillId) return null;
   const isASide = champion.kill_a_id === championKillId;
@@ -421,7 +426,7 @@ function ChampionBanner({ champion, readOnly }: { champion: BracketMatch; readOn
           {thumb ? (
             <Image
               src={thumb}
-              alt={`Vainqueur ${name ?? champ ?? "?"}`}
+              alt={t("p_bracketv.champion_thumb_alt", { name: name ?? champ ?? "?" })}
               fill
               sizes="100px"
               className="object-cover"
@@ -437,7 +442,7 @@ function ChampionBanner({ champion, readOnly }: { champion: BracketMatch; readOn
               boxShadow: "0 0 14px rgba(240,230,210,0.5)",
             }}
           >
-            ♛ GOAT du Mois
+            ♛ {t("p_bracketv.goat_badge")}
           </span>
           <p className="font-display text-xl md:text-2xl font-black text-[var(--text-primary)] leading-tight">
             <span style={{ color: "var(--gold)" }}>{name ?? champ ?? "?"}</span>{" "}
@@ -448,7 +453,7 @@ function ChampionBanner({ champion, readOnly }: { champion: BracketMatch; readOn
               href={`/kill/${championKillId}`}
               className="mt-2 inline-block font-data text-[10px] uppercase tracking-widest text-[var(--gold)]/85 hover:text-[var(--gold)] transition-colors"
             >
-              Voir le clip champion →
+              {t("p_bracketv.champion_view_clip")} →
             </Link>
           )}
         </div>
@@ -482,11 +487,12 @@ function BracketTree({
   onOpenMatch: (matchId: string) => void;
   prefersReducedMotion: boolean;
 }) {
+  const t = useT();
   void matches;
   void tournament;
   return (
     <section
-      aria-label="Arbre du tournoi"
+      aria-label={t("p_bracketv.tree_aria")}
       className="relative mx-auto max-w-[100vw] px-3 md:px-6 py-8 md:py-12 overflow-x-auto"
     >
       <div
@@ -517,7 +523,7 @@ function BracketTree({
         })}
       </div>
       <p className="mt-4 text-center font-data text-[10px] uppercase tracking-widest text-white/35 md:hidden">
-        Glisse horizontalement pour voir tous les rounds →
+        {t("p_bracketv.tree_scroll_hint")} →
       </p>
     </section>
   );
@@ -629,6 +635,7 @@ function MatchCard({
   desktopWidth: number;
   prefersReducedMotion: boolean;
 }) {
+  const t = useT();
   const nowMs = Date.now();
   const opensAt = new Date(match.opens_at).getTime();
   const closesAt = new Date(match.closes_at).getTime();
@@ -684,14 +691,14 @@ function MatchCard({
       {/* Match index micro-label */}
       <div className="flex items-center justify-between px-3 pt-2 pb-1.5">
         <span className="font-data text-[9px] uppercase tracking-[0.25em] text-[var(--text-muted)]">
-          Match #{match.match_index + 1}
+          {t("p_bracketv.match_index", { n: match.match_index + 1 })}
         </span>
         {voted && (
           <span
             className="font-data text-[9px] uppercase tracking-[0.25em]"
             style={{ color: "var(--gold)" }}
           >
-            ✓ Voté
+            ✓ {t("p_bracketv.voted_chip")}
           </span>
         )}
       </div>
@@ -741,26 +748,26 @@ function MatchCard({
           <button
             type="button"
             onClick={onOpen}
-            aria-label={`Voter pour le match ${match.match_index + 1}`}
+            aria-label={t("p_bracketv.vote_match_aria", { n: match.match_index + 1 })}
             className="w-full rounded-lg bg-[var(--gold)] hover:bg-[var(--gold-bright)] active:scale-[0.98] transition-all py-2 font-display text-[11px] font-black uppercase tracking-[0.3em] text-[var(--bg-primary)]"
             style={{
               boxShadow:
                 "0 12px 26px rgba(200,170,110,0.35), inset 0 1px 0 rgba(255,255,255,0.4)",
             }}
           >
-            {voted ? "Revoir" : "Voter"}
+            {voted ? t("p_bracketv.btn_revote") : t("p_bracketv.btn_vote")}
           </button>
         ) : isResolved ? (
           <div className="text-center font-data text-[9px] uppercase tracking-widest text-white/40">
-            {isFinal ? "Champion couronné" : "Round clôturé"}
+            {isFinal ? t("p_bracketv.status_champion_crowned") : t("p_bracketv.status_round_closed")}
           </div>
         ) : isPending ? (
           <div className="text-center font-data text-[9px] uppercase tracking-widest text-white/35">
-            En attente
+            {t("p_bracketv.status_waiting")}
           </div>
         ) : !readOnly && match.kill_a_id != null && match.kill_b_id != null ? (
           <div className="text-center font-data text-[9px] uppercase tracking-widest text-white/35">
-            Ouvre {formatRelative(match.opens_at)}
+            {t("p_bracketv.status_opens", { when: formatRelative(match.opens_at, t) })}
           </div>
         ) : (
           <div className="text-center font-data text-[9px] uppercase tracking-widest text-white/30">
@@ -806,6 +813,7 @@ function SideRow({
   empty: boolean;
   prefersReducedMotion: boolean;
 }) {
+  const t = useT();
   void side;
   if (empty) {
     return (
@@ -816,7 +824,7 @@ function SideRow({
         />
         <div className="flex-1 min-w-0">
           <p className="font-data text-[10px] uppercase tracking-widest text-white/35">
-            À déterminer
+            {t("p_bracketv.side_tbd")}
           </p>
         </div>
       </div>
@@ -861,7 +869,7 @@ function SideRow({
         </p>
         <p className="font-data text-[9px] uppercase tracking-widest text-white/45 truncate">
           {champion ?? "?"}
-          {victim ? <> · vs {victim}</> : null}
+          {victim ? <> · {t("p_bracketv.vs")} {victim}</> : null}
         </p>
         <div className="flex items-center gap-1 mt-0.5">
           {multiKill && (
@@ -871,7 +879,7 @@ function SideRow({
           )}
           {firstBlood && (
             <span className="rounded px-1 text-[8px] font-data font-bold uppercase tracking-widest text-[var(--red)] border border-[var(--red)]/30">
-              FB
+              {t("p_bracketv.fb_badge")}
             </span>
           )}
         </div>
@@ -884,7 +892,7 @@ function SideRow({
           {votes}
         </p>
         <p className="font-data text-[8px] uppercase tracking-widest text-white/35">
-          vote{votes > 1 ? "s" : ""}
+          {votes > 1 ? t("p_bracketv.votes_label_many") : t("p_bracketv.votes_label_one")}
         </p>
       </div>
     </m.div>
@@ -914,6 +922,7 @@ function VoteModal({
   onVoted: (tally: { votes_a: number; votes_b: number }) => void;
   prefersReducedMotion: boolean;
 }) {
+  const t = useT();
   void tournament;
   const [voting, setVoting] = useState(false);
   // `voted` tracks WHICH side the user voted for in THIS modal session.
@@ -970,12 +979,12 @@ function VoteModal({
           setVoted(choice);
         }
       } catch (err) {
-        setVoteError(err instanceof Error ? err.message : "Erreur réseau");
+        setVoteError(err instanceof Error ? err.message : t("p_bracketv.vote_network_error"));
       } finally {
         setVoting(false);
       }
     },
-    [voting, readOnly, onVoted],
+    [voting, readOnly, onVoted, t],
   );
 
   if (!displayMatch) return null;
@@ -1005,27 +1014,27 @@ function VoteModal({
         <header className="flex items-center justify-between px-5 py-4 border-b border-white/10">
           <div>
             <p id="bracket-modal-title" className="font-data text-[10px] uppercase tracking-[0.3em] text-[var(--gold)]/80">
-              Match #{displayMatch.match_index + 1}
+              {t("p_bracketv.match_index", { n: displayMatch.match_index + 1 })}
             </p>
             <p className="font-display text-base md:text-lg font-black text-[var(--text-primary)] leading-tight">
               {voted || alreadyVoted
-                ? "Tu as voté — Reviens demain pour la suite"
-                : "Quel kill est le plus fort ?"}
+                ? t("p_bracketv.modal_title_voted")
+                : t("p_bracketv.modal_title_prompt")}
             </p>
           </div>
           <button
             type="button"
             onClick={onClose}
-            aria-label="Fermer"
+            aria-label={t("common.close")}
             className="rounded-lg border border-white/15 bg-black/30 px-3 py-1.5 font-data text-xs uppercase tracking-widest text-[var(--text-muted)] hover:border-white/40 hover:text-white transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--gold)] focus-visible:outline-offset-2"
           >
-            Fermer ✕
+            {t("common.close")} ✕
           </button>
         </header>
 
         <div className="grid gap-3 md:grid-cols-2 p-4 md:p-6">
           <ModalClipPanel
-            label="Gauche"
+            label={t("p_bracketv.panel_left")}
             accent="var(--cyan)"
             thumb={displayMatch.kill_a_thumbnail}
             clipVertical={displayMatch.kill_a_clip_vertical}
@@ -1047,7 +1056,7 @@ function VoteModal({
             prefersReducedMotion={prefersReducedMotion}
           />
           <ModalClipPanel
-            label="Droite"
+            label={t("p_bracketv.panel_right")}
             accent="var(--gold)"
             thumb={displayMatch.kill_b_thumbnail}
             clipVertical={displayMatch.kill_b_clip_vertical}
@@ -1079,21 +1088,21 @@ function VoteModal({
             <div className="rounded-xl bg-black/30 border border-[var(--gold)]/30 p-4 text-center">
               <p className="font-data text-[10px] uppercase tracking-[0.3em] text-[var(--gold)] mb-1 inline-flex items-center justify-center gap-1.5">
                 <Check size={11} strokeWidth={3} aria-hidden />
-                Vote enregistré
+                {t("p_bracketv.vote_recorded")}
               </p>
               <p className="text-sm text-[var(--text-secondary)]">
                 {voted != null
-                  ? "Reviens demain pour le prochain round du tournoi."
-                  : "Tu as déjà voté sur ce match — reviens demain pour la suite."}
+                  ? t("p_bracketv.vote_come_back")
+                  : t("p_bracketv.vote_already_done")}
               </p>
               <div className="mt-3 flex items-center justify-center gap-3">
                 <button
                   type="button"
                   onClick={onClose}
                   className="rounded-lg border border-white/20 bg-black/30 px-4 py-2 font-display text-[10px] font-bold uppercase tracking-[0.25em] text-[var(--text-secondary)] hover:border-white/45 hover:text-white transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--gold)] focus-visible:outline-offset-2"
-                  aria-label="Continuer à explorer le bracket"
+                  aria-label={t("p_bracketv.continue_bracket_aria")}
                 >
-                  Continuer le bracket
+                  {t("p_bracketv.continue_bracket")}
                 </button>
               </div>
             </div>
@@ -1147,6 +1156,7 @@ function ModalClipPanel({
   alreadyVotedOnce: boolean;
   prefersReducedMotion: boolean;
 }) {
+  const t = useT();
   const videoRef = useRef<HTMLVideoElement>(null);
   const videoUrl = clipVerticalLow ?? clipVertical ?? null;
 
@@ -1191,13 +1201,13 @@ function ModalClipPanel({
             playsInline
             preload="metadata"
             className="absolute inset-0 h-full w-full object-cover"
-            aria-label={`Clip ${label} : ${killerName ?? killerChampion ?? "?"}`}
+            aria-label={t("p_bracketv.clip_aria", { label, name: killerName ?? killerChampion ?? "?" })}
           />
         ) : thumb ? (
-          <Image src={thumb} alt={`Clip ${label}`} fill sizes="(max-width: 768px) 50vw, 400px" className="object-cover" />
+          <Image src={thumb} alt={t("p_bracketv.clip_alt", { label })} fill sizes="(max-width: 768px) 50vw, 400px" className="object-cover" />
         ) : (
           <div className="absolute inset-0 flex items-center justify-center text-[var(--text-muted)] text-xs">
-            Clip indisponible
+            {t("p_bracketv.clip_unavailable")}
           </div>
         )}
 
@@ -1221,7 +1231,7 @@ function ModalClipPanel({
             )}
             {firstBlood && (
               <span className="rounded-md bg-[var(--red)]/25 border border-[var(--red)]/45 px-1.5 py-0.5 text-[9px] font-data font-bold uppercase tracking-widest text-[var(--red)]">
-                FB
+                {t("p_bracketv.fb_badge")}
               </span>
             )}
           </div>
@@ -1246,7 +1256,7 @@ function ModalClipPanel({
       <div className="px-3 py-3 border-t border-white/10 flex items-center justify-between gap-2">
         <div className="flex items-center gap-2 font-data text-[10px] uppercase tracking-widest text-[var(--text-muted)]">
           {typeof highlightScore === "number" && (
-            <span className="text-[var(--gold)]">IA {highlightScore.toFixed(1)}</span>
+            <span className="text-[var(--gold)]">{t("p_bracketv.ai_score", { score: highlightScore.toFixed(1) })}</span>
           )}
           {typeof avgRating === "number" && avgRating > 0 && (
             <span>★ {avgRating.toFixed(1)}</span>
@@ -1258,7 +1268,9 @@ function ModalClipPanel({
           className="font-display text-base font-black"
           style={{ color: voted ? "var(--gold-bright)" : "var(--text-primary)" }}
         >
-          {votes} vote{votes > 1 ? "s" : ""}
+          {votes > 1
+            ? t("p_bracketv.votes_count_many", { n: votes })
+            : t("p_bracketv.votes_count_one", { n: votes })}
         </m.span>
       </div>
 
@@ -1266,7 +1278,7 @@ function ModalClipPanel({
         type="button"
         onClick={onVote}
         disabled={disabled || alreadyVotedOnce}
-        aria-label={`Voter pour ${killerName ?? killerChampion ?? "ce clip"}`}
+        aria-label={t("p_bracketv.vote_for_aria", { name: killerName ?? killerChampion ?? t("p_bracketv.this_clip") })}
         className="w-full py-3 font-display text-xs font-black uppercase tracking-[0.25em] border-t transition-all disabled:cursor-not-allowed inline-flex items-center justify-center gap-1.5"
         style={{
           background: voted
@@ -1282,12 +1294,12 @@ function ModalClipPanel({
         {voted ? (
           <>
             <Check size={13} strokeWidth={3} aria-hidden />
-            Tu as voté ici
+            {t("p_bracketv.voted_here")}
           </>
         ) : alreadyVotedOnce ? (
-          "Vote déjà placé"
+          t("p_bracketv.vote_already_placed")
         ) : (
-          "Celui-ci"
+          t("p_bracketv.choose_this")
         )}
       </button>
     </m.div>
@@ -1305,6 +1317,7 @@ function PastWinnersGallery({
   winners: PastWinner[];
   currentSlug: string;
 }) {
+  const t = useT();
   const filtered = winners.filter((w) => w.slug !== currentSlug);
   if (filtered.length === 0) return null;
   return (
@@ -1315,7 +1328,7 @@ function PastWinnersGallery({
       <div className="flex items-center gap-3 mb-6" id="bracket-past-winners">
         <Losange small />
         <span className="font-data text-[10px] uppercase tracking-[0.3em] font-bold text-[var(--gold)]">
-          Galerie des GOATs
+          {t("p_bracketv.gallery_title")}
         </span>
         <span className="gold-line flex-1 opacity-50" aria-hidden />
       </div>
@@ -1326,14 +1339,14 @@ function PastWinnersGallery({
             href={`/bracket/${w.slug}`}
             className="glass group relative rounded-2xl border border-[var(--border-gold)] overflow-hidden transition-all hover:border-[var(--gold)]/70 hover:-translate-y-0.5 hover:gold-glow"
             style={{ boxShadow: "0 12px 28px rgba(0,0,0,0.4)" }}
-            aria-label={`Voir le bracket ${w.name}`}
+            aria-label={t("p_bracketv.gallery_view_aria", { name: w.name })}
           >
             <CornerLosange position="tr" />
             <div className="relative bg-black/40" style={{ aspectRatio: "16 / 9" }}>
               {w.champion_thumbnail ? (
                 <Image
                   src={w.champion_thumbnail}
-                  alt={`Champion ${w.name}`}
+                  alt={t("p_bracketv.gallery_champion_alt", { name: w.name })}
                   fill
                   sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, (max-width: 1280px) 33vw, 25vw"
                   className="object-cover group-hover:scale-105 transition-transform"
@@ -1351,7 +1364,7 @@ function PastWinnersGallery({
                 }}
               >
                 <Crown size={10} strokeWidth={2.5} aria-hidden />
-                GOAT
+                {t("p_bracketv.goat_short")}
               </span>
             </div>
             <div className="px-3 py-3">
@@ -1363,7 +1376,7 @@ function PastWinnersGallery({
               </p>
               <p className="font-data text-[10px] uppercase tracking-widest text-[var(--text-muted)] truncate">
                 {w.champion_killer_champion ?? "?"}
-                {w.champion_victim_champion ? <> · vs {w.champion_victim_champion}</> : null}
+                {w.champion_victim_champion ? <> · {t("p_bracketv.vs")} {w.champion_victim_champion}</> : null}
               </p>
             </div>
           </Link>
@@ -1394,21 +1407,21 @@ function formatDateRange(start: string, end: string): string {
   }
 }
 
-function formatRelative(iso: string): string {
+function formatRelative(iso: string, t: (key: string, vars?: Record<string, string | number>) => string): string {
   try {
     const target = new Date(iso).getTime();
-    if (!Number.isFinite(target)) return "bientôt";
+    if (!Number.isFinite(target)) return t("p_bracketv.relative_soon");
     const diff = target - Date.now();
     const absMs = Math.abs(diff);
-    const sign = diff < 0 ? "il y a " : "dans ";
+    const past = diff < 0;
     const min = Math.round(absMs / 60_000);
-    if (min < 60) return `${sign}${min} min`;
+    if (min < 60) return t(past ? "p_bracketv.relative_past_min" : "p_bracketv.relative_future_min", { n: min });
     const hours = Math.round(min / 60);
-    if (hours < 24) return `${sign}${hours} h`;
+    if (hours < 24) return t(past ? "p_bracketv.relative_past_hour" : "p_bracketv.relative_future_hour", { n: hours });
     const days = Math.round(hours / 24);
-    return `${sign}${days} j`;
+    return t(past ? "p_bracketv.relative_past_day" : "p_bracketv.relative_future_day", { n: days });
   } catch {
-    return "bientôt";
+    return t("p_bracketv.relative_soon");
   }
 }
 

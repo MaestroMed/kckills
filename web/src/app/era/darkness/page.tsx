@@ -15,6 +15,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { getEraById } from "@/lib/eras";
+import { getServerT } from "@/lib/i18n/server-lang";
 
 export const metadata: Metadata = {
   title: "L'ere sombre",
@@ -35,7 +36,8 @@ const SPRING = getEraById("lec-2024-spring");
 const SUMMER = getEraById("lec-2024-summer");
 const SACRE = getEraById("lec-2025-winter");
 
-export default function DarknessPage() {
+export default async function DarknessPage() {
+  const { t } = await getServerT();
   return (
     <div className="darkness-root relative -mx-4 -my-6 min-h-[calc(100vh+200px)] overflow-hidden">
       {/* ── Background layers ───────────────────────────────────── */}
@@ -63,7 +65,7 @@ export default function DarknessPage() {
         {/* HERO — massive inverted title */}
         <section className="text-center">
           <p className="font-data text-[10px] uppercase tracking-[0.4em] text-[#7c2424] mb-6">
-            Page non referencee &middot; robots: noindex
+            {t("p_darkness.hero_eyebrow")}
           </p>
           <h1
             className="font-display text-5xl md:text-7xl lg:text-8xl font-black uppercase leading-none tracking-tight"
@@ -74,12 +76,12 @@ export default function DarknessPage() {
               letterSpacing: "-0.02em",
             }}
           >
-            L&rsquo;ere
+            {t("p_darkness.hero_title_l1")}
             <br />
-            sombre
+            {t("p_darkness.hero_title_l2")}
           </h1>
           <p className="mt-8 font-display text-xs md:text-sm uppercase tracking-[0.35em] text-[#9a3a3a]">
-            Le chapitre qu&rsquo;on prefere oublier
+            {t("p_darkness.hero_tagline")}
           </p>
           <div className="mt-12 h-px w-40 bg-gradient-to-r from-transparent via-[#e84057]/40 to-transparent mx-auto" />
         </section>
@@ -87,19 +89,18 @@ export default function DarknessPage() {
         {/* OPENING */}
         <section className="space-y-6 text-lg md:text-xl leading-relaxed text-[#c4b0b0]">
           <p>
-            En 2023, la Karmine Corp achetait le slot LEC d&rsquo;Astralis pour{" "}
-            <strong className="text-[#e8bfa5]">129 millions de couronnes danoises</strong>,
-            soit environ 15 millions d&rsquo;euros.
+            {t("p_darkness.open_p1_pre")}{" "}
+            <strong className="text-[#e8bfa5]">{t("p_darkness.open_p1_amount")}</strong>
+            {t("p_darkness.open_p1_mid")}
             <br />
-            Kameto, devant les cameras, prononcait une phrase qui allait hanter le club :{" "}
-            <em>&laquo; On vise le Championnat du Monde dans 5 a 10 ans. &raquo;</em>
+            {t("p_darkness.open_p1_kameto")}{" "}
+            <em>{t("p_darkness.open_p1_quote")}</em>
           </p>
           <p>
-            La KC Army retenait son souffle. Le slot venait d&rsquo;etre achete, le roster se construisait,
-            le merchandising partait en rupture de stock. <strong className="text-[#e8bfa5]">Berlin</strong> attendait.
+            {t("p_darkness.open_p2_pre")} <strong className="text-[#e8bfa5]">{t("p_darkness.open_p2_berlin")}</strong> {t("p_darkness.open_p2_post")}
           </p>
           <p className="text-[#e84057] text-xl md:text-2xl font-display font-bold uppercase tracking-wide">
-            Berlin n&rsquo;a pas ete clemente.
+            {t("p_darkness.open_berlin_verdict")}
           </p>
         </section>
 
@@ -107,23 +108,19 @@ export default function DarknessPage() {
         <DarkChapter
           ordinal="I."
           period="Winter 2024"
-          title="Le choc culturel"
-          subtitle="10e sur 10"
-          result={WINTER?.result ?? "10e place"}
+          title={t("p_darkness.ch1_title")}
+          subtitle={t("p_darkness.ch1_subtitle")}
+          result={WINTER?.result ?? t("p_darkness.result_10th")}
         >
           <p>
-            Premier split LEC. Bo et Upset arrivent de Vitality et Fnatic, Cabochard tient le top lane,
-            Saken reste au mid, Targamas au support. Caliste, pourtant present dans le pipeline, n&rsquo;a
-            que 17 ans \u2014 la LEC exige 18. Il va dominer la LFL sur KCB pendant ce temps, en silence.
+            {t("p_darkness.ch1_p1")}
           </p>
           <p>
-            Sur la scene principale, c&rsquo;est une leçon d&rsquo;humilite. KC termine{" "}
-            <strong className="text-[#e84057]">dernier</strong>. Aucun playoff. Aucun momentum.
-            Les casters francais parlent de &laquo; choc culturel &raquo; et de &laquo; temps
-            d&rsquo;adaptation &raquo;. Les supporters veulent y croire.
+            {t("p_darkness.ch1_p2_pre")}{" "}
+            <strong className="text-[#e84057]">{t("p_darkness.ch1_p2_last")}</strong>{t("p_darkness.ch1_p2_post")}
           </p>
           <blockquote className="border-l-2 border-[#e84057]/40 pl-5 italic text-[#9a8080]">
-            &laquo; On savait que ca serait dur. On ne savait pas que ca serait <em>ca</em>. &raquo;
+            {t("p_darkness.ch1_quote_pre")}<em>{t("p_darkness.ch1_quote_em")}</em>{t("p_darkness.ch1_quote_post")}
           </blockquote>
         </DarkChapter>
 
@@ -131,32 +128,26 @@ export default function DarknessPage() {
         <DarkChapter
           ordinal="II."
           period="Spring 2024"
-          title="Le reverse sweep reverse"
-          subtitle="Deux derniers rangs consecutifs"
-          result={SPRING?.result ?? "10e place"}
+          title={t("p_darkness.ch2_title")}
+          subtitle={t("p_darkness.ch2_subtitle")}
+          result={SPRING?.result ?? t("p_darkness.result_10th")}
         >
           <p>
-            Le deuxieme split arrive avec la meme equipe, les memes espoirs, le meme discours sur
-            &laquo; le temps qu&rsquo;il faut &raquo;. Puis, le meme verdict :{" "}
-            <strong className="text-[#e84057]">dernier, encore</strong>. Deux splits, deux 10e places.
-            Une premiere pour un club de cette taille.
+            {t("p_darkness.ch2_p1_pre")}{" "}
+            <strong className="text-[#e84057]">{t("p_darkness.ch2_p1_last")}</strong>{t("p_darkness.ch2_p1_post")}
           </p>
           <p>
-            En playoffs, la KC Army retient son souffle une derniere fois. KC bat GIANTX, et accroche
-            G2 en BO5. Menes <strong>0-2</strong>, les joueurs sortent de leurs tripes pour remonter a{" "}
-            <strong>2-2</strong>. L&rsquo;atmosphere dans les live stream est electrique. On y croit.
-            Vraiment, cette fois.
+            {t("p_darkness.ch2_p2_pre")} <strong>{t("p_darkness.ch2_p2_02")}</strong>{t("p_darkness.ch2_p2_mid")}{" "}
+            <strong>{t("p_darkness.ch2_p2_22")}</strong>{t("p_darkness.ch2_p2_post")}
           </p>
           <p className="text-[#e84057] text-xl font-display font-bold">
-            Game 5. KC s&rsquo;effondre.
+            {t("p_darkness.ch2_game5")}
           </p>
           <p>
-            Reverse sweep reverse. Prime time, diffusion officielle, Kameto en larmes a la fin du match.
-            Un message public aux fans, reconnaissant la profondeur de l&rsquo;echec. Ce soir-la,
-            tout le monde comprend. Le statu quo est fini. La reconstruction doit etre totale.
+            {t("p_darkness.ch2_p3")}
           </p>
           <blockquote className="border-l-2 border-[#e84057]/40 pl-5 italic text-[#9a8080]">
-            &laquo; Je vous demande pardon. On va tout changer. &raquo;
+            {t("p_darkness.ch2_quote")}
           </blockquote>
         </DarkChapter>
 
@@ -164,27 +155,21 @@ export default function DarknessPage() {
         <DarkChapter
           ordinal="III."
           period="2 mai 2024"
-          title="La remise a zero"
-          subtitle="Clean slate"
-          result="Roster dissous"
+          title={t("p_darkness.ch3_title")}
+          subtitle={t("p_darkness.ch3_subtitle")}
+          result={t("p_darkness.ch3_result")}
         >
           <p>
-            <strong className="text-[#e8bfa5]">Cabochard. Bo. Saken.</strong> Trois noms sur la bench
-            list. Le communique KC tombe en debut de matinee, sec, sans fioritures. En l&rsquo;espace
-            d&rsquo;un week-end, le roster qui portait la plus grosse fanbase d&rsquo;Europe est dissous.
+            <strong className="text-[#e8bfa5]">{t("p_darkness.ch3_p1_names")}</strong> {t("p_darkness.ch3_p1_post")}
           </p>
           <p>
-            Trois semaines plus tard, une annonce fait trembler toute la scene LEC :{" "}
-            <strong className="text-[#e8bfa5]">Canna</strong>, champion du monde 2020 avec T1,
-            signe chez Karmine Corp. C&rsquo;est le premier import LCK majeur de l&rsquo;histoire du club,
-            et l&rsquo;un des plus gros transferts de la LEC. <strong className="text-[#e8bfa5]">Closer</strong>{" "}
-            suit depuis 100 Thieves. <strong className="text-[#e8bfa5]">Vladi</strong>, qui vient de
-            remporter la LFL Spring sur KCB, est promu au mid.
+            {t("p_darkness.ch3_p2_pre")}{" "}
+            <strong className="text-[#e8bfa5]">Canna</strong>{t("p_darkness.ch3_p2_canna")}{" "}
+            <strong className="text-[#e8bfa5]">Closer</strong>{" "}
+            {t("p_darkness.ch3_p2_closer")} <strong className="text-[#e8bfa5]">Vladi</strong>{t("p_darkness.ch3_p2_vladi")}
           </p>
           <p>
-            Summer 2024 : KC passe de dernier a <strong className="text-[#e8bfa5]">4e</strong> en un
-            seul split. Premier playoff LEC gagne dans l&rsquo;histoire du club.
-            L&rsquo;ombre recule, sans disparaitre tout a fait.
+            {t("p_darkness.ch3_p3_pre")} <strong className="text-[#e8bfa5]">{t("p_darkness.ch3_p3_4th")}</strong> {t("p_darkness.ch3_p3_post")}
           </p>
         </DarkChapter>
 
@@ -192,7 +177,7 @@ export default function DarknessPage() {
         <section className="space-y-10 text-center pt-16">
           <div className="h-px w-40 bg-gradient-to-r from-transparent via-[#e84057]/40 to-transparent mx-auto" />
           <p className="font-display text-sm uppercase tracking-[0.3em] text-[#7c5a3a]">
-            Ce que l&rsquo;ere sombre a prepare
+            {t("p_darkness.fade_eyebrow")}
           </p>
           <h2
             className="font-display text-4xl md:text-5xl lg:text-6xl font-black uppercase"
@@ -207,23 +192,22 @@ export default function DarknessPage() {
             Le Sacre
           </h2>
           <p className="text-[#9a8080] max-w-xl mx-auto">
-            Moins d&rsquo;un an plus tard, KC remportait sa premiere finale LEC{" "}
-            <strong className="text-[#c8aa6e]">3-0 contre G2</strong>, devant 801 369 viewers.
-            L&rsquo;ere sombre avait un sens.
+            {t("p_darkness.fade_p_pre")}{" "}
+            <strong className="text-[#c8aa6e]">{t("p_darkness.fade_p_score")}</strong>{t("p_darkness.fade_p_post")}
           </p>
           {SACRE && (
             <Link
               href={`/era/${SACRE.id}`}
               className="inline-flex items-center gap-3 rounded-xl border border-[#c8aa6e]/50 bg-gradient-to-br from-[#c8aa6e]/10 to-[#785a28]/5 px-8 py-4 font-display text-sm font-bold uppercase tracking-[0.2em] text-[#c8aa6e] transition-all hover:border-[#c8aa6e] hover:shadow-[0_0_40px_rgba(200,170,110,0.2)]"
             >
-              Retrouver la lumiere
+              {t("p_darkness.cta_light")}
               <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M9 5l7 7-7 7" />
               </svg>
             </Link>
           )}
           <p className="pt-10 font-data text-[10px] uppercase tracking-[0.3em] text-[#4a2424]">
-            La KC Army n&rsquo;oublie jamais
+            {t("p_darkness.never_forget")}
           </p>
         </section>
 
@@ -233,7 +217,7 @@ export default function DarknessPage() {
             href="/#timeline"
             className="font-data text-[11px] uppercase tracking-widest text-[#5a3030] hover:text-[#9a5050] transition-colors"
           >
-            &laquo; retour a la timeline officielle
+            {t("p_darkness.back_timeline")}
           </Link>
         </div>
       </div>

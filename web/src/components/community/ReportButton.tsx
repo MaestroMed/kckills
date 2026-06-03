@@ -45,6 +45,7 @@ import {
   useTransition,
 } from "react";
 import { m, AnimatePresence } from "motion/react";
+import { useT } from "@/lib/i18n/use-lang";
 
 // ─── Public types ─────────────────────────────────────────────────────
 
@@ -82,9 +83,11 @@ export interface ReportButtonController {
 
 interface ReasonOption {
   code: string;
-  label: string;
-  /** Short helper line shown under the label in the mobile sheet. */
-  description: string;
+  /** i18n key suffix (under p_comm) for the reason label. */
+  labelKey: string;
+  /** i18n key suffix (under p_comm) for the helper line shown under the
+   *  label in the mobile sheet. */
+  descriptionKey: string;
   /** Inline SVG `d` for a generic 24×24 stroke icon. */
   iconPath: string;
   /** Which target_types this option applies to. We hide reasons that
@@ -95,48 +98,48 @@ interface ReasonOption {
 const REASONS: ReasonOption[] = [
   {
     code: "wrong_clip",
-    label: "Le clip ne correspond pas",
-    description: "Mauvais moment, mauvais match, ou clip vide.",
+    labelKey: "reason_wrong_clip_label",
+    descriptionKey: "reason_wrong_clip_desc",
     iconPath:
       "M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2",
     appliesTo: ["kill", "community_clip"],
   },
   {
     code: "no_kill_visible",
-    label: "On ne voit pas le kill",
-    description: "Camera ailleurs, écran de mort, ou trop court.",
+    labelKey: "reason_no_kill_visible_label",
+    descriptionKey: "reason_no_kill_visible_desc",
     iconPath:
       "M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21",
     appliesTo: ["kill"],
   },
   {
     code: "wrong_player",
-    label: "Mauvais joueur / champion",
-    description: "Identification erronée du killer ou de la victime.",
+    labelKey: "reason_wrong_player_label",
+    descriptionKey: "reason_wrong_player_desc",
     iconPath:
       "M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z",
     appliesTo: ["kill", "community_clip"],
   },
   {
     code: "spam",
-    label: "Spam",
-    description: "Pub, lien suspect, message répété.",
+    labelKey: "reason_spam_label",
+    descriptionKey: "reason_spam_desc",
     iconPath:
       "M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z",
     appliesTo: ["comment", "community_clip"],
   },
   {
     code: "toxic",
-    label: "Toxique / haineux",
-    description: "Insultes, harcèlement, contenu de haine.",
+    labelKey: "reason_toxic_label",
+    descriptionKey: "reason_toxic_desc",
     iconPath:
       "M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728L5.636 5.636m12.728 12.728L18.364 5.636M5.636 18.364l12.728-12.728",
     appliesTo: ["comment", "community_clip"],
   },
   {
     code: "other",
-    label: "Autre",
-    description: "Décris ce qui ne va pas (optionnel).",
+    labelKey: "reason_other_label",
+    descriptionKey: "reason_other_desc",
     iconPath:
       "M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z",
     appliesTo: ["kill", "comment", "community_clip"],
@@ -278,6 +281,7 @@ export function ReportButton({
   controllerRef,
   hideTrigger = false,
 }: ReportButtonProps) {
+  const t = useT();
   const [open, setOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
   const [toast, setToast] = useState<
@@ -486,10 +490,10 @@ export function ReportButton({
   const label =
     ariaLabel ??
     (targetType === "comment"
-      ? "Signaler ce commentaire"
+      ? t("p_comm.report_comment_aria")
       : targetType === "community_clip"
-        ? "Signaler ce clip communautaire"
-        : "Signaler ce kill");
+        ? t("p_comm.report_clip_aria")
+        : t("p_comm.report_kill_aria"));
 
   // ─── Reason-row keyboard nav (arrow keys cycle, Enter selects) ──────
   const onReasonsKeyDown = useCallback(
@@ -528,10 +532,10 @@ export function ReportButton({
     if (!toast) return null;
     const text =
       toast === "sent"
-        ? "Merci, signalé"
+        ? t("p_comm.toast_sent")
         : toast === "rate_limited"
-          ? "Trop de signalements, réessayez plus tard"
-          : "Erreur, réessaie";
+          ? t("p_comm.toast_rate_limited")
+          : t("p_comm.toast_error");
     const tone =
       toast === "sent"
         ? "bg-[var(--green)]/20 text-[var(--green)] border border-[var(--green)]/35"
@@ -571,8 +575,8 @@ export function ReportButton({
         setOpen((v) => !v);
       }}
       disabled={reported || submitting}
-      aria-label={reported ? "Déjà signalé" : label}
-      title={reported ? "Déjà signalé" : label}
+      aria-label={reported ? t("p_comm.already_reported") : label}
+      title={reported ? t("p_comm.already_reported") : label}
       aria-haspopup={isMobile ? "dialog" : "menu"}
       aria-expanded={open}
       className={`${sizeBoxClass} flex items-center justify-center rounded-full text-white/55 hover:text-white hover:bg-white/10 transition-colors disabled:opacity-40 disabled:cursor-not-allowed outline-none focus-visible:ring-2 focus-visible:ring-[var(--gold)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg-primary)]`}
@@ -593,16 +597,16 @@ export function ReportButton({
       {!isMobile && open && reasons.length > 0 && (
         <div
           role="menu"
-          aria-label="Raisons du signalement"
+          aria-label={t("p_comm.report_reasons_aria")}
           onKeyDown={onReasonsKeyDown}
           className="absolute right-0 top-full mt-1.5 z-[400] min-w-[240px] rounded-xl border border-white/10 bg-[var(--bg-surface)] shadow-[0_18px_48px_rgba(0,0,0,0.65)] overflow-hidden"
         >
           <div className="px-3 py-2 border-b border-white/5">
             <p className="font-display text-[11px] font-bold uppercase tracking-widest text-[var(--gold)]/80">
-              Signaler
+              {t("p_comm.report_title")}
             </p>
             <p className="text-[10px] text-white/45 mt-0.5">
-              Pourquoi tu signales ?
+              {t("p_comm.report_why")}
             </p>
           </div>
           <ul className="py-1">
@@ -618,7 +622,7 @@ export function ReportButton({
                   }}
                   className="w-full text-left px-3 py-2 text-[12px] text-white/85 hover:bg-white/8 hover:text-white transition-colors outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--gold)]"
                 >
-                  {r.label}
+                  {t(`p_comm.${r.labelKey}`)}
                 </button>
               </li>
             ))}
@@ -683,20 +687,20 @@ export function ReportButton({
                     id={headingId}
                     className="font-display text-lg font-bold text-white leading-none"
                   >
-                    Signaler
+                    {t("p_comm.report_title")}
                   </h3>
                   <p className="font-data text-[10px] uppercase tracking-widest text-white/45 mt-1">
                     {targetType === "comment"
-                      ? "Ce commentaire"
+                      ? t("p_comm.report_target_comment")
                       : targetType === "community_clip"
-                        ? "Ce clip communautaire"
-                        : "Ce kill"}
+                        ? t("p_comm.report_target_clip")
+                        : t("p_comm.report_target_kill")}
                   </p>
                 </div>
                 <button
                   onClick={() => setOpen(false)}
                   className="flex h-9 w-9 items-center justify-center rounded-full bg-white/8 hover:bg-white/15 transition-colors outline-none focus-visible:ring-2 focus-visible:ring-[var(--gold)]"
-                  aria-label="Fermer"
+                  aria-label={t("p_comm.close")}
                 >
                   <svg
                     className="h-4 w-4 text-white/75"
@@ -717,7 +721,7 @@ export function ReportButton({
               {/* Reasons list (scrollable in case viewport is short) */}
               <div
                 role="menu"
-                aria-label="Raisons du signalement"
+                aria-label={t("p_comm.report_reasons_aria")}
                 onKeyDown={onReasonsKeyDown}
                 className="flex-1 overflow-y-auto px-3 py-3 space-y-1.5"
               >
@@ -772,10 +776,10 @@ export function ReportButton({
                         </span>
                         <div className="flex-1 min-w-0">
                           <p className="text-[14px] font-semibold text-white leading-snug">
-                            {r.label}
+                            {t(`p_comm.${r.labelKey}`)}
                           </p>
                           <p className="text-[11px] text-white/55 mt-0.5 leading-snug">
-                            {r.description}
+                            {t(`p_comm.${r.descriptionKey}`)}
                           </p>
                         </div>
                       </button>
@@ -788,7 +792,7 @@ export function ReportButton({
                             htmlFor={`${headingId}-note`}
                             className="sr-only"
                           >
-                            Détails (optionnel)
+                            {t("p_comm.report_details_label")}
                           </label>
                           <textarea
                             id={`${headingId}-note`}
@@ -796,7 +800,7 @@ export function ReportButton({
                             onChange={(e) => setOtherText(e.target.value)}
                             maxLength={500}
                             rows={3}
-                            placeholder="Décris le problème (optionnel)"
+                            placeholder={t("p_comm.report_details_placeholder")}
                             disabled={submitting}
                             className="w-full rounded-lg bg-[var(--bg-primary)] border border-white/10 px-3 py-2 text-[13px] text-white placeholder-white/30 outline-none focus:border-[var(--gold)]/55 focus:bg-white/5 disabled:opacity-60 resize-none"
                           />
@@ -832,7 +836,7 @@ export function ReportButton({
                   disabled={submitting}
                   className="flex-1 rounded-full bg-white/8 hover:bg-white/12 px-4 py-3 text-[14px] font-semibold text-white/85 outline-none focus-visible:ring-2 focus-visible:ring-[var(--gold)] disabled:opacity-60"
                 >
-                  Annuler
+                  {t("p_comm.cancel")}
                 </button>
                 <button
                   type="button"
@@ -844,7 +848,7 @@ export function ReportButton({
                   disabled={submitting || reported}
                   className="flex-1 rounded-full bg-[var(--gold)] hover:bg-[var(--gold-bright)] px-4 py-3 text-[14px] font-bold text-black transition-colors outline-none focus-visible:ring-2 focus-visible:ring-[var(--gold)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg-surface)] disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  {submitting ? "Envoi…" : "Envoyer"}
+                  {submitting ? t("p_comm.report_sending") : t("p_comm.report_send")}
                 </button>
               </div>
             </m.div>

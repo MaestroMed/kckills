@@ -36,6 +36,7 @@ import { m, AnimatePresence, useReducedMotion } from "motion/react";
 
 import { createClient } from "@/lib/supabase/client";
 import { Description } from "@/components/i18n/Description";
+import { useT } from "@/lib/i18n/use-lang";
 import {
   cleanFiltersSide,
   formatEloDelta,
@@ -90,6 +91,7 @@ export function VSRoulette({
   eras,
   rouletteThumbnails,
 }: VSRouletteProps) {
+  const t = useT();
   const prefersReducedMotion = useReducedMotion();
 
   // ─── Filter state (per side) ────────────────────────────────────
@@ -152,7 +154,7 @@ export function VSRoulette({
           : { kill_a: null, kill_b: null };
       }
     } catch (err) {
-      rpcError = err instanceof Error ? err.message : "Erreur réseau";
+      rpcError = err instanceof Error ? err.message : t("p_vsgame.error_network");
     }
 
     // Hold the spin until the visual finishes (unless reduced motion).
@@ -163,15 +165,14 @@ export function VSRoulette({
       if (rpcError) {
         setState({
           kind: "error",
-          message: `Impossible de tirer une paire : ${rpcError}`,
+          message: t("p_vsgame.spin_error", { error: rpcError }),
         });
         return;
       }
       if (!resultData?.kill_a || !resultData?.kill_b) {
         setState({
           kind: "empty",
-          message:
-            "Aucune paire ne correspond à ces filtres. Élargis les critères de l'un des côtés.",
+          message: t("p_vsgame.empty_no_pair"),
         });
         return;
       }
@@ -182,7 +183,7 @@ export function VSRoulette({
         b: resultData.kill_b,
       });
     }, remaining);
-  }, [leftFilters, rightFilters, prefersReducedMotion]);
+  }, [leftFilters, rightFilters, prefersReducedMotion, t]);
 
   // ─── Vote action ────────────────────────────────────────────────
   const castVote = useCallback(
@@ -213,14 +214,14 @@ export function VSRoulette({
         if (error) {
           setState({
             kind: "error",
-            message: `Vote non enregistré : ${error.message}`,
+            message: t("p_vsgame.vote_error", { error: error.message }),
           });
           return;
         }
         const rows = Array.isArray(data) ? data : [];
         const row = rows[0] as VSVoteResult | undefined;
         if (!row) {
-          setState({ kind: "error", message: "Vote non enregistré" });
+          setState({ kind: "error", message: t("p_vsgame.vote_not_recorded") });
           return;
         }
 
@@ -243,11 +244,11 @@ export function VSRoulette({
         setState({
           kind: "error",
           message:
-            err instanceof Error ? err.message : "Erreur réseau pendant le vote",
+            err instanceof Error ? err.message : t("p_vsgame.vote_network_error"),
         });
       }
     },
-    [state, leftFilters, rightFilters],
+    [state, leftFilters, rightFilters, t],
   );
 
   const spinAgain = useCallback(() => {
@@ -341,7 +342,7 @@ export function VSRoulette({
       >
         <div className="grid gap-5 md:grid-cols-2 md:gap-8">
           <FilterColumn
-            sideLabel="Côté gauche"
+            sideLabel={t("p_vsgame.side_left")}
             accent="var(--cyan)"
             value={leftFilters}
             onChange={setLeftFilters}
@@ -350,7 +351,7 @@ export function VSRoulette({
             eras={eras}
           />
           <FilterColumn
-            sideLabel="Côté droit"
+            sideLabel={t("p_vsgame.side_right")}
             accent="var(--gold)"
             value={rightFilters}
             onChange={setRightFilters}
@@ -400,9 +401,10 @@ function FiltersAccordion({
   onToggle: () => void;
   children: React.ReactNode;
 }) {
+  const t = useT();
   return (
     <section
-      aria-label="Filtres de la roulette"
+      aria-label={t("p_vsgame.filters_aria")}
       className="rounded-2xl border border-[var(--border-gold)] bg-[var(--bg-surface)]/70 backdrop-blur-md overflow-hidden"
       style={{
         boxShadow:
@@ -430,11 +432,11 @@ function FiltersAccordion({
             }}
           />
           <span className="font-data text-[11px] uppercase tracking-[0.3em] text-[var(--gold)]/80">
-            Filtres
+            {t("p_vsgame.filters")}
           </span>
         </div>
         <span className="text-[11px] uppercase tracking-widest text-white/40 md:hidden">
-          {open ? "Réduire" : "Déployer"}
+          {open ? t("p_vsgame.collapse") : t("p_vsgame.expand")}
         </span>
       </button>
       <div
@@ -468,6 +470,7 @@ function FilterColumn({
   champions: string[];
   eras: VSEraOption[];
 }) {
+  const t = useT();
   // Champions filtered by player : if a player is picked, narrow the
   // champion list to the champions actually played by that ign (we
   // can't know that without a DB hit, so we just show all and let the
@@ -503,21 +506,21 @@ function FilterColumn({
           type="button"
           onClick={() => onChange({})}
           className="text-[10px] uppercase tracking-widest text-white/40 hover:text-white/80 transition-colors"
-          aria-label={`Réinitialiser les filtres ${sideLabel}`}
+          aria-label={t("p_vsgame.reset_side_aria", { side: sideLabel })}
         >
-          Reset
+          {t("p_vsgame.reset")}
         </button>
       </div>
 
       {/* Player */}
-      <Field label="Joueur">
+      <Field label={t("p_vsgame.field_player")}>
         <select
           value={playerSelected}
           onChange={(e) => set({ player_slug: e.target.value || undefined })}
           className="vs-select"
-          aria-label={`Joueur ${sideLabel}`}
+          aria-label={t("p_vsgame.player_side_aria", { side: sideLabel })}
         >
-          <option value="">Tous</option>
+          <option value="">{t("p_vsgame.opt_all_m")}</option>
           {players.map((p) => (
             <option key={p.ign} value={p.ign}>
               {p.ign}
@@ -528,7 +531,7 @@ function FilterColumn({
       </Field>
 
       {/* Role */}
-      <Field label="Rôle">
+      <Field label={t("p_vsgame.field_role")}>
         <select
           value={roleSelected}
           onChange={(e) =>
@@ -537,9 +540,9 @@ function FilterColumn({
             })
           }
           className="vs-select"
-          aria-label={`Rôle ${sideLabel}`}
+          aria-label={t("p_vsgame.role_side_aria", { side: sideLabel })}
         >
-          <option value="">Tous</option>
+          <option value="">{t("p_vsgame.opt_all_m")}</option>
           {VS_ROLES.map((r) => (
             <option key={r.value} value={r.value}>
               {r.label}
@@ -549,14 +552,14 @@ function FilterColumn({
       </Field>
 
       {/* Champion */}
-      <Field label="Champion">
+      <Field label={t("p_vsgame.field_champion")}>
         <select
           value={championSelected}
           onChange={(e) => set({ champion: e.target.value || undefined })}
           className="vs-select"
-          aria-label={`Champion ${sideLabel}`}
+          aria-label={t("p_vsgame.champion_side_aria", { side: sideLabel })}
         >
-          <option value="">Tous</option>
+          <option value="">{t("p_vsgame.opt_all_m")}</option>
           {championOptions.map((c) => (
             <option key={c} value={c}>
               {c}
@@ -566,7 +569,7 @@ function FilterColumn({
       </Field>
 
       {/* Era */}
-      <Field label="Époque">
+      <Field label={t("p_vsgame.field_era")}>
         <select
           value={eraSelected}
           onChange={(e) => {
@@ -592,9 +595,9 @@ function FilterColumn({
             });
           }}
           className="vs-select"
-          aria-label={`Époque ${sideLabel}`}
+          aria-label={t("p_vsgame.era_side_aria", { side: sideLabel })}
         >
-          <option value="">Toutes</option>
+          <option value="">{t("p_vsgame.opt_all_f")}</option>
           {eras.map((era) => (
             <option key={era.id} value={era.id}>
               {era.period} · {era.label}
@@ -604,7 +607,7 @@ function FilterColumn({
       </Field>
 
       {/* Multi-kill */}
-      <Field label="Multi-kill">
+      <Field label={t("p_vsgame.field_multikill")}>
         <select
           value={multiSelected}
           onChange={(e) =>
@@ -614,9 +617,9 @@ function FilterColumn({
             })
           }
           className="vs-select"
-          aria-label={`Multi-kill ${sideLabel}`}
+          aria-label={t("p_vsgame.multikill_side_aria", { side: sideLabel })}
         >
-          <option value="">Tous</option>
+          <option value="">{t("p_vsgame.opt_all_m")}</option>
           {VS_MULTIKILL_OPTIONS.map((o) => (
             <option key={o.value} value={o.value}>
               {o.label}
@@ -635,15 +638,15 @@ function FilterColumn({
               set({ is_first_blood: e.target.checked ? true : undefined })
             }
             className="h-4 w-4 rounded border border-white/30 bg-transparent accent-[var(--gold)]"
-            aria-label={`First blood uniquement ${sideLabel}`}
+            aria-label={t("p_vsgame.first_blood_side_aria", { side: sideLabel })}
           />
           <span className="text-[11px] uppercase tracking-widest text-white/70">
-            First Blood
+            {t("p_vsgame.first_blood")}
           </span>
         </label>
         <div className="text-right">
           <p className="font-data text-[9px] uppercase tracking-[0.25em] text-white/40">
-            Score IA min · {(value.min_highlight_score ?? 0).toFixed(1)}
+            {t("p_vsgame.ai_score_min")} · {(value.min_highlight_score ?? 0).toFixed(1)}
           </p>
           <input
             type="range"
@@ -658,7 +661,7 @@ function FilterColumn({
               })
             }
             className="w-[110px] accent-[var(--gold)] mt-1"
-            aria-label={`Score IA minimum ${sideLabel}`}
+            aria-label={t("p_vsgame.ai_score_min_side_aria", { side: sideLabel })}
           />
         </div>
       </div>
@@ -740,20 +743,21 @@ function SpinButton({
   disabled: boolean;
   state: SpinState["kind"];
 }) {
+  const t = useT();
   const label =
     state === "spinning"
-      ? "Roulette en cours…"
+      ? t("p_vsgame.spin_running")
       : state === "idle"
-        ? "SPIN"
+        ? t("p_vsgame.spin")
         : state === "voted" || state === "voting"
-          ? "Re-spin"
-          : "SPIN";
+          ? t("p_vsgame.respin")
+          : t("p_vsgame.spin");
   return (
     <button
       type="button"
       onClick={onClick}
       disabled={disabled}
-      aria-label="Lancer la roulette"
+      aria-label={t("p_vsgame.spin_aria")}
       className="relative group inline-flex items-center justify-center font-display text-base font-black uppercase tracking-[0.3em] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gold)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg-primary)] disabled:cursor-not-allowed disabled:opacity-70"
       style={{
         padding: "18px 42px",
@@ -819,6 +823,7 @@ function Arena({
   autoNextLeft: number | null;
   onCancelAutoNext: () => void;
 }) {
+  const t = useT();
   if (state.kind === "idle") {
     return (
       <IdlePlaceholder
@@ -851,7 +856,7 @@ function Arena({
     return (
       <CenteredCard tone="warn">
         <p className="font-display text-lg font-bold text-[var(--gold-bright)]">
-          Aucune paire trouvée
+          {t("p_vsgame.empty_title")}
         </p>
         <p className="mt-2 text-sm text-white/70 max-w-md mx-auto">
           {state.message}
@@ -861,9 +866,9 @@ function Arena({
             type="button"
             onClick={onResetFilters}
             className="rounded-xl border border-white/25 bg-black/30 px-4 py-2 font-display text-xs font-bold uppercase tracking-widest text-white/80 hover:border-white/50"
-            aria-label="Réinitialiser les filtres"
+            aria-label={t("p_vsgame.reset_filters_aria")}
           >
-            Changer filtres
+            {t("p_vsgame.change_filters")}
           </button>
         </div>
       </CenteredCard>
@@ -874,7 +879,7 @@ function Arena({
     return (
       <CenteredCard tone="error">
         <p className="font-display text-lg font-bold text-[var(--red)]">
-          Erreur
+          {t("p_vsgame.error")}
         </p>
         <p className="mt-2 text-sm text-white/70 max-w-md mx-auto">
           {state.message}
@@ -967,6 +972,7 @@ function IdlePlaceholder({
   thumbnails: string[];
   prefersReducedMotion: boolean;
 }) {
+  const t = useT();
   // Show a static 3-thumbnail stack on each side, gently pulsing, with
   // a "Lance la roulette" tagline. No animation cycling — keeps idle
   // CPU near zero.
@@ -981,8 +987,8 @@ function IdlePlaceholder({
         </p>
         <p className="font-data text-[10px] uppercase tracking-[0.3em] text-white/45 max-w-[140px] text-center">
           {prefersReducedMotion
-            ? "Appuie sur SPIN"
-            : "Lance la roulette"}
+            ? t("p_vsgame.idle_press_spin")
+            : t("p_vsgame.idle_launch")}
         </p>
       </div>
       <IdleStack
@@ -1003,6 +1009,7 @@ function IdleStack({
   accent: string;
   mirror?: boolean;
 }) {
+  const t = useT();
   return (
     <div
       className="relative rounded-2xl border bg-[var(--bg-surface)]/60 overflow-hidden"
@@ -1019,7 +1026,7 @@ function IdleStack({
             className="font-data text-[10px] uppercase tracking-widest text-white/30"
             aria-hidden
           >
-            Aucun clip
+            {t("p_vsgame.no_clip")}
           </div>
         ) : (
           thumbnails.map((src, i) => (
@@ -1071,6 +1078,7 @@ function RouletteReel({
   prefersReducedMotion: boolean;
   delayMs?: number;
 }) {
+  const t = useT();
   const [tickIdx, setTickIdx] = useState(0);
   const [phase, setPhase] = useState<"fast" | "slow" | "lock">("fast");
 
@@ -1135,7 +1143,7 @@ function RouletteReel({
         boxShadow: `0 20px 50px rgba(0,0,0,0.55), 0 0 0 1px ${accent}30, 0 0 60px ${accent}45`,
       }}
       aria-live="polite"
-      aria-label="Roulette en cours"
+      aria-label={t("p_vsgame.reel_aria")}
     >
       {/* Background flicker thumb */}
       {currentThumb ? (
@@ -1248,6 +1256,7 @@ function ClipPanel({
   dimmed: boolean;
   prefersReducedMotion: boolean;
 }) {
+  const t = useT();
   const videoRef = useRef<HTMLVideoElement>(null);
   const videoUrl =
     kill.clip_url_vertical_low ?? kill.clip_url_vertical ?? null;
@@ -1303,11 +1312,11 @@ function ClipPanel({
           playsInline
           preload="metadata"
           className="absolute inset-0 h-full w-full object-cover"
-          aria-label={`Clip de ${kill.killer_name ?? kill.killer_champion ?? "?"}`}
+          aria-label={t("p_vsgame.clip_of_aria", { name: kill.killer_name ?? kill.killer_champion ?? "?" })}
         />
       ) : (
         <div className="absolute inset-0 flex items-center justify-center text-xs text-white/40">
-          Clip indisponible
+          {t("p_vsgame.clip_unavailable")}
         </div>
       )}
 
@@ -1449,8 +1458,9 @@ function VoteRow({
   disabled: boolean;
   onVote: (choice: "a" | "b" | "tie") => void;
 }) {
-  const labelA = a.killer_name ?? a.killer_champion ?? "Gauche";
-  const labelB = b.killer_name ?? b.killer_champion ?? "Droite";
+  const t = useT();
+  const labelA = a.killer_name ?? a.killer_champion ?? t("p_vsgame.left");
+  const labelB = b.killer_name ?? b.killer_champion ?? t("p_vsgame.right");
   return (
     <div className="space-y-2.5">
       <div className="grid gap-3 md:grid-cols-[1fr_auto_1fr] items-stretch">
@@ -1458,7 +1468,7 @@ function VoteRow({
         type="button"
         onClick={() => onVote("a")}
         disabled={disabled}
-        aria-label={`Vote pour le clip de ${labelA}`}
+        aria-label={t("p_vsgame.vote_clip_aria", { name: labelA })}
         whileTap={{ scale: 0.97 }}
         className="group rounded-xl border border-[var(--cyan)]/40 bg-[var(--cyan)]/5 backdrop-blur-sm px-5 py-3.5 font-display text-sm font-black uppercase tracking-[0.2em] text-[var(--cyan)] hover:bg-[var(--cyan)]/15 hover:border-[var(--cyan)] disabled:opacity-50 disabled:cursor-not-allowed transition-all"
         style={{
@@ -1468,32 +1478,32 @@ function VoteRow({
         <span className="mr-2 group-hover:-translate-x-0.5 inline-block transition-transform">
           👈
         </span>
-        Plus fort
+        {t("p_vsgame.vote_stronger")}
       </m.button>
 
       <m.button
         type="button"
         onClick={() => onVote("tie")}
         disabled={disabled}
-        aria-label="Vote pour l'égalité"
+        aria-label={t("p_vsgame.vote_tie_aria")}
         whileTap={{ scale: 0.97 }}
         className="rounded-xl border border-white/25 bg-black/30 backdrop-blur-sm px-4 py-3 font-data text-[11px] font-bold uppercase tracking-[0.3em] text-white/70 hover:border-white/55 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed transition-all"
       >
-        Égalité
+        {t("p_vsgame.tie")}
       </m.button>
 
       <m.button
         type="button"
         onClick={() => onVote("b")}
         disabled={disabled}
-        aria-label={`Vote pour le clip de ${labelB}`}
+        aria-label={t("p_vsgame.vote_clip_aria", { name: labelB })}
         whileTap={{ scale: 0.97 }}
         className="group rounded-xl border border-[var(--gold)]/45 bg-[var(--gold)]/8 backdrop-blur-sm px-5 py-3.5 font-display text-sm font-black uppercase tracking-[0.2em] text-[var(--gold)] hover:bg-[var(--gold)]/20 hover:border-[var(--gold)] disabled:opacity-50 disabled:cursor-not-allowed transition-all"
         style={{
           boxShadow: "0 12px 28px rgba(200,170,110,0.22)",
         }}
       >
-        Plus fort
+        {t("p_vsgame.vote_stronger")}
         <span className="ml-2 group-hover:translate-x-0.5 inline-block transition-transform">
           👉
         </span>
@@ -1503,7 +1513,7 @@ function VoteRow({
         className="hidden md:block text-center font-data text-[9px] uppercase tracking-[0.3em] text-white/30"
         aria-hidden
       >
-        ← / → pour voter · ↓ égalité · Espace pour relancer
+        {t("p_vsgame.keyboard_hint")}
       </p>
     </div>
   );
@@ -1526,6 +1536,7 @@ function ResultBlock({
   autoNextLeft: number | null;
   onCancelAutoNext: () => void;
 }) {
+  const t = useT();
   const counting = autoNextLeft != null && autoNextLeft > 0;
   const { a, b, result, voted, deltaA, deltaB } = state;
   const aIsRowA = result.kill_a_id === a.id;
@@ -1549,16 +1560,16 @@ function ResultBlock({
         <div className="flex items-center gap-2">
           <Losange small />
           <p className="font-data text-[10px] uppercase tracking-[0.3em] text-[var(--gold)]/70">
-            {inserted ? "Vote enregistré" : "Vote déjà compté"}
+            {inserted ? t("p_vsgame.vote_recorded") : t("p_vsgame.vote_already_counted")}
           </p>
         </div>
         {voted === "tie" ? (
           <p className="font-display text-[11px] uppercase tracking-widest text-white/55">
-            Égalité — pas de gagnant
+            {t("p_vsgame.tie_no_winner")}
           </p>
         ) : (
           <p className="font-display text-[11px] uppercase tracking-widest text-white/55">
-            Vainqueur :{" "}
+            {t("p_vsgame.winner_label")}{" "}
             <span className="text-[var(--gold)]">
               {voted === "a"
                 ? a.killer_name ?? a.killer_champion
@@ -1610,15 +1621,15 @@ function ResultBlock({
             className="font-data text-[10px] uppercase tracking-[0.25em] text-white/55"
             aria-live="polite"
           >
-            Duel suivant dans {autoNextLeft}s
+            {t("p_vsgame.next_duel_in", { n: autoNextLeft ?? 0 })}
           </p>
           <button
             type="button"
             onClick={onCancelAutoNext}
             className="rounded-md border border-white/20 px-2.5 py-1 font-data text-[10px] uppercase tracking-widest text-white/60 hover:border-white/50 hover:text-white transition-colors"
-            aria-label="Rester sur ce résultat et stopper le passage automatique"
+            aria-label={t("p_vsgame.stay_aria")}
           >
-            Rester
+            {t("p_vsgame.stay")}
           </button>
         </div>
       ) : null}
@@ -1629,8 +1640,8 @@ function ResultBlock({
           onClick={onSpinAgain}
           aria-label={
             counting
-              ? "Passer au duel suivant maintenant"
-              : "Relancer la roulette avec les mêmes filtres"
+              ? t("p_vsgame.next_duel_now_aria")
+              : t("p_vsgame.respin_same_filters_aria")
           }
           className="rounded-xl bg-[var(--gold)] px-6 py-2.5 font-display text-xs font-black uppercase tracking-[0.25em] text-[var(--bg-primary)] hover:bg-[var(--gold-bright)] hover:scale-[1.02] active:scale-95 transition-all"
           style={{
@@ -1638,21 +1649,21 @@ function ResultBlock({
               "0 12px 28px rgba(200,170,110,0.35), inset 0 1px 0 rgba(255,255,255,0.4)",
           }}
         >
-          {counting ? "Suivant" : "Encore"}
+          {counting ? t("p_vsgame.next") : t("p_vsgame.again")}
         </button>
         <button
           type="button"
           onClick={onResetFilters}
-          aria-label="Réinitialiser les filtres"
+          aria-label={t("p_vsgame.reset_filters_aria")}
           className="rounded-xl border border-white/25 bg-black/30 px-5 py-2.5 font-display text-xs font-bold uppercase tracking-[0.25em] text-white/75 hover:border-white/55 hover:text-white transition-all"
         >
-          Changer filtres
+          {t("p_vsgame.change_filters")}
         </button>
         <Link
           href="/vs/leaderboard"
           className="rounded-xl border border-[var(--gold)]/45 bg-black/30 px-5 py-2.5 font-display text-xs font-bold uppercase tracking-[0.25em] text-[var(--gold)] hover:border-[var(--gold)] hover:bg-[var(--gold)]/10 transition-all"
         >
-          Classement ELO
+          {t("p_vsgame.elo_leaderboard")}
         </Link>
       </div>
     </div>
@@ -1678,6 +1689,7 @@ function ResultStatCard({
   wins: number;
   winner: boolean;
 }) {
+  const t = useT();
   const wr = winRatePct(wins, battles);
   return (
     <div
@@ -1710,14 +1722,14 @@ function ResultStatCard({
                 "linear-gradient(135deg, var(--gold-bright), var(--gold))",
             }}
           >
-            Vainqueur
+            {t("p_vsgame.winner_badge")}
           </span>
         ) : null}
       </div>
 
       <div className="mt-3 grid grid-cols-3 gap-2">
         <Stat
-          label="ELO"
+          label={t("p_vsgame.stat_elo")}
           value={`${eloAfter}`}
           sub={
             <span
@@ -1735,8 +1747,8 @@ function ResultStatCard({
             </span>
           }
         />
-        <Stat label="Battles" value={`${battles}`} />
-        <Stat label="Winrate" value={`${wr}%`} />
+        <Stat label={t("p_vsgame.stat_battles")} value={`${battles}`} />
+        <Stat label={t("p_vsgame.stat_winrate")} value={`${wr}%`} />
       </div>
     </div>
   );

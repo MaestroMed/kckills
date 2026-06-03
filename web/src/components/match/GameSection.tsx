@@ -5,6 +5,9 @@ import { pickAssetUrl } from "@/lib/kill-assets";
 import type { PublishedKillRow } from "@/lib/supabase/kills";
 import type { MatchGame, MatchGameParticipant } from "@/lib/supabase/match";
 import { KDAChart, type KDAChartPlayer } from "@/app/match/[slug]/KDAChart";
+import { getServerT } from "@/lib/i18n/server-lang";
+
+type TFn = (key: string, vars?: Record<string, string | number>) => string;
 
 /**
  * GameSection — per-game premium block under the timeline header.
@@ -75,7 +78,7 @@ function chartPlayers(
 
 // ─── Component ────────────────────────────────────────────────────────
 
-export function GameSection({
+export async function GameSection({
   game,
   kills,
   kcWon,
@@ -83,6 +86,7 @@ export function GameSection({
   kcTeamId,
   anchorId,
 }: GameSectionProps) {
+  const { t } = await getServerT();
   const players = chartPlayers(game, kcTeamId);
   const kcParts = game.participants.filter((p) => p.teamId === kcTeamId);
   const oppParts = game.participants.filter(
@@ -95,14 +99,14 @@ export function GameSection({
   return (
     <article
       id={anchorId}
-      aria-label={`Section Game ${game.number}`}
+      aria-label={t("p_matchx.section_game", { n: game.number })}
       className="scroll-mt-32 rounded-2xl border border-[var(--border-gold)] bg-[var(--bg-surface)] overflow-hidden"
     >
       {/* Header */}
       <header className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--border-gold)] bg-[var(--bg-primary)] px-4 py-3">
         <div className="flex items-center gap-3">
           <span className="font-display text-base font-black uppercase tracking-widest text-[var(--gold)]">
-            Game {game.number}
+            {t("p_matchx.game_n", { n: game.number })}
           </span>
           <span className="font-data text-[11px] text-[var(--text-muted)]">
             {formatMinSec(game.durationSeconds)}
@@ -115,7 +119,7 @@ export function GameSection({
                   : "border-[var(--red)]/40 bg-[var(--red)]/10 text-[var(--red)]"
               }`}
             >
-              {kcWon ? "KC Win" : "KC Loss"}
+              {kcWon ? t("p_matchx.kc_win") : t("p_matchx.kc_loss")}
             </span>
           )}
         </div>
@@ -125,7 +129,7 @@ export function GameSection({
           )}
           {kcSide && (
             <span>
-              KC side <span className="font-bold text-[var(--gold)]">{kcSide}</span>
+              {t("p_matchx.kc_side")} <span className="font-bold text-[var(--gold)]">{kcSide}</span>
             </span>
           )}
         </div>
@@ -135,13 +139,14 @@ export function GameSection({
       {(kcParts.length > 0 || oppParts.length > 0) && (
         <div
           className="flex items-center justify-between gap-3 border-b border-[var(--border-gold)] bg-[var(--bg-elevated)]/40 px-4 py-3"
-          aria-label="Picks de la game"
+          aria-label={t("p_matchx.picks_aria")}
         >
           <PickGroup
             label="KC"
             accent="gold"
             side={kcSide}
             participants={kcParts}
+            t={t}
           />
           <span aria-hidden className="font-display text-xs text-[var(--text-disabled)]">
             VS
@@ -152,6 +157,7 @@ export function GameSection({
             side={oppSide}
             participants={oppParts}
             alignRight
+            t={t}
           />
         </div>
       )}
@@ -160,7 +166,7 @@ export function GameSection({
       {players.length > 0 && (
         <div className="border-b border-[var(--border-gold)] bg-[var(--bg-primary)]/40 p-4">
           <p className="mb-3 font-data text-[10px] uppercase tracking-[0.3em] text-[var(--gold)]/80">
-            Évolution des kills · cliquez sur un joueur pour masquer la ligne
+            {t("p_matchx.kda_caption")}
           </p>
           <KDAChart
             gameNumber={game.number}
@@ -176,18 +182,18 @@ export function GameSection({
         <div className="space-y-3 p-4">
           <div className="flex items-baseline justify-between">
             <p className="font-data text-[10px] uppercase tracking-[0.3em] text-[var(--gold)]/80">
-              Top {top.length} highlights de la game
+              {t("p_matchx.top_highlights", { n: top.length })}
             </p>
             <Link
               href={`/scroll?gameId=${game.externalId}`}
               className="font-data text-[10px] uppercase tracking-widest text-[var(--text-muted)] hover:text-[var(--gold)]"
             >
-              Voir tous ›
+              {t("p_matchx.see_all")}
             </Link>
           </div>
           <div className="-mx-4 grid grid-flow-col auto-cols-[78%] gap-3 overflow-x-auto px-4 pb-2 snap-x snap-mandatory sm:grid-flow-row sm:grid-cols-3 sm:auto-cols-auto sm:overflow-visible sm:px-0 sm:mx-0 lg:grid-cols-5">
             {top.map((k) => (
-              <MiniHighlightCard key={k.id} kill={k} opponentCode={opponentCode} />
+              <MiniHighlightCard key={k.id} kill={k} opponentCode={opponentCode} t={t} />
             ))}
           </div>
         </div>
@@ -196,7 +202,7 @@ export function GameSection({
       {/* No-clip fallback */}
       {top.length === 0 && (
         <div className="px-4 py-6 text-center text-xs text-[var(--text-muted)]">
-          Pas encore de clips publiés pour cette game — le pipeline est en route.
+          {t("p_matchx.no_clips_game")}
         </div>
       )}
     </article>
@@ -211,12 +217,14 @@ function PickGroup({
   side,
   participants,
   alignRight,
+  t,
 }: {
   label: string;
   accent: "gold" | "red";
   side: "blue" | "red" | null;
   participants: MatchGameParticipant[];
   alignRight?: boolean;
+  t: TFn;
 }) {
   const dotColor =
     side === "blue" ? "bg-blue-400" : side === "red" ? "bg-red-400" : "bg-white/40";
@@ -234,7 +242,7 @@ function PickGroup({
         </span>
         <span className="flex items-center gap-1.5 text-[9px] uppercase tracking-widest text-[var(--text-muted)]">
           <span className={`h-1.5 w-1.5 rounded-full ${dotColor}`} aria-hidden />
-          {side ? `Côté ${side}` : "—"}
+          {side ? t("p_matchx.side_label", { side }) : "—"}
         </span>
       </div>
       <div className={`flex flex-1 items-center gap-1 ${alignRight ? "flex-row-reverse" : ""}`}>
@@ -244,7 +252,11 @@ function PickGroup({
             href={`/player/${encodeURIComponent(p.playerIgn)}`}
             className="group relative h-9 w-9 flex-shrink-0 overflow-hidden rounded-md border border-[var(--border-gold)] bg-[var(--bg-primary)] transition-all hover:border-[var(--gold)]/60 hover:scale-110 sm:h-10 sm:w-10"
             title={`${p.playerIgn} · ${p.champion} · ${p.kills}/${p.deaths}/${p.assists}`}
-            aria-label={`${p.playerIgn} a joué ${p.champion} : KDA ${p.kills}/${p.deaths}/${p.assists}`}
+            aria-label={t("p_matchx.pick_player_aria", {
+              ign: p.playerIgn,
+              champion: p.champion,
+              kda: `${p.kills}/${p.deaths}/${p.assists}`,
+            })}
           >
             <Image
               src={championIconUrl(p.champion)}
@@ -268,9 +280,11 @@ function PickGroup({
 function MiniHighlightCard({
   kill,
   opponentCode,
+  t,
 }: {
   kill: PublishedKillRow;
   opponentCode: string;
+  t: TFn;
 }) {
   const thumb = pickAssetUrl(kill, "thumbnail");
   const score = kill.highlight_score?.toFixed(1) ?? "—";
@@ -280,7 +294,11 @@ function MiniHighlightCard({
       href={`/kill/${kill.id}`}
       className="group relative block snap-start overflow-hidden rounded-xl border border-[var(--border-gold)] bg-black transition-all hover:border-[var(--gold)]/60 hover:-translate-y-1 hover:shadow-lg hover:shadow-[var(--gold)]/10"
       style={{ aspectRatio: "9 / 16" }}
-      aria-label={`Clip : ${kill.killer_champion ?? "?"} élimine ${kill.victim_champion ?? "?"} à T+${formatMinSec(kill.game_time_seconds)}`}
+      aria-label={t("p_matchx.clip_aria", {
+        killer: kill.killer_champion ?? "?",
+        victim: kill.victim_champion ?? "?",
+        time: formatMinSec(kill.game_time_seconds),
+      })}
     >
       {thumb ? (
         <Image
@@ -324,7 +342,7 @@ function MiniHighlightCard({
           )}
           {kill.is_first_blood && (
             <span className="rounded-full bg-[var(--red)]/90 px-2 py-0.5 font-data text-[8px] font-bold uppercase tracking-widest text-white">
-              First Blood
+              {t("kill.first_blood")}
             </span>
           )}
         </div>

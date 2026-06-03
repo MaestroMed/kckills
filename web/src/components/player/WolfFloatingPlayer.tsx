@@ -50,6 +50,7 @@ import { useEffect, useRef, useState } from "react";
 import { m, AnimatePresence, useReducedMotion } from "motion/react";
 import { useFloatingPlayerInternal } from "@/lib/audio/use-floating-player";
 import { type PlaylistId } from "@/lib/audio/playlists";
+import { useT } from "@/lib/i18n/use-lang";
 
 // ─── Wolf head SVG silhouette ─────────────────────────────────────
 // Stylised geometric wolf head — pointy ears, angular snout, big eye.
@@ -562,6 +563,7 @@ function HiddenAudioIframe() {
 
 // ─── Compact pill (always visible, bottom-right) ─────────────────
 function CompactPill({ onExpand }: { onExpand: () => void }) {
+  const t = useT();
   const { isPlaying, isOptedIn, toggle, currentTrack, playlistOverride } =
     useFloatingPlayerInternal();
   const reducedMotion = useReducedMotion() ?? false;
@@ -597,8 +599,10 @@ function CompactPill({ onExpand }: { onExpand: () => void }) {
       role="button"
       aria-label={
         isPlaying
-          ? `En lecture : ${currentTrack?.title ?? "vibe KC"}. Cliquer pour ouvrir le lecteur.`
-          : "Lancer la vibe KC"
+          ? t("p_pteam.wolf_now_playing", {
+              title: currentTrack?.title ?? t("p_pteam.wolf_vibe_kc_fallback"),
+            })
+          : t("p_pteam.wolf_launch_vibe_kc")
       }
       onClick={(e) => {
         // First-time visitors will tap the FAB *to start the audio*.
@@ -649,7 +653,7 @@ function CompactPill({ onExpand }: { onExpand: () => void }) {
                 bccActive ? "text-[var(--red)]/80" : "text-[var(--gold)]/60"
               }`}
             >
-              {bccActive ? "◆ BCC" : "Vibe"}
+              {bccActive ? "◆ BCC" : t("p_pteam.wolf_vibe")}
             </span>
             <span className="text-[11px] text-[var(--gold-bright)] truncate font-medium">
               {currentTrack.title}
@@ -657,7 +661,7 @@ function CompactPill({ onExpand }: { onExpand: () => void }) {
           </>
         ) : (
           <span className="text-[11px] text-[var(--gold-bright)]/80 leading-none">
-            {isOptedIn ? "Reprendre" : "Lancer la vibe"}
+            {isOptedIn ? t("p_pteam.wolf_resume") : t("p_pteam.wolf_launch_vibe")}
           </span>
         )}
       </div>
@@ -668,6 +672,7 @@ function CompactPill({ onExpand }: { onExpand: () => void }) {
 
 // ─── Expanded panel (track info + scrubber + controls) ───────────
 function ExpandedPanel({ onCollapse }: { onCollapse: () => void }) {
+  const t = useT();
   const {
     isPlaying,
     currentTrack,
@@ -710,8 +715,13 @@ function ExpandedPanel({ onCollapse }: { onCollapse: () => void }) {
   }, [toggle, next, prev, onCollapse]);
 
   const headerKicker = bccActive
-    ? "BCC Playlist · Ahou Ahou"
-    : `Vibe KC · ${playlistId === "homepage" ? "Ambient" : "Hype"}`;
+    ? t("p_pteam.wolf_kicker_bcc")
+    : t("p_pteam.wolf_kicker_vibe_kc", {
+        playlist:
+          playlistId === "homepage"
+            ? t("p_pteam.wolf_playlist_ambient")
+            : t("p_pteam.wolf_playlist_hype"),
+      });
 
   return (
     <>
@@ -744,7 +754,7 @@ function ExpandedPanel({ onCollapse }: { onCollapse: () => void }) {
         }}
         role="dialog"
         aria-modal="true"
-        aria-label="Lecteur audio KC"
+        aria-label={t("p_pteam.wolf_player_aria")}
       >
         {/* Header — wolf + track info + close */}
         <div className="flex items-center gap-3 p-4 pb-2">
@@ -771,7 +781,7 @@ function ExpandedPanel({ onCollapse }: { onCollapse: () => void }) {
               {bccActive && (
                 <span
                   className="shrink-0 font-data text-[9px] uppercase tracking-[0.2em] text-[var(--red)] border border-[var(--red)]/50 rounded-sm px-1 py-px"
-                  aria-label="Playlist BCC active"
+                  aria-label={t("p_pteam.wolf_bcc_active_aria")}
                 >
                   ◆ BCC
                 </span>
@@ -783,7 +793,7 @@ function ExpandedPanel({ onCollapse }: { onCollapse: () => void }) {
           </div>
           <button
             onClick={onCollapse}
-            aria-label="Fermer le lecteur"
+            aria-label={t("p_pteam.wolf_close_player")}
             className="shrink-0 w-8 h-8 grid place-items-center rounded-full hover:bg-white/10 text-[var(--text-secondary)] hover:text-[var(--gold-bright)] transition-colors"
           >
             <svg viewBox="0 0 16 16" className="w-3 h-3" aria-hidden="true">
@@ -819,7 +829,7 @@ function ExpandedPanel({ onCollapse }: { onCollapse: () => void }) {
         <div className="flex items-center justify-center gap-3 px-4 pb-3">
           <button
             onClick={prev}
-            aria-label="Piste précédente"
+            aria-label={t("p_pteam.wolf_prev_track")}
             className="w-10 h-10 grid place-items-center rounded-full hover:bg-white/10 text-[var(--gold)] hover:text-[var(--gold-bright)] transition-colors"
           >
             <svg viewBox="0 0 24 24" className="w-5 h-5" aria-hidden="true">
@@ -833,7 +843,7 @@ function ExpandedPanel({ onCollapse }: { onCollapse: () => void }) {
           </button>
           <button
             onClick={toggle}
-            aria-label={isPlaying ? "Mettre en pause" : "Lancer la lecture"}
+            aria-label={isPlaying ? t("p_pteam.wolf_pause") : t("p_pteam.wolf_play")}
             className={`w-14 h-14 grid place-items-center rounded-full border text-[var(--gold-bright)] transition-all hover:scale-105 ${
               bccActive
                 ? "bg-[var(--red)]/20 border-[var(--red)]/60 hover:bg-[var(--red)]/30 hover:border-[var(--red)]"
@@ -853,7 +863,7 @@ function ExpandedPanel({ onCollapse }: { onCollapse: () => void }) {
           </button>
           <button
             onClick={next}
-            aria-label="Piste suivante"
+            aria-label={t("p_pteam.wolf_next_track")}
             className="w-10 h-10 grid place-items-center rounded-full hover:bg-white/10 text-[var(--gold)] hover:text-[var(--gold-bright)] transition-colors"
           >
             <svg viewBox="0 0 24 24" className="w-5 h-5" aria-hidden="true">
@@ -894,7 +904,7 @@ function ExpandedPanel({ onCollapse }: { onCollapse: () => void }) {
             max="100"
             value={Math.round(volume * 100)}
             onChange={(e) => setVolume(parseInt(e.target.value, 10) / 100)}
-            aria-label="Volume"
+            aria-label={t("p_pteam.wolf_volume")}
             className="flex-1 accent-[var(--gold)] h-1"
           />
           <span className="font-data text-[10px] text-[var(--text-muted)] w-7 text-right tabular-nums">
@@ -906,12 +916,11 @@ function ExpandedPanel({ onCollapse }: { onCollapse: () => void }) {
             (the cave owns the audio context until it releases). */}
         <div className="px-4 pb-4 pt-1 border-t border-white/5">
           <p className="font-data text-[9px] uppercase tracking-[0.25em] text-[var(--gold)]/60 mb-1.5">
-            Playlist
+            {t("p_pteam.wolf_playlist_label")}
           </p>
           {bccActive ? (
             <div className="rounded-lg border border-[var(--red)]/40 bg-[var(--red)]/10 px-3 py-2 text-[11px] text-[var(--gold-bright)]/80">
-              Tu es dans l&apos;Antre de la BCC. Sors de la grotte pour
-              changer de vibe.
+              {t("p_pteam.wolf_bcc_locked")}
             </div>
           ) : (
             <div className="grid grid-cols-2 gap-2">
@@ -929,13 +938,18 @@ function ExpandedPanel({ onCollapse }: { onCollapse: () => void }) {
                     }
                   `}
                 >
-                  {id === "homepage" ? "Ambient" : "Hype"}
+                  {id === "homepage"
+                    ? t("p_pteam.wolf_playlist_ambient")
+                    : t("p_pteam.wolf_playlist_hype")}
                 </button>
               ))}
             </div>
           )}
           <p className="mt-2 font-data text-[10px] text-[var(--text-disabled)] tabular-nums text-center">
-            Piste {index + 1} / {queue.length}
+            {t("p_pteam.wolf_track_progress", {
+              n: index + 1,
+              total: queue.length,
+            })}
           </p>
         </div>
       </m.div>

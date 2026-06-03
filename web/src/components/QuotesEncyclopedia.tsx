@@ -24,6 +24,7 @@ import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 
 import { QuoteCard, type QuoteCardData } from "./quotes/QuoteCard";
 import { searchQuotesAction } from "@/lib/quotes-search-action";
+import { useT } from "@/lib/i18n/use-lang";
 
 export interface QuotesEncyclopediaInput {
   /** Top quotes pre-rendered server-side. Displayed on first paint. */
@@ -45,6 +46,7 @@ export function QuotesEncyclopedia({
   featured,
   stats,
 }: QuotesEncyclopediaInput) {
+  const t = useT();
   const [query, setQuery] = useState<string>("");
   const [searchResults, setSearchResults] = useState<QuoteCardData[] | null>(
     null,
@@ -110,30 +112,32 @@ export function QuotesEncyclopedia({
       <section className="relative flex flex-col items-center text-center gap-5 pt-2 pb-10 md:pt-4 md:pb-14 mb-10">
         <span className="inline-flex items-center gap-2 font-data text-[10px] md:text-[11px] uppercase tracking-[0.3em] text-[var(--gold)]/70">
           <Losange small />
-          Encyclopedie sonore Karmine Corp
+          {t("p_qsearch.hero_eyebrow")}
         </span>
         <h1 className="font-display text-5xl md:text-6xl lg:text-7xl font-black leading-none tracking-tight">
-          <span className="text-shimmer">Phrases Cultes</span>
+          <span className="text-shimmer">{t("p_qsearch.hero_title")}</span>
         </h1>
         <p className="max-w-2xl text-sm md:text-base text-[var(--text-muted)] leading-relaxed">
-          Les shouts des casters · extraits automatiquement de chaque clip
-          KC. L&apos;IA transcrit l&apos;audio et garde les pepites — tu
-          ecoutes, tu votes, tu cites.
+          {t("p_qsearch.hero_subtitle")}
         </p>
 
         <dl className="grid grid-cols-2 md:grid-cols-3 gap-6 md:gap-12 mt-3 text-center">
           <Stat
-            label="Phrases extraites"
+            label={t("p_qsearch.stat_quotes_extracted")}
             value={stats.total_quotes.toLocaleString("fr-FR")}
           />
           <Stat
-            label="Clips analyses"
+            label={t("p_qsearch.stat_clips_analyzed")}
             value={stats.total_kills.toLocaleString("fr-FR")}
           />
           <Stat
-            label={stats.top_caster ?? "Top caster"}
+            label={stats.top_caster ?? t("p_qsearch.stat_top_caster")}
             value={
-              stats.top_caster ? `${stats.top_caster_quotes} phrases` : "—"
+              stats.top_caster
+                ? t("p_qsearch.stat_caster_quotes", {
+                    n: stats.top_caster_quotes,
+                  })
+                : "—"
             }
             hideOnMobile={!stats.top_caster}
           />
@@ -146,7 +150,7 @@ export function QuotesEncyclopedia({
           <header className="flex items-center justify-between mb-4">
             <p className="inline-flex items-center gap-2 font-data text-[10px] uppercase tracking-[0.3em] text-[var(--gold)]/70">
               <Losange small />
-              Phrase du jour
+              {t("p_qsearch.quote_of_the_day")}
             </p>
           </header>
           <div className="rounded-3xl border-2 border-[var(--gold)]/30 bg-gradient-to-br from-[var(--bg-surface)] to-[var(--bg-elevated)] p-6 md:p-10">
@@ -170,21 +174,21 @@ export function QuotesEncyclopedia({
       <div className="glass sticky top-2 z-30 mb-8 rounded-2xl border border-[var(--border-gold)] p-4 md:p-5">
         <div className="flex flex-col md:flex-row md:items-center gap-3 md:gap-4">
           <label className="relative flex-1">
-            <span className="sr-only">Rechercher une phrase</span>
+            <span className="sr-only">{t("p_qsearch.search_label")}</span>
             <input
               type="search"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder='"absolument insane", "outplay", "pentakill"...'
+              placeholder={t("p_qsearch.search_placeholder")}
               className="w-full rounded-xl border border-[var(--border-gold)] bg-[var(--bg-elevated)] px-4 py-3 text-sm md:text-base text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--gold)]/70 focus-visible:ring-2 focus-visible:ring-[var(--gold)]/40"
-              aria-label="Rechercher une phrase de caster"
+              aria-label={t("p_qsearch.search_aria")}
             />
             {pending && (
               <span
                 className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] uppercase tracking-widest text-[var(--gold)]"
                 aria-live="polite"
               >
-                recherche…
+                {t("p_qsearch.searching")}
               </span>
             )}
           </label>
@@ -195,15 +199,15 @@ export function QuotesEncyclopedia({
 
           <div className="flex items-center gap-2">
             <label className="text-[10px] uppercase tracking-widest text-[var(--text-muted)] whitespace-nowrap">
-              Caster
+              {t("p_qsearch.caster")}
             </label>
             <select
               value={casterFilter}
               onChange={(e) => setCasterFilter(e.target.value)}
               className="rounded-lg border border-[var(--border-gold)] bg-[var(--bg-elevated)] px-3 py-2 text-xs text-[var(--text-primary)] focus-visible:ring-2 focus-visible:ring-[var(--gold)]/40 focus:outline-none"
-              aria-label="Filtrer par caster"
+              aria-label={t("p_qsearch.caster_filter_aria")}
             >
-              <option value="all">Tous</option>
+              <option value="all">{t("p_qsearch.caster_all")}</option>
               {casterOptions.map((c) => (
                 <option key={c} value={c}>
                   {c}
@@ -229,7 +233,7 @@ export function QuotesEncyclopedia({
 
       {/* Footer reminder so the page never feels like a dead end */}
       <p className="mt-12 text-center text-[10px] uppercase tracking-[0.3em] text-[var(--text-muted)]">
-        Les phrases sont extraites par Gemini · vote pour la plus folle
+        {t("p_qsearch.footer_reminder")}
       </p>
     </div>
   );
@@ -284,11 +288,12 @@ function EnergyPicker({
   value: number;
   onChange: (n: number) => void;
 }) {
+  const t = useT();
   return (
     <div
       className="inline-flex items-center gap-1 rounded-lg border border-[var(--border-gold)] bg-[var(--bg-elevated)] p-1"
       role="radiogroup"
-      aria-label="Filtrer par energie minimum"
+      aria-label={t("p_qsearch.energy_filter_aria")}
     >
       {[1, 2, 3, 4, 5].map((n) => {
         const active = value === n;
@@ -305,7 +310,7 @@ function EnergyPicker({
                 ? "bg-[var(--gold)] text-[var(--bg-primary)]"
                 : "text-[var(--text-secondary)] hover:bg-[var(--gold)]/15 hover:text-[var(--gold)]",
             ].join(" ")}
-            title={`Minimum ${n} flammes`}
+            title={t("p_qsearch.energy_min_title", { n })}
           >
             {n}
           </button>
@@ -322,14 +327,15 @@ function EmptyState({
   query: string;
   hasSlate: boolean;
 }) {
+  const t = useT();
   if (query.trim().length > 0) {
     return (
       <div className="glass rounded-2xl border border-[var(--border-gold)] p-10 text-center">
         <p className="font-display text-lg text-[var(--text-primary)]">
-          Aucune phrase ne matche &laquo; {query.trim()} &raquo;.
+          {t("p_qsearch.empty_no_match", { query: query.trim() })}
         </p>
         <p className="mt-2 text-sm text-[var(--text-secondary)]">
-          Essaie un mot-cle plus court, ou retire les filtres energie / caster.
+          {t("p_qsearch.empty_no_match_hint")}
         </p>
       </div>
     );
@@ -338,10 +344,10 @@ function EmptyState({
     return (
       <div className="glass rounded-2xl border border-[var(--border-gold)] p-10 text-center">
         <p className="font-display text-lg text-[var(--text-primary)]">
-          Pas encore de phrase extraite.
+          {t("p_qsearch.empty_none_extracted")}
         </p>
         <p className="mt-2 text-sm text-[var(--text-secondary)]">
-          Le worker tourne en continu — repasse dans quelques heures.
+          {t("p_qsearch.empty_none_extracted_hint")}
         </p>
       </div>
     );
@@ -349,10 +355,10 @@ function EmptyState({
   return (
     <div className="rounded-2xl border border-[var(--border-gold)] bg-[var(--bg-surface)] p-10 text-center">
       <p className="font-display text-lg text-[var(--text-primary)]">
-        Aucune phrase ne passe les filtres actuels.
+        {t("p_qsearch.empty_filtered")}
       </p>
       <p className="mt-2 text-sm text-[var(--text-secondary)]">
-        Baisse le filtre energie ou choisis &laquo; Tous &raquo; cote casters.
+        {t("p_qsearch.empty_filtered_hint")}
       </p>
     </div>
   );

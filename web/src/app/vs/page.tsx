@@ -39,6 +39,7 @@ import {
 
 import { VSRoulette } from "@/components/VSRoulette";
 import { JsonLd, breadcrumbLD } from "@/lib/seo/jsonld";
+import { getServerT } from "@/lib/i18n/server-lang";
 
 export const revalidate = 1800;
 
@@ -122,6 +123,7 @@ async function buildChampionsAndThumbnails(): Promise<{
 }
 
 export default async function VSPage() {
+  const { t } = await getServerT();
   const [players, { champions, rouletteThumbnails }] = await Promise.all([
     buildPlayerOptions(),
     buildChampionsAndThumbnails(),
@@ -192,23 +194,23 @@ export default async function VSPage() {
 
         <div className="relative z-10 mx-auto max-w-6xl px-5 pt-12 pb-8 md:pt-20 md:pb-12 text-center">
           <nav
-            aria-label="Fil d'Ariane"
+            aria-label={t("p_vsgame.breadcrumb_aria")}
             className="mb-6 flex items-center justify-center gap-2 text-xs text-white/55"
           >
             <Link
               href="/"
               className="hover:text-[var(--gold)] transition-colors"
             >
-              Accueil
+              {t("p_vsgame.vs_breadcrumb_home")}
             </Link>
             <span aria-hidden className="text-white/25">
               {"◆"}
             </span>
-            <span className="text-[var(--gold)]">VS Roulette</span>
+            <span className="text-[var(--gold)]">{t("p_vsgame.vs_breadcrumb_current")}</span>
           </nav>
 
           <p className="font-data text-[11px] uppercase tracking-[0.4em] text-[var(--gold)]/70 mb-3">
-            La roulette des kills · Wave 25.3
+            {t("p_vsgame.vs_eyebrow")}
           </p>
           <h1
             className="font-display font-black tracking-tight leading-[0.85] text-5xl md:text-7xl lg:text-[7.5rem]"
@@ -222,9 +224,7 @@ export default async function VSPage() {
             VS <span className="text-shimmer">ROULETTE</span>
           </h1>
           <p className="mt-5 mx-auto max-w-2xl text-base md:text-lg text-white/80 font-medium">
-            Deux clips. Une roulette. Un seul gagnant. Filtre par joueur,
-            champion, époque ou type de kill — laisse la communauté décider
-            quel kill Karmine Corp est le plus fort.
+            {t("p_vsgame.vs_hero_subtitle")}
           </p>
 
           <div className="mt-7 flex items-center justify-center gap-3 flex-wrap">
@@ -232,13 +232,13 @@ export default async function VSPage() {
               href="/vs/leaderboard"
               className="rounded-xl border border-[var(--gold)]/40 bg-black/35 backdrop-blur-sm px-5 py-2.5 font-display text-xs font-bold uppercase tracking-[0.25em] text-[var(--gold)] transition-all hover:border-[var(--gold)]/80 hover:bg-[var(--gold)]/10"
             >
-              Voir le classement ELO
+              {t("p_vsgame.vs_see_elo_ranking")}
             </Link>
             <Link
               href="/scroll"
               className="rounded-xl border border-white/20 bg-black/25 backdrop-blur-sm px-5 py-2.5 font-display text-xs font-bold uppercase tracking-[0.25em] text-white/75 transition-all hover:border-white/45 hover:text-white"
             >
-              Mode scroll
+              {t("p_vsgame.vs_scroll_mode")}
             </Link>
           </div>
         </div>
@@ -248,7 +248,7 @@ export default async function VSPage() {
       <Suspense
         fallback={
           <div className="mx-auto max-w-6xl px-4 py-16 text-center font-data text-xs uppercase tracking-[0.3em] text-[var(--text-muted)]">
-            Chargement de la roulette…
+            {t("p_vsgame.vs_loading_roulette")}
           </div>
         }
       >

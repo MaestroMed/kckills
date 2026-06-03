@@ -27,6 +27,8 @@ import Link from "next/link";
 import Image from "next/image";
 import { getWeekendBestClips, type PublishedKillRow } from "@/lib/supabase/kills";
 import { pickAssetUrl, getAssetMetadata } from "@/lib/kill-assets";
+import { getServerT } from "@/lib/i18n/server-lang";
+import type { ServerTranslateFn } from "@/lib/i18n/getServerLang";
 
 /**
  * Compute the current "weekend window" — Friday 00:00 → Monday 06:00 UTC.
@@ -65,9 +67,10 @@ interface ClipCardProps {
   kill: PublishedKillRow;
   priority?: boolean;
   rank: number;
+  t: ServerTranslateFn;
 }
 
-function ClipCard({ kill, priority = false, rank }: ClipCardProps) {
+function ClipCard({ kill, priority = false, rank, t }: ClipCardProps) {
   const thumb = pickAssetUrl(kill, "thumbnail");
   const meta = getAssetMetadata(kill, "thumbnail");
   const score = kill.highlight_score ?? 0;
@@ -84,19 +87,19 @@ function ClipCard({ kill, priority = false, rank }: ClipCardProps) {
   const matchupLabel =
     kill.killer_champion && kill.victim_champion
       ? `${kill.killer_champion} → ${kill.victim_champion}`
-      : kill.killer_champion ?? "Clip KC";
+      : kill.killer_champion ?? t("p_homex.clip_kc");
 
   return (
     <Link
       href={`/scroll?kill=${kill.id}`}
-      aria-label={`Lire le clip : ${matchupLabel}`}
+      aria-label={t("p_homex.play_clip_aria", { matchup: matchupLabel })}
       className="group relative shrink-0 snap-start w-[78vw] max-w-[260px] sm:w-auto sm:max-w-none overflow-hidden rounded-2xl border border-[var(--border-gold)] bg-black transition-all hover:border-[var(--gold)]/60 hover:scale-[1.02] hover:-translate-y-1 hover:shadow-2xl hover:shadow-[var(--gold)]/20"
       style={{ aspectRatio: "9 / 16" }}
     >
       {thumb ? (
         <Image
           src={thumb}
-          alt={`Clip ${matchupLabel}`}
+          alt={t("p_homex.clip_alt", { matchup: matchupLabel })}
           fill
           sizes="(max-width: 640px) 78vw, (max-width: 1024px) 30vw, 22vw"
           className="object-cover transition-transform duration-700 group-hover:scale-110"
@@ -115,10 +118,10 @@ function ClipCard({ kill, priority = false, rank }: ClipCardProps) {
         </span>
         {showFirstBlood && (
           <span
-            aria-label="First blood"
+            aria-label={t("p_homex.first_blood")}
             className="rounded-md bg-[var(--red)]/85 backdrop-blur px-1.5 py-0.5 font-data text-[9px] font-bold uppercase tracking-widest text-white"
           >
-            1st blood
+            {t("p_homex.first_blood_short")}
           </span>
         )}
       </div>
@@ -127,7 +130,7 @@ function ClipCard({ kill, priority = false, rank }: ClipCardProps) {
       <div className="absolute right-2 top-2 z-10">
         <span
           className={`rounded-md backdrop-blur px-1.5 py-0.5 font-data text-[10px] font-bold border ${scoreClass}`}
-          aria-label={`Score IA : ${score.toFixed(1)} sur 10`}
+          aria-label={t("p_homex.ai_score_aria", { score: score.toFixed(1) })}
         >
           {score.toFixed(1)}
         </span>
@@ -155,7 +158,7 @@ function ClipCard({ kill, priority = false, rank }: ClipCardProps) {
         {(kill.avg_rating ?? 0) > 0 && (
           <p className="mt-1 font-data text-[10px] text-[var(--gold)]/80">
             ★ {(kill.avg_rating ?? 0).toFixed(1)}
-            <span className="text-[var(--text-disabled)]"> · {kill.rating_count ?? 0} votes</span>
+            <span className="text-[var(--text-disabled)]"> · {t("p_homex.votes", { n: kill.rating_count ?? 0 })}</span>
           </p>
         )}
       </div>
@@ -164,6 +167,7 @@ function ClipCard({ kill, priority = false, rank }: ClipCardProps) {
 }
 
 export async function HomeWeekendBestClips() {
+  const { t } = await getServerT();
   const { from, to, label } = currentWeekendWindow();
   const clips = await getWeekendBestClips({
     fromIso: from.toISOString(),
@@ -193,19 +197,19 @@ export async function HomeWeekendBestClips() {
       <div className="flex items-end justify-between gap-3 mb-4">
         <div className="flex-1 min-w-0">
           <p className="font-data text-[10px] sm:text-[11px] uppercase tracking-[0.3em] text-[var(--gold)]/70">
-            🔥 Le top du week-end
+            {t("p_homex.weekend_eyebrow")}
           </p>
           <h2
             id="weekend-best-clips-heading"
             className="mt-1 font-display text-2xl sm:text-3xl text-[var(--gold-bright)] leading-tight"
           >
-            Les meilleurs clips de ce week-end
+            {t("p_homex.weekend_title")}
           </h2>
           <p className="mt-1 text-xs text-[var(--text-muted)]">
             {label}
             {isEmptyWindow && (
               <span className="ml-1.5 text-[var(--text-disabled)]">
-                · derniers clips disponibles
+                {t("p_homex.weekend_fallback_suffix")}
               </span>
             )}
           </p>
@@ -214,7 +218,7 @@ export async function HomeWeekendBestClips() {
           href="/scroll"
           className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[var(--gold)]/40 bg-[var(--gold)]/5 hover:bg-[var(--gold)]/15 hover:border-[var(--gold)] font-data text-[11px] uppercase tracking-widest text-[var(--gold-bright)] transition-all"
         >
-          Voir tous les clips
+          {t("p_homex.see_all_clips")}
           <span className="text-base leading-none">→</span>
         </Link>
       </div>
@@ -231,7 +235,7 @@ export async function HomeWeekendBestClips() {
         "
       >
         {clips.map((kill, idx) => (
-          <ClipCard key={kill.id} kill={kill} rank={idx + 1} priority={idx < 4} />
+          <ClipCard key={kill.id} kill={kill} rank={idx + 1} priority={idx < 4} t={t} />
         ))}
       </div>
 
@@ -241,7 +245,7 @@ export async function HomeWeekendBestClips() {
           href="/scroll"
           className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg border border-[var(--gold)]/40 bg-[var(--gold)]/5 hover:bg-[var(--gold)]/15 font-data text-xs uppercase tracking-widest text-[var(--gold-bright)] transition-all"
         >
-          Voir tous les clips →
+          {t("p_homex.see_all_clips")} →
         </Link>
       </div>
     </section>

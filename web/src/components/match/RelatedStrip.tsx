@@ -5,6 +5,7 @@ import { pickAssetUrl } from "@/lib/kill-assets";
 import type { PublishedKillRow } from "@/lib/supabase/kills";
 import type { MatchPreviewRow } from "@/lib/supabase/match";
 import type { Era } from "@/lib/eras";
+import { getServerT } from "@/lib/i18n/server-lang";
 
 /**
  * RelatedStrip — 4-card "what to read next" strip at the bottom of the
@@ -46,26 +47,27 @@ function formatMinSec(seconds: number | null): string {
   return `${mm.toString().padStart(2, "0")}:${ss.toString().padStart(2, "0")}`;
 }
 
-export function RelatedStrip({
+export async function RelatedStrip({
   previousVsOpponent,
   next,
   topKill,
   era,
   opponentCode,
 }: RelatedStripProps) {
+  const { t } = await getServerT();
   const allEmpty = !previousVsOpponent && !next && !topKill && !era;
 
   if (allEmpty) {
     return (
       <section
-        aria-label="Lectures recommandées"
+        aria-label={t("p_matchx.related_aria")}
         className="rounded-2xl border border-[var(--border-gold)] bg-[var(--bg-surface)] p-6 text-center text-sm text-[var(--text-muted)]"
       >
         <Link
           href="/matches"
           className="inline-flex items-center gap-2 font-data text-[10px] uppercase tracking-widest text-[var(--gold)] hover:underline"
         >
-          ◆ Retour aux matchs
+          ◆ {t("p_matchx.back_to_matches")}
         </Link>
       </section>
     );
@@ -80,17 +82,19 @@ export function RelatedStrip({
         id="related-heading"
         className="font-display text-xl font-black uppercase tracking-widest text-[var(--gold)]"
       >
-        À lire ensuite
+        {t("p_matchx.related_heading")}
       </h2>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <PreviousMatchCard match={previousVsOpponent} opponentCode={opponentCode} />
-        <NextMatchCard match={next} />
-        <TopKillCard kill={topKill} opponentCode={opponentCode} />
-        <EraCard era={era} />
+        <PreviousMatchCard match={previousVsOpponent} opponentCode={opponentCode} t={t} />
+        <NextMatchCard match={next} t={t} />
+        <TopKillCard kill={topKill} opponentCode={opponentCode} t={t} />
+        <EraCard era={era} t={t} />
       </div>
     </section>
   );
 }
+
+type TFn = (key: string, vars?: Record<string, string | number>) => string;
 
 // ─── Cards ────────────────────────────────────────────────────────────
 
@@ -125,18 +129,20 @@ function CardShell({
 function PreviousMatchCard({
   match,
   opponentCode,
+  t,
 }: {
   match: MatchPreviewRow | null;
   opponentCode: string;
+  t: TFn;
 }) {
   if (!match) {
     return (
       <div className="rounded-2xl border border-[var(--border-gold)]/40 bg-[var(--bg-surface)] p-4 opacity-50">
         <p className="font-data text-[10px] uppercase tracking-[0.3em] text-[var(--text-muted)]">
-          Précédent vs {opponentCode}
+          {t("p_matchx.prev_vs", { code: opponentCode })}
         </p>
         <p className="mt-3 text-sm italic text-[var(--text-muted)]">
-          Première rencontre tracée — pas d&apos;historique vs cette équipe.
+          {t("p_matchx.prev_empty")}
         </p>
       </div>
     );
@@ -144,7 +150,7 @@ function PreviousMatchCard({
   return (
     <CardShell
       href={`/match/${match.externalId}`}
-      kicker={`Précédent vs ${match.opponentCode}`}
+      kicker={t("p_matchx.prev_vs", { code: match.opponentCode })}
     >
       <p className="mt-3 font-display text-3xl font-black tabular-nums leading-none">
         <span
@@ -178,15 +184,15 @@ function PreviousMatchCard({
   );
 }
 
-function NextMatchCard({ match }: { match: MatchPreviewRow | null }) {
+function NextMatchCard({ match, t }: { match: MatchPreviewRow | null; t: TFn }) {
   if (!match) {
     return (
       <div className="rounded-2xl border border-[var(--border-gold)]/40 bg-[var(--bg-surface)] p-4 opacity-50">
         <p className="font-data text-[10px] uppercase tracking-[0.3em] text-[var(--text-muted)]">
-          Match suivant
+          {t("p_matchx.next_match")}
         </p>
         <p className="mt-3 text-sm italic text-[var(--text-muted)]">
-          Calendrier non publié.
+          {t("p_matchx.next_empty")}
         </p>
       </div>
     );
@@ -195,7 +201,7 @@ function NextMatchCard({ match }: { match: MatchPreviewRow | null }) {
   return (
     <CardShell
       href={`/match/${match.externalId}`}
-      kicker="Match suivant"
+      kicker={t("p_matchx.next_match")}
     >
       <div className="mt-3 flex items-center gap-3">
         <div className="relative h-10 w-10 flex-shrink-0 grid place-items-center rounded-lg border border-[var(--border-gold)] bg-[var(--bg-primary)]">
@@ -228,18 +234,20 @@ function NextMatchCard({ match }: { match: MatchPreviewRow | null }) {
 function TopKillCard({
   kill,
   opponentCode,
+  t,
 }: {
   kill: PublishedKillRow | null;
   opponentCode: string;
+  t: TFn;
 }) {
   if (!kill) {
     return (
       <div className="rounded-2xl border border-[var(--border-gold)]/40 bg-[var(--bg-surface)] p-4 opacity-50">
         <p className="font-data text-[10px] uppercase tracking-[0.3em] text-[var(--text-muted)]">
-          Highlight du match
+          {t("p_matchx.highlight")}
         </p>
         <p className="mt-3 text-sm italic text-[var(--text-muted)]">
-          Pas encore de clip noté pour ce match.
+          {t("p_matchx.highlight_empty")}
         </p>
       </div>
     );
@@ -271,7 +279,7 @@ function TopKillCard({
       </div>
       <div className="absolute top-3 left-3 z-10">
         <p className="font-data text-[10px] uppercase tracking-[0.3em] text-[var(--gold)]/95 drop-shadow">
-          Highlight du match
+          {t("p_matchx.highlight")}
         </p>
       </div>
       <div className="absolute top-3 right-3 z-10">
@@ -284,7 +292,7 @@ function TopKillCard({
           {kill.killer_champion ?? "?"} → {kill.victim_champion ?? "?"}
         </p>
         <p className="mt-0.5 font-data text-[9px] uppercase tracking-widest text-[var(--text-secondary)]">
-          Game {kill.games?.game_number ?? "?"} · T+
+          {t("p_matchx.game_n", { n: kill.games?.game_number ?? "?" })} · T+
           {formatMinSec(kill.game_time_seconds)} ·{" "}
           {isKc ? "KC" : opponentCode}
         </p>
@@ -293,15 +301,15 @@ function TopKillCard({
   );
 }
 
-function EraCard({ era }: { era: Era | null }) {
+function EraCard({ era, t }: { era: Era | null; t: TFn }) {
   if (!era) {
     return (
       <div className="rounded-2xl border border-[var(--border-gold)]/40 bg-[var(--bg-surface)] p-4 opacity-50">
         <p className="font-data text-[10px] uppercase tracking-[0.3em] text-[var(--text-muted)]">
-          Époque KC
+          {t("p_matchx.era_kc")}
         </p>
         <p className="mt-3 text-sm italic text-[var(--text-muted)]">
-          Match hors époques tracées.
+          {t("p_matchx.era_empty")}
         </p>
       </div>
     );
@@ -324,7 +332,7 @@ function EraCard({ era }: { era: Era | null }) {
         className="font-data text-[10px] uppercase tracking-[0.3em] mb-1"
         style={{ color: era.color }}
       >
-        Époque KC
+        {t("p_matchx.era_kc")}
       </p>
       <p className="font-display text-lg font-black uppercase tracking-wide text-[var(--text-primary)] line-clamp-1">
         {era.label}

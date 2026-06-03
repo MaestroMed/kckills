@@ -54,6 +54,7 @@ import Link from "next/link";
 import { m, AnimatePresence, useReducedMotion } from "motion/react";
 
 import { createClient } from "@/lib/supabase/client";
+import { useT } from "@/lib/i18n/use-lang";
 import { getBCCSessionHash } from "@/lib/bcc-state";
 import {
   STARK_CULTURE_ENTRIES,
@@ -115,6 +116,7 @@ interface RpcRefs {
 // ════════════════════════════════════════════════════════════════════
 
 export function AntreOfBCC({ onClose }: AntreOfBCCProps) {
+  const t = useT();
   const prefersReducedMotion = useReducedMotion();
   const wolf = useFloatingPlayer();
   const [ceremonyDone, setCeremonyDone] = useState(false);
@@ -167,7 +169,7 @@ export function AntreOfBCC({ onClose }: AntreOfBCCProps) {
     <div
       role="dialog"
       aria-modal="true"
-      aria-label="L'Antre de la Bronze Consulting Company"
+      aria-label={t("p_antre.root_aria")}
       className="fixed inset-0 z-[9999] antre-root"
     >
       <div className="antre-stage">
@@ -191,6 +193,7 @@ function CaveDashboard({
   onClose: () => void;
   prefersReducedMotion: boolean;
 }) {
+  const t = useT();
   const sessionHashRef = useRef<string>("bcc-ssr-placeholder-hash");
   const supabaseRef = useRef<ReturnType<typeof createClient> | null>(null);
 
@@ -222,7 +225,7 @@ function CaveDashboard({
           <span style={{ width: 2, height: 36, background: "linear-gradient(180deg, transparent, #6b4a1c, #a07533)" }} />
         </div>
         <div className="antre-brass-plate" style={{ padding: "16px 44px", fontSize: "clamp(15px, 2.4vw, 19px)" }}>
-          L&apos;Antre de la BCC
+          {t("p_antre.plate_title")}
           <div style={{ marginTop: 4, fontSize: "0.55em", letterSpacing: "0.38em", opacity: 0.85 }}>
             Bronze Consulting Company
           </div>
@@ -235,7 +238,7 @@ function CaveDashboard({
             letterSpacing: "0.04em",
           }}
         >
-          Réunion en cours · n&apos;oubliez pas votre badge
+          {t("p_antre.meeting_in_progress")}
         </p>
       </m.div>
 
@@ -249,7 +252,7 @@ function CaveDashboard({
             letterSpacing: "0.18em",
           }}
         >
-          Tapez <kbd style={{
+          {t("p_antre.kbd_type")} <kbd style={{
             padding: "2px 6px",
             border: "1px solid rgba(184,133,42,0.4)",
             borderRadius: 3,
@@ -257,12 +260,12 @@ function CaveDashboard({
             background: "rgba(0,0,0,0.35)",
             fontFamily: "var(--antre-font-display)",
             fontSize: 11,
-          }}>OUT</kbd> ou ESC
+          }}>OUT</kbd> {t("p_antre.kbd_or_esc")}
         </span>
         <button
           type="button"
           onClick={onClose}
-          aria-label="Quitter l'Antre"
+          aria-label={t("p_antre.exit_aria")}
           className="rounded-full p-2"
           style={{
             border: "1px solid rgba(184,133,42,0.45)",
@@ -316,7 +319,7 @@ function CaveDashboard({
         <button
           type="button"
           onClick={onClose}
-          aria-label="Retour au monde profane"
+          aria-label={t("p_antre.exit_profane_aria")}
           className="antre-door-handle"
         />
         <span
@@ -327,7 +330,7 @@ function CaveDashboard({
             letterSpacing: "0.35em",
           }}
         >
-          Retour au monde profane
+          {t("p_antre.exit_profane")}
         </span>
       </m.div>
     </m.div>
@@ -354,6 +357,7 @@ const PUNCHER_LEADERBOARD = [
 ];
 
 function CoupDePoingRoom({ sessionHashRef, supabaseRef }: RpcRefs) {
+  const t = useT();
   const [localCount, setLocalCount] = useState(0);
   const [globalCount, setGlobalCount] = useState<number | null>(null);
   const [pendingBatch, setPendingBatch] = useState(0);
@@ -447,8 +451,8 @@ function CoupDePoingRoom({ sessionHashRef, supabaseRef }: RpcRefs) {
   return (
     <RoomFrame
       numeral="I"
-      title="La Salle des Coups-de-Poing"
-      tagline="Une seule touche d'Underwood Standard 5, frappée jusqu'à l'épuisement. Le registre, lui, ne dort jamais."
+      title={t("p_antre.r1_title")}
+      tagline={t("p_antre.r1_tagline")}
       surface="wood"
     >
       <div className="grid gap-8 md:grid-cols-[1.1fr_1fr] items-center">
@@ -457,7 +461,7 @@ function CoupDePoingRoom({ sessionHashRef, supabaseRef }: RpcRefs) {
           <button
             type="button"
             onClick={handlePunch}
-            aria-label="Frapper le coup de poing"
+            aria-label={t("p_antre.r1_punch_aria")}
             className="antre-typewriter-key"
           >
             <span
@@ -508,16 +512,16 @@ function CoupDePoingRoom({ sessionHashRef, supabaseRef }: RpcRefs) {
         >
           <div className="flex items-baseline justify-between mb-5 pb-2 border-b border-[var(--antre-ink-soft)]/30">
             <h4 className="antre-engraved" style={{ fontSize: 13, color: "var(--antre-ink)" }}>
-              Registre des Frappes
+              {t("p_antre.r1_ledger_title")}
             </h4>
             <span className="antre-quill" style={{ color: "var(--antre-ink-soft)", fontSize: 13 }}>
-              folio I
+              {t("p_antre.r1_folio")}
             </span>
           </div>
           <div className="space-y-3">
             <div className="flex items-baseline justify-between">
               <span className="antre-quill" style={{ color: "var(--antre-ink)", fontSize: 16 }}>
-                Coups portés ce soir
+                {t("p_antre.r1_punches_tonight")}
               </span>
               <span
                 className="antre-handwriting"
@@ -533,7 +537,7 @@ function CoupDePoingRoom({ sessionHashRef, supabaseRef }: RpcRefs) {
             </div>
             <div className="flex items-baseline justify-between">
               <span className="antre-quill" style={{ color: "var(--antre-ink)", fontSize: 16 }}>
-                Au registre de la BCC
+                {t("p_antre.r1_in_bcc_ledger")}
               </span>
               <span
                 className="antre-handwriting"
@@ -549,7 +553,7 @@ function CoupDePoingRoom({ sessionHashRef, supabaseRef }: RpcRefs) {
             </div>
             {pendingBatch > 0 && (
               <p className="antre-quill text-right" style={{ color: "var(--antre-ink-faint)", fontSize: 12 }}>
-                · {pendingBatch} en route vers la scribe
+                {t("p_antre.r1_pending", { n: pendingBatch })}
               </p>
             )}
           </div>
@@ -559,7 +563,7 @@ function CoupDePoingRoom({ sessionHashRef, supabaseRef }: RpcRefs) {
               className="antre-engraved mb-3"
               style={{ fontSize: 11, color: "var(--antre-ink-soft)" }}
             >
-              Top puncheurs de la session
+              {t("p_antre.r1_top_punchers")}
             </h5>
             <ol className="space-y-2">
               {PUNCHER_LEADERBOARD.slice(0, 5).map((row, i) => (
@@ -581,7 +585,7 @@ function CoupDePoingRoom({ sessionHashRef, supabaseRef }: RpcRefs) {
                       color: "#2a1a4a",
                     }}
                   >
-                    {row.count} coups
+                    {t("p_antre.r1_punches_unit", { n: row.count })}
                   </span>
                 </li>
               ))}
@@ -598,6 +602,7 @@ function CoupDePoingRoom({ sessionHashRef, supabaseRef }: RpcRefs) {
 // ════════════════════════════════════════════════════════════════════
 
 function ScoutingLabRoom() {
+  const t = useT();
   const [data, setData] = useState<BCCKrLadderResponse | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -611,7 +616,9 @@ function ScoutingLabRoom() {
       } catch (err) {
         if (!cancelled) setData({
           entries: [],
-          warning: `Le télégraphe est en dérangement : ${err instanceof Error ? err.message : "ligne brouillée"}`,
+          warning: t("p_antre.r2_telegraph_down", {
+            err: err instanceof Error ? err.message : t("p_antre.r2_line_garbled"),
+          }),
         });
       } finally {
         if (!cancelled) setLoading(false);
@@ -625,8 +632,8 @@ function ScoutingLabRoom() {
   return (
     <RoomFrame
       numeral="II"
-      title="Le Labo d'Observation"
-      tagline="Espions de la BCC déployés en Corée du Sud — rapport en temps réel."
+      title={t("p_antre.r2_title")}
+      tagline={t("p_antre.r2_tagline")}
       surface="velvet"
     >
       <div className="grid gap-6 md:grid-cols-[1fr_1.2fr]">
@@ -683,7 +690,7 @@ function ScoutingLabRoom() {
               textTransform: "uppercase",
             }}
           >
-            Carte du royaume coréen, 1893
+            {t("p_antre.r2_map_caption")}
           </p>
         </div>
 
@@ -691,7 +698,7 @@ function ScoutingLabRoom() {
         <div className="antre-parchment p-6">
           <div className="flex items-baseline justify-between mb-4 pb-2 border-b border-[var(--antre-ink-soft)]/30">
             <h4 className="antre-engraved" style={{ fontSize: 12, color: "var(--antre-ink)" }}>
-              Dossier · Challenger Solo/Duo
+              {t("p_antre.r2_dossier_title")}
             </h4>
             {data?.fetchedAt && (
               <span className="antre-quill" style={{ color: "var(--antre-ink-faint)", fontSize: 12 }}>
@@ -703,7 +710,7 @@ function ScoutingLabRoom() {
           {loading && (
             <div className="py-10 text-center">
               <p className="antre-quill" style={{ color: "var(--antre-ink-soft)", fontSize: 14 }}>
-                Le télégraphe transcrit le rapport…
+                {t("p_antre.r2_transcribing")}
               </p>
             </div>
           )}
@@ -712,7 +719,7 @@ function ScoutingLabRoom() {
             <div className="py-8 text-center">
               <RockingChair />
               <p className="mt-4 antre-quill italic" style={{ color: "var(--antre-ink)", fontSize: 15, maxWidth: 320, margin: "0 auto" }}>
-                Le bureau du chef du renseignement est temporairement inoccupé.
+                {t("p_antre.r2_office_empty")}
               </p>
               <p className="mt-2 antre-quill" style={{ color: "var(--antre-ink-faint)", fontSize: 11, letterSpacing: "0.18em", textTransform: "uppercase" }}>
                 {data.warning}
@@ -749,10 +756,10 @@ function ScoutingLabRoom() {
                       {e.summonerName}
                     </p>
                     <p className="antre-quill" style={{ color: "var(--antre-ink-faint)", fontSize: 11 }}>
-                      {e.wins} V · {e.losses} D · {e.winrate}% WR
-                      {e.hotStreak ? " · en feu" : ""}
-                      {e.freshBlood ? " · sang neuf" : ""}
-                      {e.veteran ? " · vétéran" : ""}
+                      {e.wins} {t("p_antre.r2_unit_wins")} · {e.losses} {t("p_antre.r2_unit_losses")} · {e.winrate}% {t("p_antre.r2_unit_wr")}
+                      {e.hotStreak ? ` · ${t("p_antre.r2_flag_hot")}` : ""}
+                      {e.freshBlood ? ` · ${t("p_antre.r2_flag_fresh")}` : ""}
+                      {e.veteran ? ` · ${t("p_antre.r2_flag_veteran")}` : ""}
                     </p>
                   </div>
                   <span
@@ -768,7 +775,7 @@ function ScoutingLabRoom() {
 
           {!loading && !data?.warning && data?.entries.length === 0 && (
             <p className="py-8 text-center antre-quill italic" style={{ color: "var(--antre-ink-soft)", fontSize: 14 }}>
-              Le ladder est vide. Nos agents attendent en silence.
+              {t("p_antre.r2_ladder_empty")}
             </p>
           )}
         </div>
@@ -798,6 +805,7 @@ function RockingChair() {
 // ════════════════════════════════════════════════════════════════════
 
 function StarkCultureRoom({ supabaseRef }: Pick<RpcRefs, "supabaseRef"> & Partial<RpcRefs>) {
+  const t = useT();
   const todays = useMemo<StarkCultureEntry>(() => getTodaysStarkCultureEntry(), []);
   const [active, setActive] = useState<StarkCultureEntry>(todays);
   const [thematicKill, setThematicKill] = useState<KyeahooKill | null>(null);
@@ -876,8 +884,8 @@ function StarkCultureRoom({ supabaseRef }: Pick<RpcRefs, "supabaseRef"> & Partia
   return (
     <RoomFrame
       numeral="III"
-      title="Le Salon de Stark Culture"
-      tagline="Vingt-deux heures. M. Eto ouvre un livre. La BCC écoute en silence."
+      title={t("p_antre.r3_title")}
+      tagline={t("p_antre.r3_tagline")}
       surface="wood"
     >
       <div className="grid gap-7 lg:grid-cols-[1.4fr_1fr]">
@@ -885,7 +893,7 @@ function StarkCultureRoom({ supabaseRef }: Pick<RpcRefs, "supabaseRef"> & Partia
         <article className="antre-parchment p-8" style={{ transform: "rotate(-0.3deg)" }}>
           <div className="flex items-baseline justify-between mb-5 pb-2 border-b border-[var(--antre-ink-soft)]/35">
             <p className="antre-engraved" style={{ fontSize: 11, color: "#6b1a26", letterSpacing: "0.4em" }}>
-              Stark Culture · 22h
+              {t("p_antre.r3_eyebrow")}
             </p>
             <p className="antre-quill" style={{ color: "var(--antre-ink-faint)", fontSize: 12 }}>
               {new Date().toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" })}
@@ -895,7 +903,7 @@ function StarkCultureRoom({ supabaseRef }: Pick<RpcRefs, "supabaseRef"> & Partia
             className="antre-engraved mb-3"
             style={{ fontSize: 10, color: "#a07533", letterSpacing: "0.4em" }}
           >
-            Thème · {active.theme}
+            {t("p_antre.r3_theme", { theme: active.theme })}
           </p>
           <blockquote
             className="antre-dropcap"
@@ -937,9 +945,9 @@ function StarkCultureRoom({ supabaseRef }: Pick<RpcRefs, "supabaseRef"> & Partia
                 border: "none",
                 cursor: "pointer",
               }}
-              aria-label="Revenir à la citation du jour"
+              aria-label={t("p_antre.r3_back_today_aria")}
             >
-              ← Revenir à la citation d&apos;aujourd&apos;hui
+              ← {t("p_antre.r3_back_today")}
             </button>
           )}
         </article>
@@ -950,7 +958,10 @@ function StarkCultureRoom({ supabaseRef }: Pick<RpcRefs, "supabaseRef"> & Partia
             <Link
               href={`/kill/${thematicKill.id}`}
               className="block"
-              aria-label={`Kill du jour : ${thematicKill.killer_champion} face à ${thematicKill.victim_champion}`}
+              aria-label={t("p_antre.r3_kill_of_day_aria", {
+                killer: thematicKill.killer_champion ?? "",
+                victim: thematicKill.victim_champion ?? "",
+              })}
             >
               <NewspaperClipping
                 thumbnail={thematicKill.thumbnail_url}
@@ -960,7 +971,7 @@ function StarkCultureRoom({ supabaseRef }: Pick<RpcRefs, "supabaseRef"> & Partia
             </Link>
           ) : (
             <NewspaperClipping
-              title="Aucun kill thématique"
+              title={t("p_antre.r3_no_thematic_kill")}
               caption={active.killCaption}
             />
           )}
@@ -970,7 +981,7 @@ function StarkCultureRoom({ supabaseRef }: Pick<RpcRefs, "supabaseRef"> & Partia
       {/* Bibliothèque — 8 book spines on a shelf */}
       <div className="mt-10">
         <p className="antre-engraved mb-4" style={{ fontSize: 11, color: "var(--antre-flame-amber)", letterSpacing: "0.4em" }}>
-          La Bibliothèque de la BCC
+          {t("p_antre.r3_library")}
         </p>
         <div
           className="relative pt-3 pb-4"
@@ -992,7 +1003,10 @@ function StarkCultureRoom({ supabaseRef }: Pick<RpcRefs, "supabaseRef"> & Partia
                 type="button"
                 onClick={() => setActive(s.entry)}
                 className={`antre-book-spine antre-book-${s.color}`}
-                aria-label={`Lire la citation : ${s.entry.author} — ${s.entry.attribution}`}
+                aria-label={t("p_antre.r3_read_quote_aria", {
+                  author: s.entry.author,
+                  attribution: s.entry.attribution,
+                })}
                 title={`${s.entry.author} — ${s.entry.theme}`}
               >
                 <span className="antre-book-label">
@@ -1026,6 +1040,7 @@ function NewspaperClipping({
   title: string;
   caption: string;
 }) {
+  const t = useT();
   return (
     <div
       className="antre-parchment relative"
@@ -1045,7 +1060,7 @@ function NewspaperClipping({
           marginBottom: 8,
         }}
       >
-        Le Petit Journal de la BCC · n° {Math.floor(Math.random() * 900) + 100}
+        {t("p_antre.r3_newspaper_masthead", { n: Math.floor(Math.random() * 900) + 100 })}
       </p>
       {thumbnail && (
         <div
@@ -1092,6 +1107,7 @@ function NewspaperClipping({
 interface TomatoSplat { id: number; x: number; y: number; }
 
 function LanceTomatesRoom({ sessionHashRef, supabaseRef }: RpcRefs) {
+  const t = useT();
   const [tomatoCount, setTomatoCount] = useState<number | null>(null);
   const [sessionThrows, setSessionThrows] = useState(0);
   const [splats, setSplats] = useState<TomatoSplat[]>([]);
@@ -1189,8 +1205,8 @@ function LanceTomatesRoom({ sessionHashRef, supabaseRef }: RpcRefs) {
   return (
     <RoomFrame
       numeral="IV"
-      title="Le Stand de Lancer-Tomates"
-      tagline="Saisissez une tomate dans le seau. Visez le portrait. Le club garde le compte."
+      title={t("p_antre.r4_title")}
+      tagline={t("p_antre.r4_tagline")}
       surface="wood"
     >
       <div className="grid gap-8 md:grid-cols-[1.4fr_1fr] items-start">
@@ -1204,7 +1220,7 @@ function LanceTomatesRoom({ sessionHashRef, supabaseRef }: RpcRefs) {
             onClick={fire}
             role="button"
             tabIndex={0}
-            aria-label={armed ? "Lancer une tomate sur le portrait" : "Saisir une tomate dans le seau d'abord"}
+            aria-label={armed ? t("p_antre.r4_throw_aria") : t("p_antre.r4_grab_first_aria")}
             onKeyDown={(e) => {
               if ((e.key === "Enter" || e.key === " ") && armed) {
                 e.preventDefault();
@@ -1225,7 +1241,7 @@ function LanceTomatesRoom({ sessionHashRef, supabaseRef }: RpcRefs) {
             <div className="aspect-[3/4] relative overflow-hidden bg-[#0a0606]">
               <Image
                 src="/images/zaboutine-sticker.png"
-                alt="M. Thomas Si-Hassen, l'analyste préféré de la BCC"
+                alt={t("p_antre.r4_portrait_alt", { name: "M. Thomas Si-Hassen" })}
                 fill
                 sizes="280px"
                 className="object-cover"
@@ -1285,7 +1301,7 @@ function LanceTomatesRoom({ sessionHashRef, supabaseRef }: RpcRefs) {
             >
               M. Thomas Si-Hassen
               <div style={{ marginTop: 4, fontSize: "0.8em", fontWeight: 400, fontStyle: "italic", letterSpacing: "0.06em", textTransform: "none" }}>
-                analyste préféré de la BCC
+                {t("p_antre.r4_nameplate_role")}
               </div>
             </div>
           </div>
@@ -1295,7 +1311,7 @@ function LanceTomatesRoom({ sessionHashRef, supabaseRef }: RpcRefs) {
             type="button"
             onClick={() => setArmed(true)}
             disabled={armed}
-            aria-label={armed ? "Tomate en main" : "Prendre une tomate du seau"}
+            aria-label={armed ? t("p_antre.r4_bucket_armed_aria") : t("p_antre.r4_bucket_grab_aria")}
             className="absolute"
             style={{
               bottom: 12, right: 14,
@@ -1325,7 +1341,7 @@ function LanceTomatesRoom({ sessionHashRef, supabaseRef }: RpcRefs) {
               className="antre-quill mt-1 text-center"
               style={{ fontSize: 10, color: "rgba(240,193,74,0.85)", letterSpacing: "0.1em" }}
             >
-              {armed ? "en main" : "seau"}
+              {armed ? t("p_antre.r4_in_hand") : t("p_antre.r4_bucket")}
             </p>
           </button>
         </div>
@@ -1334,10 +1350,10 @@ function LanceTomatesRoom({ sessionHashRef, supabaseRef }: RpcRefs) {
         <div className="space-y-5">
           <div className="antre-chalkboard rounded p-6" style={{ minHeight: 220 }}>
             <p className="text-center mb-4" style={{ fontSize: 26, lineHeight: 1.1, transform: "rotate(-1deg)" }}>
-              Tomates lancées
+              {t("p_antre.r4_chalk_thrown")}
             </p>
             <p className="text-center mb-1" style={{ fontSize: 14, opacity: 0.85, transform: "rotate(-0.5deg)" }}>
-              ce soir
+              {t("p_antre.r4_chalk_tonight")}
             </p>
             <p className="text-center" style={{ fontSize: 52, fontWeight: 700, color: "#f0c14a", textShadow: "0 0 12px rgba(240,193,74,0.5)" }}>
               {sessionThrows}
@@ -1350,7 +1366,7 @@ function LanceTomatesRoom({ sessionHashRef, supabaseRef }: RpcRefs) {
               }}
             />
             <p className="text-center" style={{ fontSize: 12, opacity: 0.7 }}>
-              Total du club
+              {t("p_antre.r4_club_total")}
             </p>
             <p className="text-center" style={{ fontSize: 22, fontWeight: 600 }}>
               {tomatoCount == null ? "…" : tomatoCount.toLocaleString("fr-FR")}
@@ -1371,14 +1387,13 @@ function LanceTomatesRoom({ sessionHashRef, supabaseRef }: RpcRefs) {
                   className="antre-engraved mb-2"
                   style={{ fontSize: 10, color: "#6b1a26", letterSpacing: "0.4em" }}
                 >
-                  Message scellé
+                  {t("p_antre.r4_sealed_message")}
                 </p>
                 <p
                   className="antre-quill italic"
                   style={{ color: "var(--antre-ink)", fontSize: 14, lineHeight: 1.5 }}
                 >
-                  &laquo; M. Si-Hassen vous regarde dans le blanc des yeux. Il reviendra
-                  demain, et il aura tout noté. &raquo;
+                  &laquo; {t("p_antre.r4_sealed_quote")} &raquo;
                 </p>
               </m.div>
             )}
@@ -1464,6 +1479,7 @@ function vintageDateLabel(iso: string): string {
 }
 
 function MurAhouAhouRoom({ sessionHashRef, supabaseRef }: RpcRefs) {
+  const t = useT();
   const [kills, setKills] = useState<KyeahooKill[] | null>(null);
   const [openKill, setOpenKill] = useState<KyeahooKill | null>(null);
   const hoveredRef = useRef<Set<string>>(new Set());
@@ -1503,14 +1519,14 @@ function MurAhouAhouRoom({ sessionHashRef, supabaseRef }: RpcRefs) {
   return (
     <RoomFrame
       numeral="V"
-      title="Le Mur des Ahou-Ahou"
-      tagline="Galerie privée de M. Kyeahoo. Passez la main au-dessus d'un cadre pour qu'il chante."
+      title={t("p_antre.r5_title")}
+      tagline={t("p_antre.r5_tagline")}
       surface="velvet"
     >
       {kills === null && (
         <div className="py-10 text-center">
           <p className="antre-quill italic" style={{ color: "var(--antre-flame-amber)", fontSize: 15 }}>
-            Le concierge accroche les cadres…
+            {t("p_antre.r5_loading")}
           </p>
         </div>
       )}
@@ -1520,10 +1536,10 @@ function MurAhouAhouRoom({ sessionHashRef, supabaseRef }: RpcRefs) {
             className="antre-engraved mb-2"
             style={{ color: "var(--antre-flame-bright)", fontSize: 14, letterSpacing: "0.3em" }}
           >
-            Le mur attend.
+            {t("p_antre.r5_empty_title")}
           </p>
           <p className="antre-quill" style={{ color: "rgba(240,232,210,0.6)", fontSize: 14, maxWidth: 420, margin: "0 auto" }}>
-            Aucune exécution de M. Kyeahoo n&apos;a encore été archivée par le club.
+            {t("p_antre.r5_empty_body")}
           </p>
         </div>
       )}
@@ -1539,7 +1555,10 @@ function MurAhouAhouRoom({ sessionHashRef, supabaseRef }: RpcRefs) {
               onFocus={() => handleHover(kill.id)}
               onClick={() => setOpenKill(kill)}
               className="group block text-left antre-gilt-frame transition-transform"
-              aria-label={`Kill de Kyeahoo : ${kill.killer_champion} face à ${kill.victim_champion}`}
+              aria-label={t("p_antre.r5_frame_aria", {
+                killer: kill.killer_champion ?? "",
+                victim: kill.victim_champion ?? "",
+              })}
               style={{ padding: 12 }}
             >
               <div className="relative aspect-[3/4] overflow-hidden bg-[#0a0606]">
@@ -1576,7 +1595,7 @@ function MurAhouAhouRoom({ sessionHashRef, supabaseRef }: RpcRefs) {
                         letterSpacing: "0.15em",
                       }}
                     >
-                      First Blood
+                      {t("kill.first_blood")}
                     </span>
                   )}
                   {kill.multi_kill && (
@@ -1644,7 +1663,7 @@ function MurAhouAhouRoom({ sessionHashRef, supabaseRef }: RpcRefs) {
             style={{ background: "rgba(8, 4, 2, 0.92)", backdropFilter: "blur(4px)" }}
             initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
             onClick={() => setOpenKill(null)}
-            role="dialog" aria-modal="true" aria-label="Lecture du kill"
+            role="dialog" aria-modal="true" aria-label={t("p_antre.r5_modal_aria")}
           >
             <m.div
               className="antre-gilt-frame relative w-full max-w-md"
@@ -1665,7 +1684,7 @@ function MurAhouAhouRoom({ sessionHashRef, supabaseRef }: RpcRefs) {
                   />
                 ) : (
                   <div className="flex items-center justify-center h-full antre-quill" style={{ color: "rgba(240,232,210,0.6)" }}>
-                    Clip indisponible.
+                    {t("p_antre.r5_clip_unavailable")}
                   </div>
                 )}
               </div>
@@ -1673,7 +1692,7 @@ function MurAhouAhouRoom({ sessionHashRef, supabaseRef }: RpcRefs) {
                 <button
                   type="button"
                   onClick={() => setOpenKill(null)}
-                  aria-label="Fermer"
+                  aria-label={t("common.close")}
                   className="rounded-full p-2"
                   style={{
                     background: "rgba(20,8,4,0.85)",
@@ -1715,7 +1734,7 @@ function MurAhouAhouRoom({ sessionHashRef, supabaseRef }: RpcRefs) {
                     letterSpacing: "0.3em",
                   }}
                 >
-                  Page complète →
+                  {t("p_antre.r5_full_page")} →
                 </Link>
               </div>
             </m.div>
@@ -1731,8 +1750,9 @@ function MurAhouAhouRoom({ sessionHashRef, supabaseRef }: RpcRefs) {
 // ════════════════════════════════════════════════════════════════════
 
 function RegistreMembresRoom({ sessionHashRef }: Pick<RpcRefs, "sessionHashRef">) {
+  const t = useT();
   const past = useMemo(() => seedVisitors(18), []);
-  const [myName, setMyName] = useState<string>("Visiteur masqué");
+  const [myName, setMyName] = useState<string>(() => t("p_antre.r6_masked_visitor"));
   const [reveal, setReveal] = useState(false);
 
   useEffect(() => {
@@ -1752,17 +1772,17 @@ function RegistreMembresRoom({ sessionHashRef }: Pick<RpcRefs, "sessionHashRef">
   return (
     <RoomFrame
       numeral="VI"
-      title="Le Registre des Membres"
-      tagline="Le portier vous prie d'inscrire votre nom — la plume est trempée, le sous-main préparé."
+      title={t("p_antre.r6_title")}
+      tagline={t("p_antre.r6_tagline")}
       surface="wood"
     >
       <div className="antre-guestbook p-6 sm:p-10 mx-auto" style={{ maxWidth: 880 }}>
         <div className="text-center mb-6 pb-4 border-b border-[var(--antre-ink-soft)]/30">
           <p className="antre-engraved" style={{ fontSize: 11, color: "#6b1a26", letterSpacing: "0.4em" }}>
-            Registre des Initiés
+            {t("p_antre.r6_register_title")}
           </p>
           <p className="antre-quill italic mt-2" style={{ color: "var(--antre-ink-soft)", fontSize: 13 }}>
-            tenu par le concierge depuis le premier soir
+            {t("p_antre.r6_register_subtitle")}
           </p>
         </div>
 
@@ -1818,14 +1838,14 @@ function RegistreMembresRoom({ sessionHashRef }: Pick<RpcRefs, "sessionHashRef">
                 fontStyle: "italic",
               }}
             >
-              le {todayLabel}
+              {t("p_antre.r6_dated", { date: todayLabel })}
             </span>
           </div>
           <p
             className="antre-quill italic mt-3"
             style={{ color: "var(--antre-ink-faint)", fontSize: 12 }}
           >
-            ↑ vous venez d&apos;être inscrit · le concierge a pris note
+            ↑ {t("p_antre.r6_just_registered")}
           </p>
         </div>
       </div>

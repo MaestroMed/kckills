@@ -43,7 +43,10 @@ import {
   pickBestForViewport,
 } from "@/lib/kill-assets";
 import { Description } from "@/components/i18n/Description";
+import { useT } from "@/lib/i18n/use-lang";
 import type { PublishedKillRow } from "@/lib/supabase/kills";
+
+type TFn = (key: string, vars?: Record<string, string | number>) => string;
 
 // ─── Types ────────────────────────────────────────────────────────────
 
@@ -121,6 +124,7 @@ export function KillSidePanel({
   onClose,
   onChange,
 }: KillSidePanelProps) {
+  const t = useT();
   const reducedMotion = usePrefersReducedMotion();
   const viewport = useViewportClass();
   const saveData = useSaveData();
@@ -281,7 +285,7 @@ export function KillSidePanel({
                   className="font-data text-[10px] uppercase tracking-[0.3em] text-[var(--gold)] mb-0.5"
                   aria-live="polite"
                 >
-                  Game {kill.games?.game_number ?? "?"} · T+
+                  {t("p_matchx.game_n", { n: kill.games?.game_number ?? "?" })} · T+
                   {formatGameTime(kill.game_time_seconds)}
                 </p>
                 <h2
@@ -296,8 +300,8 @@ export function KillSidePanel({
                   {kill.is_first_blood ? (
                     <span
                       className="mr-1.5 text-xs"
-                      aria-label="Premier sang"
-                      title="Premier sang"
+                      aria-label={t("p_matchx.first_blood_fr")}
+                      title={t("p_matchx.first_blood_fr")}
                     >
                       {"🩸"}
                     </span>
@@ -323,14 +327,14 @@ export function KillSidePanel({
                   </span>
                 </h2>
                 <p className="text-[10px] uppercase tracking-widest text-[var(--text-muted)]">
-                  vs {opponentName}
+                  {t("p_matchx.vs")} {opponentName}
                 </p>
               </div>
               <button
                 ref={closeBtnRef}
                 type="button"
                 onClick={onClose}
-                aria-label="Fermer le panneau du kill"
+                aria-label={t("p_matchx.close_panel")}
                 className="ml-2 flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full border border-[var(--border-gold)] bg-[var(--bg-surface)] text-[var(--gold)] transition-colors hover:bg-[var(--gold)]/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gold)]"
               >
                 <svg
@@ -363,13 +367,19 @@ export function KillSidePanel({
                   controls
                   preload="metadata"
                   className="mx-auto block aspect-[9/16] max-h-[60vh] w-full max-w-xs object-contain sm:max-w-sm md:max-w-[360px]"
-                  aria-label={`Clip vidéo : ${kill.killer_champion ?? "?"} élimine ${kill.victim_champion ?? "?"}`}
+                  aria-label={t("p_matchx.clip_video_aria", {
+                    killer: kill.killer_champion ?? "?",
+                    victim: kill.victim_champion ?? "?",
+                  })}
                 />
               ) : poster ? (
                 <div className="relative mx-auto aspect-[9/16] w-full max-w-xs">
                   <Image
                     src={poster}
-                    alt={`${kill.killer_champion ?? "?"} élimine ${kill.victim_champion ?? "?"}`}
+                    alt={t("p_matchx.kill_alt", {
+                      killer: kill.killer_champion ?? "?",
+                      victim: kill.victim_champion ?? "?",
+                    })}
                     fill
                     sizes="(max-width: 768px) 88vw, 360px"
                     className="object-cover"
@@ -377,14 +387,14 @@ export function KillSidePanel({
                   />
                   <div className="absolute inset-0 flex items-center justify-center bg-black/55">
                     <p className="rounded-md bg-black/70 px-3 py-1.5 text-xs text-[var(--text-muted)]">
-                      Clip vidéo indisponible
+                      {t("p_matchx.clip_video_unavailable")}
                     </p>
                   </div>
                 </div>
               ) : (
                 <div className="flex aspect-[9/16] items-center justify-center bg-[var(--bg-surface)]">
                   <p className="text-xs text-[var(--text-muted)]">
-                    Clip non disponible
+                    {t("p_matchx.clip_unavailable")}
                   </p>
                 </div>
               )}
@@ -394,7 +404,7 @@ export function KillSidePanel({
                 type="button"
                 onClick={goPrev}
                 disabled={!hasPrev}
-                aria-label="Kill précédent"
+                aria-label={t("p_matchx.kill_prev")}
                 className="absolute left-2 top-1/2 -translate-y-1/2 flex h-10 w-10 items-center justify-center rounded-full border border-[var(--border-gold)] bg-black/60 text-[var(--gold)] backdrop-blur transition-opacity hover:bg-black/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gold)] disabled:cursor-not-allowed disabled:opacity-30"
               >
                 <svg
@@ -416,7 +426,7 @@ export function KillSidePanel({
                 type="button"
                 onClick={goNext}
                 disabled={!hasNext}
-                aria-label="Kill suivant"
+                aria-label={t("p_matchx.kill_next")}
                 className="absolute right-2 top-1/2 -translate-y-1/2 flex h-10 w-10 items-center justify-center rounded-full border border-[var(--border-gold)] bg-black/60 text-[var(--gold)] backdrop-blur transition-opacity hover:bg-black/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gold)] disabled:cursor-not-allowed disabled:opacity-30"
               >
                 <svg
@@ -443,7 +453,7 @@ export function KillSidePanel({
                 id="kill-side-desc"
                 className="font-display text-sm leading-snug text-[var(--text-primary)]"
               >
-                <Description kill={kill} fallback="Description IA indisponible." />
+                <Description kill={kill} fallback={t("p_matchx.ai_desc_unavailable")} />
               </p>
 
               {/* Score + tags */}
@@ -458,16 +468,18 @@ export function KillSidePanel({
                     >
                       <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
                     </svg>
-                    Score {kill.highlight_score.toFixed(1)}/10
+                    {t("p_matchx.score_out_of_10", {
+                      score: kill.highlight_score.toFixed(1),
+                    })}
                   </span>
                 )}
                 {kill.tracked_team_involvement === "team_killer" ? (
                   <span className="rounded-full border border-[var(--gold)]/40 bg-[var(--gold)]/10 px-2 py-0.5 text-[10px] font-medium uppercase tracking-widest text-[var(--gold)]">
-                    KC Kill
+                    {t("p_matchx.kc_kill")}
                   </span>
                 ) : (
                   <span className="rounded-full border border-[var(--red)]/40 bg-[var(--red)]/10 px-2 py-0.5 text-[10px] font-medium uppercase tracking-widest text-[var(--red)]">
-                    KC Death
+                    {t("p_matchx.kc_death")}
                   </span>
                 )}
                 {kill.ai_tags.slice(0, 4).map((tag) => (
@@ -489,8 +501,10 @@ export function KillSidePanel({
                     : "—"}
                   <span className="text-[var(--text-disabled)]">
                     {" "}
-                    · {kill.rating_count} note
-                    {kill.rating_count > 1 ? "s" : ""}
+                    · {t("p_matchx.n_ratings", {
+                      n: kill.rating_count,
+                      s: kill.rating_count > 1 ? "s" : "",
+                    })}
                   </span>
                 </span>
                 <span className="font-data text-[10px] uppercase tracking-widest text-[var(--text-disabled)]">
@@ -505,7 +519,7 @@ export function KillSidePanel({
                   onClick={onClose}
                   className="flex items-center justify-between rounded-xl border border-[var(--gold)]/40 bg-[var(--gold)]/10 px-4 py-3 text-sm font-semibold uppercase tracking-widest text-[var(--gold)] transition-colors hover:bg-[var(--gold)]/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gold)]"
                 >
-                  <span>Voir en plein écran</span>
+                  <span>{t("p_matchx.view_fullscreen")}</span>
                   <svg
                     className="h-3 w-3"
                     fill="none"
@@ -526,7 +540,7 @@ export function KillSidePanel({
                   onClick={onClose}
                   className="flex items-center justify-between rounded-xl border border-[var(--border-gold)] bg-[var(--bg-surface)] px-4 py-2.5 text-xs uppercase tracking-widest text-[var(--text-secondary)] transition-colors hover:border-[var(--gold)]/40 hover:text-[var(--gold)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gold)]"
                 >
-                  <span>Voir la fiche complète</span>
+                  <span>{t("p_matchx.view_full_detail")}</span>
                   <span className="text-[var(--text-disabled)]" aria-hidden>
                     ◆
                   </span>
@@ -536,14 +550,14 @@ export function KillSidePanel({
               {/* Side-by-side prev / next mini-previews */}
               <div className="grid grid-cols-2 gap-2 pt-3">
                 <KillNeighborButton
-                  label="Précédent"
+                  label={t("p_matchx.neighbor_prev")}
                   kill={hasPrev ? kills[(activeIdx as number) - 1] : null}
                   opponentCode={opponentCode}
                   disabled={!hasPrev}
                   onClick={goPrev}
                 />
                 <KillNeighborButton
-                  label="Suivant"
+                  label={t("p_matchx.neighbor_next")}
                   kill={hasNext ? kills[(activeIdx as number) + 1] : null}
                   opponentCode={opponentCode}
                   disabled={!hasNext}

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { Metadata } from "next";
+import { getServerT } from "@/lib/i18n/server-lang";
 
 export const metadata: Metadata = {
   title: "Politique de confidentialit\u00e9",
@@ -7,126 +8,129 @@ export const metadata: Metadata = {
     "Politique de confidentialit\u00e9 de KCKILLS \u2014 z\u00e9ro tracking, z\u00e9ro cookies tiers, z\u00e9ro collecte de donn\u00e9es personnelles.",
 };
 
-export default function PrivacyPage() {
+export default async function PrivacyPage() {
+  const { t } = await getServerT();
   return (
     <div className="mx-auto max-w-3xl space-y-8 py-8">
       <nav className="flex items-center gap-2 text-sm text-[var(--text-muted)]">
         <Link href="/" className="hover:text-[var(--gold)]">
-          Accueil
+          {t("p_pubpages.privacy_breadcrumb_home")}
         </Link>
         <span className="text-[var(--gold)]/30">{"\u25C6"}</span>
-        <span>Confidentialit&eacute;</span>
+        <span>{t("p_pubpages.privacy_breadcrumb_current")}</span>
       </nav>
 
       <h1 className="font-display text-3xl font-bold">
-        Politique de <span className="text-[var(--gold)]">confidentialit&eacute;</span>
+        {t("p_pubpages.privacy_title_pre")}{" "}
+        <span className="text-[var(--gold)]">{t("p_pubpages.privacy_title_accent")}</span>
       </h1>
 
       <div className="space-y-6 text-sm text-[var(--text-secondary)] leading-relaxed">
         <section>
           <h2 className="font-display text-lg font-bold text-[var(--text-primary)] mb-2">
-            Donn&eacute;es collect&eacute;es
+            {t("p_pubpages.privacy_collected_heading")}
           </h2>
           <p>
-            KCKILLS collecte le <strong>minimum absolu</strong> de donn&eacute;es
-            n&eacute;cessaires au fonctionnement du site :
+            {t("p_pubpages.privacy_collected_lead_pre")}{" "}
+            <strong>{t("p_pubpages.privacy_collected_lead_strong")}</strong>{" "}
+            {t("p_pubpages.privacy_collected_lead_post")}
           </p>
           <ul className="list-disc pl-6 mt-2 space-y-1">
             <li>
-              <strong>Connexion Discord</strong> : nom d&apos;utilisateur et avatar
-              Discord (publics). Votre Discord ID est hash&eacute; SHA-256 et jamais
-              stock&eacute; en clair.
+              <strong>{t("p_pubpages.privacy_collected_discord_strong")}</strong>{" "}
+              {t("p_pubpages.privacy_collected_discord_body")}
             </li>
             <li>
-              <strong>Connexion Riot (optionnelle)</strong> : PUUID hash&eacute;
-              SHA-256, nom d&apos;invocateur et rang (publics).
+              <strong>{t("p_pubpages.privacy_collected_riot_strong")}</strong>{" "}
+              {t("p_pubpages.privacy_collected_riot_body")}
             </li>
             <li>
-              <strong>Ratings et commentaires</strong> : stock&eacute;s avec votre
-              ID utilisateur pour &eacute;viter les doublons.
+              <strong>{t("p_pubpages.privacy_collected_ratings_strong")}</strong>{" "}
+              {t("p_pubpages.privacy_collected_ratings_body")}
             </li>
           </ul>
         </section>
 
         <section>
           <h2 className="font-display text-lg font-bold text-[var(--text-primary)] mb-2">
-            Ce que nous ne collectons PAS
+            {t("p_pubpages.privacy_notcollected_heading")}
           </h2>
           <ul className="list-disc pl-6 space-y-1">
-            <li>Adresse email</li>
-            <li>Mot de passe (authentification OAuth uniquement)</li>
-            <li>Adresse IP</li>
-            <li>Localisation g&eacute;ographique</li>
-            <li>Donn&eacute;es de paiement</li>
-            <li>Cookies tiers ou trackers publicitaires</li>
+            <li>{t("p_pubpages.privacy_notcollected_email")}</li>
+            <li>{t("p_pubpages.privacy_notcollected_password")}</li>
+            <li>{t("p_pubpages.privacy_notcollected_ip")}</li>
+            <li>{t("p_pubpages.privacy_notcollected_location")}</li>
+            <li>{t("p_pubpages.privacy_notcollected_payment")}</li>
+            <li>{t("p_pubpages.privacy_notcollected_cookies")}</li>
           </ul>
         </section>
 
         <section>
           <h2 className="font-display text-lg font-bold text-[var(--text-primary)] mb-2">
-            Cookies
+            {t("p_pubpages.privacy_cookies_heading")}
           </h2>
-          <p>
-            KCKILLS utilise uniquement un cookie de session Supabase Auth pour
-            maintenir votre connexion Discord. Aucun cookie tiers, aucun tracker
-            publicitaire, aucun analytics tiers.
-          </p>
+          <p>{t("p_pubpages.privacy_cookies_body")}</p>
         </section>
 
         <section>
           <h2 className="font-display text-lg font-bold text-[var(--text-primary)] mb-2">
-            Vos droits (RGPD)
+            {t("p_pubpages.privacy_rights_heading")}
           </h2>
-          <p>Vous pouvez &agrave; tout moment :</p>
+          <p>{t("p_pubpages.privacy_rights_lead")}</p>
           <ul className="list-disc pl-6 mt-2 space-y-1">
             <li>
-              <strong>Exporter vos donn&eacute;es</strong> : depuis la page{" "}
+              <strong>{t("p_pubpages.privacy_rights_export_strong")}</strong>{" "}
+              {t("p_pubpages.privacy_rights_export_body")}{" "}
               <Link href="/settings" className="text-[var(--gold)] underline">
-                Param&egrave;tres
+                {t("p_pubpages.privacy_rights_settings_link")}
               </Link>
               .
             </li>
             <li>
-              <strong>Supprimer votre compte</strong> : depuis la page
-              Param&egrave;tres. Vos ratings sont anonymis&eacute;s, vos
-              commentaires supprim&eacute;s.
+              <strong>{t("p_pubpages.privacy_rights_delete_strong")}</strong>{" "}
+              {t("p_pubpages.privacy_rights_delete_body")}
             </li>
             <li>
-              <strong>Nous contacter</strong> : par Discord ou &agrave;
-              l&apos;adresse indiqu&eacute;e en bas de page.
+              <strong>{t("p_pubpages.privacy_rights_contact_strong")}</strong>{" "}
+              {t("p_pubpages.privacy_rights_contact_body")}
             </li>
           </ul>
         </section>
 
         <section>
           <h2 className="font-display text-lg font-bold text-[var(--text-primary)] mb-2">
-            H&eacute;bergement et s&eacute;curit&eacute;
+            {t("p_pubpages.privacy_hosting_heading")}
           </h2>
           <ul className="list-disc pl-6 space-y-1">
-            <li>Site h&eacute;berg&eacute; sur <strong>Vercel</strong> (HTTPS obligatoire)</li>
-            <li>Base de donn&eacute;es sur <strong>Supabase</strong> (PostgreSQL + RLS)</li>
-            <li>Clips vid&eacute;o sur <strong>Cloudflare R2</strong> (CDN mondial)</li>
             <li>
-              Headers de s&eacute;curit&eacute; : CSP, HSTS, X-Frame-Options,
-              X-Content-Type-Options
+              {t("p_pubpages.privacy_hosting_vercel_pre")}{" "}
+              <strong>Vercel</strong> {t("p_pubpages.privacy_hosting_vercel_post")}
             </li>
+            <li>
+              {t("p_pubpages.privacy_hosting_supabase_pre")}{" "}
+              <strong>Supabase</strong>{" "}
+              {t("p_pubpages.privacy_hosting_supabase_post")}
+            </li>
+            <li>
+              {t("p_pubpages.privacy_hosting_r2_pre")}{" "}
+              <strong>Cloudflare R2</strong>{" "}
+              {t("p_pubpages.privacy_hosting_r2_post")}
+            </li>
+            <li>{t("p_pubpages.privacy_hosting_headers")}</li>
           </ul>
         </section>
 
         <section>
           <h2 className="font-display text-lg font-bold text-[var(--text-primary)] mb-2">
-            Contact
+            {t("p_pubpages.privacy_contact_heading")}
           </h2>
-          <p>
-            Pour toute question relative &agrave; vos donn&eacute;es personnelles,
-            contactez-nous sur Discord ou via le site.
-          </p>
+          <p>{t("p_pubpages.privacy_contact_body")}</p>
         </section>
       </div>
 
       <div className="gold-line" />
       <p className="text-[10px] text-[var(--text-disabled)] text-center">
-        Derni&egrave;re mise &agrave; jour : avril 2026
+        {t("p_pubpages.privacy_last_updated")}
       </p>
     </div>
   );

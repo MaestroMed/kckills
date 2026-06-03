@@ -14,6 +14,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import { getServerT } from "@/lib/i18n/server-lang";
 import { JsonLd, breadcrumbLD } from "@/lib/seo/jsonld";
 import {
   getBracketBySlug,
@@ -60,6 +61,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 
 export default async function BracketArchivePage({ params }: PageProps) {
   const { slug } = await params;
+  const { t } = await getServerT();
   const [bundle, pastWinners] = await Promise.all([
     getBracketBySlug(slug),
     getPastWinners(12),
@@ -92,17 +94,17 @@ export default async function BracketArchivePage({ params }: PageProps) {
       <JsonLd data={breadcrumb} />
 
       <nav
-        aria-label="Fil d'Ariane"
+        aria-label={t("p_bracketv.breadcrumb_aria")}
         className="mx-auto max-w-6xl px-5 pt-6 flex items-center justify-start gap-2 text-xs text-white/55 flex-wrap"
       >
         <Link href="/" className="hover:text-[var(--gold)] transition-colors">
-          Accueil
+          {t("p_bracketv.breadcrumb_home")}
         </Link>
         <span aria-hidden className="text-white/25">
           ◆
         </span>
         <Link href="/bracket" className="hover:text-[var(--gold)] transition-colors">
-          Tournoi du Mois
+          {t("p_bracketv.breadcrumb_current")}
         </Link>
         <span aria-hidden className="text-white/25">
           ◆
@@ -113,7 +115,7 @@ export default async function BracketArchivePage({ params }: PageProps) {
       {championPath && (
         <section
           className="relative mx-auto max-w-6xl px-4 md:px-6 pt-6"
-          aria-label="Parcours du champion"
+          aria-label={t("p_bracketv.champion_path")}
         >
           <div
             className="rounded-2xl border bg-[var(--bg-surface)]/80 backdrop-blur-md p-4 md:p-5"
@@ -123,7 +125,7 @@ export default async function BracketArchivePage({ params }: PageProps) {
             }}
           >
             <p className="font-data text-[10px] uppercase tracking-[0.3em] text-[var(--gold)]/85 mb-3">
-              ♛ Parcours du champion
+              ♛ {t("p_bracketv.champion_path")}
             </p>
             <div className="flex items-center flex-wrap gap-2 text-[11px] md:text-xs">
               {championPath.map((step, i) => (
@@ -136,7 +138,7 @@ export default async function BracketArchivePage({ params }: PageProps) {
                     style={{ color: step.isFinal ? "var(--gold-bright)" : "var(--gold)" }}
                   >
                     {step.winnerName ?? "?"}{" "}
-                    <span className="text-white/45">vs {step.loserName ?? "?"}</span>
+                    <span className="text-white/45">{t("p_bracketv.vs")} {step.loserName ?? "?"}</span>
                     <span className="text-white/35"> · {step.votesWinner}-{step.votesLoser}</span>
                   </span>
                   {i < championPath.length - 1 && (
@@ -154,10 +156,10 @@ export default async function BracketArchivePage({ params }: PageProps) {
       <BracketView bundle={bundle} pastWinners={pastWinners} readOnly />
 
       <p
-        aria-label="Riot Games disclaimer"
+        aria-label={t("p_bracketv.riot_disclaimer_aria")}
         className="px-4 pb-6 text-center text-[9px] uppercase tracking-widest text-white/30"
       >
-        Not endorsed by Riot Games. League of Legends © Riot Games.
+        {t("p_bracketv.riot_disclaimer")}
       </p>
     </div>
   );

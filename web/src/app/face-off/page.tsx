@@ -40,6 +40,7 @@ import { loadRealData, getCurrentRoster, type RosterPlayer } from "@/lib/real-da
 import { ALUMNI, type Alumni } from "@/lib/alumni";
 import { PLAYER_PHOTOS } from "@/lib/kc-assets";
 import { JsonLd, breadcrumbLD } from "@/lib/seo/jsonld";
+import { getServerT } from "@/lib/i18n/server-lang";
 
 import {
   FaceOff,
@@ -239,6 +240,7 @@ async function buildBundle(
 // ════════════════════════════════════════════════════════════════════
 
 export default async function FaceOffPage({ searchParams }: PageProps) {
+  const { t } = await getServerT();
   const sp = await searchParams;
   const aRaw = (sp.a ?? "").trim().toLowerCase();
   const bRaw = (sp.b ?? "").trim().toLowerCase();
@@ -330,20 +332,20 @@ export default async function FaceOffPage({ searchParams }: PageProps) {
 
         <div className="relative z-10 mx-auto max-w-6xl px-5 pt-10 pb-6 md:pt-16 md:pb-10 text-center">
           <nav
-            aria-label="Fil d'Ariane"
+            aria-label={t("p_vsgame.breadcrumb_aria")}
             className="mb-5 flex items-center justify-center gap-2 text-xs text-white/55"
           >
             <Link href="/" className="hover:text-[var(--gold)] transition-colors">
-              Accueil
+              {t("p_vsgame.vs_breadcrumb_home")}
             </Link>
             <span aria-hidden className="text-white/25">
               ◆
             </span>
-            <span className="text-[var(--gold)]">Face-Off</span>
+            <span className="text-[var(--gold)]">{t("p_vsgame.fo_breadcrumb_current")}</span>
           </nav>
 
           <p className="font-data text-[11px] uppercase tracking-[0.4em] text-[var(--gold)]/70 mb-3">
-            Player vs Player · Wave 30d
+            {t("p_vsgame.fo_eyebrow_wave")}
           </p>
           <h1
             className="font-display font-black tracking-tight leading-[0.85] text-4xl md:text-6xl lg:text-7xl"
@@ -357,8 +359,7 @@ export default async function FaceOffPage({ searchParams }: PageProps) {
             FACE <span className="text-shimmer">OFF</span>
           </h1>
           <p className="mt-4 mx-auto max-w-2xl text-sm md:text-base text-white/75 font-medium">
-            Deux joueurs. Tous les chiffres. Top 10 des kills côte à côte.
-            Et c&apos;est la communauté qui tranche.
+            {t("p_vsgame.fo_hero_subtitle")}
           </p>
         </div>
       </section>

@@ -29,6 +29,7 @@ import { useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { animate, m, useMotionValue, useTransform } from "motion/react";
+import { useT } from "@/lib/i18n/use-lang";
 
 // ─── Types ────────────────────────────────────────────────────────────
 
@@ -160,6 +161,7 @@ export function ReplayHero({
   killsAnchor = "kills-feed",
   gameAnchorPrefix = "game",
 }: ReplayHeroProps) {
+  const t = useT();
   const reduced = usePrefersReducedMotion();
   const isPast = new Date(date).getTime() < Date.now();
   const dateLabel = formatDate(date);
@@ -174,13 +176,17 @@ export function ReplayHero({
 
   const kicker = isPast
     ? kcWon
-      ? "★ Victoire Karmine Corp"
-      : "✗ Défaite — KC encaisse"
-    : "▽ Match à venir";
+      ? t("p_matchx.kicker_win")
+      : t("p_matchx.kicker_loss")
+    : t("p_matchx.kicker_upcoming");
 
   return (
     <section
-      aria-label={`Hero du match Karmine Corp ${kcScore}-${opponentScore} ${opponentName}`}
+      aria-label={t("p_matchx.hero_aria", {
+        kc: kcScore,
+        opp: opponentScore,
+        name: opponentName,
+      })}
       className="relative overflow-hidden"
       style={{
         width: "100vw",
@@ -342,7 +348,10 @@ export function ReplayHero({
                     color: "var(--text-primary)",
                     textShadow: "0 4px 30px rgba(0,0,0,0.5)",
                   }}
-                  aria-label={`Score : ${kcScore} - ${opponentScore}`}
+                  aria-label={t("p_matchx.score_aria", {
+                    kc: kcScore,
+                    opp: opponentScore,
+                  })}
                 >
                   <ScoreNumber
                     target={kcScore}
@@ -358,7 +367,7 @@ export function ReplayHero({
                 </p>
                 {!isPast && (
                   <span className="font-data text-[10px] uppercase tracking-widest text-[var(--cyan)]">
-                    À venir
+                    {t("p_matchx.upcoming")}
                   </span>
                 )}
               </div>
@@ -410,7 +419,7 @@ export function ReplayHero({
             {games.length > 0 && (
               <div
                 className="mt-6 flex flex-wrap items-center justify-center gap-2 md:mt-8"
-                aria-label="Résultats par game"
+                aria-label={t("p_matchx.games_results_aria")}
               >
                 {games.map((g) => {
                   const known = g.winnerKnown;
@@ -421,14 +430,18 @@ export function ReplayHero({
                     : lost
                       ? "border-[var(--red)]/60 bg-[var(--red)]/15 text-[var(--red)] hover:bg-[var(--red)]/25"
                       : "border-[var(--border-gold)] bg-[var(--bg-surface)] text-[var(--text-muted)] hover:border-[var(--gold)]/40";
-                  const label = won ? "Win" : lost ? "Loss" : "—";
+                  const label = won
+                    ? t("p_matchx.win")
+                    : lost
+                      ? t("p_matchx.loss")
+                      : "—";
                   return (
                     <Link
                       key={g.number}
                       href={`#${gameAnchorPrefix}-${g.number}`}
                       className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 font-data text-[11px] font-semibold uppercase tracking-widest transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gold)] ${cls}`}
                     >
-                      <span>Game {g.number}</span>
+                      <span>{t("p_matchx.game_n", { n: g.number })}</span>
                       <span aria-hidden className="text-[9px] opacity-70">
                         ·
                       </span>
@@ -445,7 +458,7 @@ export function ReplayHero({
                 href={`#${killsAnchor}`}
                 className="inline-flex items-center gap-2 rounded-full border border-[var(--gold)]/40 bg-[var(--gold)]/10 px-4 py-2 font-display text-xs font-bold uppercase tracking-widest text-[var(--gold)] transition-colors hover:bg-[var(--gold)]/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gold)]"
               >
-                <span>Voir tous les kills</span>
+                <span>{t("p_matchx.see_all_kills")}</span>
                 <svg
                   className="h-3 w-3"
                   fill="none"
@@ -475,7 +488,7 @@ export function ReplayHero({
                     className="h-2 w-2 rounded-full animate-pulse"
                     style={{ background: `rgba(${accentRgb},1)` }}
                   />
-                  {publishedClipCount} clips vidéo
+                  {t("p_matchx.clips_video", { n: publishedClipCount })}
                 </span>
               )}
             </div>

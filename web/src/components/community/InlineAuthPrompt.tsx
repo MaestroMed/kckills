@@ -24,6 +24,7 @@
 
 import { useEffect } from "react";
 import { m, AnimatePresence } from "motion/react";
+import { useT } from "@/lib/i18n/use-lang";
 
 interface Props {
   isOpen: boolean;
@@ -36,11 +37,11 @@ interface Props {
   intent?: "like" | "comment" | "rate" | "share";
 }
 
-const INTENT_COPY: Record<string, string> = {
-  like: "pour liker ce kill",
-  comment: "pour commenter",
-  rate: "pour noter",
-  share: "pour partager",
+const INTENT_COPY_KEYS: Record<string, string> = {
+  like: "auth_intent_like",
+  comment: "auth_intent_comment",
+  rate: "auth_intent_rate",
+  share: "auth_intent_share",
 };
 
 export function InlineAuthPrompt({
@@ -49,6 +50,7 @@ export function InlineAuthPrompt({
   onAuthenticated,
   intent,
 }: Props) {
+  const t = useT();
   // Listen for the auth-success message from the popup.
   useEffect(() => {
     if (!isOpen) return;
@@ -91,7 +93,7 @@ export function InlineAuthPrompt({
     }
   };
 
-  const reason = intent ? INTENT_COPY[intent] : null;
+  const reason = intent ? t(`p_comm.${INTENT_COPY_KEYS[intent]}`) : null;
 
   return (
     <AnimatePresence>
@@ -119,7 +121,7 @@ export function InlineAuthPrompt({
             <button
               onClick={onClose}
               className="absolute top-3 right-3 flex h-8 w-8 items-center justify-center rounded-full text-white/60 hover:text-white hover:bg-white/10 transition-colors"
-              aria-label="Fermer"
+              aria-label={t("p_comm.close")}
             >
               <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
@@ -134,13 +136,13 @@ export function InlineAuthPrompt({
             </div>
 
             <h2 className="font-display text-xl md:text-2xl font-black text-white mb-1">
-              Connexion rapide
+              {t("p_comm.auth_title")}
             </h2>
             <p className="text-sm text-white/65 mb-6 leading-relaxed">
-              Connecte-toi avec Discord {reason ? reason : ""}.
+              {t("p_comm.auth_body_prefix")} {reason ? reason : ""}.
               <br />
               <span className="text-xs text-white/40">
-                Aucun mot de passe, on garde juste ton pseudo + avatar.
+                {t("p_comm.auth_body_note")}
               </span>
             </p>
 
@@ -152,7 +154,7 @@ export function InlineAuthPrompt({
               <svg className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M20.317 4.37a19.791 19.791 0 00-4.885-1.515.074.074 0 00-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 00-5.487 0 12.64 12.64 0 00-.617-1.25.077.077 0 00-.079-.037A19.736 19.736 0 003.677 4.37a.07.07 0 00-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 00.031.057 19.9 19.9 0 005.993 3.03.078.078 0 00.084-.028c.462-.63.874-1.295 1.226-1.994a.076.076 0 00-.041-.106 13.107 13.107 0 01-1.872-.892.077.077 0 01-.008-.128 10.2 10.2 0 00.372-.292.074.074 0 01.077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 01.078.01c.12.098.246.198.373.292a.077.077 0 01-.006.127 12.299 12.299 0 01-1.873.892.077.077 0 00-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 00.084.028 19.839 19.839 0 006.002-3.03.077.077 0 00.032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 00-.031-.03z" />
               </svg>
-              Continuer avec Discord
+              {t("p_comm.auth_continue_discord")}
             </button>
 
             <button
@@ -160,7 +162,7 @@ export function InlineAuthPrompt({
               onClick={onClose}
               className="mt-3 text-xs text-white/45 hover:text-white/65 transition-colors"
             >
-              Plus tard
+              {t("p_comm.auth_later")}
             </button>
           </m.div>
         </m.div>
