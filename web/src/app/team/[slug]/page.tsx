@@ -29,6 +29,7 @@ import {
   type TeamKillCard,
 } from "@/lib/teams-loader";
 import { JsonLd, breadcrumbLD } from "@/lib/seo/jsonld";
+import { getServerT, type ServerTranslateFn } from "@/lib/i18n/server-lang";
 
 export const revalidate = 1800; // Wave 13d : DB pressure
 
@@ -70,6 +71,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
 export default async function TeamPage({ params }: Props) {
   const { slug } = await params;
+  const { t } = await getServerT();
   const team = await getTeamBySlug(slug);
   if (!team) notFound();
 
@@ -101,7 +103,7 @@ export default async function TeamPage({ params }: Props) {
       {/* ─── Header ───────────────────────────────────────────── */}
       <header className="border-b border-[var(--border-gold)]/40 bg-gradient-to-b from-[var(--bg-elevated)] to-[var(--bg-primary)]">
         <div className="mx-auto max-w-5xl px-4 py-10">
-          <nav aria-label="Fil d'Ariane" className="mb-4">
+          <nav aria-label={t("p6_pagesa.breadcrumb_aria")} className="mb-4">
             <ol className="flex items-center gap-1.5 text-xs text-[var(--text-muted)]">
               {crumbs.map((c, i) => (
                 <li key={c.url} className="flex items-center gap-1.5">
@@ -122,7 +124,7 @@ export default async function TeamPage({ params }: Props) {
               {team.logo_url ? (
                 <Image
                   src={team.logo_url}
-                  alt={`Logo ${team.name}`}
+                  alt={t("p6_pagesa.team_logo_alt", { name: team.name })}
                   width={96}
                   height={96}
                   className="h-20 w-20 md:h-24 md:w-24 object-contain"
@@ -157,7 +159,7 @@ export default async function TeamPage({ params }: Props) {
                 ) : null}
                 {team.is_tracked ? (
                   <span className="inline-flex items-center rounded-full bg-[var(--gold)]/15 border border-[var(--gold)]/30 px-3 py-1 text-xs font-medium text-[var(--gold)]">
-                    Suivi
+                    {t("p6_pagesa.tracked_badge")}
                   </span>
                 ) : null}
               </div>
@@ -169,17 +171,17 @@ export default async function TeamPage({ params }: Props) {
       {/* ─── Recent kills ─────────────────────────────────────── */}
       <section className="mx-auto max-w-5xl px-4 py-10">
         <h2 className="font-display text-xl font-bold text-[var(--text-primary)] mb-4">
-          Derniers clips
+          {t("p6_pagesa.recent_clips_heading")}
         </h2>
         {kills.length === 0 ? (
           <p className="text-sm text-[var(--text-muted)]">
-            Aucun clip publié pour {team.name} pour le moment.
+            {t("p6_pagesa.clips_empty", { team: team.name })}
           </p>
         ) : (
           <ul className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
             {kills.map((k) => (
               <li key={k.id}>
-                <KillThumb kill={k} />
+                <KillThumb kill={k} t={t} />
               </li>
             ))}
           </ul>
@@ -200,15 +202,16 @@ export default async function TeamPage({ params }: Props) {
 
 interface KillThumbProps {
   kill: TeamKillCard;
+  t: ServerTranslateFn;
 }
 
-function KillThumb({ kill }: KillThumbProps) {
+function KillThumb({ kill, t }: KillThumbProps) {
   const desc =
     kill.ai_description_fr ??
     kill.ai_description ??
     (kill.killer_champion && kill.victim_champion
-      ? `${kill.killer_champion} élimine ${kill.victim_champion}`
-      : "Clip");
+      ? t("p6_pagesa.kill_alt", { killer: kill.killer_champion, victim: kill.victim_champion })
+      : t("p6_pagesa.clip_fallback"));
   return (
     <Link
       href={`/kill/${kill.id}`}

@@ -19,6 +19,7 @@
  */
 
 import { useEffect, useRef, useState } from "react";
+import { useT } from "@/lib/i18n/use-lang";
 
 interface Chapter {
   id: string;
@@ -33,6 +34,7 @@ interface Props {
 }
 
 export function CompilationPlayer({ videoUrl, poster, chapters }: Props) {
+  const t = useT();
   const videoRef = useRef<HTMLVideoElement>(null);
   const [announce, setAnnounce] = useState("");
 
@@ -60,14 +62,19 @@ export function CompilationPlayer({ videoUrl, poster, chapters }: Props) {
         });
       }
       if (chapter) {
-        setAnnounce(`Lecture du chapitre ${Number(idx) + 1} : ${chapter.label}`);
+        setAnnounce(
+          t("p6_pagesb.player_announce_chapter", {
+            n: Number(idx) + 1,
+            label: chapter.label,
+          }),
+        );
       }
       // Scroll the player back into view if it's offscreen.
       videoRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
     }
     document.addEventListener("click", onClick);
     return () => document.removeEventListener("click", onClick);
-  }, [chapters]);
+  }, [chapters, t]);
 
   return (
     <div className="overflow-hidden rounded-2xl border border-[var(--border-gold)] bg-black shadow-2xl shadow-black/40">
@@ -78,13 +85,12 @@ export function CompilationPlayer({ videoUrl, poster, chapters }: Props) {
         preload="metadata"
         poster={poster ?? undefined}
         className="block aspect-video w-full bg-black"
-        aria-label="Lecteur vidéo de la compilation"
+        aria-label={t("p6_pagesb.player_aria_label")}
       >
         <source src={videoUrl} type="video/mp4" />
-        Ton navigateur ne supporte pas la lecture vidéo. Télécharge le fichier
-        directement{" "}
+        {t("p6_pagesb.player_fallback_text")}{" "}
         <a href={videoUrl} className="underline">
-          ici
+          {t("p6_pagesb.player_fallback_link")}
         </a>
         .
       </video>

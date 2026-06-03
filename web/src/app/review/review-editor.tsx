@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback } from "react";
+import { useT } from "@/lib/i18n/use-lang";
 
 interface ReviewItem {
   id: string;
@@ -23,13 +24,13 @@ interface ReviewItem {
 }
 
 const FIGHT_TYPES = [
-  { value: "solo_kill", label: "Solo Kill (vrai 1v1)" },
-  { value: "pick", label: "Pick (2v1)" },
-  { value: "gank", label: "Gank (3v1+)" },
-  { value: "skirmish_2v2", label: "Skirmish 2v2" },
-  { value: "skirmish_3v3", label: "Skirmish 3v3" },
-  { value: "teamfight_4v4", label: "Teamfight 4v4" },
-  { value: "teamfight_5v5", label: "Teamfight 5v5" },
+  { value: "solo_kill", labelKey: "p6_pagesb.fight_solo_kill" },
+  { value: "pick", labelKey: "p6_pagesb.fight_pick" },
+  { value: "gank", labelKey: "p6_pagesb.fight_gank" },
+  { value: "skirmish_2v2", labelKey: "p6_pagesb.fight_skirmish_2v2" },
+  { value: "skirmish_3v3", labelKey: "p6_pagesb.fight_skirmish_3v3" },
+  { value: "teamfight_4v4", labelKey: "p6_pagesb.fight_teamfight_4v4" },
+  { value: "teamfight_5v5", labelKey: "p6_pagesb.fight_teamfight_5v5" },
 ];
 
 const ALL_TAGS = [
@@ -40,6 +41,7 @@ const ALL_TAGS = [
 ];
 
 export function ReviewEditor({ items }: { items: ReviewItem[] }) {
+  const t = useT();
   const [idx, setIdx] = useState(0);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -97,11 +99,11 @@ export function ReviewEditor({ items }: { items: ReviewItem[] }) {
 
   const toggleTag = (tag: string) => {
     setTags((prev) =>
-      prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag],
+      prev.includes(tag) ? prev.filter((x) => x !== tag) : [...prev, tag],
     );
   };
 
-  if (!current) return <p className="p-8 text-center text-[var(--text-muted)]">Aucun clip.</p>;
+  if (!current) return <p className="p-8 text-center text-[var(--text-muted)]">{t("p6_pagesb.editor_no_clip")}</p>;
 
   const gt = current.gameTimeSeconds;
   const gtStr = `${Math.floor(gt / 60)}:${(gt % 60).toString().padStart(2, "0")}`;
@@ -111,10 +113,10 @@ export function ReviewEditor({ items }: { items: ReviewItem[] }) {
       {/* Header */}
       <div className="flex items-center justify-between">
         <h1 className="font-display text-xl font-bold text-[var(--gold)]">
-          Backoffice Clips
+          {t("p6_pagesb.editor_heading")}
         </h1>
         <div className="flex items-center gap-4">
-          <span className="text-xs text-[var(--text-muted)]">{editedCount} modifies</span>
+          <span className="text-xs text-[var(--text-muted)]">{t("p6_pagesb.editor_edited_count", { n: editedCount })}</span>
           <span className="font-data text-sm text-[var(--gold)]">
             {idx + 1} / {items.length}
           </span>
@@ -125,11 +127,11 @@ export function ReviewEditor({ items }: { items: ReviewItem[] }) {
       <div className="flex gap-2">
         <button onClick={() => loadItem(Math.max(0, idx - 1))}
           className="rounded-lg border border-[var(--border-gold)] px-3 py-1.5 text-xs text-[var(--text-muted)] hover:bg-[var(--bg-elevated)]">
-          Precedent
+          {t("p6_pagesb.editor_prev")}
         </button>
         <button onClick={() => loadItem(Math.min(items.length - 1, idx + 1))}
           className="rounded-lg border border-[var(--border-gold)] px-3 py-1.5 text-xs text-[var(--text-muted)] hover:bg-[var(--bg-elevated)]">
-          Suivant
+          {t("p6_pagesb.editor_next")}
         </button>
         <button onClick={() => loadItem(Math.min(items.length - 1, idx + 10))}
           className="rounded-lg border border-[var(--border-gold)] px-3 py-1.5 text-xs text-[var(--text-muted)] hover:bg-[var(--bg-elevated)]">
@@ -173,7 +175,7 @@ export function ReviewEditor({ items }: { items: ReviewItem[] }) {
           {/* Description */}
           <div>
             <label className="text-[10px] uppercase tracking-widest text-[var(--text-muted)]">
-              Description
+              {t("p6_pagesb.editor_label_description")}
             </label>
             <textarea
               value={desc}
@@ -181,13 +183,13 @@ export function ReviewEditor({ items }: { items: ReviewItem[] }) {
               rows={3}
               className="mt-1 w-full rounded-lg border border-[var(--border-gold)] bg-[var(--bg-primary)] px-3 py-2 text-sm text-[var(--text-primary)] outline-none focus:border-[var(--gold)] resize-none"
             />
-            <p className="text-[10px] text-[var(--text-muted)] mt-0.5">{desc.length} chars</p>
+            <p className="text-[10px] text-[var(--text-muted)] mt-0.5">{t("p6_pagesb.editor_chars", { n: desc.length })}</p>
           </div>
 
           {/* Fight type */}
           <div>
             <label className="text-[10px] uppercase tracking-widest text-[var(--text-muted)]">
-              Fight Type
+              {t("p6_pagesb.editor_label_fight_type")}
             </label>
             <select
               value={fightType}
@@ -195,7 +197,7 @@ export function ReviewEditor({ items }: { items: ReviewItem[] }) {
               className="mt-1 w-full rounded-lg border border-[var(--border-gold)] bg-[var(--bg-primary)] px-3 py-2 text-sm text-[var(--text-primary)] outline-none focus:border-[var(--gold)]"
             >
               {FIGHT_TYPES.map((ft) => (
-                <option key={ft.value} value={ft.value}>{ft.label}</option>
+                <option key={ft.value} value={ft.value}>{t(ft.labelKey)}</option>
               ))}
             </select>
           </div>
@@ -203,7 +205,7 @@ export function ReviewEditor({ items }: { items: ReviewItem[] }) {
           {/* Highlight score */}
           <div>
             <label className="text-[10px] uppercase tracking-widest text-[var(--text-muted)]">
-              Highlight Score: {score.toFixed(1)}/10
+              {t("p6_pagesb.editor_label_highlight_score", { score: score.toFixed(1) })}
             </label>
             <input
               type="range" min={1} max={10} step={0.5} value={score}
@@ -215,7 +217,7 @@ export function ReviewEditor({ items }: { items: ReviewItem[] }) {
           {/* Tags */}
           <div>
             <label className="text-[10px] uppercase tracking-widest text-[var(--text-muted)]">
-              Tags ({tags.length})
+              {t("p6_pagesb.editor_label_tags", { n: tags.length })}
             </label>
             <div className="flex flex-wrap gap-1.5 mt-1">
               {ALL_TAGS.map((tag) => (
@@ -242,7 +244,7 @@ export function ReviewEditor({ items }: { items: ReviewItem[] }) {
               className="accent-[var(--red)]"
             />
             <span className="text-xs text-[var(--text-muted)]">
-              Masquer ce clip du feed (kill pas visible / mauvaise qualite)
+              {t("p6_pagesb.editor_hide_label")}
             </span>
           </label>
 
@@ -250,16 +252,16 @@ export function ReviewEditor({ items }: { items: ReviewItem[] }) {
           <div className="flex gap-2 pt-2">
             <button onClick={save} disabled={saving}
               className="rounded-lg border border-[var(--gold)] px-4 py-2 text-sm font-bold text-[var(--gold)] hover:bg-[var(--gold)]/10 disabled:opacity-50 transition-all">
-              {saving ? "..." : saved ? "Sauvegarde !" : "Sauvegarder"}
+              {saving ? "..." : saved ? t("p6_pagesb.editor_saved_btn") : t("p6_pagesb.editor_save_btn")}
             </button>
             <button onClick={saveAndNext} disabled={saving}
               className="flex-1 rounded-lg bg-[var(--gold)] px-4 py-2 text-sm font-bold text-black hover:bg-[var(--gold-bright)] disabled:opacity-50 transition-all">
-              {saving ? "..." : "Sauvegarder + Suivant"}
+              {saving ? "..." : t("p6_pagesb.editor_save_next_btn")}
             </button>
           </div>
 
           {saved && (
-            <p className="text-xs text-[var(--green)] text-center">Modifications sauvegardees en DB</p>
+            <p className="text-xs text-[var(--green)] text-center">{t("p6_pagesb.editor_saved_db")}</p>
           )}
         </div>
       </div>

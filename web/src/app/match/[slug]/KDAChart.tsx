@@ -34,6 +34,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { PublishedKillRow } from "@/lib/supabase/kills";
+import { useT } from "@/lib/i18n/use-lang";
 
 // ─── Types ────────────────────────────────────────────────────────────
 
@@ -96,6 +97,7 @@ export function KDAChart({
   players,
   kills,
 }: KDAChartProps) {
+  const t = useT();
   const wrapRef = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(640);
   const [hidden, setHidden] = useState<Set<string>>(new Set());
@@ -254,7 +256,7 @@ export function KDAChart({
       ref={wrapRef}
       className="space-y-3"
       role="figure"
-      aria-label={`Évolution des kills par joueur — Game ${gameNumber}`}
+      aria-label={t("p6_matchpg.kda_figure_aria", { n: gameNumber })}
     >
       <div className="overflow-x-auto">
         <svg
@@ -440,16 +442,18 @@ export function KDAChart({
 
       {/* Screen-reader table fallback. */}
       <figcaption className="sr-only">
-        Tableau des kills cumulés par joueur pour la Game {gameNumber} ;
-        durée {formatMinSec(series.lastTime)}.
+        {t("p6_matchpg.kda_figcaption", {
+          n: gameNumber,
+          duration: formatMinSec(series.lastTime),
+        })}
       </figcaption>
       <table className="sr-only">
         <thead>
           <tr>
-            <th scope="col">Joueur</th>
-            <th scope="col">Champion</th>
-            <th scope="col">Camp</th>
-            <th scope="col">Kills finaux</th>
+            <th scope="col">{t("p6_matchpg.kda_col_player")}</th>
+            <th scope="col">{t("p6_matchpg.kda_col_champion")}</th>
+            <th scope="col">{t("p6_matchpg.kda_col_side")}</th>
+            <th scope="col">{t("p6_matchpg.kda_col_final_kills")}</th>
           </tr>
         </thead>
         <tbody>
@@ -460,7 +464,7 @@ export function KDAChart({
               <tr key={`sr-row-${p.champion}`}>
                 <td>{p.ign}</td>
                 <td>{p.champion}</td>
-                <td>{p.side === "kc" ? "KC" : "Adversaire"}</td>
+                <td>{p.side === "kc" ? "KC" : t("p6_matchpg.opponent_fallback")}</td>
                 <td>{final}</td>
               </tr>
             );

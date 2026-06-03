@@ -6,6 +6,7 @@ import Image from "next/image";
 import type { Era } from "@/lib/eras";
 import type { PublishedKillRow } from "@/lib/supabase/kills";
 import { SkeletonKillCard } from "@/components/Skeleton";
+import { useT } from "@/lib/i18n/use-lang";
 
 /**
  * EraKillsFeed — horizontal scrollable strip of clips that fall inside
@@ -32,6 +33,7 @@ interface ApiResponse {
 }
 
 export function EraKillsFeed({ era }: EraKillsFeedProps) {
+  const t = useT();
   const [state, setState] = useState<
     | { kind: "loading" }
     | { kind: "ready"; kills: PublishedKillRow[] }
@@ -73,7 +75,7 @@ export function EraKillsFeed({ era }: EraKillsFeedProps) {
   return (
     <section
       className="relative max-w-7xl mx-auto px-4 md:px-6 py-6"
-      aria-label={`Clips de l'ere ${era.label}`}
+      aria-label={t("p6_tl.feed_aria", { label: era.label })}
     >
       {/* Header — era badge + title + count */}
       <div className="flex items-end justify-between gap-4 mb-4 flex-wrap">
@@ -93,7 +95,9 @@ export function EraKillsFeed({ era }: EraKillsFeedProps) {
           </h2>
           {state.kind === "ready" && state.kills.length > 0 && (
             <span className="font-data text-xs uppercase tracking-widest text-[var(--text-muted)]">
-              {state.kills.length} clip{state.kills.length > 1 ? "s" : ""}
+              {state.kills.length > 1
+                ? t("p6_tl.clips_count", { n: state.kills.length })
+                : t("p6_tl.clip_count_one", { n: state.kills.length })}
             </span>
           )}
         </div>
@@ -120,10 +124,10 @@ export function EraKillsFeed({ era }: EraKillsFeedProps) {
           }}
         >
           <p className="text-sm text-[var(--text-muted)]">
-            Pas encore de kills indexes pour cette ere.
+            {t("p6_tl.empty_title")}
           </p>
           <p className="mt-2 text-[11px] text-[var(--text-disabled)] uppercase tracking-widest">
-            La pipeline backfill les eras anciennes au fur et a mesure.
+            {t("p6_tl.empty_body")}
           </p>
         </div>
       )}
@@ -134,7 +138,7 @@ export function EraKillsFeed({ era }: EraKillsFeedProps) {
       {state.kind === "error" && (
         <div className="rounded-2xl border border-[var(--red)]/30 bg-[var(--red)]/5 p-6 text-center">
           <p className="text-sm text-[var(--red)]">
-            Erreur de chargement : {state.message}
+            {t("p6_tl.error_load", { message: state.message })}
           </p>
         </div>
       )}
@@ -160,6 +164,7 @@ interface EraKillCardProps {
 }
 
 function EraKillCard({ kill, accentColor }: EraKillCardProps) {
+  const t = useT();
   const matchExt = kill.games?.matches?.external_id ?? null;
   // The opponent code is encoded as the suffix of the match external_id
   // (e.g. "lec_2026_kc_g2" → "G2"). Best-effort — falls back to "?" if
@@ -175,7 +180,10 @@ function EraKillCard({ kill, accentColor }: EraKillCardProps) {
       style={{
         borderColor: `${accentColor}40`,
       }}
-      aria-label={`${kill.killer_champion ?? "?"} elimine ${kill.victim_champion ?? "?"}`}
+      aria-label={t("p6_tl.kill_alt", {
+        killer: kill.killer_champion ?? "?",
+        victim: kill.victim_champion ?? "?",
+      })}
     >
       {kill.thumbnail_url && (
         <Image
@@ -190,7 +198,7 @@ function EraKillCard({ kill, accentColor }: EraKillCardProps) {
       {/* Top: opponent + score chips */}
       <div className="absolute top-1.5 left-1.5 right-1.5 flex items-center justify-between gap-1 z-10">
         <span className="rounded bg-black/70 backdrop-blur-sm px-1.5 py-0.5 text-[8px] font-bold text-white">
-          KC vs {opp || "?"}
+          {t("p6_tl.kc_vs", { opp: opp || "?" })}
         </span>
         {kill.highlight_score !== null && (
           <span
@@ -215,7 +223,7 @@ function EraKillCard({ kill, accentColor }: EraKillCardProps) {
       {kill.is_first_blood && (
         <div className="absolute top-7 right-1.5 z-10">
           <span className="rounded bg-[var(--red)]/90 px-1.5 py-0.5 text-[8px] font-black text-white uppercase tracking-wide">
-            first
+            {t("p6_tl.first_blood_short")}
           </span>
         </div>
       )}

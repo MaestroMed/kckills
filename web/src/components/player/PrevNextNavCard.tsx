@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { getServerT } from "@/lib/i18n/server-lang";
 
 export interface PrevNextEntity {
   slug: string;
@@ -16,7 +17,7 @@ export interface PrevNextEntity {
  * of both /player/[slug] and /alumni/[slug]. Honors `direction` to flip
  * the chevron and align the label.
  */
-export function PrevNextNavCard({
+export async function PrevNextNavCard({
   direction,
   entity,
   basePath = "/player/",
@@ -28,21 +29,22 @@ export function PrevNextNavCard({
   /** "alumni" or "active". Controls the eyebrow copy. */
   variant?: "alumni" | "active";
 }) {
+  const { t } = await getServerT();
   const href = entity.href ?? `${basePath}${encodeURIComponent(entity.slug)}`;
   const accent = entity.accentColor;
   const eyebrow =
     variant === "alumni"
       ? direction === "prev"
-        ? "Alumni precedent"
-        : "Alumni suivant"
+        ? t("p6_playerpg.nav_alumni_prev")
+        : t("p6_playerpg.nav_alumni_next")
       : direction === "prev"
-        ? "Joueur precedent"
-        : "Joueur suivant";
+        ? t("p6_playerpg.nav_player_prev")
+        : t("p6_playerpg.nav_player_next");
 
   return (
     <Link
       href={href}
-      aria-label={`${eyebrow} : ${entity.name}`}
+      aria-label={t("p6_playerpg.nav_aria", { eyebrow, name: entity.name })}
       className={`group flex items-center gap-5 rounded-2xl border border-[var(--border-gold)] bg-[var(--bg-surface)] p-6 transition-all hover:border-[var(--gold)]/50 hover:-translate-y-0.5 hover:shadow-2xl hover:shadow-[var(--gold)]/15 focus-visible:outline-2 focus-visible:outline-[var(--gold)] focus-visible:outline-offset-2 ${
         direction === "next" ? "md:text-right md:flex-row-reverse" : ""
       }`}

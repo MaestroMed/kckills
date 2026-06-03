@@ -7,6 +7,7 @@ import { ClipReel } from "@/components/ClipReel";
 import { PortraitCubeMorph } from "@/components/PortraitCubeMorph";
 import { getClipsFiltered } from "@/lib/supabase/clips";
 import { Breadcrumb } from "@/components/Breadcrumb";
+import { getServerT } from "@/lib/i18n/server-lang";
 
 export const revalidate = 600;
 
@@ -81,6 +82,8 @@ export default async function MatchupPage({ params }: Props) {
     notFound();
   }
 
+  const { t } = await getServerT();
+
   // ─── JSON-LD: tells Google this is a video collection about a specific
   //     LoL champion match-up. Two CollectionPage facets per matchup, one
   //     summarizing each side. Helps the rich-results crawler associate
@@ -125,8 +128,8 @@ export default async function MatchupPage({ params }: Props) {
       <div className="absolute top-6 left-0 right-0 z-30 max-w-7xl mx-auto px-6">
         <Breadcrumb
           items={[
-            { label: "Accueil", href: "/" },
-            { label: "Matchups", href: "/clips" },
+            { label: t("p6_pagesa.breadcrumb_home"), href: "/" },
+            { label: t("p6_pagesa.breadcrumb_matchups"), href: "/clips" },
             { label: `${a} vs ${b}` },
           ]}
         />
@@ -157,23 +160,23 @@ export default async function MatchupPage({ params }: Props) {
 
         <nav
           className="absolute top-6 left-6 right-6 z-20 flex items-center justify-between text-xs text-white/55"
-          aria-label="Fil d'Ariane"
+          aria-label={t("p6_pagesa.breadcrumb_aria")}
         >
           <Link href="/" className="hover:text-[var(--gold)] transition-colors">
-            Accueil
+            {t("p6_pagesa.breadcrumb_home")}
           </Link>
-          <span className="font-data uppercase tracking-widest text-white/40">Match-up</span>
+          <span className="font-data uppercase tracking-widest text-white/40">{t("p6_pagesa.matchup_tag")}</span>
         </nav>
 
         <div className="relative z-10 mx-auto max-w-7xl h-full flex flex-col justify-end px-6 pb-12">
           <p className="font-data text-[10px] uppercase tracking-[0.3em] text-[var(--gold)]/70 mb-4">
-            Match-up champion
+            {t("p6_pagesa.matchup_champion_eyebrow")}
           </p>
 
           {/* Two-portrait header */}
           <div className="flex items-end gap-4 md:gap-8 mb-8">
             <ChampionPanel name={a} side="left" />
-            <span className="font-display text-3xl md:text-5xl font-black text-white/40 mb-2">vs</span>
+            <span className="font-display text-3xl md:text-5xl font-black text-white/40 mb-2">{t("p6_pagesa.vs")}</span>
             <ChampionPanel name={b} side="right" />
           </div>
 
@@ -184,7 +187,7 @@ export default async function MatchupPage({ params }: Props) {
                 {totalAOverB + totalBOverA + totalKcWith_b_pick + totalKcDeath_a_pick}
               </span>
               <span className="ml-2 text-xs uppercase tracking-widest text-[var(--gold)]/80">
-                clips au total
+                {t("p6_pagesa.clips_total")}
               </span>
             </span>
           </div>
@@ -195,9 +198,9 @@ export default async function MatchupPage({ params }: Props) {
       <section className="max-w-7xl mx-auto px-6 py-16 space-y-14">
         {totalAOverB > 0 && (
           <ClipReel
-            kicker={`${a} domine ${b}`}
-            title={`${a} (KC) → ${b}`}
-            subtitle={`Quand KC pick ${a} face \u00e0 ${b}, voici les kills donn\u00e9s.`}
+            kicker={t("p6_pagesa.reel1_kicker", { a, b })}
+            title={t("p6_pagesa.reel1_title", { a, b })}
+            subtitle={t("p6_pagesa.reel1_subtitle", { a, b })}
             filter={{
               killerChampion: a,
               victimChampion: b,
@@ -210,9 +213,9 @@ export default async function MatchupPage({ params }: Props) {
 
         {totalKcDeath_a_pick > 0 && (
           <ClipReel
-            kicker={`${a} se fait piquer par ${b}`}
-            title={`${b} → ${a} (KC)`}
-            subtitle={`Quand KC pick ${a} et se fait punir par ${b}.`}
+            kicker={t("p6_pagesa.reel2_kicker", { a, b })}
+            title={t("p6_pagesa.reel2_title", { a, b })}
+            subtitle={t("p6_pagesa.reel2_subtitle", { a, b })}
             filter={{
               killerChampion: b,
               victimChampion: a,
@@ -225,9 +228,9 @@ export default async function MatchupPage({ params }: Props) {
 
         {totalKcWith_b_pick > 0 && (
           <ClipReel
-            kicker={`${b} (KC) domine ${a}`}
-            title={`${b} → ${a}`}
-            subtitle={`Quand KC pick ${b} et finit ${a}.`}
+            kicker={t("p6_pagesa.reel3_kicker", { a, b })}
+            title={t("p6_pagesa.reel3_title", { a, b })}
+            subtitle={t("p6_pagesa.reel3_subtitle", { a, b })}
             filter={{
               killerChampion: b,
               victimChampion: a,
@@ -240,9 +243,9 @@ export default async function MatchupPage({ params }: Props) {
 
         {totalBOverA > 0 && (
           <ClipReel
-            kicker={`${b} se fait piquer`}
-            title={`${a} → ${b} (KC se fait punir)`}
-            subtitle={`KC pick ${b} et se fait piquer par ${a}.`}
+            kicker={t("p6_pagesa.reel4_kicker", { a, b })}
+            title={t("p6_pagesa.reel4_title", { a, b })}
+            subtitle={t("p6_pagesa.reel4_subtitle", { a, b })}
             filter={{
               killerChampion: a,
               victimChampion: b,

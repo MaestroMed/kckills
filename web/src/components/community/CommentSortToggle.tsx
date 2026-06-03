@@ -13,6 +13,7 @@
  */
 
 import type { CommentSortMode } from "@/lib/comments";
+import { useT } from "@/lib/i18n/use-lang";
 
 interface Props {
   mode: CommentSortMode;
@@ -20,17 +21,18 @@ interface Props {
   className?: string;
 }
 
-const SEGMENTS: { value: CommentSortMode; label: string; desc: string }[] = [
-  { value: "latest", label: "Récents", desc: "Trier par date de publication (plus récent en premier)" },
-  { value: "top", label: "Top", desc: "Trier par score Wilson (votes positifs sur total, intervalle de confiance)" },
+const SEGMENTS: { value: CommentSortMode; labelKey: string; descKey: string }[] = [
+  { value: "latest", labelKey: "p6_comm2.sort_latest", descKey: "p6_comm2.sort_latest_desc" },
+  { value: "top", labelKey: "p6_comm2.sort_top", descKey: "p6_comm2.sort_top_desc" },
 ];
 
 export function CommentSortToggle({ mode, onChange, className }: Props) {
+  const t = useT();
   return (
     <div
       className={`inline-flex items-center rounded-full bg-white/5 p-0.5 ${className ?? ""}`}
       role="tablist"
-      aria-label="Trier les commentaires"
+      aria-label={t("p6_comm2.sort_aria")}
     >
       {SEGMENTS.map((seg) => {
         const active = seg.value === mode;
@@ -40,7 +42,7 @@ export function CommentSortToggle({ mode, onChange, className }: Props) {
             type="button"
             role="tab"
             aria-selected={active}
-            title={seg.desc}
+            title={t(seg.descKey)}
             onClick={() => onChange(seg.value)}
             className={`
               h-7 rounded-full px-3 text-[11px] font-semibold uppercase tracking-wider
@@ -51,7 +53,7 @@ export function CommentSortToggle({ mode, onChange, className }: Props) {
               focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gold)]/60
             `.replace(/\s+/g, " ").trim()}
           >
-            {seg.label}
+            {t(seg.labelKey)}
           </button>
         );
       })}

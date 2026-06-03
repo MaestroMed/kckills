@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
+import { useT, type TranslateFn } from "@/lib/i18n/use-lang";
 import { TEAM_LOGOS } from "@/lib/kc-assets";
 import {
   getLiveMatch,
@@ -46,6 +47,7 @@ interface ApiMatch {
  * pulse dot so a vestibular user isn't bothered.
  */
 export function NextMatchOverlay() {
+  const t = useT();
   const [now, setNow] = useState<Date | null>(null);
   const [reducedMotion, setReducedMotion] = useState(false);
   const [dismissed, setDismissed] = useState(false);
@@ -101,8 +103,12 @@ export function NextMatchOverlay() {
   const soon = !isLive && ms <= 60 * 60 * 1000;
 
   const accent = isLive ? "var(--red)" : soon ? "var(--orange)" : "var(--gold)";
-  const label = isLive ? "EN LIVE" : soon ? "EN APPROCHE" : "PROCHAIN RDV";
-  const countdown = formatCountdown(ms, { live: isLive, soon });
+  const label = isLive
+    ? t("p6_comm2.next_live")
+    : soon
+      ? t("p6_comm2.next_soon")
+      : t("p6_comm2.next_upcoming");
+  const countdown = formatCountdown(ms, { live: isLive, soon }, t);
 
   const oppLogo = TEAM_LOGOS[next.opponentCode];
 
@@ -198,7 +204,7 @@ export function NextMatchOverlay() {
       <button
         type="button"
         onClick={() => setDismissed(true)}
-        aria-label="Masquer le prochain rendez-vous"
+        aria-label={t("p6_comm2.next_dismiss_aria")}
         className="pointer-events-auto absolute -top-2 -right-2 flex h-6 w-6 items-center justify-center rounded-full border border-white/20 bg-black/70 text-white/70 transition-opacity opacity-0 group-hover:opacity-100 hover:opacity-100 hover:text-white focus-visible:opacity-100"
       >
         <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -211,24 +217,32 @@ export function NextMatchOverlay() {
 
 // ─── Helpers ────────────────────────────────────────────────────────────
 
-function formatCountdown(ms: number, ctx: { live: boolean; soon: boolean }): string {
-  if (ctx.live) return "Match en cours";
-  if (ms <= 0) return "Match en cours";
+function formatCountdown(
+  ms: number,
+  ctx: { live: boolean; soon: boolean },
+  t: TranslateFn,
+): string {
+  if (ctx.live) return t("p6_comm2.cd_in_progress");
+  if (ms <= 0) return t("p6_comm2.cd_in_progress");
   const totalSec = Math.floor(ms / 1000);
   const days = Math.floor(totalSec / 86400);
   const hours = Math.floor((totalSec % 86400) / 3600);
   const mins = Math.floor((totalSec % 3600) / 60);
 
   if (ctx.soon) {
-    return mins <= 0 ? "\u00c0 la baballe !" : `dans ${mins} min`;
+    return mins <= 0 ? t("p6_comm2.cd_kickoff") : t("p6_comm2.cd_in_min", { n: mins });
   }
   if (days > 0) {
-    return hours > 0 ? `dans ${days}j ${hours}h` : `dans ${days}j`;
+    return hours > 0
+      ? t("p6_comm2.cd_in_days_hours", { d: days, h: hours })
+      : t("p6_comm2.cd_in_days", { d: days });
   }
   if (hours > 0) {
-    return mins > 0 ? `dans ${hours}h ${mins}min` : `dans ${hours}h`;
+    return mins > 0
+      ? t("p6_comm2.cd_in_hours_min", { h: hours, m: mins })
+      : t("p6_comm2.cd_in_hours", { h: hours });
   }
-  return `dans ${mins} min`;
+  return t("p6_comm2.cd_in_min", { n: mins });
 }
 
 function noopForUpcomingType(_m: UpcomingMatch): void {

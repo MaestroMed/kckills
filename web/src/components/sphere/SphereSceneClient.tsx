@@ -2,6 +2,7 @@
 
 import dynamic from "next/dynamic";
 import { useEffect, useState } from "react";
+import { useT } from "@/lib/i18n/use-lang";
 import type { SphereAxis, SphereFilter, SphereTile } from "./SphereScene";
 
 /**
@@ -28,15 +29,16 @@ interface Props {
   initialAxis?: SphereAxis;
 }
 
-const AXES: { id: SphereAxis; label: string; hint: string }[] = [
-  { id: "fibonacci", label: "Aleatoire", hint: "Distribution uniforme (golden ratio)" },
-  { id: "time",      label: "Temps",     hint: "Top = early, bas = late game" },
-  { id: "player",    label: "Joueur",    hint: "Chaque joueur sur son meridien" },
-  { id: "fight",     label: "Type",      hint: "Solo \u2192 teamfight 5v5" },
-  { id: "opponent",  label: "Adversaire", hint: "Wedge par equipe rivale" },
+const AXES: { id: SphereAxis; labelKey: string; hintKey: string }[] = [
+  { id: "fibonacci", labelKey: "p6_media.axis_random_label",   hintKey: "p6_media.axis_random_hint" },
+  { id: "time",      labelKey: "p6_media.axis_time_label",     hintKey: "p6_media.axis_time_hint" },
+  { id: "player",    labelKey: "p6_media.axis_player_label",   hintKey: "p6_media.axis_player_hint" },
+  { id: "fight",     labelKey: "p6_media.axis_fight_label",    hintKey: "p6_media.axis_fight_hint" },
+  { id: "opponent",  labelKey: "p6_media.axis_opponent_label", hintKey: "p6_media.axis_opponent_hint" },
 ];
 
 export function SphereSceneClient({ tiles, cameraZ, debug, initialAxis = "fibonacci" }: Props) {
+  const t = useT();
   const [axis, setAxis] = useState<SphereAxis>(initialAxis);
   const [filter, setFilter] = useState<SphereFilter | null>(null);
 
@@ -66,12 +68,12 @@ export function SphereSceneClient({ tiles, cameraZ, debug, initialAxis = "fibona
   // Count tiles passing the filter — surfaced in the active-filter chip
   // so the user knows immediately how much they narrowed.
   const filteredCount = filter
-    ? tiles.filter((t) => {
+    ? tiles.filter((tile) => {
         switch (filter.key) {
-          case "player":   return t.killerPlayerId === filter.value;
-          case "opponent": return t.opponentCode === filter.value;
-          case "fight":    return t.fightType === filter.value;
-          case "time":     return t.minuteBucket === filter.value;
+          case "player":   return tile.killerPlayerId === filter.value;
+          case "opponent": return tile.opponentCode === filter.value;
+          case "fight":    return tile.fightType === filter.value;
+          case "time":     return tile.minuteBucket === filter.value;
           default:         return true;
         }
       }).length
@@ -93,7 +95,7 @@ export function SphereSceneClient({ tiles, cameraZ, debug, initialAxis = "fibona
         <div className="pointer-events-none absolute top-4 right-4 z-30">
           <div className="pointer-events-auto flex items-center gap-2 rounded-full border border-[var(--gold)]/45 bg-black/80 backdrop-blur-md px-3 py-1.5 shadow-2xl shadow-black/40">
             <span className="font-data text-[10px] uppercase tracking-[0.22em] text-[var(--gold)]">
-              {filterKeyLabel(filter.key)} : {filter.label}
+              {t(filterKeyLabel(filter.key))} : {filter.label}
             </span>
             <span className="font-data text-[9px] text-white/55">
               {filteredCount}/{tiles.length}
@@ -101,7 +103,7 @@ export function SphereSceneClient({ tiles, cameraZ, debug, initialAxis = "fibona
             <button
               type="button"
               onClick={() => setFilter(null)}
-              aria-label="Retirer le filtre"
+              aria-label={t("p6_media.remove_filter")}
               className="flex h-5 w-5 items-center justify-center rounded-full bg-white/8 text-white/65 hover:bg-white/15 hover:text-white transition-colors"
             >
               <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -115,7 +117,7 @@ export function SphereSceneClient({ tiles, cameraZ, debug, initialAxis = "fibona
       {/* Axis selector — bottom centre, glassmorphism */}
       <div
         className="pointer-events-none absolute inset-x-0 bottom-4 z-30 flex justify-center px-4"
-        aria-label="Selecteur d'axe semantique"
+        aria-label={t("p6_media.axis_selector_aria")}
       >
         <div className="pointer-events-auto flex items-center gap-1 rounded-full border border-[var(--gold)]/30 bg-black/65 backdrop-blur-xl px-2 py-1.5 shadow-2xl shadow-black/40">
           {AXES.map((a, i) => {
@@ -125,7 +127,7 @@ export function SphereSceneClient({ tiles, cameraZ, debug, initialAxis = "fibona
                 key={a.id}
                 type="button"
                 onClick={() => setAxis(a.id)}
-                title={`${a.hint} (touche ${i + 1})`}
+                title={t("p6_media.axis_title", { hint: t(a.hintKey), n: i + 1 })}
                 className={
                   "group relative rounded-full px-3 py-1.5 text-[10px] font-data font-bold uppercase tracking-[0.18em] transition-all " +
                   (active
@@ -133,7 +135,7 @@ export function SphereSceneClient({ tiles, cameraZ, debug, initialAxis = "fibona
                     : "text-white/65 hover:text-white hover:bg-white/8")
                 }
               >
-                {a.label}
+                {t(a.labelKey)}
                 <kbd
                   className={
                     "ml-1.5 inline-flex h-3.5 min-w-[14px] items-center justify-center rounded text-[8px] font-data " +
@@ -152,7 +154,10 @@ export function SphereSceneClient({ tiles, cameraZ, debug, initialAxis = "fibona
       {/* Axis hint bar — top centre */}
       <div className="pointer-events-none absolute top-4 left-1/2 -translate-x-1/2 z-30">
         <span className="rounded-full bg-black/60 backdrop-blur-md border border-[var(--gold)]/25 px-4 py-1.5 text-[10px] font-data uppercase tracking-[0.22em] text-[var(--gold)]/80">
-          {AXES.find((a) => a.id === axis)?.hint ?? ""}
+          {(() => {
+            const active = AXES.find((a) => a.id === axis);
+            return active ? t(active.hintKey) : "";
+          })()}
         </span>
       </div>
     </div>
@@ -161,20 +166,21 @@ export function SphereSceneClient({ tiles, cameraZ, debug, initialAxis = "fibona
 
 function filterKeyLabel(k: SphereFilter["key"]): string {
   switch (k) {
-    case "player":   return "Joueur";
-    case "opponent": return "Adversaire";
-    case "fight":    return "Type fight";
-    case "time":     return "Minute";
+    case "player":   return "p6_media.filter_key_player";
+    case "opponent": return "p6_media.filter_key_opponent";
+    case "fight":    return "p6_media.filter_key_fight";
+    case "time":     return "p6_media.filter_key_time";
   }
 }
 
 function SphereLoading() {
+  const t = useT();
   return (
     <div className="flex h-full w-full items-center justify-center">
       <div className="flex flex-col items-center gap-4">
-        <div className="kc-spinner" aria-label="Chargement de la sphere 3D" />
+        <div className="kc-spinner" aria-label={t("p6_media.sphere_loading_aria")} />
         <p className="font-data text-[11px] uppercase tracking-[0.3em] text-[var(--gold)]/70">
-          Initialisation WebGL
+          {t("p6_media.sphere_loading_webgl")}
         </p>
       </div>
     </div>

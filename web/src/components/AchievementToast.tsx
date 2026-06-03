@@ -31,6 +31,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { useT } from "@/lib/i18n/use-lang";
 import { getBCCSessionHash } from "@/lib/bcc-state";
 import {
   type AchievementRarity,
@@ -74,6 +75,7 @@ function persistSeen(seen: Set<string>): void {
 }
 
 export function AchievementToast() {
+  const t = useT();
   const [queue, setQueue] = useState<ToastEntry[]>([]);
   const [current, setCurrent] = useState<ToastEntry | null>(null);
   const seenRef = useRef<Set<string>>(new Set());
@@ -203,13 +205,13 @@ export function AchievementToast() {
             className="text-[9px] font-bold uppercase tracking-widest"
             style={{ color }}
           >
-            {rarityLabel} débloqué
+            {t("p6_comm2.toast_unlocked", { rarity: rarityLabel })}
           </p>
           <p className="truncate text-sm font-semibold text-[var(--text-primary)]">
             {current.name}
           </p>
           <p className="text-[10px] text-[var(--text-muted)]">
-            +{current.points} pts · tape pour voir
+            {t("p6_comm2.toast_points", { n: current.points })}
           </p>
         </div>
       </Link>

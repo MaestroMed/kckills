@@ -14,6 +14,7 @@
  */
 
 import { getQuotesForKill, type KillQuoteRow } from "@/lib/supabase/quotes";
+import { getServerT } from "@/lib/i18n/server-lang";
 import { QuoteCard, type QuoteCardData } from "./QuoteCard";
 
 interface Props {
@@ -49,12 +50,12 @@ function toCardData(
 }
 
 export async function KillQuotesPanel(props: Props) {
+  const { t } = await getServerT();
   const rows = await getQuotesForKill(props.killId);
   if (rows.length === 0) {
     return (
       <div className="rounded-xl border border-dashed border-[var(--border-subtle)] bg-[var(--bg-elevated)] p-6 text-center text-sm text-[var(--text-muted)]">
-        Pas encore de phrase culte extraite pour ce clip. L&apos;IA passe en
-        revue les casters en continu — repasse bientot.
+        {t("p6_searchq.quotes_empty")}
       </div>
     );
   }
@@ -73,10 +74,10 @@ export async function KillQuotesPanel(props: Props) {
           id="kill-quotes-heading"
           className="font-display text-base md:text-lg uppercase tracking-widest text-[var(--gold)]"
         >
-          ★ Phrases · {cards.length}
+          ★ {t("p6_searchq.quotes_heading")} · {cards.length}
         </h2>
         <span className="text-[10px] uppercase tracking-widest text-[var(--text-muted)]">
-          Extrait par IA
+          {t("p6_searchq.quotes_by_ai")}
         </span>
       </header>
       <ul className="grid gap-3 grid-cols-1 md:grid-cols-2">

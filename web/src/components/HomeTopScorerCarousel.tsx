@@ -21,6 +21,7 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { m, useReducedMotion } from "motion/react";
+import { useT } from "@/lib/i18n/use-lang";
 
 export interface RosterPlayerStat {
   ign: string;
@@ -41,6 +42,7 @@ export interface RosterPlayerStat {
 const ROTATE_MS = 4500;
 
 export function HomeTopScorerCarousel({ players }: { players: RosterPlayerStat[] }) {
+  const t = useT();
   const [idx, setIdx] = useState(0);
   const [paused, setPaused] = useState(false);
   const reducedMotion = useReducedMotion() ?? false;
@@ -93,7 +95,7 @@ export function HomeTopScorerCarousel({ players }: { players: RosterPlayerStat[]
         <Link
           href={`/player/${encodeURIComponent(current.ign)}`}
           className="shrink-0 group"
-          aria-label={`Voir le profil de ${current.ign}`}
+          aria-label={t("p6_home2.scorer_view_profile", { ign: current.ign })}
         >
           {current.imageUrl ? (
             <Image
@@ -129,7 +131,7 @@ export function HomeTopScorerCarousel({ players }: { players: RosterPlayerStat[]
       <div
         className="mt-3 flex items-center justify-center gap-1.5"
         role="tablist"
-        aria-label="Sélectionner un joueur"
+        aria-label={t("p6_home2.scorer_select_player")}
       >
         {safe.map((p, i) => (
           <button
@@ -141,7 +143,7 @@ export function HomeTopScorerCarousel({ players }: { players: RosterPlayerStat[]
             }}
             role="tab"
             aria-selected={i === idx}
-            aria-label={`Voir ${p.ign}`}
+            aria-label={t("p6_home2.scorer_view_player", { ign: p.ign })}
             className={`
               h-1.5 rounded-full transition-all
               ${i === idx

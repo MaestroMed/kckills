@@ -2,6 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { pickAssetUrl } from "@/lib/kill-assets";
 import type { PublishedKillRow } from "@/lib/supabase/kills";
+import { getServerT, type ServerTranslateFn } from "@/lib/i18n/server-lang";
 
 /**
  * FullKillsGrid — desktop : 4-col grid of every clip in the match.
@@ -33,19 +34,20 @@ const MULTI_KILL_LABEL: Record<string, string> = {
   double: "DOUBLE",
 };
 
-export function FullKillsGrid({
+export async function FullKillsGrid({
   kills,
   opponentCode,
   anchorId = "kills-feed",
 }: FullKillsGridProps) {
+  const { t } = await getServerT();
   if (kills.length === 0) {
     return (
       <section
         id={anchorId}
-        aria-label="Liste complète des kills"
+        aria-label={t("p6_matchpg.grid_section_aria")}
         className="rounded-2xl border border-[var(--border-gold)] bg-[var(--bg-surface)] p-6 text-center text-sm text-[var(--text-muted)] scroll-mt-32"
       >
-        Pas encore de clips publiés pour ce match. Le pipeline est en route.
+        {t("p6_matchpg.grid_empty")}
       </section>
     );
   }
@@ -61,13 +63,13 @@ export function FullKillsGrid({
           id="kills-feed-heading"
           className="font-display text-xl font-black uppercase tracking-widest text-[var(--gold)]"
         >
-          Tous les kills · {kills.length}
+          {t("p6_matchpg.all_kills", { n: kills.length })}
         </h2>
         <Link
           href="/scroll"
           className="font-data text-[10px] uppercase tracking-widest text-[var(--text-muted)] hover:text-[var(--gold)]"
         >
-          Mode TikTok ›
+          {t("p6_matchpg.tiktok_mode")}
         </Link>
       </div>
 
@@ -81,6 +83,7 @@ export function FullKillsGrid({
             key={kill.id}
             kill={kill}
             opponentCode={opponentCode}
+            t={t}
           />
         ))}
       </div>
@@ -93,9 +96,11 @@ export function FullKillsGrid({
 function KillCard({
   kill,
   opponentCode,
+  t,
 }: {
   kill: PublishedKillRow;
   opponentCode: string;
+  t: ServerTranslateFn;
 }) {
   const thumb = pickAssetUrl(kill, "thumbnail");
   const score = kill.highlight_score?.toFixed(1) ?? "—";
@@ -108,7 +113,11 @@ function KillCard({
       href={`/kill/${kill.id}`}
       className="group relative block w-[78vw] sm:w-auto shrink-0 snap-start overflow-hidden rounded-xl border border-[var(--border-gold)] bg-black transition-all hover:border-[var(--gold)]/60 hover:-translate-y-1 hover:shadow-xl hover:shadow-[var(--gold)]/10"
       style={{ aspectRatio: "9 / 16" }}
-      aria-label={`Clip : ${matchup} à T+${formatMinSec(kill.game_time_seconds)}, score IA ${score}`}
+      aria-label={t("p6_matchpg.card_aria", {
+        matchup,
+        time: formatMinSec(kill.game_time_seconds),
+        score,
+      })}
     >
       {thumb ? (
         <Image
@@ -152,7 +161,7 @@ function KillCard({
           )}
           {kill.is_first_blood && (
             <span className="rounded-full bg-[var(--red)]/90 px-2 py-0.5 font-data text-[8px] font-bold uppercase tracking-widest text-white">
-              First Blood
+              {t("p6_matchpg.first_blood_badge")}
             </span>
           )}
         </div>
@@ -161,8 +170,10 @@ function KillCard({
       {/* Bottom info */}
       <div className="absolute inset-x-0 bottom-0 z-[5] p-3">
         <p className="font-data text-[9px] uppercase tracking-widest text-[var(--gold)]/85">
-          Game {kill.games?.game_number ?? "?"} · T+
-          {formatMinSec(kill.game_time_seconds)}
+          {t("p6_matchpg.card_game_time", {
+            n: kill.games?.game_number ?? "?",
+            time: formatMinSec(kill.game_time_seconds),
+          })}
         </p>
         <p className="mt-0.5 font-display text-sm font-black uppercase text-white line-clamp-1 drop-shadow-md">
           {matchup}

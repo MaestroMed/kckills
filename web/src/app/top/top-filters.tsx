@@ -2,6 +2,7 @@
 
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback } from "react";
+import { useT } from "@/lib/i18n/use-lang";
 
 interface Props {
   players: string[];
@@ -14,6 +15,7 @@ interface Props {
  * This makes filter states shareable + bookmarkable.
  */
 export function TopFilters({ players, champions = [] }: Props) {
+  const t = useT();
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -48,7 +50,7 @@ export function TopFilters({ players, champions = [] }: Props) {
         onChange={(e) => setFilter("player", e.target.value)}
         className="rounded-lg border border-[var(--border-gold)] bg-[var(--bg-surface)] px-3 py-2 text-sm text-[var(--text-secondary)] outline-none focus:border-[var(--gold)]"
       >
-        <option value="">Tous les joueurs</option>
+        <option value="">{t("p6_pagesb.filter_all_players")}</option>
         {players.map((p) => (
           <option key={p} value={p}>
             {p}
@@ -61,7 +63,7 @@ export function TopFilters({ players, champions = [] }: Props) {
         onChange={(e) => setFilter("year", e.target.value)}
         className="rounded-lg border border-[var(--border-gold)] bg-[var(--bg-surface)] px-3 py-2 text-sm text-[var(--text-secondary)] outline-none focus:border-[var(--gold)]"
       >
-        <option value="">Toutes saisons</option>
+        <option value="">{t("p6_pagesb.filter_all_seasons")}</option>
         <option value="2026">2026</option>
         <option value="2025">2025</option>
         <option value="2024">2024</option>
@@ -73,7 +75,7 @@ export function TopFilters({ players, champions = [] }: Props) {
           onChange={(e) => setFilter("champion", e.target.value)}
           className="rounded-lg border border-[var(--border-gold)] bg-[var(--bg-surface)] px-3 py-2 text-sm text-[var(--text-secondary)] outline-none focus:border-[var(--gold)]"
         >
-          <option value="">Tous champions</option>
+          <option value="">{t("p6_pagesb.filter_all_champions")}</option>
           {champions.map((c) => (
             <option key={c} value={c}>
               {c}
@@ -87,10 +89,10 @@ export function TopFilters({ players, champions = [] }: Props) {
         onChange={(e) => setFilter("multi", e.target.value)}
         className="rounded-lg border border-[var(--border-gold)] bg-[var(--bg-surface)] px-3 py-2 text-sm text-[var(--text-secondary)] outline-none focus:border-[var(--gold)]"
       >
-        <option value="">Tous types</option>
-        <option value="3">Triple+ (3+ kills)</option>
-        <option value="5">Carry (5+ kills)</option>
-        <option value="perfect">Perfect (0 deaths)</option>
+        <option value="">{t("p6_pagesb.filter_all_types")}</option>
+        <option value="3">{t("p6_pagesb.filter_triple_plus")}</option>
+        <option value="5">{t("p6_pagesb.filter_carry")}</option>
+        <option value="perfect">{t("p6_pagesb.filter_perfect")}</option>
       </select>
 
       {hasFilters && (
@@ -98,7 +100,7 @@ export function TopFilters({ players, champions = [] }: Props) {
           onClick={resetAll}
           className="rounded-lg border border-[var(--red)]/30 px-3 py-2 text-sm text-[var(--red)] hover:bg-[var(--red)]/10 transition-colors"
         >
-          Reset
+          {t("p6_pagesb.reset")}
         </button>
       )}
     </div>

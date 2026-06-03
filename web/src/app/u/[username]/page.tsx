@@ -20,6 +20,7 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { Breadcrumb } from "@/components/Breadcrumb";
+import { getServerT } from "@/lib/i18n/server-lang";
 
 export const revalidate = 600;
 
@@ -53,6 +54,7 @@ export default async function PublicProfilePage({ params }: Props) {
   const { username } = await params;
   if (!username || username.length > 64) notFound();
 
+  const { t } = await getServerT();
   const sb = await createServerSupabase();
   const { data: profile } = (await sb
     .from("profiles")
@@ -73,7 +75,7 @@ export default async function PublicProfilePage({ params }: Props) {
     <article className="space-y-8">
       <Breadcrumb
         items={[
-          { label: "Accueil", href: "/" },
+          { label: t("p6_pagesa.breadcrumb_home"), href: "/" },
           { label: profile.discord_username ?? username },
         ]}
       />
@@ -99,7 +101,7 @@ export default async function PublicProfilePage({ params }: Props) {
             {profile.discord_username ?? username}
           </h1>
           <p className="text-xs text-[var(--text-muted)]">
-            Membre depuis le{" "}
+            {t("p6_pagesa.member_since")}{" "}
             {new Date(profile.created_at).toLocaleDateString("fr-FR", {
               day: "numeric",
               month: "long",
@@ -112,7 +114,7 @@ export default async function PublicProfilePage({ params }: Props) {
       <section className="grid grid-cols-2 sm:grid-cols-3 gap-3">
         <div className="rounded-2xl border border-[var(--border-gold)] bg-[var(--bg-surface)]/50 p-4">
           <p className="text-[10px] uppercase tracking-widest text-[var(--text-muted)]">
-            Ratings
+            {t("p6_pagesa.stat_ratings")}
           </p>
           <p className="font-data text-3xl font-bold text-[var(--gold)]">
             {profile.total_ratings ?? 0}
@@ -120,7 +122,7 @@ export default async function PublicProfilePage({ params }: Props) {
         </div>
         <div className="rounded-2xl border border-[var(--border-gold)] bg-[var(--bg-surface)]/50 p-4">
           <p className="text-[10px] uppercase tracking-widest text-[var(--text-muted)]">
-            Commentaires
+            {t("p6_pagesa.stat_comments")}
           </p>
           <p className="font-data text-3xl font-bold text-[var(--text-primary)]">
             {profile.total_comments ?? 0}
@@ -128,7 +130,7 @@ export default async function PublicProfilePage({ params }: Props) {
         </div>
         <div className="rounded-2xl border border-[var(--border-gold)] bg-[var(--bg-surface)]/50 p-4 col-span-2 sm:col-span-1">
           <p className="text-[10px] uppercase tracking-widest text-[var(--text-muted)]">
-            Badges
+            {t("p6_pagesa.stat_badges")}
           </p>
           <p className="font-data text-sm text-[var(--text-primary)]">
             {Array.isArray(profile.badges) && profile.badges.length > 0
@@ -140,7 +142,7 @@ export default async function PublicProfilePage({ params }: Props) {
 
       {showBookmarks && (
         <section className="space-y-3">
-          <h2 className="font-display text-lg font-bold">Clips sauvegardés</h2>
+          <h2 className="font-display text-lg font-bold">{t("p6_pagesa.saved_clips_heading")}</h2>
           <p className="text-sm text-[var(--text-muted)]">
             (V33 — bookmark list rendering, gated on profile.public_bookmarks
             opt-in. Migration 058 wires the column.)
@@ -153,7 +155,7 @@ export default async function PublicProfilePage({ params }: Props) {
           href="/scroll"
           className="inline-flex items-center gap-2 text-sm text-[var(--gold)] hover:text-[var(--gold-bright)]"
         >
-          ← Retour au feed
+          {t("p6_pagesa.back_to_feed")}
         </Link>
       </section>
     </article>

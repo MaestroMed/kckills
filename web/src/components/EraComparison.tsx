@@ -23,6 +23,7 @@
  */
 
 import { useMemo } from "react";
+import { useT } from "@/lib/i18n/use-lang";
 
 interface EraStats {
   era: string;
@@ -88,20 +89,21 @@ function yForValue(
 // ─── Public component ────────────────────────────────────────────────
 
 export function EraComparisonChart({ data }: { data: EraStats[] }) {
+  const t = useT();
   if (data.length < 2) return null;
 
   return (
     <div className="space-y-6">
       <div className="rounded-2xl border border-[var(--border-gold)] bg-[var(--bg-surface)] p-5">
         <h3 className="font-display text-sm font-bold text-[var(--text-secondary)] mb-4">
-          Winrate par &egrave;re
+          {t("p6_tl.chart_winrate_title")}
         </h3>
         <WinrateAreaChart data={data} />
       </div>
 
       <div className="rounded-2xl border border-[var(--border-gold)] bg-[var(--bg-surface)] p-5">
         <h3 className="font-display text-sm font-bold text-[var(--text-secondary)] mb-4">
-          Kills/game par &egrave;re
+          {t("p6_tl.chart_kills_title")}
         </h3>
         <KillsLineChart data={data} />
       </div>
@@ -112,6 +114,7 @@ export function EraComparisonChart({ data }: { data: EraStats[] }) {
 // ─── Winrate area chart ──────────────────────────────────────────────
 
 function WinrateAreaChart({ data }: { data: EraStats[] }) {
+  const t = useT();
   const area = plotArea(GEOM);
   const uid = "era-winrate";
 
@@ -150,7 +153,7 @@ function WinrateAreaChart({ data }: { data: EraStats[] }) {
         className="w-full h-auto overflow-visible"
         preserveAspectRatio="none"
         role="img"
-        aria-label="Winrate par ère KC"
+        aria-label={t("p6_tl.chart_winrate_aria")}
       >
         <defs>
           <linearGradient id={`${uid}-fill`} x1="0" y1="0" x2="0" y2="1">
@@ -265,6 +268,7 @@ function WinrateAreaChart({ data }: { data: EraStats[] }) {
 // ─── Kills line chart (dual-line KC vs adversaire) ───────────────────
 
 function KillsLineChart({ data }: { data: EraStats[] }) {
+  const t = useT();
   const area = plotArea(GEOM);
   const uid = "era-kills";
 
@@ -314,14 +318,14 @@ function KillsLineChart({ data }: { data: EraStats[] }) {
             className="inline-block h-0.5 w-4 rounded-full"
             style={{ background: GOLD }}
           />
-          <span style={{ color: GOLD }}>KC kills</span>
+          <span style={{ color: GOLD }}>{t("p6_tl.legend_kc_kills")}</span>
         </span>
         <span className="flex items-center gap-1.5">
           <span
             className="inline-block h-0.5 w-4 rounded-full border-t border-dashed"
             style={{ borderColor: RED, background: RED }}
           />
-          <span style={{ color: RED }}>Adversaire</span>
+          <span style={{ color: RED }}>{t("p6_tl.legend_opponent")}</span>
         </span>
       </div>
 
@@ -330,7 +334,7 @@ function KillsLineChart({ data }: { data: EraStats[] }) {
         className="w-full h-auto overflow-visible"
         preserveAspectRatio="none"
         role="img"
-        aria-label="Kills par game par ère — KC vs adversaires"
+        aria-label={t("p6_tl.chart_kills_aria")}
       >
         {/* Y grid lines + labels */}
         {yTicks.map((v) => {

@@ -3,6 +3,7 @@ import Image from "next/image";
 import { getRecentPublishedKills } from "@/lib/supabase/kills";
 import { TEAM_LOGOS } from "@/lib/kc-assets";
 import { championIconUrl } from "@/lib/constants";
+import { getServerT } from "@/lib/i18n/server-lang";
 
 /**
  * HomeRecentClips — horizontal strip of the 8 most recent clips.
@@ -25,20 +26,22 @@ export async function HomeRecentClips() {
 
   if (cards.length === 0) return null;
 
+  const { t } = await getServerT();
+
   return (
     <section>
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-3">
           <span className="font-data text-[10px] uppercase tracking-[0.3em] font-bold text-[var(--gold)]">
-            ▼ Derniers clips
+            {t("p6_home1.recent_clips_kicker")}
           </span>
-          <span className="text-xs text-[var(--text-muted)]">{cards.length} récents</span>
+          <span className="text-xs text-[var(--text-muted)]">{t("p6_home1.recent_count", { n: cards.length })}</span>
         </div>
         <Link
           href="/clips"
           className="text-xs text-[var(--text-muted)] hover:text-[var(--gold)] uppercase tracking-widest font-bold"
         >
-          Tous &rarr;
+          {t("p6_home1.all_arrow")}
         </Link>
       </div>
 

@@ -1,5 +1,6 @@
 import Image from "next/image";
 import { championIconUrl, championLoadingUrl } from "@/lib/constants";
+import { getServerT } from "@/lib/i18n/server-lang";
 
 export interface ChampionPoolEntry {
   name: string;
@@ -30,7 +31,7 @@ function wrTone(wr: number): string {
  * Each card uses a CSS clip-path to evoke a Hextech corner-cut,
  * shows the champion icon, name, games, KDA, WR, and a splash hover.
  */
-export function ChampionPoolHextech({
+export async function ChampionPoolHextech({
   champions,
   accent = "var(--gold)",
 }: {
@@ -39,6 +40,7 @@ export function ChampionPoolHextech({
 }) {
   if (champions.length === 0) return null;
 
+  const { t } = await getServerT();
   const top = champions.slice(0, 8);
   const rest = champions.slice(8);
 
@@ -46,7 +48,7 @@ export function ChampionPoolHextech({
     <div>
       <div className="grid gap-3 grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4">
         {top.map((c) => {
-          const kda = c.deaths > 0 ? ((c.kills + c.assists) / c.deaths).toFixed(1) : "Perfect";
+          const kda = c.deaths > 0 ? ((c.kills + c.assists) / c.deaths).toFixed(1) : t("p6_playerpg.kda_perfect");
           // Wave 31d — real winrate when wins data is present, else the
           // legacy kill-share proxy that the chip used to show.
           const total = c.kills + c.deaths + c.assists;
@@ -61,7 +63,7 @@ export function ChampionPoolHextech({
             <a
               key={c.name}
               href={`/champion/${encodeURIComponent(c.name)}`}
-              aria-label={`Voir la page du champion ${c.name}`}
+              aria-label={t("p6_playerpg.champion_page_aria", { name: c.name })}
               className="hex-card group relative aspect-[4/5] overflow-hidden bg-[var(--bg-surface)] transition-transform hover:-translate-y-1 focus-visible:outline-2 focus-visible:outline-[var(--gold)] focus-visible:outline-offset-2"
               style={{
                 clipPath:
@@ -98,7 +100,7 @@ export function ChampionPoolHextech({
                   {c.name}
                 </p>
                 <p className="font-data text-[10px] uppercase tracking-widest text-white/50 mt-0.5">
-                  {c.games} {c.games > 1 ? "games" : "game"}
+                  {c.games} {c.games > 1 ? t("p6_playerpg.games_unit") : t("p6_playerpg.game_unit")}
                 </p>
               </div>
 
@@ -118,7 +120,7 @@ export function ChampionPoolHextech({
                     background: `${accent}1A`,
                     border: `1px solid ${accent}40`,
                   }}
-                  aria-label={`KDA ${kda}`}
+                  aria-label={t("p6_playerpg.kda_aria", { kda })}
                   data-wr-hint={wrHint}
                 >
                   {kda}
@@ -130,7 +132,7 @@ export function ChampionPoolHextech({
                   fall back to the legacy KDA-only display). */}
               {realWr !== null && (
                 <span
-                  aria-label={`Winrate ${realWr}% sur ${c.games} games (${c.wins ?? 0} wins)`}
+                  aria-label={t("p6_playerpg.winrate_aria", { wr: realWr, games: c.games, wins: c.wins ?? 0 })}
                   className="absolute top-2 right-2 z-10 font-data text-[9px] font-black px-1.5 py-0.5 rounded"
                   style={{
                     color: wrColor,
@@ -138,7 +140,7 @@ export function ChampionPoolHextech({
                     border: `1px solid ${wrColor}40`,
                   }}
                 >
-                  {realWr}% WR
+                  {t("p6_playerpg.wr_pct", { wr: realWr })}
                 </span>
               )}
 
@@ -161,13 +163,13 @@ export function ChampionPoolHextech({
             className="cursor-pointer list-none flex items-center justify-center gap-3 text-center text-xs font-display uppercase tracking-[0.22em] text-[var(--text-muted)] hover:text-[var(--gold)] py-3 transition-colors"
           >
             <span className="h-px w-12 bg-[var(--gold)]/30 group-hover:bg-[var(--gold)] transition-colors" />
-            Voir les {rest.length} autres champions
+            {t("p6_playerpg.see_other_champions", { n: rest.length })}
             <span className="h-px w-12 bg-[var(--gold)]/30 group-hover:bg-[var(--gold)] transition-colors" />
           </summary>
           <div className="mt-4 grid gap-2 md:grid-cols-2 lg:grid-cols-3">
             {rest.map((c) => {
               const kda =
-                c.deaths > 0 ? ((c.kills + c.assists) / c.deaths).toFixed(1) : "Perfect";
+                c.deaths > 0 ? ((c.kills + c.assists) / c.deaths).toFixed(1) : t("p6_playerpg.kda_perfect");
               const wr =
                 c.wins !== undefined && c.games > 0
                   ? Math.round((c.wins / c.games) * 100)
@@ -188,11 +190,11 @@ export function ChampionPoolHextech({
                   <div className="flex-1 min-w-0">
                     <p className="font-medium text-sm truncate">{c.name}</p>
                     <p className="text-[10px] text-[var(--text-muted)]">
-                      {c.games} games
+                      {t("p6_playerpg.games_count", { n: c.games })}
                       {wr !== null && (
                         <>
                           <span className="text-[var(--text-disabled)] mx-1">·</span>
-                          <span style={{ color: wrColor ?? undefined }}>{wr}% WR</span>
+                          <span style={{ color: wrColor ?? undefined }}>{t("p6_playerpg.wr_pct", { wr })}</span>
                         </>
                       )}
                     </p>

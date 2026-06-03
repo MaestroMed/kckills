@@ -30,6 +30,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { QUOTES, type Quote } from "@/lib/quotes";
+import { useT } from "@/lib/i18n/use-lang";
 
 const REVEAL_MS_PER_CHAR = 35;
 const HOLD_MS_BASE = 9000;          // base reading time
@@ -61,9 +62,11 @@ interface Props {
 
 export function HomeQuoteRotator({
   quotes = QUOTES,
-  kicker = "▽ Citations · KC dans leurs propres mots",
+  kicker,
   minHeight = "min-h-[280px] md:min-h-[320px]",
 }: Props) {
+  const t = useT();
+  const resolvedKicker = kicker ?? t("p6_home1.quote_kicker");
   const [seed] = useState(() => Math.floor(Math.random() * 1_000_000));
   const order = useMemo(() => shuffle(quotes, seed), [quotes, seed]);
   const [idx, setIdx] = useState(0);
@@ -101,11 +104,11 @@ export function HomeQuoteRotator({
       return;
     }
     if (revealedChars >= text.length) return;
-    const t = window.setTimeout(
+    const to = window.setTimeout(
       () => setRevealedChars((c) => Math.min(text.length, c + 1)),
       REVEAL_MS_PER_CHAR,
     );
-    return () => window.clearTimeout(t);
+    return () => window.clearTimeout(to);
   }, [phase, revealedChars, text, paused]);
 
   // Phase transitions :
@@ -117,21 +120,21 @@ export function HomeQuoteRotator({
 
     if (phase === "reveal" && revealedChars >= text.length && text.length > 0) {
       const hold = Math.min(HOLD_MS_BASE + text.length * HOLD_MS_PER_CHAR, 16_000);
-      const t = window.setTimeout(() => setPhase("hold"), 200);
-      const t2 = window.setTimeout(() => setPhase("dissolve"), 200 + hold);
+      const to = window.setTimeout(() => setPhase("hold"), 200);
+      const to2 = window.setTimeout(() => setPhase("dissolve"), 200 + hold);
       return () => {
-        window.clearTimeout(t);
-        window.clearTimeout(t2);
+        window.clearTimeout(to);
+        window.clearTimeout(to2);
       };
     }
 
     if (phase === "dissolve") {
-      const t = window.setTimeout(() => {
+      const to = window.setTimeout(() => {
         setIdx((i) => (i + 1) % order.length);
         setRevealedChars(0);
         setPhase("reveal");
       }, DISSOLVE_MS);
-      return () => window.clearTimeout(t);
+      return () => window.clearTimeout(to);
     }
   }, [phase, revealedChars, text, paused, order.length]);
 
@@ -172,9 +175,9 @@ export function HomeQuoteRotator({
       />
 
       <div className="relative max-w-3xl mx-auto text-center">
-        {kicker && (
+        {resolvedKicker && (
           <p className="font-data text-[10px] uppercase tracking-[0.4em] text-[var(--gold)]/70 mb-6 transition-opacity duration-700">
-            {kicker}
+            {resolvedKicker}
           </p>
         )}
 

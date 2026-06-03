@@ -5,6 +5,7 @@ import { m, AnimatePresence } from "motion/react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { ERAS, type Era } from "@/lib/eras";
+import { useT } from "@/lib/i18n/use-lang";
 
 /**
  * Two interaction modes :
@@ -58,6 +59,7 @@ export function KCTimeline({
   killCountByEra,
 }: KCTimelineProps = {}) {
   const router = useRouter();
+  const t = useT();
   const [hovered, setHovered] = useState<string | null>(null);
   const [popupEra, setPopupEra] = useState<Era | null>(null);
   const [reducedMotion, setReducedMotion] = useState(false);
@@ -327,7 +329,7 @@ export function KCTimeline({
         onKeyDown={onKeyDown}
         tabIndex={0}
         role="region"
-        aria-label="Frise des epoques Karmine Corp"
+        aria-label={t("p6_tl.region_aria")}
         className="timeline-container relative flex items-center pb-10 pt-20 px-4 min-h-[640px] overflow-x-auto overflow-y-visible cursor-grab active:cursor-grabbing select-none focus:outline-none"
         style={{
           scrollbarWidth: "none",
@@ -392,7 +394,7 @@ export function KCTimeline({
               tabIndex={0}
               aria-label={
                 mode === "filter"
-                  ? `Filtrer par ${era.label}`
+                  ? t("p6_tl.filter_by_era", { label: era.label })
                   : `${era.label} \u2014 ${era.period}`
               }
               aria-pressed={mode === "filter" ? isActiveFilter : undefined}
@@ -573,7 +575,7 @@ export function KCTimeline({
                     >
                       {killCountByEra[era.id]!.toLocaleString("fr-FR")}
                     </span>
-                    <span>kills</span>
+                    <span>{t("p6_tl.kills")}</span>
                   </m.div>
                 )}
 
@@ -587,7 +589,7 @@ export function KCTimeline({
                   transition={{ duration: 0.3 }}
                 >
                   <span className="text-[10px] uppercase tracking-[0.2em] text-white/70">
-                    D&eacute;couvrir l&apos;&eacute;poque
+                    {t("p6_tl.discover_era")}
                   </span>
                   <m.svg
                     className="h-3 w-3 text-white/70"
@@ -629,7 +631,7 @@ export function KCTimeline({
               <button
                 onClick={() => setPopupEra(null)}
                 className="absolute -top-14 right-0 flex h-11 w-11 items-center justify-center rounded-full border border-white/20 bg-black/60 text-white hover:bg-white/10 transition-colors"
-                aria-label="Fermer"
+                aria-label={t("p6_tl.close")}
               >
                 <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -705,7 +707,7 @@ export function KCTimeline({
               {/* CTA to open the full era page */}
               <div className="mt-6 flex items-center justify-between">
                 <p className="text-xs text-white/40 uppercase tracking-[0.2em]">
-                  Esc ou clic en dehors pour fermer
+                  {t("p6_tl.close_hint")}
                 </p>
                 <button
                   onClick={() => {
@@ -720,7 +722,7 @@ export function KCTimeline({
                     backgroundColor: `${popupEra.color}15`,
                   }}
                 >
-                  D&eacute;couvrir l&apos;&eacute;poque
+                  {t("p6_tl.discover_era")}
                   <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M9 5l7 7-7 7" />
                   </svg>

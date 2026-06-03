@@ -9,6 +9,7 @@ import {
 } from "react";
 import Image from "next/image";
 import type { ScoredVideo } from "@/lib/youtube-scoring";
+import { useT, type TranslateFn } from "@/lib/i18n/use-lang";
 
 interface Props {
   videos: ScoredVideo[];
@@ -32,6 +33,7 @@ interface Props {
  * collapsing the per-card transforms.
  */
 export function YouTubeParallaxCarousel({ videos }: Props) {
+  const t = useT();
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const trackRef = useRef<HTMLDivElement | null>(null);
   const cardRefs = useRef<Array<HTMLElement | null>>([]);
@@ -261,7 +263,7 @@ export function YouTubeParallaxCarousel({ videos }: Props) {
   if (videos.length === 0) {
     return (
       <div className="rounded-2xl border border-dashed border-[var(--border-gold)] p-12 text-center text-sm text-[var(--text-muted)]">
-        Aucune vidéo disponible pour l&apos;instant.
+        {t("p6_home2.yt_empty")}
       </div>
     );
   }
@@ -319,7 +321,7 @@ export function YouTubeParallaxCarousel({ videos }: Props) {
                     : "transform 60ms linear, filter 220ms ease, opacity 220ms ease",
                 }}
                 aria-roledescription="slide"
-                aria-label={`${v.title} — chaîne ${v.channel.name}`}
+                aria-label={t("p6_home2.yt_card_aria", { title: v.title, channel: v.channel.name })}
               >
                 {/* Title perched above the frame — always visible, not just
                     on hover. Subtle but legible. */}
@@ -328,7 +330,7 @@ export function YouTubeParallaxCarousel({ videos }: Props) {
                     className="font-data text-[10px] uppercase tracking-[0.25em] mb-1"
                     style={{ color: v.channel.color ?? "#C8AA6E" }}
                   >
-                    {v.channel.name} · {formatRelative(v.publishedAt)}
+                    {v.channel.name} · {formatRelative(v.publishedAt, t)}
                   </p>
                   <h3
                     className="font-display text-lg md:text-xl font-bold leading-tight text-white drop-shadow line-clamp-2"
@@ -345,7 +347,7 @@ export function YouTubeParallaxCarousel({ videos }: Props) {
                     e.stopPropagation();
                     handleCardClick(v);
                   }}
-                  aria-label={`Lire ${v.title}`}
+                  aria-label={t("p6_home2.yt_play_aria", { title: v.title })}
                   className="group relative block w-full overflow-hidden rounded-3xl border bg-black shadow-[0_40px_120px_rgba(0,0,0,0.7)]"
                   style={{
                     height: cardHeightCss,
@@ -408,10 +410,10 @@ export function YouTubeParallaxCarousel({ videos }: Props) {
                   {/* Bottom row — views & date pills. */}
                   <div className="absolute inset-x-5 bottom-5 flex items-end justify-between gap-3">
                     <span className="rounded-full bg-black/55 backdrop-blur-md px-3 py-1.5 text-[10px] font-data uppercase tracking-[0.18em] text-white/75">
-                      {v.views !== null ? formatViews(v.views) : v.channel.tagline ?? ""}
+                      {v.views !== null ? formatViews(v.views, t) : v.channel.tagline ?? ""}
                     </span>
                     <span className="rounded-full bg-black/55 backdrop-blur-md px-3 py-1.5 text-[10px] font-data tracking-wider text-white/70">
-                      {formatRelative(v.publishedAt)}
+                      {formatRelative(v.publishedAt, t)}
                     </span>
                   </div>
                 </button>
@@ -440,7 +442,7 @@ export function YouTubeParallaxCarousel({ videos }: Props) {
         <button
           type="button"
           onClick={() => nudge(-1)}
-          aria-label="Reculer"
+          aria-label={t("p6_home2.yt_prev")}
           className="group absolute left-4 md:left-10 top-1/2 -translate-y-1/2 z-[310] flex h-12 w-12 items-center justify-center rounded-full border border-white/15 bg-black/40 backdrop-blur-md text-white opacity-0 transition-all hover:bg-black/70 hover:scale-110 focus-visible:opacity-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--gold)]"
           style={{ animation: "none" }}
           onMouseEnter={(e) => (e.currentTarget.style.opacity = "1")}
@@ -453,7 +455,7 @@ export function YouTubeParallaxCarousel({ videos }: Props) {
         <button
           type="button"
           onClick={() => nudge(1)}
-          aria-label="Avancer"
+          aria-label={t("p6_home2.yt_next")}
           className="group absolute right-4 md:right-10 top-1/2 -translate-y-1/2 z-[310] flex h-12 w-12 items-center justify-center rounded-full border border-white/15 bg-black/40 backdrop-blur-md text-white opacity-0 transition-all hover:bg-black/70 hover:scale-110 focus-visible:opacity-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--gold)]"
           onMouseEnter={(e) => (e.currentTarget.style.opacity = "1")}
           onMouseLeave={(e) => (e.currentTarget.style.opacity = "0")}
@@ -472,7 +474,7 @@ export function YouTubeParallaxCarousel({ videos }: Props) {
               boxShadow: paused ? "0 0 10px var(--gold)" : "none",
             }}
           />
-          {paused ? "En pause" : "Lecture continue"}
+          {paused ? t("p6_home2.yt_paused") : t("p6_home2.yt_playing")}
         </div>
       </div>
 
@@ -485,22 +487,22 @@ export function YouTubeParallaxCarousel({ videos }: Props) {
 
 // ─── Helpers ────────────────────────────────────────────────────────────
 
-function formatRelative(iso: string): string {
+function formatRelative(iso: string, tr: TranslateFn): string {
   const t = Date.parse(iso);
   if (Number.isNaN(t)) return "";
   const days = (Date.now() - t) / (1000 * 60 * 60 * 24);
-  if (days < 1) return "Aujourd'hui";
-  if (days < 2) return "Hier";
-  if (days < 7) return `Il y a ${Math.floor(days)} j`;
-  if (days < 30) return `Il y a ${Math.floor(days / 7)} sem`;
-  if (days < 365) return `Il y a ${Math.floor(days / 30)} mois`;
-  return `Il y a ${Math.floor(days / 365)} an${Math.floor(days / 365) > 1 ? "s" : ""}`;
+  if (days < 1) return tr("p6_home2.rel_today");
+  if (days < 2) return tr("p6_home2.rel_yesterday");
+  if (days < 7) return tr("p6_home2.rel_days", { n: Math.floor(days) });
+  if (days < 30) return tr("p6_home2.rel_weeks", { n: Math.floor(days / 7) });
+  if (days < 365) return tr("p6_home2.rel_months", { n: Math.floor(days / 30) });
+  return tr("p6_home2.rel_years", { n: Math.floor(days / 365) });
 }
 
-function formatViews(n: number): string {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M vues`;
-  if (n >= 1_000) return `${(n / 1_000).toFixed(0)}K vues`;
-  return `${n} vues`;
+function formatViews(n: number, tr: TranslateFn): string {
+  if (n >= 1_000_000) return tr("p6_home2.views_m", { n: (n / 1_000_000).toFixed(1) });
+  if (n >= 1_000) return tr("p6_home2.views_k", { n: (n / 1_000).toFixed(0) });
+  return tr("p6_home2.views_n", { n });
 }
 
 // ─── Lightbox ───────────────────────────────────────────────────────────
@@ -512,6 +514,7 @@ function YouTubeLightbox({
   video: ScoredVideo;
   onClose: () => void;
 }) {
+  const t = useT();
   useEffect(() => {
     const h = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
@@ -547,7 +550,7 @@ function YouTubeLightbox({
       <button
         type="button"
         onClick={onClose}
-        aria-label="Fermer"
+        aria-label={t("p6_home2.lightbox_close")}
         className="absolute top-6 right-6 flex h-11 w-11 items-center justify-center rounded-full bg-black/60 backdrop-blur-md border border-white/20 text-white hover:bg-black/80"
       >
         <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -560,7 +563,7 @@ function YouTubeLightbox({
         rel="noopener noreferrer"
         className="absolute bottom-6 right-6 flex items-center gap-2 rounded-full bg-red-600/90 backdrop-blur-md border border-red-500/50 px-4 py-2 text-xs font-bold text-white hover:bg-red-600"
       >
-        Voir sur YouTube
+        {t("p6_home2.watch_on_youtube")}
         <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
         </svg>

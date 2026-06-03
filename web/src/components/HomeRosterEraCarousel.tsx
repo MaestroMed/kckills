@@ -42,6 +42,7 @@ import Image from "next/image";
 import { championIconUrl, championSplashUrl } from "@/lib/constants";
 import { displayRole } from "@/lib/real-data";
 import { defaultEraIndex, type EraRoster } from "@/lib/era-rosters";
+import { useT } from "@/lib/i18n/use-lang";
 
 const AUTO_ROTATE_MS = 7000;
 const FADE_MS = 300;
@@ -192,6 +193,7 @@ export function HomeRosterEraCarousel({
 }: {
   rosters: EraRoster[];
 }) {
+  const t = useT();
   const [idx, setIdx] = useState(() => defaultEraIndex(rosters));
   const [paused, setPaused] = useState(false);
   const [autoEnabled, setAutoEnabled] = useState(true);
@@ -221,7 +223,7 @@ export function HomeRosterEraCarousel({
       onMouseEnter={() => setPaused(true)}
       onMouseLeave={() => setPaused(false)}
       aria-roledescription="carousel"
-      aria-label="Roster Karmine Corp par année"
+      aria-label={t("p6_home1.carousel_aria")}
     >
       {/* The breathing color layer — sits behind the player bands and
           provides the per-era visual tone. Animates by itself ; no
@@ -251,7 +253,7 @@ export function HomeRosterEraCarousel({
                   : undefined,
               }}
               aria-pressed={active}
-              aria-label={`Voir le roster ${r.yearLabel}`}
+              aria-label={t("p6_home1.tab_aria", { year: r.yearLabel })}
             >
               {r.yearLabel}
             </button>
@@ -265,11 +267,11 @@ export function HomeRosterEraCarousel({
           aria-pressed={autoEnabled}
           aria-label={
             autoEnabled
-              ? "Mettre en pause la rotation auto"
-              : "Reprendre la rotation auto"
+              ? t("p6_home1.auto_pause_aria")
+              : t("p6_home1.auto_resume_aria")
           }
         >
-          {autoEnabled ? "❚❚ Auto" : "▶ Auto"}
+          {autoEnabled ? t("p6_home1.auto_on") : t("p6_home1.auto_off")}
         </button>
       </div>
 
@@ -285,7 +287,7 @@ export function HomeRosterEraCarousel({
           {current.period} · {current.result}
         </span>
         <span className="text-[10px] uppercase tracking-[0.22em] text-white/35 font-data ml-auto">
-          Coach : {current.coach}
+          {t("p6_home1.coach_label")} {current.coach}
         </span>
       </div>
 

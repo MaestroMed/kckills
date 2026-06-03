@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { championIconUrl } from "@/lib/constants";
+import { useT } from "@/lib/i18n/use-lang";
 
 interface HistoryEntry {
   matchId: string;
@@ -26,6 +27,7 @@ const PAGE_SIZE = 30;
 const MAX_VISIBLE = 200;
 
 export function MatchHistory({ history }: { history: HistoryEntry[] }) {
+  const t = useT();
   const [champFilter, setChampFilter] = useState("");
   const [resultFilter, setResultFilter] = useState<"" | "won" | "lost">("");
   const [yearFilter, setYearFilter] = useState("");
@@ -49,7 +51,7 @@ export function MatchHistory({ history }: { history: HistoryEntry[] }) {
 
   return (
     <section>
-      <h2 className="mb-3 text-lg font-semibold">Historique des matchs</h2>
+      <h2 className="mb-3 text-lg font-semibold">{t("p6_playerpg.match_history_title")}</h2>
 
       {/* Filters */}
       <div className="flex flex-wrap gap-2 mb-3">
@@ -58,7 +60,7 @@ export function MatchHistory({ history }: { history: HistoryEntry[] }) {
           onChange={(e) => setChampFilter(e.target.value)}
           className="rounded-lg border border-[var(--border-gold)] bg-[var(--bg-surface)] px-3 py-1.5 text-xs text-[var(--text-secondary)] outline-none"
         >
-          <option value="">Tous champions</option>
+          <option value="">{t("p6_playerpg.filter_all_champions")}</option>
           {champions.map((c) => <option key={c} value={c}>{c}</option>)}
         </select>
 
@@ -67,9 +69,9 @@ export function MatchHistory({ history }: { history: HistoryEntry[] }) {
           onChange={(e) => setResultFilter(e.target.value as "" | "won" | "lost")}
           className="rounded-lg border border-[var(--border-gold)] bg-[var(--bg-surface)] px-3 py-1.5 text-xs text-[var(--text-secondary)] outline-none"
         >
-          <option value="">W + L</option>
-          <option value="won">Victoires</option>
-          <option value="lost">D&eacute;faites</option>
+          <option value="">{t("p6_playerpg.filter_wl")}</option>
+          <option value="won">{t("p6_playerpg.filter_wins")}</option>
+          <option value="lost">{t("p6_playerpg.filter_losses")}</option>
         </select>
 
         <select
@@ -77,7 +79,7 @@ export function MatchHistory({ history }: { history: HistoryEntry[] }) {
           onChange={(e) => setYearFilter(e.target.value)}
           className="rounded-lg border border-[var(--border-gold)] bg-[var(--bg-surface)] px-3 py-1.5 text-xs text-[var(--text-secondary)] outline-none"
         >
-          <option value="">Toutes saisons</option>
+          <option value="">{t("p6_playerpg.filter_all_seasons")}</option>
           {years.map((y) => <option key={y} value={y}>{y}</option>)}
         </select>
 
@@ -86,12 +88,12 @@ export function MatchHistory({ history }: { history: HistoryEntry[] }) {
             onClick={() => { setChampFilter(""); setResultFilter(""); setYearFilter(""); }}
             className="rounded-lg border border-[var(--red)]/30 px-3 py-1.5 text-xs text-[var(--red)] hover:bg-[var(--red)]/10"
           >
-            Reset
+            {t("p6_playerpg.reset")}
           </button>
         )}
 
         <span className="text-[10px] text-[var(--text-disabled)] self-center ml-auto">
-          {filtered.length} match{filtered.length > 1 ? "s" : ""}
+          {t("p6_playerpg.match_count", { n: filtered.length, s: filtered.length > 1 ? "s" : "" })}
         </span>
       </div>
 
@@ -129,13 +131,12 @@ export function MatchHistory({ history }: { history: HistoryEntry[] }) {
           onClick={() => setVisibleCount((n) => n + PAGE_SIZE)}
           className="mt-3 w-full rounded-lg border border-[var(--border-gold)] py-2 text-xs text-[var(--text-muted)] hover:border-[var(--gold)]/40 hover:text-[var(--gold)]"
         >
-          Charger plus &middot; {displayed.length}/{filtered.length} affich&eacute;s
+          {t("p6_playerpg.load_more_count", { shown: displayed.length, total: filtered.length })}
         </button>
       )}
       {!hasMore && filtered.length > MAX_VISIBLE && (
         <p className="mt-3 text-center text-[10px] text-[var(--text-disabled)]">
-          {MAX_VISIBLE} matchs affich&eacute;s sur {filtered.length}.
-          Filtre par champion, r&eacute;sultat ou ann&eacute;e pour explorer le reste.
+          {t("p6_playerpg.cap_notice", { max: MAX_VISIBLE, total: filtered.length })}
         </p>
       )}
     </section>

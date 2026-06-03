@@ -4,6 +4,7 @@ import { getPublishedKills, getKillById } from "@/lib/supabase/kills";
 import { createAnonSupabase } from "@/lib/supabase/server";
 import { championIconUrl } from "@/lib/constants";
 import { isDescriptionClean } from "@/lib/scroll/sanitize-description";
+import { getServerT } from "@/lib/i18n/server-lang";
 
 /**
  * Kill of the Week — Editorial-curated featured clip if set, otherwise
@@ -45,6 +46,7 @@ export async function KillOfTheWeek() {
     isFeatured = false;
   }
   if (!kill) return null;
+  const { t } = await getServerT();
   const isKc = kill.tracked_team_involvement === "team_killer";
   const gt = kill.game_time_seconds ?? 0;
   const mm = Math.floor(gt / 60);
@@ -84,7 +86,7 @@ export async function KillOfTheWeek() {
           <div className="flex items-center gap-2 mb-3">
             <span className="h-2 w-2 rounded-full bg-[var(--gold)] animate-pulse" />
             <span className="font-data text-[10px] uppercase tracking-[0.3em] font-bold text-[var(--gold)]">
-              {isFeatured ? "★ Clip vedette du jour" : "Kill of the week"}
+              {isFeatured ? t("p6_home2.featured_clip_of_day") : t("p6_home2.kill_of_the_week")}
             </span>
             {kill.highlight_score != null && (
               <span className="ml-auto font-data text-lg font-black text-[var(--gold)]">
@@ -133,7 +135,7 @@ export async function KillOfTheWeek() {
               href={`/scroll?kill=${kill.id}`}
               className="ml-auto inline-flex items-center gap-1.5 rounded-lg border border-[var(--gold)]/30 bg-[var(--gold)]/10 px-3 py-1.5 text-[10px] font-bold text-[var(--gold)] uppercase tracking-wider hover:bg-[var(--gold)]/20 transition-colors"
             >
-              Voir le clip
+              {t("p6_home2.watch_clip")}
               <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M9 5l7 7-7 7" />
               </svg>

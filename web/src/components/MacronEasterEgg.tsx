@@ -4,6 +4,7 @@ import { useState, useCallback, useEffect } from "react";
 import { m, AnimatePresence } from "motion/react";
 import Image from "next/image";
 import { KC_LOGO } from "@/lib/kc-assets";
+import { useT } from "@/lib/i18n/use-lang";
 
 /**
  * Hidden easter egg: click the KC logo 5 times within 3 seconds to unlock
@@ -15,6 +16,7 @@ import { KC_LOGO } from "@/lib/kc-assets";
  * Based on recommendation #2 from the Opus 4.6 audit.
  */
 export function MacronEasterEgg() {
+  const t = useT();
   const [clicks, setClicks] = useState(0);
   const [show, setShow] = useState(false);
   const [lastClick, setLastClick] = useState(0);
@@ -98,7 +100,7 @@ export function MacronEasterEgg() {
                 </div>
                 <div className="rounded-full bg-[var(--gold)]/20 border border-[var(--gold)]/40 px-2 py-0.5">
                   <span className="text-[9px] font-black text-[var(--gold)] uppercase tracking-widest">
-                    Easter Egg
+                    {t("p6_misc1.macron_badge")}
                   </span>
                 </div>
               </div>
@@ -106,21 +108,19 @@ export function MacronEasterEgg() {
               {/* Tweet body */}
               <div className="p-4 space-y-2">
                 <p className="text-sm text-white leading-relaxed">
-                  F&eacute;licitations &agrave; la @KarmineCorp pour cette victoire
-                  historique au <strong>EU Masters</strong> ! Une belle
-                  r&eacute;ussite fran&ccedil;aise. Bravo &agrave; toute l&apos;&eacute;quipe.
-                  &#127467;&#127479;
+                  {t("p6_misc1.macron_tweet_pre")}{" "}
+                  <strong>EU Masters</strong>
+                  {t("p6_misc1.macron_tweet_post")}
                 </p>
                 <p className="text-xs text-[var(--gold)]/70 font-data uppercase tracking-widest pt-2 border-t border-white/5">
-                  Oui, le pr&eacute;sident de la R&eacute;publique a vraiment f&eacute;licit&eacute;
-                  KC pour les EU Masters.
+                  {t("p6_misc1.macron_caption")}
                 </p>
               </div>
 
               {/* Tap hint */}
               <div className="px-4 py-2 bg-black/40 text-center">
                 <p className="text-[10px] text-white/40 uppercase tracking-widest">
-                  Tap pour fermer
+                  {t("p6_misc1.tap_to_close")}
                 </p>
               </div>
             </button>

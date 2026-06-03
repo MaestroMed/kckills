@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import dynamic from "next/dynamic";
 
 import { isBCCMember, markBCCMember } from "@/lib/bcc-state";
+import { useT } from "@/lib/i18n/use-lang";
 
 // The cave itself is lazy-loaded — zero bundle cost until the ritual
 // fires. It pulls in Motion + the Supabase client + ~30 KB of editorial
@@ -45,6 +46,7 @@ const SEQUENCE = ["b", "c", "c"] as const;
 const RESET_WINDOW_MS = 2500;
 
 export function AntreTrigger() {
+  const t = useT();
   const [open, setOpen] = useState(false);
   const [member, setMember] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -133,7 +135,7 @@ export function AntreTrigger() {
           <span
             className="font-data text-[9px] uppercase tracking-[0.4em] text-[var(--gold)]/25 transition-opacity hover:opacity-100"
             style={{ textShadow: "0 0 8px rgba(200,170,110,0.2)" }}
-            title="Tape B-C-C pour entrer"
+            title={t("p6_misc1.bcc_hint")}
           >
             ◆ BCC
           </span>

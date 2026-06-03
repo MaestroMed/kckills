@@ -27,6 +27,7 @@
 
 import { useEffect, useState } from "react";
 import Image from "next/image";
+import { useT } from "@/lib/i18n/use-lang";
 
 interface MatchHeroProps {
   kcLogoSrc: string;
@@ -58,6 +59,7 @@ export function MatchHero({
   date,
   publishedClipCount = 0,
 }: MatchHeroProps) {
+  const t = useT();
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
 
@@ -82,9 +84,9 @@ export function MatchHero({
 
   const kicker = isPast
     ? isWin
-      ? "★ Victoire Karmine Corp"
-      : "✗ Défaite — KC encaisse"
-    : "▽ Match à venir";
+      ? t("p6_matchpg.hero_kicker_win")
+      : t("p6_matchpg.hero_kicker_loss")
+    : t("p6_matchpg.hero_kicker_upcoming");
 
   return (
     <section
@@ -243,7 +245,7 @@ export function MatchHero({
                 className="h-2 w-2 rounded-full animate-pulse"
                 style={{ background: `rgba(${accentRgb},1)` }}
               />
-              {publishedClipCount} clips disponibles
+              {t("p6_matchpg.clips_available", { n: publishedClipCount })}
             </span>
           </div>
         )}

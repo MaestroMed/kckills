@@ -31,6 +31,7 @@
 
 import Image from "next/image";
 import { championIconUrl } from "@/lib/constants";
+import { useT } from "@/lib/i18n/use-lang";
 
 interface ChampionStat {
   name: string;
@@ -112,18 +113,19 @@ export function PlayerRadar({
   totalGold: number;
   totalCS: number;
 }) {
+  const t = useT();
   const uid = "radar";
   const avgGoldK = gamesPlayed > 0 ? totalGold / gamesPlayed / 1000 : 0;
   const avgCS = gamesPlayed > 0 ? totalCS / gamesPlayed : 0;
 
   const axes = [
-    { label: "Kills", value: clamp01(avgKills / 7) },
-    { label: "Assists", value: clamp01(avgAssists / 9) },
-    { label: "Survie", value: avgDeaths > 0 ? clamp01(2.5 / avgDeaths) : 1 },
-    { label: "CS/min", value: clamp01(avgCS / 320) },
-    { label: "Gold", value: clamp01(avgGoldK / 16) },
+    { label: t("p6_playerpg.radar_kills"), value: clamp01(avgKills / 7) },
+    { label: t("p6_playerpg.radar_assists"), value: clamp01(avgAssists / 9) },
+    { label: t("p6_playerpg.radar_survival"), value: avgDeaths > 0 ? clamp01(2.5 / avgDeaths) : 1 },
+    { label: t("p6_playerpg.radar_cs_per_min"), value: clamp01(avgCS / 320) },
+    { label: t("p6_playerpg.radar_gold"), value: clamp01(avgGoldK / 16) },
     {
-      label: "Impact",
+      label: t("p6_playerpg.radar_impact"),
       value: clamp01((avgKills + avgAssists) / 14),
     },
   ];
@@ -160,7 +162,7 @@ export function PlayerRadar({
         viewBox="0 0 300 300"
         className="w-full h-full overflow-visible"
         role="img"
-        aria-label="Profil de jeu — radar hexagonal des forces du joueur"
+        aria-label={t("p6_playerpg.radar_aria")}
       >
         <HextechDefs uid={uid} />
 
@@ -284,7 +286,7 @@ export function PlayerRadar({
           fontWeight="700"
           opacity="0.7"
         >
-          KDA
+          {t("p6_playerpg.kda_label")}
         </text>
         <text
           x={cx}
@@ -315,6 +317,7 @@ export function ChampionPerformanceChart({
 }: {
   champions: ChampionStat[];
 }) {
+  const t = useT();
   const uid = "champ";
   const data = champions.slice(0, 8);
   if (data.length === 0) return null;
@@ -341,7 +344,7 @@ export function ChampionPerformanceChart({
             <div
               key={c.name}
               className="group relative flex-1 flex flex-col items-center justify-end min-w-0"
-              title={`${c.name} — ${c.games} games · ${c.kills}/${c.deaths}/${c.assists} (KDA ${kda})`}
+              title={t("p6_playerpg.champ_bar_tooltip", { name: c.name, games: c.games, kills: c.kills, deaths: c.deaths, assists: c.assists, kda })}
             >
               {/* Floating icon above the bar */}
               <div
@@ -450,6 +453,7 @@ export function ChampionPerformanceChart({
 // painted as a CSS pseudo-element underneath. Hover raises the tile
 // and surfaces opponent + champion via the title attribute.
 export function RecentFormChart({ history }: { history: MatchEntry[] }) {
+  const t = useT();
   const recent = history.slice(0, 12).reverse();
   if (recent.length === 0) return null;
 
@@ -471,19 +475,19 @@ export function RecentFormChart({ history }: { history: MatchEntry[] }) {
       <div className="flex items-center justify-between mb-3 px-1">
         <div className="flex items-center gap-3">
           <span className="font-data text-[10px] uppercase tracking-[0.2em] text-[var(--text-muted)]">
-            {recent.length} derniers
+            {t("p6_playerpg.recent_last_n", { n: recent.length })}
           </span>
           <span
             className="font-data text-[10px] font-bold"
             style={{ color: GREEN }}
           >
-            {wins}W
+            {t("p6_playerpg.count_w", { n: wins })}
           </span>
           <span
             className="font-data text-[10px] font-bold"
             style={{ color: RED }}
           >
-            {losses}L
+            {t("p6_playerpg.count_l", { n: losses })}
           </span>
         </div>
         <span
@@ -500,7 +504,7 @@ export function RecentFormChart({ history }: { history: MatchEntry[] }) {
           const kda =
             m.deaths > 0
               ? ((m.kills + m.assists) / m.deaths).toFixed(1)
-              : "Perf";
+              : t("p6_playerpg.kda_perfect_short");
           const isWin = m.won;
           const streak = inStreak[i];
           return (
@@ -517,8 +521,8 @@ export function RecentFormChart({ history }: { history: MatchEntry[] }) {
                     ? `0 0 10px rgba(0,200,83,0.35)`
                     : "none",
               }}
-              title={`vs ${m.opponent} · ${m.champion} · ${m.kills}/${m.deaths}/${m.assists} (KDA ${kda})`}
-              aria-label={`${isWin ? "Victoire" : "Défaite"} vs ${m.opponent} avec ${m.champion}, KDA ${kda}`}
+              title={t("p6_playerpg.form_tile_tooltip", { opponent: m.opponent, champion: m.champion, kills: m.kills, deaths: m.deaths, assists: m.assists, kda })}
+              aria-label={t(isWin ? "p6_playerpg.form_tile_win_aria" : "p6_playerpg.form_tile_loss_aria", { opponent: m.opponent, champion: m.champion, kda })}
             >
               {/* Champion mini icon as backdrop */}
               <Image
@@ -569,9 +573,9 @@ export function RecentFormChart({ history }: { history: MatchEntry[] }) {
             className="inline-block h-2 w-2 rounded-full"
             style={{ background: GREEN, boxShadow: `0 0 6px ${GREEN}` }}
           />
-          Streak
+          {t("p6_playerpg.legend_streak")}
         </span>
-        <span className="font-data opacity-70">← plus ancien · plus récent →</span>
+        <span className="font-data opacity-70">{t("p6_playerpg.legend_order")}</span>
       </div>
     </div>
   );

@@ -5,6 +5,7 @@ import { KCTimeline } from "@/components/KCTimeline";
 import { EraKillsFeed } from "@/components/timeline/EraKillsFeed";
 import { ERAS, getEraById } from "@/lib/eras";
 import { track } from "@/lib/analytics/track";
+import { useT } from "@/lib/i18n/use-lang";
 
 // Wave 31a — cached at module scope so re-mounts in the same session
 // don't re-hit the network. Counts are public + slow-changing so this
@@ -64,6 +65,7 @@ export interface HomeTimelineFeedProps {
 }
 
 export function HomeTimelineFeed({ children }: HomeTimelineFeedProps) {
+  const t = useT();
   const [selectedEraId, setSelectedEraId] = useState<string | null>(null);
   const selectedEra = selectedEraId ? getEraById(selectedEraId) ?? null : null;
   const [killCounts, setKillCounts] = useState<Record<string, number> | null>(
@@ -120,10 +122,10 @@ export function HomeTimelineFeed({ children }: HomeTimelineFeedProps) {
             type="button"
             onClick={handleClear}
             className="inline-flex items-center gap-2 rounded-full border border-[var(--border-gold)] bg-[var(--bg-surface)]/80 backdrop-blur-sm px-4 py-2 text-xs font-bold uppercase tracking-widest text-[var(--gold)] transition-all hover:bg-[var(--gold)]/10 hover:border-[var(--gold)]/60 focus:outline-none focus:ring-2 focus:ring-[var(--gold)]"
-            aria-label="Effacer le filtre par ere"
+            aria-label={t("p6_tl.clear_filter_aria")}
           >
             <span aria-hidden>{"\u2715"}</span>
-            Toutes les eres
+            {t("p6_tl.all_eras")}
           </button>
         </div>
       )}

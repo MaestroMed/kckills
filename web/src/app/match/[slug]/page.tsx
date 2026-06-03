@@ -13,6 +13,7 @@ import {
 } from "@/lib/supabase/match";
 import { ERAS, type Era } from "@/lib/eras";
 import { JsonLd, breadcrumbLD } from "@/lib/seo/jsonld";
+import { getServerT } from "@/lib/i18n/server-lang";
 
 import { ReplayHero } from "@/components/match/ReplayHero";
 import { MatchSummaryCard } from "@/components/match/MatchSummaryCard";
@@ -47,13 +48,13 @@ interface Props {
 
 // ─── Skip-to-content link ─────────────────────────────────────────────
 
-function SkipToContent() {
+function SkipToContent({ label }: { label: string }) {
   return (
     <a
       href="#match-main"
       className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[100] focus:rounded-md focus:border focus:border-[var(--gold)] focus:bg-[var(--bg-elevated)] focus:px-3 focus:py-2 focus:text-xs focus:font-bold focus:uppercase focus:tracking-widest focus:text-[var(--gold)]"
     >
-      Aller au contenu du match
+      {label}
     </a>
   );
 }
@@ -123,6 +124,8 @@ export default async function MatchReplayPage({ params }: Props) {
   // the in-flight promise).
   const match = await getMatchBySlug(slug);
   if (!match) notFound();
+
+  const { t } = await getServerT();
 
   const [kills, mvp, related] = await Promise.all([
     getMatchKills(match.externalId),
@@ -197,7 +200,7 @@ export default async function MatchReplayPage({ params }: Props) {
 
   // Opponent display helpers.
   const oppCode = match.opponentTeam?.code ?? "OPP";
-  const oppName = match.opponentTeam?.name ?? "Adversaire";
+  const oppName = match.opponentTeam?.name ?? t("p6_matchpg.opponent_fallback");
 
   // Breadcrumb JSON-LD.
   const breadcrumbJsonLd = breadcrumbLD([
@@ -226,7 +229,7 @@ export default async function MatchReplayPage({ params }: Props) {
         marginRight: "-50vw",
       }}
     >
-      <SkipToContent />
+      <SkipToContent label={t("p6_matchpg.skip_to_content")} />
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(sportsEventJsonLd) }}
@@ -235,13 +238,13 @@ export default async function MatchReplayPage({ params }: Props) {
 
       {/* Breadcrumb (visual) */}
       <nav
-        aria-label="Fil d'Ariane"
+        aria-label={t("p6_matchpg.breadcrumb_aria")}
         className="mx-auto max-w-7xl px-4 pt-4 pb-2 text-sm text-[var(--text-muted)] sm:px-6"
       >
         <ol className="flex items-center gap-2">
           <li>
             <Link href="/" className="hover:text-[var(--gold)]">
-              Accueil
+              {t("nav.home")}
             </Link>
           </li>
           <li className="text-[var(--gold)]/30" aria-hidden>
@@ -249,7 +252,7 @@ export default async function MatchReplayPage({ params }: Props) {
           </li>
           <li>
             <Link href="/matches" className="hover:text-[var(--gold)]">
-              Matchs
+              {t("nav.matches")}
             </Link>
           </li>
           <li className="text-[var(--gold)]/30" aria-hidden>
@@ -309,10 +312,10 @@ export default async function MatchReplayPage({ params }: Props) {
                 id="match-timeline-heading"
                 className="font-display text-xl font-black uppercase tracking-widest text-[var(--gold)]"
               >
-                Timeline interactive
+                {t("p6_matchpg.timeline_heading")}
               </h2>
               <p className="hidden sm:block text-[10px] uppercase tracking-widest text-[var(--text-muted)]">
-                Tap ou survol → preview · clic → clip plein écran
+                {t("p6_matchpg.timeline_hint")}
               </p>
             </div>
             <MatchTimeline
@@ -336,7 +339,7 @@ export default async function MatchReplayPage({ params }: Props) {
 
         {/* ═══ 4. Per-game sections ═══════════════════════════════════ */}
         {match.games.length > 0 && (
-          <section aria-label="Détails par game" className="space-y-6">
+          <section aria-label={t("p6_matchpg.games_section_aria")} className="space-y-6">
             {match.games.map((game) => {
               const counts = gameKillCounts(game.number);
               void counts; // counts already part of header in section
@@ -381,9 +384,7 @@ export default async function MatchReplayPage({ params }: Props) {
 
         {/* Riot legal disclaimer — required on every public page. */}
         <p className="border-t border-[var(--border-gold)]/30 pt-6 text-center text-[10px] leading-relaxed text-[var(--text-muted)]">
-          KCKILLS was created under Riot Games&apos; &quot;Legal Jibber
-          Jabber&quot; policy using assets owned by Riot Games. Riot Games does
-          not endorse or sponsor this project.
+          {t("p6_matchpg.riot_disclaimer")}
         </p>
       </main>
     </div>

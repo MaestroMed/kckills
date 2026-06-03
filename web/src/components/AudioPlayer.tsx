@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
+import { useT } from "@/lib/i18n/use-lang";
 
 /**
  * BCC Vibes Audio Player — plays "Ahou Ahou" OTT Nseven on first visit.
@@ -28,6 +29,7 @@ const BGM_DUCKED_VOLUME = 25; // % volume while a clip is unmuted
 const BGM_FULL_VOLUME = 100;
 
 export function AudioPlayer() {
+  const t = useT();
   const [playing, setPlaying] = useState(false);
   const [dismissed, setDismissed] = useState(false);
   const [armedForAutoStart, setArmedForAutoStart] = useState(false);
@@ -43,8 +45,8 @@ export function AudioPlayer() {
       if (!seen) {
         setArmedForAutoStart(true);
         setShowFirstVisitHint(true);
-        const t = window.setTimeout(() => setShowFirstVisitHint(false), 6000);
-        return () => window.clearTimeout(t);
+        const timer = window.setTimeout(() => setShowFirstVisitHint(false), 6000);
+        return () => window.clearTimeout(timer);
       }
     } catch {
       // localStorage may be blocked — fail silently
@@ -127,12 +129,12 @@ export function AudioPlayer() {
   // as a paranoid safety net in case Chrome's mute=0 URL hint isn't honoured.
   useEffect(() => {
     if (!playing) return;
-    const t = window.setTimeout(() => {
+    const timer = window.setTimeout(() => {
       sendCommand("unMute", []);
       sendCommand("setVolume", [BGM_FULL_VOLUME]);
       sendCommand("playVideo", []);
     }, 800);
-    return () => window.clearTimeout(t);
+    return () => window.clearTimeout(timer);
   }, [playing, sendCommand]);
 
   const handleManualPlay = useCallback(() => {
@@ -204,12 +206,12 @@ export function AudioPlayer() {
               ))}
             </div>
             <span className="text-[9px] font-bold text-[var(--gold)] uppercase tracking-widest ml-1">
-              {ducked ? "Ducked" : "Ahou Ahou"}
+              {ducked ? t("p6_media.bgm_ducked") : "Ahou Ahou"}
             </span>
             <button
               onClick={handleDismiss}
               className="ml-1 text-white/50 hover:text-[var(--red)] transition-colors"
-              aria-label="Couper le son"
+              aria-label={t("p6_media.bgm_mute")}
             >
               <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -223,10 +225,10 @@ export function AudioPlayer() {
         <div className="fixed bottom-24 right-6 z-[90] pointer-events-none animate-pulse max-w-[260px]">
           <div className="rounded-xl border border-[var(--gold)]/40 bg-black/85 backdrop-blur-md px-4 py-3 shadow-2xl shadow-[var(--gold)]/10">
             <p className="font-data text-[10px] uppercase tracking-[0.2em] text-[var(--gold)]/80 mb-1">
-              {"\uD83C\uDFB5"} BCC Vibes &middot; first visit
+              {"\uD83C\uDFB5"} BCC Vibes &middot; {t("p6_media.bgm_first_visit")}
             </p>
             <p className="text-xs text-white/85 leading-snug">
-              Clique n&apos;importe ou sur le site pour lancer
+              {t("p6_media.bgm_hint_lead")}
               <span className="text-[var(--gold)] font-bold"> &laquo; Ahou Ahou &raquo; OTT Nseven</span>.
             </p>
           </div>

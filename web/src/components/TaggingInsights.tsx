@@ -1,4 +1,5 @@
 import { getPublishedKills } from "@/lib/supabase/kills";
+import { getServerT } from "@/lib/i18n/server-lang";
 
 /**
  * TaggingInsights — pulls the published-kills sample, computes
@@ -18,26 +19,27 @@ import { getPublishedKills } from "@/lib/supabase/kills";
 type Bar = { label: string; count: number; pct: number; accent?: string };
 
 const TIME_ORDER = ["0-5", "5-10", "10-15", "15-20", "20-25", "25-30", "30-35", "35+"];
-const FIGHT_LABELS: Record<string, string> = {
-  solo_kill: "Solo kill",
-  gank: "Gank",
-  pick: "Pick",
-  skirmish_2v2: "Skirmish 2v2",
-  skirmish_3v3: "Skirmish 3v3",
-  teamfight_4v4: "Teamfight 4v4",
-  teamfight_5v5: "Teamfight 5v5",
-};
-const CLASS_LABELS: Record<string, string> = {
-  assassin: "Assassin",
-  bruiser: "Bruiser",
-  mage: "Mage",
-  marksman: "Marksman",
-  tank: "Tank",
-  enchanter: "Enchanter",
-  skirmisher: "Skirmisher",
-};
 
 export async function TaggingInsights() {
+  const { t } = await getServerT();
+  const FIGHT_LABELS: Record<string, string> = {
+    solo_kill: t("p6_searchq.fight_solo_kill"),
+    gank: t("p6_searchq.fight_gank"),
+    pick: t("p6_searchq.fight_pick"),
+    skirmish_2v2: t("p6_searchq.fight_skirmish_2v2"),
+    skirmish_3v3: t("p6_searchq.fight_skirmish_3v3"),
+    teamfight_4v4: t("p6_searchq.fight_teamfight_4v4"),
+    teamfight_5v5: t("p6_searchq.fight_teamfight_5v5"),
+  };
+  const CLASS_LABELS: Record<string, string> = {
+    assassin: t("p6_searchq.class_assassin"),
+    bruiser: t("p6_searchq.class_bruiser"),
+    mage: t("p6_searchq.class_mage"),
+    marksman: t("p6_searchq.class_marksman"),
+    tank: t("p6_searchq.class_tank"),
+    enchanter: t("p6_searchq.class_enchanter"),
+    skirmisher: t("p6_searchq.class_skirmisher"),
+  };
   // Wave 34 T2.2 — trim 500 → 300.
   // This component computes distribution stats (game_minute_bucket,
   // fight_type, champion_class) — bigger sample = smoother bars, but
@@ -77,41 +79,40 @@ export async function TaggingInsights() {
       <div className="flex items-center gap-3">
         <span className="h-px flex-1 bg-[var(--border-gold)]" />
         <span className="font-data text-[10px] uppercase tracking-[0.3em] font-bold text-[var(--gold)]">
-          Tagging Insights
+          {t("p6_searchq.insights_eyebrow")}
         </span>
         <span className="h-px flex-1 bg-[var(--border-gold)]" />
       </div>
 
       <p className="text-sm text-[var(--text-muted)] max-w-2xl">
-        Distribution des {total} kills KC tagg&eacute;s par le pipeline IA + ground truth serveur.
-        Met &agrave; jour automatiquement.
+        {t("p6_searchq.insights_intro", { n: total })}
       </p>
 
       {/* Quick stats bar */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <QuickStat label="Score IA moyen" value={avgHighlight != null ? avgHighlight.toFixed(1) : "—"} suffix="/10" accent="var(--gold)" />
-        <QuickStat label="Exceptionnels (\u22658.5)" value={exceptional} accent="var(--orange)" />
-        <QuickStat label="Multi-kills" value={multiKills} accent="var(--gold)" />
-        <QuickStat label="First Bloods" value={firstBloods} accent="var(--red)" />
+        <QuickStat label={t("p6_searchq.stat_avg_score")} value={avgHighlight != null ? avgHighlight.toFixed(1) : "—"} suffix="/10" accent="var(--gold)" />
+        <QuickStat label={t("p6_searchq.stat_exceptional")} value={exceptional} accent="var(--orange)" />
+        <QuickStat label={t("p6_searchq.stat_multikills")} value={multiKills} accent="var(--gold)" />
+        <QuickStat label={t("p6_searchq.stat_first_bloods")} value={firstBloods} accent="var(--red)" />
       </div>
 
       {/* Three side-by-side bar charts */}
       <div className="grid gap-6 lg:grid-cols-3">
         <BarChart
-          title="Quand KC frappe"
-          subtitle="Kills par fenetre de 5 minutes in-game"
+          title={t("p6_searchq.chart_when_title")}
+          subtitle={t("p6_searchq.chart_when_subtitle")}
           bars={byMinute.bars}
           maxCount={byMinute.max}
         />
         <BarChart
-          title="Comment KC se bat"
-          subtitle="Fight type (calcul\u00e9 server-side)"
+          title={t("p6_searchq.chart_how_title")}
+          subtitle={t("p6_searchq.chart_how_subtitle")}
           bars={byFight.bars}
           maxCount={byFight.max}
         />
         <BarChart
-          title="Cibles favorites"
-          subtitle="Classe du killer KC"
+          title={t("p6_searchq.chart_targets_title")}
+          subtitle={t("p6_searchq.chart_targets_subtitle")}
           bars={byClass.bars}
           maxCount={byClass.max}
         />

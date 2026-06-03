@@ -2,6 +2,7 @@
 
 import { useRef, useState } from "react";
 import Image from "next/image";
+import { useT } from "@/lib/i18n/use-lang";
 
 interface VideoPlayerProps {
   src?: string | null;
@@ -22,6 +23,7 @@ export function VideoPlayer({
   youtubeEnd,
   status,
 }: VideoPlayerProps) {
+  const t = useT();
   const videoRef = useRef<HTMLVideoElement>(null);
   const [playing, setPlaying] = useState(false);
   const [ytLoaded, setYtLoaded] = useState(false);
@@ -48,7 +50,7 @@ export function VideoPlayer({
           <button
             className="group relative h-full w-full"
             onClick={() => setYtLoaded(true)}
-            aria-label="Lancer le clip"
+            aria-label={t("p6_media.play_clip")}
           >
             <Image
               src={thumbUrl}
@@ -113,7 +115,7 @@ export function VideoPlayer({
           <button
             className="absolute inset-0 flex items-center justify-center bg-black/30 transition-opacity hover:bg-black/20"
             onClick={() => videoRef.current?.play()}
-            aria-label="Play"
+            aria-label={t("p6_media.play")}
           >
             <div className="flex h-20 w-20 items-center justify-center rounded-full bg-[var(--gold)] shadow-2xl shadow-[var(--gold)]/30">
               <svg
@@ -162,12 +164,12 @@ export function VideoPlayer({
               </svg>
             </div>
             <p className="text-sm font-medium text-[var(--text-muted)]">
-              Clip en cours de traitement…
+              {t("p6_media.processing")}
             </p>
           </>
         ) : (
           <p className="text-sm text-[var(--text-muted)]">
-            Aucun clip disponible
+            {t("p6_media.no_clip")}
           </p>
         )}
       </div>

@@ -16,6 +16,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 
 import { getBCCSessionHash } from "@/lib/bcc-state";
+import { useT } from "@/lib/i18n/use-lang";
 import {
   type AchievementRarity,
   type AchievementRow,
@@ -23,6 +24,7 @@ import {
 } from "@/lib/supabase/achievements-types";
 
 export function SettingsAchievementsRow() {
+  const t = useT();
   const [earned, setEarned] = useState<AchievementRow[] | null>(null);
 
   useEffect(() => {
@@ -55,13 +57,13 @@ export function SettingsAchievementsRow() {
     return (
       <div>
         <p className="text-[10px] text-[var(--text-muted)] uppercase tracking-wider mb-1.5">
-          Mes badges
+          {t("p6_misc2.my_badges")}
         </p>
         <Link
           href="/achievements"
           className="inline-flex items-center gap-1.5 text-xs text-[var(--text-secondary)] hover:text-[var(--gold)]"
         >
-          Aucun badge encore. Voir le catalogue
+          {t("p6_misc2.no_badge_yet")}
           <span aria-hidden>{"→"}</span>
         </Link>
       </div>
@@ -72,13 +74,13 @@ export function SettingsAchievementsRow() {
     <div>
       <div className="mb-1.5 flex items-baseline justify-between">
         <p className="text-[10px] text-[var(--text-muted)] uppercase tracking-wider">
-          Mes badges ({earned.length})
+          {t("p6_misc2.my_badges_count", { n: earned.length })}
         </p>
         <Link
           href="/achievements"
           className="text-[10px] text-[var(--text-secondary)] hover:text-[var(--gold)]"
         >
-          Voir tout
+          {t("p6_misc2.see_all")}
         </Link>
       </div>
       <div className="flex flex-wrap gap-2">

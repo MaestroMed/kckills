@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useT } from "@/lib/i18n/use-lang";
 
 interface SearchFiltersProps {
   players: string[];
@@ -15,20 +16,22 @@ export interface FilterState {
   query: string;
 }
 
-const ERAS = [
-  { id: "", label: "Toutes les eres" },
-  { id: "2026", label: "2026" },
-  { id: "2025", label: "2025" },
-  { id: "2024", label: "2024" },
-];
-
-const INVOLVEMENTS = [
-  { id: "", label: "Tous" },
-  { id: "killer", label: "KC Killer" },
-  { id: "victim", label: "KC Victim" },
-];
-
 export function SearchFilters({ players, onFilter }: SearchFiltersProps) {
+  const t = useT();
+
+  const ERAS = [
+    { id: "", label: t("p6_searchq.filter_all_eras") },
+    { id: "2026", label: "2026" },
+    { id: "2025", label: "2025" },
+    { id: "2024", label: "2024" },
+  ];
+
+  const INVOLVEMENTS = [
+    { id: "", label: t("p6_searchq.filter_inv_all") },
+    { id: "killer", label: t("p6_searchq.filter_inv_killer") },
+    { id: "victim", label: t("p6_searchq.filter_inv_victim") },
+  ];
+
   const [filters, setFilters] = useState<FilterState>({
     player: "",
     involvement: "",
@@ -48,7 +51,7 @@ export function SearchFilters({ players, onFilter }: SearchFiltersProps) {
       {/* Search */}
       <input
         type="text"
-        placeholder="Rechercher..."
+        placeholder={t("p6_searchq.filter_search_placeholder")}
         value={filters.query}
         onChange={(e) => update({ query: e.target.value })}
         className="rounded-lg border border-[var(--border-gold)] bg-[var(--bg-surface)] px-3 py-2 text-sm text-[var(--text-primary)] placeholder-[var(--text-disabled)] outline-none focus:border-[var(--gold)] w-48"
@@ -60,7 +63,7 @@ export function SearchFilters({ players, onFilter }: SearchFiltersProps) {
         onChange={(e) => update({ player: e.target.value })}
         className="rounded-lg border border-[var(--border-gold)] bg-[var(--bg-surface)] px-3 py-2 text-sm text-[var(--text-secondary)] outline-none"
       >
-        <option value="">Tous les joueurs</option>
+        <option value="">{t("p6_searchq.filter_all_players")}</option>
         {players.map((p) => (
           <option key={p} value={p}>{p}</option>
         ))}
@@ -94,10 +97,10 @@ export function SearchFilters({ players, onFilter }: SearchFiltersProps) {
         onChange={(e) => update({ minKills: Number(e.target.value) })}
         className="rounded-lg border border-[var(--border-gold)] bg-[var(--bg-surface)] px-3 py-2 text-sm text-[var(--text-secondary)] outline-none"
       >
-        <option value={0}>Min kills: 0</option>
-        <option value={3}>Min kills: 3+</option>
-        <option value={5}>Min kills: 5+</option>
-        <option value={8}>Min kills: 8+</option>
+        <option value={0}>{t("p6_searchq.filter_min_kills", { v: "0" })}</option>
+        <option value={3}>{t("p6_searchq.filter_min_kills", { v: "3+" })}</option>
+        <option value={5}>{t("p6_searchq.filter_min_kills", { v: "5+" })}</option>
+        <option value={8}>{t("p6_searchq.filter_min_kills", { v: "8+" })}</option>
       </select>
 
       {/* Reset */}
@@ -106,7 +109,7 @@ export function SearchFilters({ players, onFilter }: SearchFiltersProps) {
           onClick={() => update({ player: "", era: "", involvement: "", minKills: 0, query: "" })}
           className="rounded-lg border border-[var(--red)]/30 px-3 py-2 text-sm text-[var(--red)] hover:bg-[var(--red)]/10"
         >
-          Reset
+          {t("p6_searchq.filter_reset")}
         </button>
       )}
     </div>

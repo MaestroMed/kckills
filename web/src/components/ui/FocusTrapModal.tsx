@@ -40,6 +40,7 @@ import {
   type RefObject,
 } from "react";
 import { m, AnimatePresence, useReducedMotion } from "motion/react";
+import { useT } from "@/lib/i18n/use-lang";
 
 // Matches the ContextDrawer selector — every natively/explicitly focusable
 // node. [tabindex="-1"] is excluded so programmatic-only stops don't become
@@ -235,14 +236,16 @@ export function Modal({
   label,
   restoreFocus = true,
   showCloseButton = true,
-  closeLabel = "Fermer",
+  closeLabel,
   panelClassName = "",
   overlayClassName = "items-center justify-center p-4",
   scrimClassName = "bg-black/55",
   zIndexClassName = "z-[80]",
 }: ModalProps) {
+  const t = useT();
   const reduce = useReducedMotion();
   const panelRef = useRef<HTMLDivElement>(null);
+  const resolvedCloseLabel = closeLabel ?? t("common.close");
 
   useFocusTrap(panelRef, { active: open, onEscape: onClose, restoreFocus });
 
@@ -290,7 +293,7 @@ export function Modal({
               <button
                 type="button"
                 onClick={close}
-                aria-label={closeLabel}
+                aria-label={resolvedCloseLabel}
                 className="absolute right-3 top-3 z-10 flex h-9 w-9 items-center justify-center rounded-full bg-black/50 text-white/75 backdrop-blur-sm transition-colors hover:bg-black/70 hover:text-[var(--gold)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--gold)] focus-visible:outline-offset-2"
               >
                 <svg

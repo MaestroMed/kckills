@@ -31,6 +31,7 @@ import Image from "next/image";
 import { m } from "motion/react";
 import { pickAssetUrl } from "@/lib/kill-assets";
 import type { PublishedKillRow } from "@/lib/supabase/kills";
+import { useT } from "@/lib/i18n/use-lang";
 import { KillSidePanel } from "./KillSidePanel";
 
 // ─── Types ────────────────────────────────────────────────────────────
@@ -116,6 +117,7 @@ export function MatchTimeline({
   opponentName,
   anchorPrefix = "game",
 }: MatchTimelineProps) {
+  const t = useT();
   // Flatten kills in chronological order — feeds the side panel's
   // prev/next cycling and the roving-tabindex keyboard navigation.
   const orderedKills = useMemo<PublishedKillRow[]>(() => {
@@ -173,7 +175,7 @@ export function MatchTimeline({
   if (orderedKills.length === 0) {
     return (
       <div className="rounded-xl border border-[var(--border-gold)] bg-[var(--bg-surface)] p-4 text-center text-xs text-[var(--text-muted)]">
-        Aucun clip vidéo disponible pour ce match.
+        {t("p6_matchpg.no_clips")}
       </div>
     );
   }
@@ -187,7 +189,7 @@ export function MatchTimeline({
         onKeyDown={onKeyDown}
         className="space-y-4"
         role="group"
-        aria-label="Timeline interactive des kills du match"
+        aria-label={t("p6_matchpg.timeline_group_aria")}
       >
         {games.map((game) => {
           const gameKills = orderedKills.filter(
@@ -232,23 +234,23 @@ export function MatchTimeline({
           Lets a screen-reader user navigate the timeline data without
           relying on the dot positions. */}
       <table className="sr-only">
-        <caption>Liste des kills du match en ordre chronologique</caption>
+        <caption>{t("p6_matchpg.sr_table_caption")}</caption>
         <thead>
           <tr>
-            <th scope="col">Game</th>
-            <th scope="col">Temps</th>
-            <th scope="col">Tueur</th>
-            <th scope="col">Champion tueur</th>
-            <th scope="col">Victime</th>
-            <th scope="col">Champion victime</th>
-            <th scope="col">Score IA</th>
-            <th scope="col">Camp KC</th>
+            <th scope="col">{t("p6_matchpg.sr_col_game")}</th>
+            <th scope="col">{t("p6_matchpg.sr_col_time")}</th>
+            <th scope="col">{t("p6_matchpg.sr_col_killer")}</th>
+            <th scope="col">{t("p6_matchpg.sr_col_killer_champion")}</th>
+            <th scope="col">{t("p6_matchpg.sr_col_victim")}</th>
+            <th scope="col">{t("p6_matchpg.sr_col_victim_champion")}</th>
+            <th scope="col">{t("p6_matchpg.sr_col_ai_score")}</th>
+            <th scope="col">{t("p6_matchpg.sr_col_kc_side")}</th>
           </tr>
         </thead>
         <tbody>
           {orderedKills.map((k) => (
             <tr key={`sr-${k.id}`}>
-              <td>Game {k.games?.game_number ?? "?"}</td>
+              <td>{t("p6_matchpg.sr_game_n", { n: k.games?.game_number ?? "?" })}</td>
               <td>{formatGameTime(k.game_time_seconds)}</td>
               <td>—</td>
               <td>{k.killer_champion ?? "?"}</td>
@@ -257,10 +259,10 @@ export function MatchTimeline({
               <td>{k.highlight_score?.toFixed(1) ?? "—"}</td>
               <td>
                 {k.tracked_team_involvement === "team_killer"
-                  ? "KC tueur"
+                  ? t("p6_matchpg.sr_kc_killer")
                   : k.tracked_team_involvement === "team_victim"
-                    ? "KC victime"
-                    : "Neutre"}
+                    ? t("p6_matchpg.sr_kc_victim")
+                    : t("p6_matchpg.sr_neutral")}
               </td>
             </tr>
           ))}
@@ -295,6 +297,7 @@ function GameStrip({
   setActiveIdx,
   anchorPrefix,
 }: GameStripProps) {
+  const t = useT();
   const reducedMotion = usePrefersReducedMotion();
   const totalMinutes = Math.max(20, Math.ceil(maxGameTime / 60));
   const tickInterval = totalMinutes <= 25 ? 5 : totalMinutes <= 35 ? 10 : 15;
@@ -336,7 +339,7 @@ function GameStrip({
       <div className="flex items-center justify-between border-b border-[var(--border-gold)] bg-[var(--bg-primary)] px-3 py-2">
         <div className="flex items-center gap-2">
           <span className="font-display text-xs font-bold uppercase tracking-widest text-[var(--gold)]">
-            Game {game.number}
+            {t("p6_matchpg.game_n", { n: game.number })}
           </span>
           <span className="font-data text-[11px] text-[var(--text-muted)]">
             <span className="font-bold text-[var(--green)]">{game.kcKills}</span>
@@ -352,7 +355,10 @@ function GameStrip({
           ) : null}
         </div>
         <span className="font-data text-[10px] uppercase tracking-widest text-[var(--gold)]/70">
-          {gameKills.length} clip{gameKills.length > 1 ? "s" : ""}
+          {t("p6_matchpg.clip_count", {
+            n: gameKills.length,
+            s: gameKills.length > 1 ? "s" : "",
+          })}
         </span>
       </div>
 
@@ -424,8 +430,13 @@ function GameStrip({
         })}
 
         <div className="sr-only">
-          Timeline du Game {game.number}: {gameKills.length} kills, dont{" "}
-          {kcCount} pour KC et {oppCount} pour {opponentCode}.
+          {t("p6_matchpg.sr_strip_summary", {
+            game: game.number,
+            total: gameKills.length,
+            kc: kcCount,
+            opp: oppCount,
+            code: opponentCode,
+          })}
         </div>
       </m.div>
     </div>
@@ -453,6 +464,7 @@ function Dot({
   onFocus,
   onActivate,
 }: DotProps) {
+  const t = useT();
   const [tooltipOpen, setTooltipOpen] = useState(false);
   const longPressTimer = useRef<number | null>(null);
 
@@ -461,11 +473,15 @@ function Dot({
   const hasMulti = !!kill.multi_kill;
   const isFb = kill.is_first_blood;
 
-  const title = `Kill : ${kill.killer_champion ?? "?"} tue ${kill.victim_champion ?? "?"} à T+${formatGameTime(kill.game_time_seconds)}${
-    hasMulti ? ` (${kill.multi_kill})` : ""
-  }${isFb ? " — Premier sang" : ""}${
+  const title = `${t("p6_matchpg.dot_title_base", {
+    killer: kill.killer_champion ?? "?",
+    victim: kill.victim_champion ?? "?",
+    time: formatGameTime(kill.game_time_seconds),
+  })}${hasMulti ? t("p6_matchpg.dot_title_multi", { multi: kill.multi_kill ?? "" }) : ""}${
+    isFb ? t("p6_matchpg.dot_title_first_blood") : ""
+  }${
     kill.tracked_team_involvement === "team_victim"
-      ? ` (kill de ${opponentCode})`
+      ? t("p6_matchpg.dot_title_opp_kill", { code: opponentCode })
       : ""
   }`;
 
@@ -536,7 +552,7 @@ function Dot({
         <span
           aria-hidden
           className="pointer-events-none absolute -top-3 left-1/2 -translate-x-1/2 text-[10px] leading-none"
-          title="Premier sang"
+          title={t("p6_matchpg.first_blood")}
         >
           {"🩸"}
         </span>
@@ -563,6 +579,7 @@ function DotTooltip({
   thumbnailUrl: string | null;
   opponentCode: string;
 }) {
+  const t = useT();
   const isKc = kill.tracked_team_involvement === "team_killer";
   return (
     <div
@@ -584,7 +601,7 @@ function DotTooltip({
       <p className="font-display text-[10px] font-bold uppercase tracking-widest text-[var(--gold)]">
         T+{formatGameTime(kill.game_time_seconds)}
         {kill.multi_kill ? ` · ${kill.multi_kill}` : ""}
-        {kill.is_first_blood ? " · Premier sang" : ""}
+        {kill.is_first_blood ? ` · ${t("p6_matchpg.first_blood")}` : ""}
       </p>
       <p className="mt-0.5 font-display text-xs font-semibold text-[var(--text-primary)]">
         <span className={isKc ? "text-[var(--gold)]" : "text-[var(--red)]"}>
@@ -597,7 +614,7 @@ function DotTooltip({
       </p>
       <div className="mt-1 flex items-center justify-between text-[10px] text-[var(--text-muted)]">
         <span>
-          Score{" "}
+          {t("p6_matchpg.score")}{" "}
           <span className="font-data text-[var(--gold)]">
             {kill.highlight_score?.toFixed(1) ?? "—"}
           </span>

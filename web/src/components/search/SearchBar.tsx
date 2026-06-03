@@ -24,6 +24,7 @@
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { track } from "@/lib/analytics/track";
+import { useT } from "@/lib/i18n/use-lang";
 
 const STORAGE_KEY = "kckills_recent_searches";
 const MAX_RECENT = 5;
@@ -111,6 +112,7 @@ function SearchBarInner({
   className = "",
   showRecent = true,
 }: SearchBarProps) {
+  const t = useT();
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -262,7 +264,7 @@ function SearchBarInner({
   return (
     <div
       role="search"
-      aria-label="Recherche dans les kills"
+      aria-label={t("p6_searchq.bar_aria")}
       className={`relative w-full ${className}`}
     >
       <form onSubmit={onSubmit} className="relative w-full">
@@ -299,8 +301,8 @@ function SearchBarInner({
             // before we hide the chip strip.
             window.setTimeout(() => setFocused(false), 150);
           }}
-          placeholder="Cherche un champion, un joueur, un kill..."
-          aria-label="Recherche dans les kills"
+          placeholder={t("p6_searchq.bar_placeholder")}
+          aria-label={t("p6_searchq.bar_aria")}
           className="w-full rounded-lg border border-[var(--border-gold)] bg-[var(--bg-surface)] py-2.5 pl-9 pr-12 text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] outline-none transition-all focus:border-[var(--gold)]/60 focus:shadow-[0_0_0_2px_rgba(200,170,110,0.15)]"
         />
         {/* Right-side hint / clear button */}
@@ -317,7 +319,7 @@ function SearchBarInner({
               navigateToSearch("");
               inputRef.current?.focus();
             }}
-            aria-label="Effacer la recherche"
+            aria-label={t("p6_searchq.bar_clear")}
             className="absolute right-2 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-md text-[var(--text-muted)] transition-colors hover:bg-[var(--bg-elevated)] hover:text-[var(--gold)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--gold)]"
           >
             <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -340,7 +342,7 @@ function SearchBarInner({
           onMouseDown={(e) => e.preventDefault()}
         >
           <div className="px-1 pb-1.5 text-[10px] font-bold uppercase tracking-[0.15em] text-[var(--text-muted)]">
-            Recherches recentes
+            {t("p6_searchq.bar_recent")}
           </div>
           <div className="flex flex-wrap gap-1.5">
             {recent.map((r) => (
@@ -369,7 +371,7 @@ function SearchBarInner({
               }}
               className="rounded-full px-2.5 py-1 text-xs text-[var(--text-muted)] hover:text-[var(--red)]"
             >
-              Effacer
+              {t("p6_searchq.bar_recent_clear")}
             </button>
           </div>
         </div>

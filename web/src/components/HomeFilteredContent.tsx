@@ -6,12 +6,14 @@ import { KCTimeline } from "./KCTimeline";
 import { championSplashUrl } from "@/lib/constants";
 import { KC_LOGO, TEAM_LOGOS } from "@/lib/kc-assets";
 import type { RealMatch } from "@/lib/real-data";
+import { useT } from "@/lib/i18n/use-lang";
 
 interface Props {
   allMatches: RealMatch[];
 }
 
 export function HomeFilteredContent({ allMatches }: Props) {
+  const t = useT();
   const displayedMatches = allMatches.slice(0, 6);
 
   return (
@@ -21,12 +23,13 @@ export function HomeFilteredContent({ allMatches }: Props) {
         <div className="flex items-center gap-3 mb-3 px-4 max-w-7xl mx-auto">
           <div className="h-px flex-1 bg-gradient-to-r from-transparent via-[var(--gold)]/20 to-transparent" />
           <h2 className="font-display text-2xl md:text-3xl font-black whitespace-nowrap">
-            L&apos;histoire <span className="text-gold-gradient">Karmine Corp</span>
+            {t("p6_home2.timeline_title_pre")}{" "}
+            <span className="text-gold-gradient">Karmine Corp</span>
           </h2>
           <div className="h-px flex-1 bg-gradient-to-r from-transparent via-[var(--gold)]/20 to-transparent" />
         </div>
         <p className="text-center text-xs text-[var(--text-muted)] mb-8 uppercase tracking-[0.25em]">
-          Cliquez sur une &eacute;poque pour d&eacute;couvrir les clips associ&eacute;s
+          {t("p6_home2.timeline_hint")}
         </p>
         <div className="w-full">
           <KCTimeline />
@@ -38,13 +41,14 @@ export function HomeFilteredContent({ allMatches }: Props) {
         <section className="py-4">
           <div className="px-4 max-w-7xl mx-auto flex items-center justify-between mb-4">
             <h2 className="font-display text-xl font-bold">
-              Matchs <span className="text-gold-gradient">r&eacute;cents</span>
+              {t("p6_home2.matches_title_pre")}{" "}
+              <span className="text-gold-gradient">{t("p6_home2.matches_title_accent")}</span>
             </h2>
             <Link
               href="/matches"
               className="text-sm text-[var(--text-muted)] hover:text-[var(--gold)]"
             >
-              Tous les matchs &rarr;
+              {t("p6_home2.all_matches")}
             </Link>
           </div>
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
@@ -85,7 +89,7 @@ export function HomeFilteredContent({ allMatches }: Props) {
                           : "bg-[var(--red)]/20 border border-[var(--red)]/40 text-[var(--red)]"
                       }`}
                     >
-                      {match.kc_won ? "Victoire" : "D\u00e9faite"}
+                      {match.kc_won ? t("p6_home2.victory") : t("p6_home2.defeat")}
                     </div>
                     <span className="text-[10px] text-white/50 font-medium">
                       {date.toLocaleDateString("fr-FR", {
@@ -128,7 +132,7 @@ export function HomeFilteredContent({ allMatches }: Props) {
                           </span>
                         </p>
                         <p className="font-data text-[10px] text-white/40 mt-1">
-                          Kills : <span className="text-[var(--green)]">{totalKc}</span>-
+                          {t("p6_home2.kills_label")} <span className="text-[var(--green)]">{totalKc}</span>-
                           <span className="text-[var(--red)]">{totalOpp}</span>
                         </p>
                       </div>
@@ -158,7 +162,7 @@ export function HomeFilteredContent({ allMatches }: Props) {
                     <div className="flex items-center justify-center gap-2 text-[10px] text-white/50">
                       <span>{match.stage}</span>
                       <span className="text-white/20">&middot;</span>
-                      <span>Bo{match.best_of}</span>
+                      <span>{t("p6_home2.bo_n", { n: match.best_of })}</span>
                     </div>
                   </div>
 

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { ClipCard } from "@/components/tcg/ClipCard";
 import { computeRarity } from "@/lib/tcg/rarity";
 import { getPublishedKills } from "@/lib/supabase/kills";
+import { getServerT } from "@/lib/i18n/server-lang";
 
 /**
  * Homepage strip — surfaces the 4 rarest cards as a TCG showcase.
@@ -40,19 +41,19 @@ export async function HomeRareCards() {
 
   if (ranked.length === 0) return null;
 
+  const { t } = await getServerT();
+
   return (
     <section className="relative py-16 md:py-20">
       <div className="px-4 md:px-8 max-w-7xl mx-auto mb-10 text-center">
         <p className="font-data text-[10px] uppercase tracking-[0.3em] text-[var(--gold)]/70 mb-3">
-          Cartes du moment
+          {t("p6_home1.rare_kicker")}
         </p>
         <h2 className="font-display text-4xl md:text-5xl font-black mb-4">
-          <span className="text-shimmer">CARTES L&Eacute;GENDAIRES</span>
+          <span className="text-shimmer">{t("p6_home1.rare_title")}</span>
         </h2>
         <p className="max-w-2xl mx-auto text-sm md:text-base text-white/65 leading-relaxed">
-          Chaque clip est un artefact. Raret&eacute; calcul&eacute;e depuis le score IA, le multi-kill,
-          le contexte du fight. Les 4 cartes les mieux not&eacute;es du backlog
-          actuel &mdash; mises &agrave; jour live au fil des matchs.
+          {t("p6_home1.rare_description")}
         </p>
       </div>
 
@@ -85,7 +86,7 @@ export async function HomeRareCards() {
             href="/clips"
             className="group inline-flex items-center gap-3 rounded-full border border-[var(--gold)]/35 bg-[var(--bg-surface)]/70 backdrop-blur-md px-6 py-3 font-display text-xs font-bold uppercase tracking-[0.25em] text-[var(--gold)] transition-all hover:bg-[var(--gold)]/10 hover:border-[var(--gold)]/60 hover:scale-[1.02]"
           >
-            Explorer tous les clips
+            {t("p6_home1.rare_explore_all")}
             <svg
               className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5"
               fill="none"

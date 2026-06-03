@@ -27,6 +27,7 @@ import {
   type TeamRow,
 } from "@/lib/teams-loader";
 import { JsonLd, breadcrumbLD } from "@/lib/seo/jsonld";
+import { getServerT, type ServerTranslateFn } from "@/lib/i18n/server-lang";
 
 export const revalidate = 1800; // Wave 13d : league overview is stable
 
@@ -63,6 +64,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
 export default async function LeaguePage({ params }: Props) {
   const { slug } = await params;
+  const { t } = await getServerT();
   const league = await getLeagueBySlug(slug);
   if (!league) notFound();
 
@@ -95,7 +97,7 @@ export default async function LeaguePage({ params }: Props) {
       {/* ─── Header ───────────────────────────────────────────── */}
       <header className="border-b border-[var(--border-gold)]/40 bg-gradient-to-b from-[var(--bg-elevated)] to-[var(--bg-primary)]">
         <div className="mx-auto max-w-5xl px-4 py-10">
-          <nav aria-label="Fil d'Ariane" className="mb-4">
+          <nav aria-label={t("p6_pagesa.breadcrumb_aria")} className="mb-4">
             <ol className="flex items-center gap-1.5 text-xs text-[var(--text-muted)]">
               {crumbs.map((c, i) => (
                 <li key={c.url} className="flex items-center gap-1.5">
@@ -124,11 +126,11 @@ export default async function LeaguePage({ params }: Props) {
       {/* ─── Teams ────────────────────────────────────────────── */}
       <section className="mx-auto max-w-5xl px-4 py-10">
         <h2 className="font-display text-xl font-bold text-[var(--text-primary)] mb-4">
-          Équipes
+          {t("p6_pagesa.teams_heading")}
         </h2>
         {teams.length === 0 ? (
           <p className="text-sm text-[var(--text-muted)]">
-            Aucune équipe rattachée à {league.short_name} pour le moment.
+            {t("p6_pagesa.teams_empty", { league: league.short_name })}
           </p>
         ) : (
           <div className="overflow-x-auto">
@@ -136,13 +138,13 @@ export default async function LeaguePage({ params }: Props) {
               <thead className="text-left">
                 <tr className="border-b border-[var(--border-gold)]/40">
                   <th className="font-data text-[10px] uppercase tracking-widest text-[var(--gold)]/70 py-2 pr-3">
-                    Code
+                    {t("p6_pagesa.col_code")}
                   </th>
                   <th className="font-data text-[10px] uppercase tracking-widest text-[var(--gold)]/70 py-2 pr-3">
-                    Équipe
+                    {t("p6_pagesa.col_team")}
                   </th>
                   <th className="font-data text-[10px] uppercase tracking-widest text-[var(--gold)]/70 py-2 pr-3 hidden sm:table-cell">
-                    Région
+                    {t("p6_pagesa.col_region")}
                   </th>
                 </tr>
               </thead>
@@ -185,17 +187,17 @@ export default async function LeaguePage({ params }: Props) {
       {/* ─── Recent matches ───────────────────────────────────── */}
       <section className="mx-auto max-w-5xl px-4 pb-10">
         <h2 className="font-display text-xl font-bold text-[var(--text-primary)] mb-4">
-          Derniers matchs
+          {t("p6_pagesa.recent_matches_heading")}
         </h2>
         {matches.length === 0 ? (
           <p className="text-sm text-[var(--text-muted)]">
-            Aucun match programmé pour {league.short_name} pour le moment.
+            {t("p6_pagesa.matches_empty", { league: league.short_name })}
           </p>
         ) : (
           <ul className="divide-y divide-[var(--border-subtle)] border border-[var(--border-subtle)] rounded-xl overflow-hidden">
             {matches.map((m: LeagueMatchCard) => (
               <li key={m.external_id}>
-                <MatchRow match={m} />
+                <MatchRow match={m} t={t} />
               </li>
             ))}
           </ul>
@@ -214,7 +216,7 @@ export default async function LeaguePage({ params }: Props) {
   );
 }
 
-function MatchRow({ match }: { match: LeagueMatchCard }) {
+function MatchRow({ match, t }: { match: LeagueMatchCard; t: ServerTranslateFn }) {
   const date = match.scheduled_at ? new Date(match.scheduled_at) : null;
   const dateLabel = date
     ? date.toLocaleDateString("fr-FR", { year: "numeric", month: "short", day: "numeric" })
@@ -230,7 +232,7 @@ function MatchRow({ match }: { match: LeagueMatchCard }) {
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 text-sm text-[var(--text-primary)]">
             <TeamBadge team={blue} winner={match.winner_code === blue?.code} />
-            <span className="text-[var(--text-muted)] text-xs">vs</span>
+            <span className="text-[var(--text-muted)] text-xs">{t("p6_pagesa.vs")}</span>
             <TeamBadge team={red} winner={match.winner_code === red?.code} />
           </div>
         </div>
