@@ -31,6 +31,7 @@ import {
   getLeaderboardChampions,
 } from "@/lib/supabase/vs-leaderboard";
 import { JsonLd, breadcrumbLD } from "@/lib/seo/jsonld";
+import { getServerT } from "@/lib/i18n/server-lang";
 
 import { VSLeaderboard } from "@/components/vs-leaderboard/VSLeaderboard";
 
@@ -58,6 +59,8 @@ export const metadata: Metadata = {
 };
 
 export default async function VSLeaderboardPage() {
+  const { t } = await getServerT();
+
   // ─── Parallel pre-fetch ────────────────────────────────────────────
   const [initialRows, initialStats, champions] = await Promise.all([
     getEloLeaderboard({ limit: 50, offset: 0, minBattles: 5 }),
@@ -130,26 +133,26 @@ export default async function VSLeaderboardPage() {
 
         <div className="relative z-10 mx-auto max-w-7xl px-4 pt-12 pb-12 md:pt-20 md:pb-16 text-center">
           <nav
-            aria-label="Fil d'Ariane"
+            aria-label={t("p_vslb.breadcrumb_aria")}
             className="mb-6 flex items-center justify-center gap-2 text-xs text-white/55"
           >
             <Link href="/" className="hover:text-[var(--gold)] transition-colors">
-              Accueil
+              {t("p_vslb.breadcrumb_home")}
             </Link>
             <span aria-hidden className="text-white/25">
               ◆
             </span>
             <Link href="/vs" className="hover:text-[var(--gold)] transition-colors">
-              VS Roulette
+              {t("p_vslb.breadcrumb_vs")}
             </Link>
             <span aria-hidden className="text-white/25">
               ◆
             </span>
-            <span className="text-[var(--gold)]">Classement</span>
+            <span className="text-[var(--gold)]">{t("p_vslb.breadcrumb_current")}</span>
           </nav>
 
           <p className="font-data text-[11px] uppercase tracking-[0.4em] text-[var(--gold)]/70 mb-3">
-            Le verdict du Blue Wall
+            {t("p_vslb.hero_eyebrow")}
           </p>
           <h1
             className="font-display font-black tracking-tight leading-[0.85] text-4xl md:text-6xl lg:text-[7rem]"
@@ -160,29 +163,29 @@ export default async function VSLeaderboardPage() {
               letterSpacing: "-0.02em",
             }}
           >
-            CLASSEMENT <span className="text-shimmer">ELO</span>
+            {t("p_vslb.hero_title_pre")} <span className="text-shimmer">{t("p_vslb.hero_title_elo")}</span>
           </h1>
           <p className="mt-5 mx-auto max-w-2xl text-base md:text-lg text-white/80 font-medium">
-            Les kills les plus survotés du VS Roulette ·{" "}
+            {t("p_vslb.hero_subtitle")} ·{" "}
             <span className="text-[var(--gold-bright)]">
-              ELO 1500 = base
+              {t("p_vslb.hero_subtitle_accent")}
             </span>
           </p>
 
           {/* Bilan strip */}
           <div className="glass gold-glow mt-7 inline-flex items-center gap-4 md:gap-6 flex-wrap justify-center rounded-2xl border border-[var(--border-gold)] px-5 py-3">
             <Bilan
-              label="Duels totaux"
+              label={t("p_vslb.bilan_battles")}
               value={initialStats.total_battles.toLocaleString("fr-FR")}
             />
             <BilanSep />
             <Bilan
-              label="Kills classés"
+              label={t("p_vslb.bilan_ranked_kills")}
               value={initialStats.total_kills_with_battles.toLocaleString("fr-FR")}
               accent="var(--gold-bright)"
             />
             <BilanSep />
-            <Bilan label="Seuil" value="≥ 5 batailles" small />
+            <Bilan label={t("p_vslb.bilan_threshold")} value={t("p_vslb.bilan_threshold_value")} small />
           </div>
 
           <div className="mt-7 flex items-center justify-center gap-3 flex-wrap">
@@ -194,13 +197,13 @@ export default async function VSLeaderboardPage() {
                   "0 14px 30px rgba(200,170,110,0.35), inset 0 1px 0 rgba(255,255,255,0.4)",
               }}
             >
-              Lance la roulette
+              {t("p_vslb.cta_launch")}
             </Link>
             <Link
               href="/scroll"
               className="rounded-xl border border-white/25 bg-black/30 px-5 py-3 font-display text-xs font-bold uppercase tracking-[0.25em] text-white/75 hover:border-white/55 hover:text-white transition-all"
             >
-              Mode scroll
+              {t("p_vslb.cta_scroll")}
             </Link>
           </div>
         </div>
@@ -216,7 +219,7 @@ export default async function VSLeaderboardPage() {
 
       {/* ─── Riot disclaimer ───────────────────────────────────────── */}
       <p
-        aria-label="Riot Games disclaimer"
+        aria-label={t("p_vslb.riot_disclaimer_aria")}
         className="px-4 py-6 text-center text-[9px] uppercase tracking-widest text-white/30"
       >
         Not endorsed by Riot Games. League of Legends © Riot Games.

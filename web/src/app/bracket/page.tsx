@@ -19,6 +19,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 import { JsonLd, breadcrumbLD } from "@/lib/seo/jsonld";
+import { getServerT } from "@/lib/i18n/server-lang";
 import {
   getCurrentBracket,
   getPastWinners,
@@ -51,6 +52,8 @@ export const metadata: Metadata = {
 };
 
 export default async function BracketPage() {
+  const { t } = await getServerT();
+
   const [bundle, pastWinners] = await Promise.all([
     getCurrentBracket(),
     getPastWinners(12),
@@ -76,11 +79,11 @@ export default async function BracketPage() {
       <JsonLd data={breadcrumb} />
 
       <nav
-        aria-label="Fil d'Ariane"
+        aria-label={t("p_bracket.breadcrumb_aria")}
         className="mx-auto max-w-7xl px-5 pt-6 flex items-center justify-start gap-2 text-xs text-[var(--text-muted)]"
       >
         <Link href="/" className="hover:text-[var(--gold)] transition-colors">
-          Accueil
+          {t("p_bracket.breadcrumb_home")}
         </Link>
         <span
           aria-hidden
@@ -93,7 +96,7 @@ export default async function BracketPage() {
             opacity: 0.5,
           }}
         />
-        <span className="text-[var(--gold)]">Tournoi du Mois</span>
+        <span className="text-[var(--gold)]">{t("p_bracket.breadcrumb_current")}</span>
       </nav>
 
       <BracketView bundle={bundle} pastWinners={pastWinners} />

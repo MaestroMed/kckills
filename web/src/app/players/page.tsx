@@ -6,6 +6,7 @@ import { championIconUrl, championLoadingUrl } from "@/lib/constants";
 import { PLAYER_PHOTOS } from "@/lib/kc-assets";
 import { ALUMNI } from "@/lib/alumni";
 import { Breadcrumb } from "@/components/Breadcrumb";
+import { getServerT } from "@/lib/i18n/server-lang";
 
 export const revalidate = 1800; // Wave 13d : DB pressure (roster stable)
 export const metadata: Metadata = {
@@ -22,7 +23,8 @@ export const metadata: Metadata = {
   },
 };
 
-export default function PlayersPage() {
+export default async function PlayersPage() {
+  const { t } = await getServerT();
   const data = loadRealData();
 
   const data2026 = { ...data, matches: data.matches.filter((m) => m.date >= "2026-01-01") };
@@ -81,22 +83,20 @@ export default function PlayersPage() {
         <div className="relative max-w-7xl mx-auto">
           <Breadcrumb
             items={[
-              { label: "Accueil", href: "/" },
-              { label: "Joueurs" },
+              { label: t("p_player.breadcrumb_home"), href: "/" },
+              { label: t("p_player.breadcrumb_players") },
             ]}
           />
 
           <div className="mt-10 text-center">
             <p className="font-data text-[10px] uppercase tracking-[0.35em] text-[var(--gold)]/70 mb-4">
-              {roster2026.length} actifs · {ALUMNI.length} alumni
+              {t("p_player.actives_alumni_count", { actives: roster2026.length, alumni: ALUMNI.length })}
             </p>
             <h1 className="font-display text-5xl md:text-7xl lg:text-8xl font-black leading-none">
-              <span className="text-shimmer">JOUEURS</span>
+              <span className="text-shimmer">{t("p_player.players_title")}</span>
             </h1>
             <p className="mt-6 max-w-2xl mx-auto text-base md:text-lg text-white/70 leading-relaxed">
-              Roster Karmine Corp actuel + anciens. Stats, KDA,
-              champion pool, historique. Clique une carte pour plonger dans
-              les clips et la forme du joueur.
+              {t("p_player.players_intro")}
             </p>
           </div>
         </div>
@@ -107,17 +107,17 @@ export default function PlayersPage() {
         <div className="flex items-end justify-between gap-4 mb-6 flex-wrap">
           <div>
             <p className="font-data text-[10px] uppercase tracking-[0.3em] font-bold text-[var(--gold)] mb-1.5">
-              ◆ Actifs
+              ◆ {t("p_player.actives")}
             </p>
             <h2 className="font-display text-3xl md:text-4xl font-black text-white">
-              Roster <span className="text-gold-gradient">2026</span>
+              {t("p_player.roster")} <span className="text-gold-gradient">2026</span>
             </h2>
           </div>
           <Link
             href="/alumni"
             className="group rounded-full border border-[var(--border-gold)] bg-[var(--bg-surface)] px-4 py-1.5 text-[11px] font-bold uppercase tracking-widest text-[var(--text-muted)] hover:border-[var(--gold)]/60 hover:text-[var(--gold)] transition-all inline-flex items-center gap-2"
           >
-            <span>Voir les alumni</span>
+            <span>{t("p_player.see_alumni")}</span>
             <svg
               className="h-3 w-3 transition-transform group-hover:translate-x-0.5"
               fill="none"
@@ -182,25 +182,25 @@ export default function PlayersPage() {
                         <p className="font-data text-lg font-bold text-[var(--green)]">
                           {player.totalKills}
                         </p>
-                        <p className="text-[9px] text-[var(--text-muted)]">KILLS</p>
+                        <p className="text-[9px] text-[var(--text-muted)]">{t("p_player.kills")}</p>
                       </div>
                       <div>
                         <p className="font-data text-lg font-bold text-[var(--red)]">
                           {player.totalDeaths}
                         </p>
-                        <p className="text-[9px] text-[var(--text-muted)]">DEATHS</p>
+                        <p className="text-[9px] text-[var(--text-muted)]">{t("p_player.deaths")}</p>
                       </div>
                       <div>
                         <p className="font-data text-lg font-bold">
                           {player.totalAssists}
                         </p>
-                        <p className="text-[9px] text-[var(--text-muted)]">ASSISTS</p>
+                        <p className="text-[9px] text-[var(--text-muted)]">{t("p_player.assists")}</p>
                       </div>
                       <div>
                         <p className="font-data text-lg font-bold text-[var(--gold)]">
                           {kda}
                         </p>
-                        <p className="text-[9px] text-[var(--text-muted)]">KDA</p>
+                        <p className="text-[9px] text-[var(--text-muted)]">{t("p_player.kda")}</p>
                       </div>
                     </div>
 
@@ -219,7 +219,7 @@ export default function PlayersPage() {
                         ))}
                       </div>
                       <span className="font-data text-[10px] text-[var(--text-muted)] ml-auto">
-                        {player.gamesPlayed} games
+                        {t("p_player.games_count", { n: player.gamesPlayed })}
                       </span>
                     </div>
                   </div>
@@ -236,17 +236,17 @@ export default function PlayersPage() {
           <div className="flex items-end justify-between gap-4 mb-6 flex-wrap">
             <div>
               <p className="font-data text-[10px] uppercase tracking-[0.3em] font-bold text-[var(--text-muted)] mb-1.5">
-                ◆ Récents départs
+                ◆ {t("p_player.recent_departures")}
               </p>
               <h2 className="font-display text-2xl md:text-3xl font-black text-white/80">
-                Saison <span className="text-[var(--cyan)]">2025</span>
+                {t("p_player.season")} <span className="text-[var(--cyan)]">2025</span>
               </h2>
             </div>
             <Link
               href="/alumni"
               className="text-xs text-[var(--text-muted)] hover:text-[var(--gold)] uppercase tracking-widest font-bold"
             >
-              Historique complet →
+              {t("p_player.full_history_arrow")}
             </Link>
           </div>
 
@@ -271,7 +271,7 @@ export default function PlayersPage() {
                   <div className="flex-1">
                     <p className="font-medium">{player.name}</p>
                     <p className="text-[10px] text-[var(--text-muted)]">
-                      {displayRole(player.role)} · {player.gamesPlayed}G
+                      {displayRole(player.role)} · {t("p_player.games_short", { n: player.gamesPlayed })}
                     </p>
                   </div>
                   <p className="font-data text-sm">
@@ -293,16 +293,14 @@ export default function PlayersPage() {
           <div className="flex flex-col md:flex-row items-start md:items-center gap-6">
             <div className="flex-1">
               <p className="font-data text-[10px] uppercase tracking-[0.3em] text-[var(--gold)]/70 mb-2">
-                ★ La légende
+                ★ {t("p_player.legend_eyebrow")}
               </p>
               <h2 className="font-display text-2xl md:text-3xl font-black text-white mb-3">
-                {ALUMNI.length} joueurs ont porté le{" "}
-                <span className="text-gold-gradient">maillot KC</span>
+                {t("p_player.players_wore_count", { n: ALUMNI.length })}{" "}
+                <span className="text-gold-gradient">{t("p_player.kc_jersey")}</span>
               </h2>
               <p className="text-sm md:text-base text-[var(--text-secondary)] leading-relaxed max-w-2xl">
-                Rekkles, Targamas, Cabochard, Saken, Vetheo, Yike, Hantera…
-                Parcours individuels, ères, champions signatures et clips
-                historiques. L&apos;histoire complète de la line Karmine Corp.
+                {t("p_player.alumni_teaser_body")}
               </p>
             </div>
 
@@ -310,7 +308,7 @@ export default function PlayersPage() {
               href="/alumni"
               className="rounded-xl bg-[var(--gold)] px-6 py-3 font-display text-sm font-black uppercase tracking-widest text-black hover:bg-[var(--gold-bright)] transition-all whitespace-nowrap"
             >
-              Hall of Alumni →
+              {t("p_player.hall_of_alumni")}
             </Link>
           </div>
 
@@ -327,7 +325,7 @@ export default function PlayersPage() {
             ))}
             {ALUMNI.length > 12 && (
               <span className="rounded-full border border-dashed border-[var(--border-gold)] px-3 py-1 text-[11px] text-[var(--text-disabled)]">
-                +{ALUMNI.length - 12} autres
+                {t("p_player.n_others", { n: ALUMNI.length - 12 })}
               </span>
             )}
           </div>

@@ -4,6 +4,7 @@ import { useState } from "react";
 import Image from "next/image";
 import { m } from "motion/react";
 import { Modal } from "@/components/ui/FocusTrapModal";
+import { useT } from "@/lib/i18n/use-lang";
 import type { Era, EraLink } from "@/lib/eras";
 
 const LINK_ICONS: Record<string, string> = {
@@ -28,6 +29,7 @@ function youtubeThumb(videoId: string): string {
 }
 
 export function EraClipsSection({ era }: { era: Era }) {
+  const t = useT();
   const [activeClip, setActiveClip] = useState<string | null>(null);
 
   const directClips = era.links.filter(
@@ -46,7 +48,7 @@ export function EraClipsSection({ era }: { era: Era }) {
           className="font-data text-[10px] uppercase tracking-[0.3em] font-bold"
           style={{ color: era.color }}
         >
-          Clips de l&apos;&eacute;poque
+          {t("p_era.clips_heading")}
         </span>
         <span className="h-px flex-1" style={{ backgroundColor: `${era.color}20` }} />
       </div>
@@ -98,7 +100,7 @@ export function EraClipsSection({ era }: { era: Era }) {
                     {link.label}
                   </p>
                   <p className="mt-1 text-[10px] text-white/50 uppercase tracking-wider">
-                    YouTube &middot; Clip officiel
+                    {t("p_era.clip_official_caption")}
                   </p>
                 </div>
               </m.button>
@@ -111,7 +113,7 @@ export function EraClipsSection({ era }: { era: Era }) {
       {searchLinks.length > 0 && (
         <div>
           <p className="font-data text-[10px] uppercase tracking-[0.25em] text-white/40 mb-4">
-            Recherches YouTube ({searchLinks.length})
+            {t("p_era.youtube_searches", { n: searchLinks.length })}
           </p>
           <div className="grid gap-3 md:grid-cols-2">
             {searchLinks.map((link, i) => (
@@ -125,7 +127,7 @@ export function EraClipsSection({ era }: { era: Era }) {
       {otherLinks.length > 0 && (
         <div className="mt-8">
           <p className="font-data text-[10px] uppercase tracking-[0.25em] text-white/40 mb-4">
-            Ressources
+            {t("p_era.resources")}
           </p>
           <div className="flex flex-wrap gap-2">
             {otherLinks.map((link, i) => (
@@ -148,7 +150,7 @@ export function EraClipsSection({ era }: { era: Era }) {
       <Modal
         open={activeClip !== null}
         onClose={() => setActiveClip(null)}
-        label="Clip vidéo"
+        label={t("p_era.lightbox_label")}
         showCloseButton={false}
         zIndexClassName="z-[200]"
         scrimClassName="bg-black/95 backdrop-blur-xl"
@@ -170,14 +172,14 @@ export function EraClipsSection({ era }: { era: Era }) {
                 ? `https://www.youtube.com/embed/${activeClip}?autoplay=1&rel=0`
                 : undefined
             }
-            title="YouTube clip"
+            title={t("p_era.iframe_title")}
             allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
             allowFullScreen
           />
           <button
             onClick={() => setActiveClip(null)}
             className="absolute -top-12 right-0 flex h-10 w-10 items-center justify-center rounded-full border border-white/20 bg-black/60 text-white hover:bg-white/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--gold)] focus-visible:outline-offset-2"
-            aria-label="Fermer"
+            aria-label={t("common.close")}
           >
             <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -190,6 +192,7 @@ export function EraClipsSection({ era }: { era: Era }) {
 }
 
 function SearchLinkCard({ link, color }: { link: EraLink; color: string }) {
+  const t = useT();
   return (
     <m.a
       href={link.url}
@@ -213,7 +216,7 @@ function SearchLinkCard({ link, color }: { link: EraLink; color: string }) {
       <div className="flex-1 min-w-0">
         <p className="font-medium text-sm text-white truncate">{link.label}</p>
         <p className="text-[10px] text-white/40 uppercase tracking-wider mt-0.5">
-          Rechercher sur YouTube
+          {t("p_era.search_on_youtube")}
         </p>
       </div>
       <svg

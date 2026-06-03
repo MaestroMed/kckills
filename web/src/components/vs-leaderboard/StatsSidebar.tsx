@@ -22,6 +22,7 @@ import Image from "next/image";
 
 import { championLoadingUrl } from "@/lib/constants";
 import { winRatePct } from "@/lib/vs-roulette";
+import { useT } from "@/lib/i18n/use-lang";
 import type {
   EloLeaderboardStats,
   FeaturedEloKill,
@@ -37,9 +38,10 @@ interface StatsSidebarProps {
 // ════════════════════════════════════════════════════════════════════
 
 export function StatsSidebar({ stats, sessionVoteCount }: StatsSidebarProps) {
+  const t = useT();
   return (
     <aside
-      aria-label="Statistiques du classement"
+      aria-label={t("p_vslb.side_stats_aria")}
       className="hidden lg:block sticky top-32 self-start space-y-3"
     >
       <SummaryCard
@@ -47,47 +49,47 @@ export function StatsSidebar({ stats, sessionVoteCount }: StatsSidebarProps) {
         totalKills={stats.total_kills_with_battles}
       />
       <FeaturedCard
-        title="Vos votes"
-        subtitle="Sur cette session"
+        title={t("p_vslb.side_your_votes")}
+        subtitle={t("p_vslb.side_this_session")}
         accent="var(--cyan)"
         bigNumber={String(sessionVoteCount)}
-        bigLabel={sessionVoteCount === 1 ? "duel voté" : "duels votés"}
+        bigLabel={sessionVoteCount === 1 ? t("p_vslb.side_duel_voted_one") : t("p_vslb.side_duel_voted_many")}
         cta={
           <Link
             href="/vs"
             className="rounded-md border border-[var(--cyan)]/45 bg-[var(--cyan)]/10 px-3 py-1 font-display text-[9px] font-bold uppercase tracking-[0.25em] text-[var(--cyan)] hover:border-[var(--cyan)]"
           >
-            Voter encore
+            {t("p_vslb.side_vote_again")}
           </Link>
         }
       />
       <FeaturedCard
-        title="Le plus actif"
-        subtitle="Le kill le plus joué"
+        title={t("p_vslb.side_most_active")}
+        subtitle={t("p_vslb.side_most_played_kill")}
         accent="var(--gold)"
         kill={stats.most_active}
         metric={(k) => ({
-          label: "Batailles",
+          label: t("p_vslb.side_metric_battles"),
           value: String(k.battles_count),
         })}
       />
       <FeaturedCard
-        title="Le plus contesté"
-        subtitle="Win rate proche de 50%"
+        title={t("p_vslb.side_most_contested")}
+        subtitle={t("p_vslb.side_winrate_near_50")}
         accent="var(--orange)"
         kill={stats.most_contested}
         metric={(k) => ({
-          label: "Win rate",
+          label: t("p_vslb.side_metric_winrate"),
           value: `${winRatePct(k.wins, k.battles_count)}%`,
         })}
       />
       <FeaturedCard
-        title="Le plus dominant"
-        subtitle="Win rate max (min 20 batailles)"
+        title={t("p_vslb.side_most_dominant")}
+        subtitle={t("p_vslb.side_winrate_max_min20")}
         accent="var(--green)"
         kill={stats.most_dominant}
         metric={(k) => ({
-          label: "Win rate",
+          label: t("p_vslb.side_metric_winrate"),
           value: `${winRatePct(k.wins, k.battles_count)}%`,
         })}
       />
@@ -100,11 +102,12 @@ export function StatsSidebar({ stats, sessionVoteCount }: StatsSidebarProps) {
 // ════════════════════════════════════════════════════════════════════
 
 export function StatsAccordion({ stats, sessionVoteCount }: StatsSidebarProps) {
+  const t = useT();
   const [open, setOpen] = useState(false);
 
   return (
     <section
-      aria-label="Statistiques du classement (mobile)"
+      aria-label={t("p_vslb.side_stats_aria_mobile")}
       className="lg:hidden mx-auto max-w-3xl px-3 md:px-6 mt-4 mb-8"
     >
       <button
@@ -125,7 +128,7 @@ export function StatsAccordion({ stats, sessionVoteCount }: StatsSidebarProps) {
             }}
           />
           <span className="font-display text-sm font-black uppercase tracking-[0.15em] text-[var(--gold-bright)]">
-            Insights & ta progression
+            {t("p_vslb.side_insights_progress")}
           </span>
         </div>
         <span aria-hidden className="text-[var(--gold)] text-sm">
@@ -139,44 +142,44 @@ export function StatsAccordion({ stats, sessionVoteCount }: StatsSidebarProps) {
             totalKills={stats.total_kills_with_battles}
           />
           <FeaturedCard
-            title="Vos votes"
-            subtitle="Sur cette session"
+            title={t("p_vslb.side_your_votes")}
+            subtitle={t("p_vslb.side_this_session")}
             accent="var(--cyan)"
             bigNumber={String(sessionVoteCount)}
-            bigLabel={sessionVoteCount === 1 ? "duel voté" : "duels votés"}
+            bigLabel={sessionVoteCount === 1 ? t("p_vslb.side_duel_voted_one") : t("p_vslb.side_duel_voted_many")}
             cta={
               <Link
                 href="/vs"
                 className="rounded-md border border-[var(--cyan)]/45 bg-[var(--cyan)]/10 px-3 py-1 font-display text-[9px] font-bold uppercase tracking-[0.25em] text-[var(--cyan)]"
               >
-                Voter
+                {t("p_vslb.side_vote")}
               </Link>
             }
           />
           <FeaturedCard
-            title="Le plus actif"
-            subtitle="Le kill le plus joué"
+            title={t("p_vslb.side_most_active")}
+            subtitle={t("p_vslb.side_most_played_kill")}
             accent="var(--gold)"
             kill={stats.most_active}
-            metric={(k) => ({ label: "Batailles", value: String(k.battles_count) })}
+            metric={(k) => ({ label: t("p_vslb.side_metric_battles"), value: String(k.battles_count) })}
           />
           <FeaturedCard
-            title="Le plus contesté"
-            subtitle="Win rate proche de 50%"
+            title={t("p_vslb.side_most_contested")}
+            subtitle={t("p_vslb.side_winrate_near_50")}
             accent="var(--orange)"
             kill={stats.most_contested}
             metric={(k) => ({
-              label: "Win rate",
+              label: t("p_vslb.side_metric_winrate"),
               value: `${winRatePct(k.wins, k.battles_count)}%`,
             })}
           />
           <FeaturedCard
-            title="Le plus dominant"
-            subtitle="Win rate max"
+            title={t("p_vslb.side_most_dominant")}
+            subtitle={t("p_vslb.side_winrate_max")}
             accent="var(--green)"
             kill={stats.most_dominant}
             metric={(k) => ({
-              label: "Win rate",
+              label: t("p_vslb.side_metric_winrate"),
               value: `${winRatePct(k.wins, k.battles_count)}%`,
             })}
           />
@@ -197,6 +200,7 @@ function SummaryCard({
   totalBattles: number;
   totalKills: number;
 }) {
+  const t = useT();
   return (
     <div
       className="rounded-2xl border border-[var(--border-gold)] bg-[var(--bg-surface)]/65 backdrop-blur-md p-4"
@@ -205,7 +209,7 @@ function SummaryCard({
       }}
     >
       <p className="font-data text-[9px] uppercase tracking-[0.3em] text-[var(--gold)]/70 mb-2">
-        Bilan global
+        {t("p_vslb.side_global_summary")}
       </p>
       <div className="flex items-baseline justify-between gap-3">
         <div>
@@ -213,7 +217,7 @@ function SummaryCard({
             {totalBattles.toLocaleString("fr-FR")}
           </p>
           <p className="font-data text-[10px] uppercase tracking-widest text-white/55">
-            duels au total
+            {t("p_vslb.side_total_duels")}
           </p>
         </div>
         <div className="text-right">
@@ -221,7 +225,7 @@ function SummaryCard({
             {totalKills.toLocaleString("fr-FR")}
           </p>
           <p className="font-data text-[10px] uppercase tracking-widest text-white/55">
-            kills classés
+            {t("p_vslb.side_ranked_kills")}
           </p>
         </div>
       </div>
@@ -252,6 +256,7 @@ function FeaturedCard({
   bigLabel?: string;
   cta?: React.ReactNode;
 }) {
+  const t = useT();
   const isKill = kill && metric;
 
   return (
@@ -292,7 +297,7 @@ function FeaturedCard({
 
       {!isKill && bigNumber === undefined && !kill ? (
         <p className="font-data text-[10px] uppercase tracking-widest text-white/35 py-4 text-center">
-          Pas encore assez de données
+          {t("p_vslb.side_not_enough_data")}
         </p>
       ) : null}
     </div>
@@ -308,6 +313,7 @@ function KillSpotlight({
   accent: string;
   metric: { label: string; value: string };
 }) {
+  const t = useT();
   const killerName = kill.killer_name ?? kill.killer_champion ?? "?";
   const victimName = kill.victim_name ?? kill.victim_champion ?? "?";
   const thumb =
@@ -317,7 +323,7 @@ function KillSpotlight({
     <Link
       href={`/scroll?kill=${kill.kill_id}`}
       className="flex items-center gap-3 -m-1 p-1 rounded-lg hover:bg-white/[0.03] transition-colors group"
-      aria-label={`Voir le clip ${killerName} contre ${victimName}`}
+      aria-label={t("p_vslb.side_watch_clip_matchup", { killer: killerName, victim: victimName })}
     >
       <span
         className="relative flex-shrink-0 rounded-md overflow-hidden border border-white/10 group-hover:border-[var(--gold)]/50 transition-colors"

@@ -11,6 +11,7 @@ import { getQuotesByEra } from "@/lib/quotes";
 import { QuoteRow } from "@/components/QuoteCard";
 import { PortraitCubeMorph } from "@/components/PortraitCubeMorph";
 import { countKillsByEra } from "@/lib/supabase/kills";
+import { getServerT, type ServerTranslateFn } from "@/lib/i18n/server-lang";
 
 export const revalidate = 3600;
 
@@ -84,6 +85,7 @@ export default async function EraPage({ params }: Props) {
   const era = getEraById(id);
   if (!era) notFound();
 
+  const { t } = await getServerT();
   const data = loadRealData();
   const periodMatches = matchesInEra(data.matches, era);
   const wins = periodMatches.filter((m) => m.kc_won).length;
@@ -177,11 +179,11 @@ export default async function EraPage({ params }: Props) {
         {/* Breadcrumb */}
         <nav className="absolute top-6 left-6 z-20 flex items-center gap-2 text-xs text-white/50">
           <Link href="/" className="hover:text-[var(--gold)]">
-            Accueil
+            {t("p_era.breadcrumb_home")}
           </Link>
           <span className="text-[var(--gold)]/30">{"\u25C6"}</span>
           <Link href="/#timeline" className="hover:text-[var(--gold)]">
-            &Eacute;poques
+            {t("p_era.breadcrumb_eras")}
           </Link>
           <span className="text-[var(--gold)]/30">{"\u25C6"}</span>
           <span className="text-[var(--gold)]">{era.label}</span>
@@ -270,7 +272,7 @@ export default async function EraPage({ params }: Props) {
             {periodMatches.length > 0 && (
               <>
                 <div className="rounded-xl border border-white/10 bg-black/30 backdrop-blur-sm px-4 py-3">
-                  <p className="font-data text-xs text-white/40 uppercase tracking-wider">Matchs</p>
+                  <p className="font-data text-xs text-white/40 uppercase tracking-wider">{t("p_era.stat_matches")}</p>
                   <p className="font-data text-xl font-black text-white">
                     <span className="text-[var(--green)]">{wins}</span>
                     <span className="text-white/30 mx-1">-</span>
@@ -278,7 +280,7 @@ export default async function EraPage({ params }: Props) {
                   </p>
                 </div>
                 <div className="rounded-xl border border-white/10 bg-black/30 backdrop-blur-sm px-4 py-3">
-                  <p className="font-data text-xs text-white/40 uppercase tracking-wider">Kills KC</p>
+                  <p className="font-data text-xs text-white/40 uppercase tracking-wider">{t("p_era.stat_kills_kc")}</p>
                   <p className="font-data text-xl font-black text-[var(--gold)]">{totalKills}</p>
                 </div>
               </>
@@ -287,10 +289,10 @@ export default async function EraPage({ params }: Props) {
               <Link
                 href={`/scroll?era=${era.id}`}
                 className="rounded-xl border border-white/10 bg-black/30 backdrop-blur-sm px-4 py-3 hover:bg-black/50 hover:border-white/30 transition-all focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--gold)]"
-                aria-label={`Voir les ${publishedClips} clips de l'époque ${era.label} dans le scroll`}
+                aria-label={t("p_era.clips_published_aria", { n: publishedClips, era: era.label })}
               >
                 <p className="font-data text-xs text-white/40 uppercase tracking-wider">
-                  Clips publiés
+                  {t("p_era.stat_clips_published")}
                 </p>
                 <p
                   className="font-data text-xl font-black tabular-nums"
@@ -302,7 +304,7 @@ export default async function EraPage({ params }: Props) {
             )}
             {era.viewership && (
               <div className="rounded-xl border border-white/10 bg-black/30 backdrop-blur-sm px-4 py-3">
-                <p className="font-data text-xs text-white/40 uppercase tracking-wider">Audience</p>
+                <p className="font-data text-xs text-white/40 uppercase tracking-wider">{t("p_era.stat_audience")}</p>
                 <p className="font-data text-sm font-bold text-white">{era.viewership}</p>
               </div>
             )}
@@ -311,7 +313,7 @@ export default async function EraPage({ params }: Props) {
 
         {/* Scroll hint */}
         <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-20 flex flex-col items-center gap-2 text-white/30">
-          <span className="text-[10px] uppercase tracking-[0.3em]">D&eacute;rouler</span>
+          <span className="text-[10px] uppercase tracking-[0.3em]">{t("p_era.scroll_hint")}</span>
           <svg className="h-4 w-4 animate-bounce" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
           </svg>
@@ -329,7 +331,7 @@ export default async function EraPage({ params }: Props) {
             className="font-data text-[10px] uppercase tracking-[0.3em] font-bold"
             style={{ color: era.color }}
           >
-            Moment cl&eacute;
+            {t("p_era.key_moment")}
           </span>
         </div>
         <p className="text-xl md:text-2xl leading-relaxed text-white/85 font-light">
@@ -351,7 +353,7 @@ export default async function EraPage({ params }: Props) {
               className="font-data text-[10px] uppercase tracking-[0.3em] font-bold"
               style={{ color: era.color }}
             >
-              &Eacute;v&eacute;nements
+              {t("p_era.events")}
             </span>
           </div>
           <div className="space-y-3">
@@ -389,7 +391,7 @@ export default async function EraPage({ params }: Props) {
                 className="font-data text-[10px] uppercase tracking-[0.3em] font-bold"
                 style={{ color: era.color }}
               >
-                Citations
+                {t("p_era.quotes")}
               </span>
             </div>
             <QuoteRow quotes={quotes} />
@@ -406,7 +408,7 @@ export default async function EraPage({ params }: Props) {
               className="font-data text-[10px] uppercase tracking-[0.3em] font-bold"
               style={{ color: era.color }}
             >
-              Roster
+              {t("p_era.roster")}
             </span>
           </div>
           <div
@@ -421,7 +423,7 @@ export default async function EraPage({ params }: Props) {
             </p>
             {era.coach && (
               <p className="mt-4 text-sm text-white/50 font-data uppercase tracking-widest">
-                Coach &mdash; {era.coach}
+                {t("p_era.coach")} &mdash; {era.coach}
               </p>
             )}
           </div>
@@ -438,14 +440,14 @@ export default async function EraPage({ params }: Props) {
                 className="font-data text-[10px] uppercase tracking-[0.3em] font-bold"
                 style={{ color: era.color }}
               >
-                Matchs &middot; {periodMatches.length}
+                {t("p_era.matches_count", { n: periodMatches.length })}
               </span>
             </div>
             <Link
               href="/matches"
               className="text-sm text-[var(--text-muted)] hover:text-[var(--gold)]"
             >
-              Tous les matchs &rarr;
+              {t("p_era.all_matches")} &rarr;
             </Link>
           </div>
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
@@ -482,7 +484,7 @@ export default async function EraPage({ params }: Props) {
                           : "bg-[var(--red)]/20 border border-[var(--red)]/40 text-[var(--red)]"
                       }`}
                     >
-                      {match.kc_won ? "Victoire" : "D\u00e9faite"}
+                      {match.kc_won ? t("p_era.win") : t("p_era.loss")}
                     </div>
                     <span className="text-[10px] text-white/50 font-medium">
                       {date.toLocaleDateString("fr-FR", {
@@ -521,7 +523,7 @@ export default async function EraPage({ params }: Props) {
                           </span>
                         </p>
                         <p className="font-data text-[10px] text-white/40 mt-1">
-                          Kills : <span className="text-[var(--green)]">{totalKc}</span>-
+                          {t("p_era.kills_label")} : <span className="text-[var(--green)]">{totalKc}</span>-
                           <span className="text-[var(--red)]">{totalOpp}</span>
                         </p>
                       </div>
@@ -551,7 +553,7 @@ export default async function EraPage({ params }: Props) {
           </div>
           {periodMatches.length > 9 && (
             <p className="mt-6 text-center text-sm text-[var(--text-muted)]">
-              + {periodMatches.length - 9} autres matchs
+              {t("p_era.more_matches", { n: periodMatches.length - 9 })}
             </p>
           )}
         </section>
@@ -560,8 +562,8 @@ export default async function EraPage({ params }: Props) {
       {/* ═══ BOTTOM NAV ═══ */}
       <section className="relative max-w-7xl mx-auto px-6 py-16">
         <div className="grid gap-4 md:grid-cols-2">
-          {prev && <EraNavCard era={prev} direction="prev" />}
-          {next && <EraNavCard era={next} direction="next" />}
+          {prev && <EraNavCard era={prev} direction="prev" t={t} />}
+          {next && <EraNavCard era={next} direction="next" t={t} />}
         </div>
       </section>
 
@@ -574,9 +576,9 @@ export default async function EraPage({ params }: Props) {
           <Link
             href="/era/darkness"
             className="inline-block font-data text-[10px] uppercase tracking-[0.3em] text-[#5a2020] transition-colors hover:text-[#e84057]"
-            aria-label="Le chapitre qu'on prefere oublier"
+            aria-label={t("p_era.easter_egg_aria")}
           >
-            &laquo; le chapitre qu&rsquo;on pr&eacute;f&egrave;re oublier
+            {t("p_era.easter_egg")}
           </Link>
         </section>
       )}
@@ -584,7 +586,15 @@ export default async function EraPage({ params }: Props) {
   );
 }
 
-function EraNavCard({ era, direction }: { era: Era; direction: "prev" | "next" }) {
+function EraNavCard({
+  era,
+  direction,
+  t,
+}: {
+  era: Era;
+  direction: "prev" | "next";
+  t: ServerTranslateFn;
+}) {
   return (
     <Link
       href={`/era/${era.id}`}
@@ -631,7 +641,7 @@ function EraNavCard({ era, direction }: { era: Era; direction: "prev" | "next" }
         </div>
         <div className="flex-1">
           <p className="font-data text-[10px] uppercase tracking-wider text-white/40 mb-1">
-            {direction === "prev" ? "\u00c9poque pr\u00e9c\u00e9dente" : "\u00c9poque suivante"}
+            {direction === "prev" ? t("p_era.nav_prev") : t("p_era.nav_next")}
           </p>
           <p className="font-display text-2xl font-black text-white">{era.label}</p>
           <p className="text-xs text-white/50 mt-1">{era.period}</p>

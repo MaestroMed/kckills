@@ -20,6 +20,7 @@ import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react"
 import { m, AnimatePresence } from "motion/react";
 
 import { useFocusTrap } from "@/components/ui/FocusTrapModal";
+import { useT, type TranslateFn } from "@/lib/i18n/use-lang";
 import type { Era } from "@/lib/eras";
 
 export interface LeaderboardFiltersValue {
@@ -39,6 +40,26 @@ export const ROLE_TABS: Array<{ value: string | null; label: string; short: stri
   { value: "bottom", label: "Bot", short: "Bot" },
   { value: "support", label: "Support", short: "Sup" },
 ];
+
+/** Translation-key suffix for each role tab (keyed by its `value`). */
+const ROLE_TAB_KEY: Record<string, string> = {
+  all: "side_role_all",
+  top: "side_role_top",
+  jungle: "side_role_jungle",
+  mid: "side_role_mid",
+  bottom: "side_role_bottom",
+  support: "side_role_support",
+};
+
+/** Localized full label for a role tab value (null = all). */
+function roleTabLabel(t: TranslateFn, value: string | null): string {
+  return t(`p_vslb.${ROLE_TAB_KEY[value ?? "all"]}`);
+}
+
+/** Localized short label for a role tab value (null = all). */
+function roleTabShort(t: TranslateFn, value: string | null): string {
+  return t(`p_vslb.${ROLE_TAB_KEY[value ?? "all"]}_short`);
+}
 
 export const DEFAULT_FILTERS: LeaderboardFiltersValue = {
   role: null,
@@ -70,9 +91,10 @@ export function Filters({
   loading,
   visibleCount,
 }: FiltersProps) {
+  const t = useT();
   const [sheetOpen, setSheetOpen] = useState(false);
 
-  const activeChips = useMemo(() => buildActiveChips(value, eras), [value, eras]);
+  const activeChips = useMemo(() => buildActiveChips(value, eras, t), [value, eras, t]);
   const filterCount = activeChips.length;
 
   const reset = useCallback(() => onChange(DEFAULT_FILTERS), [onChange]);
@@ -106,23 +128,25 @@ export function Filters({
             onChange={(n) => onChange({ ...value, minBattles: n })}
           />
           <span className="ml-auto font-data text-[10px] uppercase tracking-[0.25em] text-white/45">
-            {loading ? "Mise à jour…" : `${visibleCount} kill${visibleCount > 1 ? "s" : ""}`}
+            {loading
+              ? t("p_vslb.side_updating")
+              : t("p_vslb.side_kill_count", { n: visibleCount, s: visibleCount > 1 ? "s" : "" })}
           </span>
           {filterCount > 0 && (
             <button
               type="button"
               onClick={reset}
               className="rounded-md border border-white/15 bg-black/30 px-2.5 py-1 font-data text-[10px] uppercase tracking-widest text-white/70 hover:border-white/40 hover:text-white transition-colors"
-              aria-label="Réinitialiser tous les filtres"
+              aria-label={t("p_vslb.side_reset_all_aria")}
             >
-              Reset
+              {t("p_vslb.side_reset")}
             </button>
           )}
         </div>
         {activeChips.length > 0 && (
           <div className="mx-auto max-w-7xl mt-2 flex items-center gap-2 flex-wrap">
             <span className="font-data text-[9px] uppercase tracking-[0.3em] text-[var(--gold)]/55 mr-1">
-              Filtres actifs
+              {t("p_vslb.side_active_filters")}
             </span>
             {activeChips.map((chip) => (
               <ActiveChip key={chip.key} chip={chip} onRemove={() => removeChip(chip.key, value, onChange)} />
@@ -138,11 +162,11 @@ export function Filters({
           <button
             type="button"
             onClick={() => setSheetOpen(true)}
-            aria-label="Ouvrir les filtres"
+            aria-label={t("p_vslb.side_open_filters")}
             className="flex items-center gap-2 rounded-xl border border-[var(--gold)]/40 bg-black/35 backdrop-blur-sm px-3.5 py-2 font-display text-[11px] font-bold uppercase tracking-[0.2em] text-[var(--gold)]"
           >
             <span aria-hidden>◆</span>
-            <span>Filtres</span>
+            <span>{t("p_vslb.side_filters")}</span>
             {filterCount > 0 && (
               <span className="rounded-full bg-[var(--gold)] text-[var(--bg-primary)] px-1.5 text-[10px] font-data font-black">
                 {filterCount}
@@ -150,7 +174,7 @@ export function Filters({
             )}
           </button>
           <span className="ml-auto font-data text-[9px] uppercase tracking-[0.25em] text-white/45">
-            {loading ? "Update…" : `${visibleCount} kills`}
+            {loading ? t("p_vslb.side_update_short") : t("p_vslb.side_kills_count", { n: visibleCount })}
           </span>
         </div>
         {activeChips.length > 0 && (
@@ -189,10 +213,11 @@ function RoleTabs({
   value: string | null;
   onChange: (next: string | null) => void;
 }) {
+  const t = useT();
   return (
     <div
       role="tablist"
-      aria-label="Filtrer par rôle"
+      aria-label={t("p_vslb.side_filter_by_role")}
       className="inline-flex items-center rounded-xl border border-[var(--border-gold)] bg-black/25 p-1"
     >
       {ROLE_TABS.map((tab) => {
@@ -213,8 +238,8 @@ function RoleTabs({
               boxShadow: active ? "0 4px 12px rgba(200,170,110,0.35)" : "none",
             }}
           >
-            <span className="hidden sm:inline">{tab.label}</span>
-            <span className="sm:hidden">{tab.short}</span>
+            <span className="hidden sm:inline">{roleTabLabel(t, tab.value)}</span>
+            <span className="sm:hidden">{roleTabShort(t, tab.value)}</span>
           </button>
         );
       })}
@@ -235,6 +260,7 @@ function ChampionDropdown({
   onChange: (next: string | null) => void;
   champions: string[];
 }) {
+  const t = useT();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const rootRef = useRef<HTMLDivElement>(null);
@@ -280,11 +306,11 @@ function ChampionDropdown({
         aria-haspopup="listbox"
         aria-expanded={open}
         aria-controls={open ? listboxId : undefined}
-        aria-label="Filtrer par champion"
+        aria-label={t("p_vslb.side_filter_by_champion")}
         className="inline-flex items-center gap-2 rounded-xl border border-[var(--border-gold)] bg-black/25 px-3 py-1.5 font-data text-[10px] uppercase tracking-[0.2em] text-white/75 hover:border-[var(--gold)]/60 hover:text-white transition-colors"
       >
         <span aria-hidden>◇</span>
-        <span>{value ?? "Tous champions"}</span>
+        <span>{value ?? t("p_vslb.side_all_champions")}</span>
         <span aria-hidden className="text-[var(--gold)]/70">▾</span>
       </button>
       {open && (
@@ -294,13 +320,13 @@ function ChampionDropdown({
               type="text"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Chercher un champion…"
+              placeholder={t("p_vslb.side_search_champion_placeholder")}
               autoFocus
-              aria-label="Filtrer la liste des champions"
+              aria-label={t("p_vslb.side_filter_champion_list")}
               className="w-full rounded-lg bg-black/40 border border-white/10 px-3 py-1.5 text-xs text-white placeholder:text-white/35 focus:outline-none focus:border-[var(--gold)]/60"
             />
           </div>
-          <ul id={listboxId} role="listbox" aria-label="Champions" className="max-h-64 overflow-auto py-1">
+          <ul id={listboxId} role="listbox" aria-label={t("p_vslb.side_champions")} className="max-h-64 overflow-auto py-1">
             <li role="option" aria-selected={value === null}>
               <button
                 type="button"
@@ -311,7 +337,7 @@ function ChampionDropdown({
                 }}
                 className="w-full text-left px-3 py-1.5 text-xs text-white/80 hover:bg-white/5"
               >
-                Tous champions
+                {t("p_vslb.side_all_champions")}
               </button>
             </li>
             {filtered.map((c) => (
@@ -334,7 +360,7 @@ function ChampionDropdown({
             ))}
             {filtered.length === 0 && (
               <li role="presentation" className="px-3 py-2 text-[10px] uppercase tracking-widest text-white/40">
-                Aucun champion
+                {t("p_vslb.side_no_champion")}
               </li>
             )}
           </ul>
@@ -357,6 +383,7 @@ function EraDropdown({
   onChange: (eraId: string | null) => void;
   eras: Era[];
 }) {
+  const t = useT();
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const listboxId = useId();
@@ -395,7 +422,7 @@ function EraDropdown({
         aria-haspopup="listbox"
         aria-expanded={open}
         aria-controls={open ? listboxId : undefined}
-        aria-label="Filtrer par époque"
+        aria-label={t("p_vslb.side_filter_by_era")}
         className="inline-flex items-center gap-2 rounded-xl border border-[var(--border-gold)] bg-black/25 px-3 py-1.5 font-data text-[10px] uppercase tracking-[0.2em] text-white/75 hover:border-[var(--gold)]/60 hover:text-white transition-colors"
       >
         <span
@@ -409,12 +436,12 @@ function EraDropdown({
             boxShadow: `0 0 8px ${selectedEra?.color ?? "rgba(200,170,110,0.4)"}`,
           }}
         />
-        <span>{selectedEra ? selectedEra.label : "Toutes époques"}</span>
+        <span>{selectedEra ? selectedEra.label : t("p_vslb.side_all_eras")}</span>
         <span aria-hidden className="text-[var(--gold)]/70">▾</span>
       </button>
       {open && (
         <div className="absolute left-0 top-full mt-2 z-40 w-72 rounded-xl border border-white/15 bg-[var(--bg-elevated)]/95 backdrop-blur-md shadow-2xl overflow-hidden">
-          <ul id={listboxId} role="listbox" aria-label="Époques" className="max-h-80 overflow-auto py-1">
+          <ul id={listboxId} role="listbox" aria-label={t("p_vslb.side_eras")} className="max-h-80 overflow-auto py-1">
             <li role="option" aria-selected={value === null}>
               <button
                 type="button"
@@ -424,7 +451,7 @@ function EraDropdown({
                 }}
                 className="w-full text-left px-3 py-2 text-xs text-white/80 hover:bg-white/5"
               >
-                Toutes époques
+                {t("p_vslb.side_all_eras")}
               </button>
             </li>
             {eras.map((era) => (
@@ -480,10 +507,11 @@ function BattlesSlider({
   value: number;
   onChange: (n: number) => void;
 }) {
+  const t = useT();
   return (
     <label className="inline-flex items-center gap-2 rounded-xl border border-[var(--border-gold)] bg-black/25 px-3 py-1.5">
       <span className="font-data text-[10px] uppercase tracking-[0.2em] text-white/65">
-        Min batailles
+        {t("p_vslb.side_min_battles")}
       </span>
       <input
         type="range"
@@ -493,7 +521,7 @@ function BattlesSlider({
         value={value}
         onChange={(e) => onChange(parseInt(e.target.value, 10))}
         className="w-24 accent-[var(--gold)]"
-        aria-label="Nombre minimum de batailles"
+        aria-label={t("p_vslb.side_min_battles_aria")}
       />
       <span className="font-data text-[11px] font-bold text-[var(--gold-bright)] tabular-nums w-6 text-right">
         {value}
@@ -512,11 +540,11 @@ interface ActiveChip {
   color?: string;
 }
 
-function buildActiveChips(value: LeaderboardFiltersValue, eras: Era[]): ActiveChip[] {
+function buildActiveChips(value: LeaderboardFiltersValue, eras: Era[], t: TranslateFn): ActiveChip[] {
   const out: ActiveChip[] = [];
   if (value.role) {
     const tab = ROLE_TABS.find((r) => r.value === value.role);
-    out.push({ key: "role", label: tab?.label ?? value.role });
+    out.push({ key: "role", label: tab ? roleTabLabel(t, tab.value) : value.role });
   }
   if (value.champion) {
     out.push({ key: "champion", label: value.champion });
@@ -526,7 +554,7 @@ function buildActiveChips(value: LeaderboardFiltersValue, eras: Era[]): ActiveCh
     if (era) out.push({ key: "era", label: era.label, color: era.color });
   }
   if (value.minBattles > 5) {
-    out.push({ key: "minBattles", label: `Min ${value.minBattles} batailles` });
+    out.push({ key: "minBattles", label: t("p_vslb.side_min_battles_chip", { n: value.minBattles }) });
   }
   return out;
 }
@@ -561,11 +589,12 @@ function ActiveChip({
   onRemove: () => void;
   compact?: boolean;
 }) {
+  const t = useT();
   return (
     <button
       type="button"
       onClick={onRemove}
-      aria-label={`Retirer le filtre ${chip.label}`}
+      aria-label={t("p_vslb.side_remove_filter", { label: chip.label })}
       className={`inline-flex items-center gap-1.5 rounded-full border bg-black/35 transition-colors hover:bg-black/55 ${
         compact ? "px-2 py-0.5" : "px-2.5 py-1"
       }`}
@@ -634,6 +663,7 @@ function MobileSheet({
   onClose: () => void;
   onReset: () => void;
 }) {
+  const t = useT();
   // Adopt the shared focus-trap primitive (hook-only variant) so the sheet
   // keeps its signature slide-up animation while gaining: focus-on-open,
   // Tab cycling, Escape-to-close, focus-restore to the trigger, and an inert
@@ -681,24 +711,24 @@ function MobileSheet({
               }}
             />
             <h2 id={titleId} className="font-display text-base font-black text-[var(--gold-bright)] uppercase tracking-[0.15em]">
-              Filtres
+              {t("p_vslb.side_filters")}
             </h2>
           </div>
           <button
             type="button"
             onClick={onClose}
-            aria-label="Fermer les filtres"
+            aria-label={t("p_vslb.side_close_filters")}
             className="rounded-md border border-white/15 bg-black/30 px-3 py-1 font-data text-[10px] uppercase tracking-widest text-white/80 hover:border-white/40"
           >
             OK
           </button>
         </div>
 
-        <SheetField label="Rôle">
+        <SheetField label={t("p_vslb.side_role")}>
           <RoleTabs value={value.role} onChange={(r) => onChange({ ...value, role: r })} />
         </SheetField>
 
-        <SheetField label="Champion">
+        <SheetField label={t("p_vslb.side_champion")}>
           <ChampionDropdown
             value={value.champion}
             onChange={(c) => onChange({ ...value, champion: c })}
@@ -706,7 +736,7 @@ function MobileSheet({
           />
         </SheetField>
 
-        <SheetField label="Époque">
+        <SheetField label={t("p_vslb.side_era")}>
           <EraDropdown
             value={value.eraId}
             onChange={(eraId) => applyEra(eraId, eras, value, onChange)}
@@ -714,7 +744,7 @@ function MobileSheet({
           />
         </SheetField>
 
-        <SheetField label={`Min batailles · ${value.minBattles}`}>
+        <SheetField label={t("p_vslb.side_min_battles_value", { n: value.minBattles })}>
           <input
             type="range"
             min={5}
@@ -723,7 +753,7 @@ function MobileSheet({
             value={value.minBattles}
             onChange={(e) => onChange({ ...value, minBattles: parseInt(e.target.value, 10) })}
             className="w-full accent-[var(--gold)]"
-            aria-label="Nombre minimum de batailles"
+            aria-label={t("p_vslb.side_min_battles_aria")}
           />
         </SheetField>
 
@@ -735,7 +765,7 @@ function MobileSheet({
           }}
           className="mt-4 w-full rounded-xl border border-white/20 bg-black/30 px-4 py-2.5 font-display text-xs font-bold uppercase tracking-[0.25em] text-white/80 hover:border-white/45"
         >
-          Réinitialiser
+          {t("p_vslb.side_reset_full")}
         </button>
       </m.div>
     </m.div>

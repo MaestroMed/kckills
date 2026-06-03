@@ -26,6 +26,7 @@ import { Crown } from "lucide-react";
 import { championLoadingUrl } from "@/lib/constants";
 import { winRatePct } from "@/lib/vs-roulette";
 import { Description } from "@/components/i18n/Description";
+import { useT, type TranslateFn } from "@/lib/i18n/use-lang";
 import type { EloLeaderboardRow } from "@/lib/supabase/vs-leaderboard";
 
 interface PodiumProps {
@@ -59,7 +60,14 @@ const RANK_META = [
   },
 ] as const;
 
+/** Localized "Nth place" label per podium rank (0-based). */
+function placeLabel(t: TranslateFn, rank: 0 | 1 | 2): string {
+  const keys = ["side_place_1", "side_place_2", "side_place_3"] as const;
+  return t(`p_vslb.${keys[rank]}`);
+}
+
 export function Podium({ kills }: PodiumProps) {
+  const t = useT();
   const prefersReducedMotion = useReducedMotion();
 
   if (kills.length === 0) return null;
@@ -71,7 +79,7 @@ export function Podium({ kills }: PodiumProps) {
 
   return (
     <section
-      aria-label="Top 3 du classement ELO"
+      aria-label={t("p_vslb.side_podium_top3")}
       className="pt-8 md:pt-12 pb-2"
     >
       {/* Desktop : three columns, 1st in centre raised */}
@@ -157,6 +165,7 @@ function PodiumColumn({
   delay: number;
   mobile?: boolean;
 }) {
+  const t = useT();
   const meta = RANK_META[rank];
   const killerName = kill.killer_name ?? kill.killer_champion ?? "?";
   const victimName = kill.victim_name ?? kill.victim_champion ?? "?";
@@ -187,7 +196,12 @@ function PodiumColumn({
     >
       <Link
         href={`/scroll?kill=${kill.kill_id}`}
-        aria-label={`Lire le clip rang ${meta.short} : ${killerName} contre ${victimName}, ${Math.round(kill.elo_rating)} ELO`}
+        aria-label={t("p_vslb.side_play_clip_rank", {
+          rank: meta.short,
+          killer: killerName,
+          victim: victimName,
+          elo: Math.round(kill.elo_rating),
+        })}
         className="group relative block rounded-2xl overflow-hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gold)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg-primary)]"
         style={{
           aspectRatio: mobile ? "16 / 9" : "9 / 16",
@@ -279,7 +293,7 @@ function PodiumColumn({
         {/* Bottom info — matchup + stats */}
         <div className="absolute inset-x-0 bottom-0 z-[5] p-4">
           <p className="font-data text-[9px] uppercase tracking-[0.3em] text-[var(--gold)]/85 mb-1">
-            {meta.label}
+            {placeLabel(t, rank)}
           </p>
           <h3
             className="font-display text-lg md:text-xl font-black leading-tight line-clamp-2"
@@ -303,10 +317,10 @@ function PodiumColumn({
           )}
 
           <div className="mt-3 flex items-center gap-2.5 flex-wrap">
-            <Stat label="Battles" value={String(kill.battles_count)} accent={meta.accent} />
-            <Stat label="WR" value={`${wr}%`} accent={meta.accent} />
+            <Stat label={t("p_vslb.side_stat_battles")} value={String(kill.battles_count)} accent={meta.accent} />
+            <Stat label={t("p_vslb.side_stat_wr")} value={`${wr}%`} accent={meta.accent} />
             {kill.highlight_score != null && (
-              <Stat label="IA" value={kill.highlight_score.toFixed(1)} accent={meta.accent} />
+              <Stat label={t("p_vslb.side_stat_ai")} value={kill.highlight_score.toFixed(1)} accent={meta.accent} />
             )}
           </div>
         </div>

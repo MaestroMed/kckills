@@ -29,6 +29,7 @@ import { TeammatesGrid } from "@/components/player/TeammatesGrid";
 import { PrevNextNavCard } from "@/components/player/PrevNextNavCard";
 import { HeadToHead } from "@/components/player/HeadToHead";
 import { ERAS, type Era } from "@/lib/eras";
+import { getServerT } from "@/lib/i18n/server-lang";
 
 // Wave 13d (2026-04-28) : 300 → 1800. Player stats are essentially
 // static between matches (one new game every 1-3 days for KC).
@@ -157,6 +158,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 export default async function PlayerPage({ params }: Props) {
   const { slug } = await params;
   const name = decodeURIComponent(slug);
+  const { t } = await getServerT();
   const data = loadRealData();
   const stats = getPlayerStats(data, name);
 
@@ -222,7 +224,9 @@ export default async function PlayerPage({ params }: Props) {
     .map((p) => ({
       name: p.name,
       role: p.role,
-      roleLabel: ROLE_LABEL[p.role] ?? p.role.toUpperCase(),
+      roleLabel: ROLE_LABEL[p.role]
+        ? t(`p_player.role_short_${ROLE_LABEL[p.role].toLowerCase()}`)
+        : p.role.toUpperCase(),
       photoUrl: PLAYER_PHOTOS[p.name] ?? undefined,
       signatureChampion: p.champions[0] ?? "Jhin",
     }));
@@ -340,7 +344,7 @@ export default async function PlayerPage({ params }: Props) {
           aria-labelledby="player-signature-quote"
         >
           <h2 id="player-signature-quote" className="sr-only">
-            Citation signature
+            {t("p_player.signature_quote")}
           </h2>
           <SignatureQuote
             text={heroQuote.text}
@@ -355,18 +359,18 @@ export default async function PlayerPage({ params }: Props) {
       {/* ═══ SECTION 3 — CHAMPION POOL HEXTECH ═════════════════════════════ */}
       {stats.champions.length > 0 && (
         <section className="relative max-w-7xl mx-auto px-6 py-16">
-          <SectionHeader kicker={`Champion pool · ${stats.champions.length} champions`} />
+          <SectionHeader kicker={`${t("p_player.champion_pool")} · ${stats.champions.length} ${t("p_player.champions")}`} />
           <ChampionPoolHextech champions={stats.champions} accent="var(--gold)" />
         </section>
       )}
 
       {/* ═══ SECTION 4 — ANALYTICS ════════════════════════════════════════ */}
       <section className="relative max-w-7xl mx-auto px-6 py-16">
-        <SectionHeader kicker="Analytics" />
+        <SectionHeader kicker={t("p_player.analytics")} />
         <div className="grid gap-6 md:grid-cols-3">
           <div className="rounded-2xl border border-[var(--border-gold)] bg-[var(--bg-surface)] p-5">
             <h3 className="font-display text-sm font-bold mb-4 text-[var(--text-secondary)]">
-              Profil de jeu
+              {t("p_player.play_profile")}
             </h3>
             <div className="flex justify-center">
               <PlayerRadar
@@ -381,13 +385,13 @@ export default async function PlayerPage({ params }: Props) {
           </div>
           <div className="rounded-2xl border border-[var(--border-gold)] bg-[var(--bg-surface)] p-5">
             <h3 className="font-display text-sm font-bold mb-4 text-[var(--text-secondary)]">
-              Champions &middot; games jou&eacute;es
+              {t("p_player.champions_games_played")}
             </h3>
             <ChampionPerformanceChart champions={stats.champions} />
           </div>
           <div className="rounded-2xl border border-[var(--border-gold)] bg-[var(--bg-surface)] p-5">
             <h3 className="font-display text-sm font-bold mb-4 text-[var(--text-secondary)]">
-              Forme r&eacute;cente &middot; KDA par match
+              {t("p_player.recent_form_kda")}
             </h3>
             <RecentFormChart history={stats.matchHistory} />
           </div>
@@ -400,7 +404,7 @@ export default async function PlayerPage({ params }: Props) {
           <div className="mt-6 grid gap-6 md:grid-cols-3">
             <div className="rounded-2xl border border-[var(--border-gold)] bg-[var(--bg-surface)] p-5">
               <p className="text-[10px] uppercase tracking-[0.25em] text-[var(--text-muted)]">
-                CS par game
+                {t("p_player.cs_per_game")}
               </p>
               <p className="font-data text-4xl font-black tabular-nums text-[var(--gold)] mt-2">
                 {stats.avgCS.toLocaleString("fr-FR")}
@@ -410,12 +414,12 @@ export default async function PlayerPage({ params }: Props) {
                 <span className="text-[var(--text-secondary)] font-data">
                   {(stats.avgCS / 33.5).toFixed(1)}
                 </span>{" "}
-                CS/min (game moyenne LEC 33:30)
+                {t("p_player.cs_per_min_note")}
               </p>
             </div>
             <div className="rounded-2xl border border-[var(--border-gold)] bg-[var(--bg-surface)] p-5">
               <p className="text-[10px] uppercase tracking-[0.25em] text-[var(--text-muted)]">
-                Gold par game
+                {t("p_player.gold_per_game")}
               </p>
               <p className="font-data text-4xl font-black tabular-nums text-[var(--gold)] mt-2">
                 {stats.avgGold.toLocaleString("fr-FR")}
@@ -425,12 +429,12 @@ export default async function PlayerPage({ params }: Props) {
                 <span className="text-[var(--text-secondary)] font-data">
                   {Math.round(stats.avgGold / 33.5).toLocaleString("fr-FR")}
                 </span>{" "}
-                gold/min
+                {t("p_player.gold_per_min")}
               </p>
             </div>
             <div className="rounded-2xl border border-[var(--border-gold)] bg-[var(--bg-surface)] p-5">
               <p className="text-[10px] uppercase tracking-[0.25em] text-[var(--text-muted)]">
-                Series winrate
+                {t("p_player.series_winrate")}
               </p>
               <p
                 className="font-data text-4xl font-black tabular-nums mt-2"
@@ -446,8 +450,10 @@ export default async function PlayerPage({ params }: Props) {
                 {winRate}%
               </p>
               <p className="text-[10px] text-[var(--text-muted)] mt-1">
-                {stats.wins ?? 0} wins sur{" "}
-                {stats.matchHistory.length} séries (game-level)
+                {t("p_player.wins_over_series", {
+                  wins: stats.wins ?? 0,
+                  total: stats.matchHistory.length,
+                })}
               </p>
             </div>
           </div>
@@ -457,11 +463,11 @@ export default async function PlayerPage({ params }: Props) {
       {/* ─── Riot stats — surfaced when linked ──────────────────────────── */}
       {riotStats && (riotStats.rank || riotStats.topChampions.length > 0) && (
         <section className="relative max-w-7xl mx-auto px-6 py-10">
-          <SectionHeader kicker="Riot stats · profil lié" />
+          <SectionHeader kicker={t("p_player.riot_stats_linked")} />
           <div className="grid gap-4 md:grid-cols-3">
             <div className="rounded-2xl border border-[var(--border-gold)] bg-[var(--bg-surface)] p-5 space-y-2">
               <p className="text-[10px] uppercase tracking-[0.3em] text-[var(--text-muted)]">
-                Compte Riot
+                {t("p_player.riot_account")}
               </p>
               <p className="font-display text-2xl font-black text-[var(--gold)] leading-tight break-words">
                 {riotStats.summonerName}
@@ -473,7 +479,7 @@ export default async function PlayerPage({ params }: Props) {
               </p>
               {riotStats.linkedAt && (
                 <p className="text-[10px] text-[var(--text-muted)] opacity-70">
-                  Lié le{" "}
+                  {t("p_player.linked_on")}{" "}
                   {new Date(riotStats.linkedAt).toLocaleDateString("fr-FR", {
                     day: "numeric",
                     month: "short",
@@ -484,29 +490,29 @@ export default async function PlayerPage({ params }: Props) {
             </div>
             <div className="rounded-2xl border border-[var(--gold)]/30 bg-[var(--gold)]/5 p-5 space-y-2">
               <p className="text-[10px] uppercase tracking-[0.3em] text-[var(--text-muted)]">
-                Rank Solo/Duo
+                {t("p_player.rank_solo_duo")}
               </p>
               {riotStats.rank ? (
                 <p className="font-display text-3xl font-black text-[var(--gold)] leading-tight">
                   {riotStats.rank}
                 </p>
               ) : (
-                <p className="text-sm text-[var(--text-muted)]">Aucun rank Solo/Duo cette saison.</p>
+                <p className="text-sm text-[var(--text-muted)]">{t("p_player.no_rank_this_season")}</p>
               )}
             </div>
             <div className="rounded-2xl border border-[var(--border-gold)] bg-[var(--bg-surface)] p-5 space-y-3">
               <p className="text-[10px] uppercase tracking-[0.3em] text-[var(--text-muted)]">
-                Top {riotStats.topChampions.length} champions
+                {t("p_player.top_n_champions", { n: riotStats.topChampions.length })}
               </p>
               {riotStats.topChampions.length === 0 ? (
-                <p className="text-sm text-[var(--text-muted)]">Pas de mastery enregistrée.</p>
+                <p className="text-sm text-[var(--text-muted)]">{t("p_player.no_mastery")}</p>
               ) : (
                 <ul className="grid grid-cols-5 gap-2">
                   {riotStats.topChampions.map((c) => (
                     <li
                       key={c.champ_id}
                       className="flex flex-col items-center gap-1"
-                      title={`${c.name} — niveau ${c.level} · ${c.points.toLocaleString("fr-FR")} pts`}
+                      title={`${c.name} — ${t("p_player.mastery_tooltip", { level: c.level, points: c.points.toLocaleString("fr-FR") })}`}
                     >
                       <div className="relative h-10 w-10 rounded-full overflow-hidden border border-[var(--border-gold)] bg-[var(--bg-elevated)]">
                         <Image
@@ -537,9 +543,9 @@ export default async function PlayerPage({ params }: Props) {
       {playerId && (
         <section className="relative max-w-7xl mx-auto px-6 py-16 space-y-12">
           <ClipReel
-            kicker="Pipeline automatique"
-            title={`Les meilleurs kills de ${name}`}
-            subtitle="Clips où ce joueur termine l'adversaire — classés par highlight score puis rating communauté."
+            kicker={t("p_player.reel_pipeline_kicker")}
+            title={t("p_player.reel_best_kills_title", { name })}
+            subtitle={t("p_player.reel_best_kills_subtitle")}
             filter={{
               killerPlayerId: playerId,
               trackedTeamInvolvement: "team_killer",
@@ -547,14 +553,14 @@ export default async function PlayerPage({ params }: Props) {
             }}
             limit={9}
             ctaHref="/scroll"
-            ctaLabel="Tout voir dans le scroll"
+            ctaLabel={t("p_player.reel_see_all_scroll")}
             emptyState={null}
           />
 
           <ClipReel
-            kicker="Carry mode"
-            title="Clutch & multi-kills"
-            subtitle="First Bloods, doubles+ et plays au score IA ≥ 7.5 sur ce joueur."
+            kicker={t("p_player.reel_carry_kicker")}
+            title={t("p_player.reel_clutch_title")}
+            subtitle={t("p_player.reel_clutch_subtitle")}
             filter={{
               killerPlayerId: playerId,
               trackedTeamInvolvement: "team_killer",
@@ -565,9 +571,9 @@ export default async function PlayerPage({ params }: Props) {
           />
 
           <ClipReel
-            kicker="L'envers du décor"
-            title="Kills subis"
-            subtitle="Quand l'adversaire prend l'avantage — utile pour analyser ses death patterns."
+            kicker={t("p_player.reel_behind_kicker")}
+            title={t("p_player.reel_deaths_title")}
+            subtitle={t("p_player.reel_deaths_subtitle")}
             filter={{
               victimPlayerId: playerId,
               trackedTeamInvolvement: "team_victim",
@@ -585,11 +591,11 @@ export default async function PlayerPage({ params }: Props) {
             <div className="flex items-center gap-3">
               <span className="h-2 w-2 rounded-full bg-[var(--gold)] animate-pulse" />
               <span className="font-data text-[10px] uppercase tracking-[0.3em] font-bold text-[var(--gold)]">
-                {realKills.length} clips vidéo
+                {t("p_player.n_video_clips", { n: realKills.length })}
               </span>
             </div>
             <p className="text-sm text-[var(--text-muted)]">
-              Générés par le pipeline automatique · vrais highlights
+              {t("p_player.pipeline_generated")}
             </p>
           </div>
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
@@ -621,14 +627,14 @@ export default async function PlayerPage({ params }: Props) {
 
       {/* ═══ SECTION 6 — MATCH HISTORY ═════════════════════════════════════ */}
       <section className="relative max-w-7xl mx-auto px-6 py-16">
-        <SectionHeader kicker="Historique complet" />
+        <SectionHeader kicker={t("p_player.full_history")} />
         <MatchHistory history={stats.matchHistory} />
       </section>
 
       {/* ═══ SECTION 7 — HONORS & ÉPOQUES KC ══════════════════════════════ */}
       {playerEras.length > 0 && (
         <section className="relative max-w-5xl mx-auto px-6 py-16">
-          <SectionHeader kicker={`Honors · ${playerEras.length} époques`} />
+          <SectionHeader kicker={`${t("p_player.honors")} · ${playerEras.length} ${t("p_player.eras")}`} />
           <HonorsAndEras eras={playerEras} accent="var(--gold)" />
         </section>
       )}
@@ -636,7 +642,7 @@ export default async function PlayerPage({ params }: Props) {
       {/* ═══ SECTION 8 — COÉQUIPIERS ACTUELS + AUXILIAIRES ════════════════ */}
       {teammates.length > 0 && (
         <section className="relative max-w-7xl mx-auto px-6 py-16">
-          <SectionHeader kicker="Coéquipiers actuels" />
+          <SectionHeader kicker={t("p_player.current_teammates")} />
           <TeammatesGrid teammates={teammates} accent="var(--gold)" />
 
           {/* Auxiliary links — Leaguepedia + all kills */}
@@ -645,13 +651,13 @@ export default async function PlayerPage({ params }: Props) {
               <Link
                 href={`/scroll?player=${playerId}`}
                 className="flex items-center justify-between rounded-xl border border-[var(--border-gold)] bg-[var(--bg-surface)] px-5 py-4 text-sm text-[var(--text-secondary)] transition-colors hover:border-[var(--gold)]/50 hover:text-[var(--gold)] focus-visible:outline-2 focus-visible:outline-[var(--gold)] focus-visible:outline-offset-2"
-                aria-label={`Voir tous les kills de ${name} dans le scroll`}
+                aria-label={t("p_player.all_kills_in_scroll_aria", { name })}
               >
                 <span className="flex items-center gap-3">
                   <span className="font-data text-[10px] uppercase tracking-widest text-[var(--text-muted)]">
                     scroll
                   </span>
-                  <span>Tous les kills de {name}</span>
+                  <span>{t("p_player.all_kills_of", { name })}</span>
                 </span>
                 <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M9 5l7 7-7 7" />

@@ -31,6 +31,7 @@ import { m, useReducedMotion } from "motion/react";
 import { championLoadingUrl } from "@/lib/constants";
 import { winRatePct } from "@/lib/vs-roulette";
 import { Description } from "@/components/i18n/Description";
+import { useT } from "@/lib/i18n/use-lang";
 import type { EloLeaderboardRow } from "@/lib/supabase/vs-leaderboard";
 
 interface LeaderboardTableProps {
@@ -52,6 +53,7 @@ export function LeaderboardTable({
   onLoadMore,
   onReachEnd,
 }: LeaderboardTableProps) {
+  const t = useT();
   const prefersReducedMotion = useReducedMotion();
   const sentinelRef = useRef<HTMLDivElement>(null);
 
@@ -80,7 +82,7 @@ export function LeaderboardTable({
 
   return (
     <section
-      aria-label="Suite du classement ELO"
+      aria-label={t("p_vslb.table_section_aria")}
       className="mt-8 md:mt-12 pb-12"
     >
       {/* Mobile : card grid */}
@@ -102,12 +104,12 @@ export function LeaderboardTable({
         <table className="w-full" role="table">
           <thead>
             <tr className="border-b border-[var(--border-gold)]">
-              <Th className="w-16 text-center">Rang</Th>
-              <Th>Kill</Th>
-              <Th className="w-24 text-right">ELO</Th>
-              <Th className="w-20 text-right">Batailles</Th>
-              <Th className="w-20 text-right">Winrate</Th>
-              <Th className="w-32 text-right pr-5">Action</Th>
+              <Th className="w-16 text-center">{t("p_vslb.col_rank")}</Th>
+              <Th>{t("p_vslb.col_kill")}</Th>
+              <Th className="w-24 text-right">{t("p_vslb.col_elo")}</Th>
+              <Th className="w-20 text-right">{t("p_vslb.col_battles")}</Th>
+              <Th className="w-20 text-right">{t("p_vslb.col_winrate")}</Th>
+              <Th className="w-32 text-right pr-5">{t("p_vslb.col_action")}</Th>
             </tr>
           </thead>
           <tbody>
@@ -134,10 +136,10 @@ export function LeaderboardTable({
             type="button"
             onClick={onLoadMore}
             disabled={loading}
-            aria-label="Charger plus de kills dans le classement"
+            aria-label={t("p_vslb.load_more_aria")}
             className="rounded-xl border border-[var(--gold)]/40 bg-black/40 px-6 py-2.5 font-display text-xs font-bold uppercase tracking-[0.25em] text-[var(--gold)] hover:border-[var(--gold)] hover:bg-[var(--gold)]/10 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
           >
-            {loading ? "Chargement…" : "Voir plus"}
+            {loading ? t("p_vslb.loading") : t("p_vslb.see_more")}
           </button>
         </div>
       )}
@@ -160,6 +162,7 @@ function RowDesktop({
   prefersReducedMotion: boolean;
   index: number;
 }) {
+  const t = useT();
   const killerName = row.killer_name ?? row.killer_champion ?? "?";
   const victimName = row.victim_name ?? row.victim_champion ?? "?";
   const wr = winRatePct(row.wins, row.battles_count);
@@ -184,7 +187,7 @@ function RowDesktop({
         <Link
           href={`/scroll?kill=${row.kill_id}`}
           className="flex items-center gap-3 group/inner"
-          aria-label={`Lire le clip ${rank}: ${killerName} contre ${victimName}`}
+          aria-label={t("p_vslb.watch_clip_aria", { rank, killer: killerName, victim: victimName })}
         >
           <span
             className="relative flex-shrink-0 rounded-md overflow-hidden border border-white/10 group-hover/inner:border-[var(--gold)]/60 transition-colors"
@@ -252,7 +255,7 @@ function RowDesktop({
         <Link
           href={`/kill/${row.kill_id}`}
           className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--gold)]/45 bg-[var(--gold)]/10 px-3 py-1.5 font-display text-[10px] font-black uppercase tracking-[0.25em] text-[var(--gold)] hover:border-[var(--gold)] hover:bg-[var(--gold)]/20 transition-all"
-          aria-label={`Voir le détail du kill : ${killerName} contre ${victimName}`}
+          aria-label={t("p_vslb.view_detail_aria", { killer: killerName, victim: victimName })}
         >
           VS <span aria-hidden>→</span>
         </Link>
@@ -276,6 +279,7 @@ function RowCard({
   prefersReducedMotion: boolean;
   index: number;
 }) {
+  const t = useT();
   const killerName = row.killer_name ?? row.killer_champion ?? "?";
   const victimName = row.victim_name ?? row.victim_champion ?? "?";
   const wr = winRatePct(row.wins, row.battles_count);
@@ -294,7 +298,7 @@ function RowCard({
       <div className="flex items-start gap-3">
         <Link
           href={`/scroll?kill=${row.kill_id}`}
-          aria-label={`Lire le clip ${rank}: ${killerName} contre ${victimName}`}
+          aria-label={t("p_vslb.watch_clip_aria", { rank, killer: killerName, victim: victimName })}
           className="relative flex-shrink-0 rounded-md overflow-hidden border border-white/10"
           style={{
             width: 58,
@@ -347,15 +351,15 @@ function RowCard({
           </p>
 
           <div className="mt-2 flex items-center gap-3 flex-wrap">
-            <Mini label="Battles" value={String(row.battles_count)} />
-            <Mini label="WR" value={`${wr}%`} accent="var(--cyan)" />
+            <Mini label={t("p_vslb.mini_battles")} value={String(row.battles_count)} />
+            <Mini label={t("p_vslb.mini_wr")} value={`${wr}%`} accent="var(--cyan)" />
             {row.highlight_score != null && (
-              <Mini label="IA" value={row.highlight_score.toFixed(1)} accent="var(--gold)" />
+              <Mini label={t("p_vslb.mini_ai")} value={row.highlight_score.toFixed(1)} accent="var(--gold)" />
             )}
             <Link
               href={`/kill/${row.kill_id}`}
               className="ml-auto inline-flex items-center gap-1 rounded-md border border-[var(--gold)]/45 bg-[var(--gold)]/10 px-2 py-0.5 font-display text-[9px] font-black uppercase tracking-[0.25em] text-[var(--gold)]"
-              aria-label={`Voir le détail du kill : ${killerName} contre ${victimName}`}
+              aria-label={t("p_vslb.view_detail_aria", { killer: killerName, victim: victimName })}
             >
               VS →
             </Link>

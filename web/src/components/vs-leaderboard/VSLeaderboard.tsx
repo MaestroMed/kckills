@@ -34,6 +34,7 @@ import { m, useReducedMotion } from "motion/react";
 
 import { createClient } from "@/lib/supabase/client";
 import { getVSSessionHash } from "@/lib/vs-roulette";
+import { useT } from "@/lib/i18n/use-lang";
 import type { Era } from "@/lib/eras";
 import type {
   EloLeaderboardRow,
@@ -337,6 +338,7 @@ function EmptyState({
   filters: LeaderboardFiltersValue;
   onReset: () => void;
 }) {
+  const t = useT();
   const hasFilters =
     filters.role !== null ||
     filters.champion !== null ||
@@ -358,12 +360,12 @@ function EmptyState({
         />
       </div>
       <h2 className="font-display text-2xl md:text-3xl font-black text-[var(--gold-bright)]">
-        Pas assez de batailles
+        {t("p_vslb.empty_title")}
       </h2>
       <p className="mt-3 max-w-md mx-auto text-sm text-white/70">
         {hasFilters
-          ? "Aucun kill ne passe ce filtre avec ce minimum de batailles. Relâche un filtre ou descends le seuil."
-          : "Le ELO se débloque dès qu'un kill a accumulé 5 batailles. Va voter sur la roulette pour faire bouger le classement !"}
+          ? t("p_vslb.empty_filtered")
+          : t("p_vslb.empty_unlock")}
       </p>
       <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
         {hasFilters && (
@@ -371,9 +373,9 @@ function EmptyState({
             type="button"
             onClick={onReset}
             className="rounded-xl border border-white/20 bg-black/30 px-5 py-2.5 font-display text-xs font-bold uppercase tracking-[0.25em] text-white/80 hover:border-white/45 hover:text-white transition-all"
-            aria-label="Réinitialiser les filtres"
+            aria-label={t("p_vslb.reset_filters_aria")}
           >
-            Reset filtres
+            {t("p_vslb.reset_filters")}
           </button>
         )}
         <Link
@@ -383,7 +385,7 @@ function EmptyState({
             boxShadow: "0 12px 26px rgba(200,170,110,0.32), inset 0 1px 0 rgba(255,255,255,0.4)",
           }}
         >
-          Lancer la roulette
+          {t("p_vslb.cta_launch")}
         </Link>
       </div>
     </section>

@@ -5,6 +5,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { m, AnimatePresence, useReducedMotion } from "motion/react";
 import type { LiveKillRow, LiveMatchRow } from "@/lib/supabase/live";
+import { useT } from "@/lib/i18n/use-lang";
 
 /**
  * LiveScroll — auto-refreshing feed for /live.
@@ -44,6 +45,7 @@ const POLL_MS = 10_000;
 const MAX_RENDERED_KILLS = 40;
 
 export function LiveScroll({ initialMatch, initialKills, initialScore }: Props) {
+  const t = useT();
   const reducedMotion = useReducedMotion();
   const [match, setMatch] = useState<LiveMatchRow | null>(initialMatch);
   const [kills, setKills] = useState<LiveKillRow[]>(initialKills);
@@ -152,11 +154,19 @@ export function LiveScroll({ initialMatch, initialKills, initialScore }: Props) 
           const total = seenIdsRef.current.size;
           const plural = fresh.length > 1;
           setAnnounce(
-            `Score Karmine Corp ${scoreRef.current.kc}, adversaire ${
-              scoreRef.current.opp
-            }. ${fresh.length} nouveau${plural ? "x" : ""} kill${
-              plural ? "s" : ""
-            }. ${total} au total.`,
+            plural
+              ? t("p_live.announce_plural", {
+                  kc: scoreRef.current.kc,
+                  opp: scoreRef.current.opp,
+                  count: fresh.length,
+                  total,
+                })
+              : t("p_live.announce_singular", {
+                  kc: scoreRef.current.kc,
+                  opp: scoreRef.current.opp,
+                  count: fresh.length,
+                  total,
+                }),
           );
           // Cap the rendered window — deltas above counted every fresh kill,
           // so trimming old rows here doesn't skew the score.
@@ -205,16 +215,16 @@ export function LiveScroll({ initialMatch, initialKills, initialScore }: Props) 
     return (
       <main className="mx-auto max-w-3xl px-4 py-16 text-center">
         <h1 className="font-display text-3xl font-bold text-[var(--gold)]">
-          Match terminé
+          {t("p_live.ended_title")}
         </h1>
         <p className="mt-2 text-[var(--text-muted)]">
-          Le live KC est fini. Retrouve les clips dans le feed.
+          {t("p_live.ended_body")}
         </p>
         <Link
           href="/scroll"
           className="mt-6 inline-block rounded-full bg-[var(--gold)] px-5 py-2 text-sm font-bold text-black"
         >
-          Voir le scroll →
+          {t("p_live.ended_cta")}
         </Link>
       </main>
     );
@@ -247,10 +257,10 @@ export function LiveScroll({ initialMatch, initialKills, initialScore }: Props) 
             <span className="relative inline-flex h-3 w-3 rounded-full bg-[var(--red)]" />
           </span>
           <span className="font-display tracking-widest text-xs uppercase text-[var(--red)]">
-            KC LIVE
+            {t("p_live.live_badge")}
           </span>
           <span className="font-data text-xs text-[var(--text-muted)]">
-            · GAME {heroGameNumber}
+            · {t("p_live.game_label", { n: heroGameNumber })}
           </span>
           {tickerText && (
             <span className="ml-auto font-data text-xs font-bold text-[var(--gold-bright)]">
@@ -267,7 +277,7 @@ export function LiveScroll({ initialMatch, initialKills, initialScore }: Props) 
           </span>
           {opponent?.name && (
             <span className="font-data text-xs text-[var(--text-muted)]">
-              vs {opponent.name}
+              {t("p_live.vs")} {opponent.name}
             </span>
           )}
         </div>
@@ -303,19 +313,19 @@ export function LiveScroll({ initialMatch, initialKills, initialScore }: Props) 
                 {heroKill.killer_champion ?? "?"} → {heroKill.victim_champion ?? "?"}
               </p>
               <p className="text-xs text-[var(--text-muted)] line-clamp-1">
-                {heroKill.ai_description_fr ?? heroKill.ai_description ?? "Dernière action."}
+                {heroKill.ai_description_fr ?? heroKill.ai_description ?? t("p_live.last_action")}
               </p>
             </div>
           </div>
           <div className="flex items-center justify-between px-3 py-2">
             <span className="font-data text-[10px] uppercase tracking-widest text-[var(--text-muted)]">
-              Dernier kill
+              {t("p_live.last_kill")}
             </span>
             <Link
               href={`/kill/${heroKill.id}`}
               className="text-xs font-bold uppercase tracking-widest text-[var(--gold)] hover:text-[var(--gold-bright)]"
             >
-              Détails →
+              {t("p_live.details")}
             </Link>
           </div>
         </section>
@@ -324,7 +334,7 @@ export function LiveScroll({ initialMatch, initialKills, initialScore }: Props) 
       {/* ─── Chronological kill list ─────────────────────────── */}
       <section>
         <h2 className="mb-2 font-display text-sm uppercase tracking-widest text-[var(--text-muted)]">
-          Tous les kills · {kills.length}
+          {t("p_live.all_kills")} · {kills.length}
         </h2>
         <ul className="flex flex-col gap-2">
           <AnimatePresence initial={false}>
@@ -349,7 +359,7 @@ export function LiveScroll({ initialMatch, initialKills, initialScore }: Props) 
           </AnimatePresence>
           {kills.length === 0 && (
             <li className="rounded-xl border border-[var(--border-gold)] bg-white/[0.02] p-6 text-center text-sm italic text-[var(--text-muted)]">
-              Match en cours, premier clip à venir...
+              {t("p_live.empty_in_progress")}
             </li>
           )}
         </ul>
