@@ -9,6 +9,8 @@ import { loadRealData } from "@/lib/real-data";
 import { Breadcrumb } from "@/components/Breadcrumb";
 import { JsonLd, breadcrumbLD, weekCollectionLD } from "@/lib/seo/jsonld";
 import { Description } from "@/components/i18n/Description";
+import { getServerT } from "@/lib/i18n/server-lang";
+import type { Lang, ServerTranslateFn } from "@/lib/i18n/server-lang";
 
 /**
  * /week — "Cette semaine" recap page.
@@ -67,7 +69,17 @@ function weeklyScore(k: CardKillRow, now: number): number {
   return score;
 }
 
+/** Map the resolved app language to a BCP-47 tag for Intl date formatting,
+ *  so the "this week" range reads naturally for non-FR visitors. */
+const DATE_LOCALE: Record<Lang, string> = {
+  fr: "fr-FR",
+  en: "en-US",
+  ko: "ko-KR",
+  es: "es-ES",
+};
+
 export default async function WeekPage() {
+  const { lang, t } = await getServerT();
   const now = Date.now();
   const since = now - WEEK_MS;
 
@@ -114,11 +126,12 @@ export default async function WeekPage() {
   );
 
   // Humanised date range for the header label
-  const weekStart = new Date(since).toLocaleDateString("fr-FR", {
+  const dateLocale = DATE_LOCALE[lang];
+  const weekStart = new Date(since).toLocaleDateString(dateLocale, {
     day: "numeric",
     month: "short",
   });
-  const weekEnd = new Date(now).toLocaleDateString("fr-FR", {
+  const weekEnd = new Date(now).toLocaleDateString(dateLocale, {
     day: "numeric",
     month: "short",
   });
@@ -163,8 +176,8 @@ export default async function WeekPage() {
       <div className="relative z-20 max-w-7xl mx-auto px-6 pt-6">
         <Breadcrumb
           items={[
-            { label: "Accueil", href: "/" },
-            { label: "Cette semaine" },
+            { label: t("nav.home"), href: "/" },
+            { label: t("p_week.breadcrumb") },
           ]}
         />
       </div>
@@ -181,32 +194,30 @@ export default async function WeekPage() {
 
         <div className="relative max-w-5xl mx-auto text-center">
           <p className="font-data text-[10px] uppercase tracking-[0.35em] text-[var(--cyan)]/70 mb-4">
-            ▽ Hebdomadaire · {weekStart} → {weekEnd}
+            ▽ {t("p_week.eyebrow")} · {weekStart} → {weekEnd}
           </p>
           <h1 className="font-display text-5xl md:text-7xl lg:text-8xl font-black leading-none">
-            <span className="text-white">CETTE </span>
-            <span className="text-shimmer">SEMAINE</span>
+            <span className="text-white">{t("p_week.title_line1")} </span>
+            <span className="text-shimmer">{t("p_week.title_line2")}</span>
           </h1>
 
           {totalClips === 0 ? (
             <p className="mt-6 max-w-2xl mx-auto text-base md:text-lg text-white/60 leading-relaxed">
-              Aucun clip publié dans les 7 derniers jours. Le pipeline attend
-              le prochain match KC.
+              {t("p_week.empty")}
             </p>
           ) : (
             <>
               <p className="mt-6 max-w-2xl mx-auto text-base md:text-lg text-white/70 leading-relaxed">
-                Les meilleurs moments Karmine Corp des 7 derniers jours,
-                classés par score IA et bonus multi-kills.
+                {t("p_week.subtitle")}
               </p>
 
               {/* Quick stats */}
               <div className="mt-8 flex flex-wrap gap-6 justify-center items-center">
-                <Stat value={totalClips} label="Clips publiés" />
-                {totalPentas > 0 && <Stat value={totalPentas} label="Pentakills" accent="orange" />}
-                {totalQuadras > 0 && <Stat value={totalQuadras} label="Quadras" accent="orange" />}
+                <Stat value={totalClips} label={t("p_week.stat_clips")} />
+                {totalPentas > 0 && <Stat value={totalPentas} label={t("p_week.stat_pentas")} accent="orange" />}
+                {totalQuadras > 0 && <Stat value={totalQuadras} label={t("p_week.stat_quadras")} accent="orange" />}
                 {topScore > 0 && (
-                  <Stat value={topScore.toFixed(1)} label="Top score IA" accent="gold" suffix="/10" />
+                  <Stat value={topScore.toFixed(1)} label={t("p_week.stat_top_score")} accent="gold" suffix="/10" />
                 )}
               </div>
             </>
@@ -218,7 +229,7 @@ export default async function WeekPage() {
       {top3.length > 0 && (
         <section className="max-w-7xl mx-auto px-4 md:px-6 py-12">
           <h2 className="font-display text-2xl md:text-3xl font-black text-[var(--gold)] mb-6">
-            🏆 Podium de la semaine
+            🏆 {t("p_week.podium_title")}
           </h2>
           <div className="grid gap-4 md:grid-cols-3">
             {top3.map(({ kill }, i) => (
@@ -232,11 +243,11 @@ export default async function WeekPage() {
       {rest.length > 0 && (
         <section className="max-w-7xl mx-auto px-4 md:px-6 pb-16">
           <h2 className="font-display text-xl md:text-2xl font-black text-white/80 mb-6">
-            Et aussi...
+            {t("p_week.more_title")}
           </h2>
           <div className="grid gap-3 grid-cols-2 md:grid-cols-4 lg:grid-cols-5">
             {rest.map(({ kill }) => (
-              <MiniCard key={kill.id} kill={kill} data={data} />
+              <MiniCard key={kill.id} kill={kill} data={data} t={t} />
             ))}
           </div>
         </section>
@@ -245,26 +256,26 @@ export default async function WeekPage() {
       {/* ─── DEEPER DIVE CTA ────────────────────────────────────────── */}
       <section className="max-w-3xl mx-auto px-6 pb-20 text-center">
         <p className="text-sm text-white/60 mb-4">
-          Besoin d&apos;aller plus loin ?
+          {t("p_week.cta_prompt")}
         </p>
         <div className="flex gap-3 justify-center flex-wrap">
           <Link
             href="/records"
             className="rounded-xl border border-[var(--gold)]/30 bg-[var(--gold)]/5 px-5 py-2.5 text-xs font-display font-bold uppercase tracking-widest text-[var(--gold)] hover:bg-[var(--gold)]/15 transition-all"
           >
-            ★ Records Absolus
+            ★ {t("p_week.cta_records")}
           </Link>
           <Link
             href="/scroll"
             className="rounded-xl border border-[var(--cyan)]/30 bg-[var(--cyan)]/5 px-5 py-2.5 text-xs font-display font-bold uppercase tracking-widest text-[var(--cyan)] hover:bg-[var(--cyan)]/15 transition-all"
           >
-            ▶ Scroll complet
+            ▶ {t("p_week.cta_scroll")}
           </Link>
           <Link
             href="/clips?sort=recent"
             className="rounded-xl border border-[var(--border-gold)] bg-[var(--bg-surface)] px-5 py-2.5 text-xs font-display font-bold uppercase tracking-widest text-white/70 hover:text-white hover:border-[var(--gold)]/40 transition-all"
           >
-            Tous les clips
+            {t("p_week.cta_all_clips")}
           </Link>
         </div>
       </section>
@@ -433,9 +444,11 @@ function PodiumCard({
 function MiniCard({
   kill,
   data,
+  t,
 }: {
   kill: CardKillRow;
   data: ReturnType<typeof loadRealData>;
+  t: ServerTranslateFn;
 }) {
   const matchExt = kill.games?.matches?.external_id;
   const matchJson = matchExt ? data.matches.find((m) => m.id === matchExt) : null;
@@ -460,7 +473,7 @@ function MiniCard({
       {/* Top meta */}
       <div className="absolute top-2 left-2 right-2 flex items-center justify-between gap-1 z-10">
         <span className="rounded bg-black/70 backdrop-blur-sm px-1.5 py-0.5 text-[9px] font-bold text-white">
-          vs {matchJson?.opponent.code ?? "?"}
+          {t("p_week.vs")} {matchJson?.opponent.code ?? t("p_week.opponent_unknown")}
         </span>
         {kill.highlight_score !== null && (
           <span className="rounded bg-black/70 backdrop-blur-sm px-1.5 py-0.5 text-[9px] font-bold text-[var(--gold)]">

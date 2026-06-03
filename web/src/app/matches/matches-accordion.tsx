@@ -5,6 +5,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { ChevronDown } from "lucide-react";
 import { KC_LOGO, TEAM_LOGOS } from "@/lib/kc-assets";
+import { useT } from "@/lib/i18n/use-lang";
 
 /** Small rotated gold square accent — copied from the /vs hextech surfaces. */
 function CornerLosange({
@@ -55,6 +56,7 @@ interface YearGroup {
 }
 
 export function MatchesAccordion({ years }: { years: YearGroup[] }) {
+  const t = useT();
   // Most recent year open by default
   const [openYears, setOpenYears] = useState<Set<string>>(
     new Set(years.length > 0 ? [years[0].year] : [])
@@ -87,8 +89,8 @@ export function MatchesAccordion({ years }: { years: YearGroup[] }) {
       <div className="flex flex-wrap gap-2">
         <input
           type="text"
-          aria-label="Filtrer les matchs par adversaire"
-          placeholder="Filtrer par adversaire..."
+          aria-label={t("p_matches.filter_aria")}
+          placeholder={t("p_matches.filter_placeholder")}
           value={filter}
           onChange={(e) => setFilter(e.target.value)}
           className="flex-1 min-w-[200px] rounded-lg border border-[var(--border-gold)] bg-[var(--bg-surface)] px-3 py-2 text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] outline-none focus:border-[var(--gold)]"
@@ -99,7 +101,7 @@ export function MatchesAccordion({ years }: { years: YearGroup[] }) {
               key={v}
               onClick={() => setResultFilter(v)}
               aria-pressed={resultFilter === v}
-              aria-label={v === "all" ? "Tous les matchs" : v === "win" ? "Victoires uniquement" : "Défaites uniquement"}
+              aria-label={v === "all" ? t("p_matches.filter_all_aria") : v === "win" ? t("p_matches.filter_win_aria") : t("p_matches.filter_loss_aria")}
               className={`rounded-lg px-3 py-2 text-xs font-bold uppercase tracking-wider transition-colors ${
                 resultFilter === v
                   ? v === "win" ? "bg-[var(--green)]/20 text-[var(--green)] border border-[var(--green)]/40"
@@ -108,7 +110,7 @@ export function MatchesAccordion({ years }: { years: YearGroup[] }) {
                   : "bg-[var(--bg-surface)] text-[var(--text-muted)] border border-[var(--border-gold)] hover:bg-[var(--bg-elevated)]"
               }`}
             >
-              {v === "all" ? "Tous" : v === "win" ? "W" : "L"}
+              {v === "all" ? t("p_matches.filter_all") : v === "win" ? "W" : "L"}
             </button>
           ))}
         </div>
@@ -122,7 +124,7 @@ export function MatchesAccordion({ years }: { years: YearGroup[] }) {
                 : "bg-[var(--bg-surface)] text-[var(--text-muted)] border border-[var(--border-gold)] hover:bg-[var(--bg-elevated)]"
             }`}
           >
-            Avec clips
+            {t("p_matches.with_clips")}
           </button>
         )}
         {hasFilters && (
@@ -130,7 +132,7 @@ export function MatchesAccordion({ years }: { years: YearGroup[] }) {
             onClick={resetAll}
             className="rounded-lg border border-[var(--red)]/30 px-3 py-2 text-xs text-[var(--red)] hover:bg-[var(--red)]/10"
           >
-            Reset
+            {t("p_matches.reset")}
           </button>
         )}
       </div>
@@ -165,7 +167,7 @@ export function MatchesAccordion({ years }: { years: YearGroup[] }) {
               <div className="flex items-center gap-2">
                 <h2 className="font-display text-xl font-bold text-[var(--gold)]">{year}</h2>
                 <span className="font-data text-[10px] text-[var(--text-muted)]">
-                  {filtered.length} matchs &middot; {wins}W-{losses}L
+                  {t("p_matches.n_matches", { n: filtered.length })} &middot; {wins}W-{losses}L
                 </span>
                 <ChevronDown
                   aria-hidden
@@ -211,7 +213,7 @@ export function MatchesAccordion({ years }: { years: YearGroup[] }) {
                       </div>
                       {match.kc_won === null ? (
                         <span className="rounded-lg border border-[var(--border-gold)] bg-[var(--bg-elevated)] px-2 py-1 text-[9px] font-bold uppercase tracking-wider text-[var(--text-muted)]">
-                          À&nbsp;venir
+                          {t("p_matches.upcoming")}
                         </span>
                       ) : (
                         <span className={`flex h-7 w-7 items-center justify-center rounded-lg text-[11px] font-bold ${match.kc_won ? "bg-[var(--green)]/20 text-[var(--green)]" : "bg-[var(--red)]/20 text-[var(--red)]"}`}>
@@ -235,7 +237,7 @@ export function MatchesAccordion({ years }: { years: YearGroup[] }) {
                     <div className="mt-auto flex items-center justify-between gap-2 border-t border-[var(--border-subtle)] pt-2.5 pl-1">
                       <div className="flex items-center gap-2">
                         {match.hasGames && (
-                          <p className="font-data text-xs" title="Kills KC — Kills adverses">
+                          <p className="font-data text-xs" title={t("p_matches.kills_tooltip")}>
                             <span className="text-[var(--green)]">{match.totalKc}</span>
                             <span className="text-[var(--text-muted)]">-</span>
                             <span className="text-[var(--red)]">{match.totalOpp}</span>
@@ -243,7 +245,7 @@ export function MatchesAccordion({ years }: { years: YearGroup[] }) {
                         )}
                         {(match.clipCount ?? 0) > 0 && (
                           <span className="badge-glass rounded-md px-2 py-0.5 text-[9px] font-bold text-[var(--gold)]">
-                            {match.clipCount} clips
+                            {t("p_matches.clips_count", { n: match.clipCount ?? 0 })}
                           </span>
                         )}
                       </div>

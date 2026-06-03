@@ -20,6 +20,7 @@ import { isDescriptionClean } from "@/lib/scroll/sanitize-description";
 import { Breadcrumb } from "@/components/Breadcrumb";
 import { JsonLd, breadcrumbLD, recordsCollectionLD } from "@/lib/seo/jsonld";
 import { Description } from "@/components/i18n/Description";
+import { getServerT, type ServerTranslateFn } from "@/lib/i18n/getServerLang";
 
 /**
  * /records — "Records Absolus" hall-of-fame.
@@ -67,8 +68,17 @@ export const metadata: Metadata = {
 };
 
 interface Category {
+  /**
+   * Canonical FR title — kept as a STABLE identifier even after i18n.
+   * Drives the React key, the `#cat-…` anchor id/href slug, and the
+   * JSON-LD category name (SEO stays FR-canonical). The *displayed*
+   * title is resolved at render time via `t(p_records.<i18nKey>_title)`.
+   */
   title: string;
+  /** Canonical FR kicker — displayed copy comes from i18n (see i18nKey). */
   kicker: string;
+  /** i18n sub-key under `p_records.*` for the localized title + kicker. */
+  i18nKey: string;
   /** lucide-react icon used as the category's primary hextech mark. */
   Icon: LucideIcon;
   accent: string;
@@ -87,6 +97,7 @@ const CATEGORIES: Category[] = [
   {
     title: "Score IA absolu",
     kicker: "Les plus gros moments",
+    i18nKey: "cat_score",
     Icon: Trophy,
     accent: "var(--gold)",
     filter: (k) =>
@@ -96,6 +107,7 @@ const CATEGORIES: Category[] = [
   {
     title: "Pentakills & quadras",
     kicker: "Multi-kills historiques",
+    i18nKey: "cat_multi",
     Icon: Swords,
     accent: "var(--orange)",
     filter: (k) =>
@@ -106,6 +118,7 @@ const CATEGORIES: Category[] = [
   {
     title: "First bloods",
     kicker: "Le premier sang",
+    i18nKey: "cat_fb",
     Icon: Droplet,
     accent: "var(--red)",
     filter: (k) =>
@@ -115,6 +128,7 @@ const CATEGORIES: Category[] = [
   {
     title: "1v3 & clutch",
     kicker: "Outplays solo",
+    i18nKey: "cat_clutch",
     Icon: Crosshair,
     accent: "var(--cyan)",
     filter: (k) =>
@@ -125,6 +139,7 @@ const CATEGORIES: Category[] = [
   {
     title: "Teamfights",
     kicker: "Gros combats",
+    i18nKey: "cat_teamfight",
     Icon: Flame,
     accent: "var(--green)",
     filter: (k) =>
@@ -135,6 +150,7 @@ const CATEGORIES: Category[] = [
   {
     title: "Snipes & skillshots",
     kicker: "Précision chirurgicale",
+    i18nKey: "cat_snipe",
     Icon: Target,
     accent: "var(--gold)",
     filter: (k) =>
@@ -157,6 +173,7 @@ export default async function RecordsPage() {
   // Wave 36 — getCardKills (slim CARD_SELECT) instead of getPublishedKills:
   // this page renders only card fields, so the ~25 extra columns the fat
   // loader ships were dead egress. Cuts the per-cache-miss payload ~2-3×.
+  const { t } = await getServerT();
   const all = await getCardKills(500, { buildTime: true });
   const scored = all.filter((k) => k.kill_visible !== false);
 
@@ -204,8 +221,8 @@ export default async function RecordsPage() {
       <div className="relative z-20 max-w-7xl mx-auto px-6 pt-6">
         <Breadcrumb
           items={[
-            { label: "Accueil", href: "/" },
-            { label: "Records Absolus" },
+            { label: t("nav.home"), href: "/" },
+            { label: t("p_records.title") },
           ]}
         />
       </div>
@@ -259,16 +276,15 @@ export default async function RecordsPage() {
         <div className="relative max-w-5xl mx-auto text-center">
           <p className="font-data text-[10px] uppercase tracking-[0.35em] text-[var(--gold)]/70 mb-4 flex items-center justify-center gap-2.5">
             <Losange />
-            Hall of Fame
+            {t("p_records.hero_eyebrow")}
           </p>
           <h1 className="font-display text-5xl md:text-7xl lg:text-8xl font-black leading-none">
-            <span className="text-shimmer">RECORDS</span>
+            <span className="text-shimmer">{t("p_records.hero_title_l1")}</span>
             <br />
-            <span className="text-white">ABSOLUS</span>
+            <span className="text-white">{t("p_records.hero_title_l2")}</span>
           </h1>
           <p className="mt-6 max-w-2xl mx-auto text-base md:text-lg text-[var(--text-muted)] leading-relaxed">
-            Les plus gros moments de la Karmine Corp en LEC. Classés par catégorie.
-            Score IA · Multi-kills · First bloods · Clutch plays.
+            {t("p_records.hero_subtitle")}
           </p>
 
           {/* Category quick-nav */}
@@ -285,7 +301,7 @@ export default async function RecordsPage() {
                   strokeWidth={2.25}
                   aria-hidden
                 />
-                {cat.title}
+                {t(`p_records.${cat.i18nKey}_title`)}
               </a>
             ))}
           </nav>
@@ -298,7 +314,7 @@ export default async function RecordsPage() {
               className="group inline-flex items-center gap-2 rounded-full border border-[var(--cyan)]/30 bg-[var(--cyan)]/5 px-4 py-1.5 text-[11px] font-bold uppercase tracking-widest text-[var(--cyan)] hover:bg-[var(--cyan)]/15 transition-all"
             >
               <CalendarDays className="h-3.5 w-3.5" strokeWidth={2.25} aria-hidden />
-              <span>Voir cette semaine</span>
+              <span>{t("p_records.see_this_week")}</span>
               <ChevronRight
                 className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5"
                 strokeWidth={3}
@@ -325,17 +341,17 @@ export default async function RecordsPage() {
                     style={{ color: cat.accent }}
                   >
                     <cat.Icon className="h-3.5 w-3.5" strokeWidth={2.25} aria-hidden />
-                    {cat.kicker}
+                    {t(`p_records.${cat.i18nKey}_kicker`)}
                   </p>
                   <h2 className="font-display text-3xl md:text-4xl font-black text-white">
-                    {cat.title}
+                    {t(`p_records.${cat.i18nKey}_title`)}
                   </h2>
                 </div>
                 <Link
                   href={cat.allHref}
                   className="group inline-flex items-center gap-1.5 rounded-full border border-[var(--border-gold)] bg-[var(--bg-surface)] px-4 py-1.5 text-[11px] font-bold uppercase tracking-widest text-[var(--text-muted)] hover:border-[var(--gold)]/60 hover:text-[var(--gold)] transition-all"
                 >
-                  Voir tout
+                  {t("p_records.see_all")}
                   <ChevronRight
                     className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5"
                     strokeWidth={3}
@@ -349,7 +365,7 @@ export default async function RecordsPage() {
 
             <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3 lg:grid-cols-4">
               {rows.map((k, i) => (
-                <RecordCard key={k.id} kill={k} rank={i + 1} accent={cat.accent} />
+                <RecordCard key={k.id} kill={k} rank={i + 1} accent={cat.accent} t={t} />
               ))}
             </div>
           </section>
@@ -358,8 +374,7 @@ export default async function RecordsPage() {
         {categories.length === 0 && (
           <section className="text-center py-20">
             <p className="text-sm text-[var(--text-muted)]">
-              Pas encore assez de clips analysés pour remplir le hall of fame.
-              Le pipeline automatique tourne — reviens dans quelques heures.
+              {t("p_records.empty")}
             </p>
           </section>
         )}
@@ -374,10 +389,12 @@ function RecordCard({
   kill,
   rank,
   accent,
+  t,
 }: {
   kill: CardKillRow;
   rank: number;
   accent: string;
+  t: ServerTranslateFn;
 }) {
   return (
     <Link
@@ -401,6 +418,7 @@ function RecordCard({
       {/* Rank badge — hextech gold frame for #1, slim dark chip otherwise */}
       <div className="absolute top-2.5 left-2.5 z-10">
         <div
+          aria-label={t("p_records.rank", { n: rank })}
           className="flex h-9 w-9 items-center justify-center rounded-lg font-display text-base font-black backdrop-blur-sm"
           style={{
             color: rank === 1 ? "var(--bg-primary)" : "var(--gold-bright)",

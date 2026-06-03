@@ -20,6 +20,7 @@ import {
   type TopQuoteRow,
 } from "@/lib/supabase/quotes";
 import { JsonLd, breadcrumbLD } from "@/lib/seo/jsonld";
+import { getServerT } from "@/lib/i18n/server-lang";
 import type { QuoteCardData } from "@/components/quotes/QuoteCard";
 
 export const revalidate = 900;
@@ -88,6 +89,7 @@ function pickFeatured(rows: TopQuoteRow[]): TopQuoteRow | null {
 }
 
 export default async function QuotesPage() {
+  const { t } = await getServerT();
   const [stats, top] = await Promise.all([
     getQuotesStats({ buildTime: true }),
     getTopQuotes(60, 1, { buildTime: true }),
@@ -191,12 +193,9 @@ export default async function QuotesPage() {
           CLAUDE.md PARTIE 7.6. Contrast fix kept : --text-muted (AA),
           never --text-disabled. */}
       <p className="relative mx-auto mt-16 max-w-3xl text-center text-[10px] uppercase tracking-widest text-[var(--text-muted)] px-6">
-        Les phrases sont extraites par IA depuis les commentaires officiels
-        des casts. KCKILLS was created under Riot Games&apos; &laquo; Legal
-        Jibber Jabber &raquo; policy using assets owned by Riot Games. Riot
-        Games does not endorse or sponsor this project.{" "}
+        {t("p_quotes.disclaimer_lead")} {t("legal.riot_disclaimer")}{" "}
         <Link href="/privacy" className="underline hover:text-[var(--gold)]">
-          Politique
+          {t("p_quotes.privacy_link")}
         </Link>
         .
       </p>

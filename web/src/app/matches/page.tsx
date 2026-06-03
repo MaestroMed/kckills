@@ -3,6 +3,7 @@ import { loadRealData, getMatchesSorted } from "@/lib/real-data";
 import { getPublishedKills } from "@/lib/supabase/kills";
 import { createAnonSupabase } from "@/lib/supabase/server";
 import { Breadcrumb } from "@/components/Breadcrumb";
+import { getServerT } from "@/lib/i18n/getServerLang";
 import { MatchesAccordion } from "./matches-accordion";
 
 export const revalidate = 600; // Wave 13d : new match every 1-3 days
@@ -23,6 +24,7 @@ export const metadata: Metadata = {
 };
 
 export default async function MatchesPage() {
+  const { t } = await getServerT();
   const sb = await createAnonSupabase();
   // Wave 34 T2.2 — trim 500 → 300.
   // The list iterates `allClips` only to compute `clipsByMatch.size`
@@ -175,7 +177,7 @@ export default async function MatchesPage() {
 
         <div className="relative z-10 mx-auto max-w-7xl">
           <Breadcrumb
-            items={[{ label: "Accueil", href: "/" }, { label: "Matchs" }]}
+            items={[{ label: t("nav.home"), href: "/" }, { label: t("nav.matches") }]}
           />
 
           <div className="mt-10 text-center">
@@ -192,32 +194,32 @@ export default async function MatchesPage() {
                   boxShadow: "0 0 10px rgba(200,170,110,0.5)",
                 }}
               />
-              {allMatches.length} matchs
-              {winRate != null && <span>\u00B7 {winRate}% winrate</span>}
+              {t("p_matches.n_matches", { n: allMatches.length })}
+              {winRate != null && (
+                <span>\u00B7 {t("p_matches.winrate", { rate: winRate })}</span>
+              )}
             </p>
             <h1 className="font-display text-5xl md:text-7xl lg:text-8xl font-black leading-none tracking-tight">
-              <span className="text-shimmer">MATCHS</span>
+              <span className="text-shimmer">{t("p_matches.hero_title")}</span>
             </h1>
             <p className="mt-6 max-w-2xl mx-auto text-base md:text-lg text-[var(--text-muted)] leading-relaxed">
-              Tout l&apos;historique Karmine Corp, saison par saison. Scores,
-              r\u00E9sultats, kills par game et clips vid\u00E9o. Clique un match pour
-              ouvrir sa timeline compl\u00E8te.
+              {t("p_matches.subtitle")}
             </p>
 
             {/* Tally chips */}
             <div className="mt-7 flex items-center justify-center gap-2.5 flex-wrap font-data text-[11px] uppercase tracking-widest">
               <span className="rounded-lg border border-[var(--green)]/30 bg-[var(--green)]/10 px-3 py-1.5 font-bold text-[var(--green)]">
-                {totalWins}V
+                {t("p_matches.wins_short", { n: totalWins })}
               </span>
               <span className="rounded-lg border border-[var(--red)]/30 bg-[var(--red)]/10 px-3 py-1.5 font-bold text-[var(--red)]">
-                {totalLosses}D
+                {t("p_matches.losses_short", { n: totalLosses })}
               </span>
               <span className="rounded-lg border border-[var(--border-gold)] bg-[var(--bg-surface)] px-3 py-1.5 text-[var(--text-muted)]">
-                {data.total_games} games
+                {t("p_matches.games_count", { n: data.total_games })}
               </span>
               {allClips.length > 0 && (
                 <span className="badge-glass rounded-lg px-3 py-1.5 font-bold text-[var(--gold)]">
-                  {allClips.length} clips
+                  {t("p_matches.clips_count", { n: allClips.length })}
                 </span>
               )}
             </div>
