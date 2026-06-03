@@ -72,6 +72,7 @@ import type {
 import type { RecommendedKillRow } from "@/lib/supabase/recommendations";
 import { rateKill } from "@/components/community/actions";
 import { track } from "@/lib/analytics/track";
+import { useT } from "@/lib/i18n/use-lang";
 
 /**
  * Recommendation engine feature flag.
@@ -185,6 +186,7 @@ export function ScrollFeedV2({
   rosterChips,
   feedTab = "pour-toi",
 }: Props) {
+  const t = useT();
   const containerRef = useRef<HTMLDivElement>(null);
   const [itemHeight, setItemHeight] = useState(0);
   const [muted, setMuted] = useState(true);
@@ -603,7 +605,7 @@ export function ScrollFeedV2({
     const active = visibleItems[activeIndex];
     if (!active || typeof window === "undefined") return;
     const url = `${window.location.origin}/scroll?kill=${active.id}`;
-    const title = "KCKILLS — clip à voir";
+    const title = t("p_scroll.sh_share_title");
     try {
       if (typeof navigator !== "undefined" && typeof navigator.share === "function") {
         await navigator.share({ title, url });
@@ -614,10 +616,10 @@ export function ScrollFeedV2({
     }
     try {
       await navigator.clipboard.writeText(url);
-      setShareToast("Lien copié !");
+      setShareToast(t("p_scroll.sh_link_copied"));
       window.setTimeout(() => setShareToast(null), 1800);
     } catch {
-      setShareToast("Copie impossible");
+      setShareToast(t("p_scroll.sh_copy_failed"));
       window.setTimeout(() => setShareToast(null), 1800);
     }
   };
@@ -928,7 +930,7 @@ export function ScrollFeedV2({
         className="absolute inset-0"
         style={{ y, willChange: "transform" }}
         role="feed"
-        aria-label="Feed des kills Karmine Corp"
+        aria-label={t("p_scroll.sh_feed_aria")}
         aria-busy={isRefreshing}
         {...bind()}
       >
@@ -1091,10 +1093,10 @@ export function ScrollFeedV2({
           <div className="text-center max-w-md px-6">
             <div className="text-6xl mb-6">{"⚔️"}</div>
             <h1 className="font-display text-3xl font-black text-[var(--gold)] mb-3 uppercase">
-              Aucun clip
+              {t("p_scroll.sh_empty_title")}
             </h1>
             <p className="text-sm text-[var(--text-muted)] mb-6">
-              Le worker travaille en background, reviens dans quelques minutes.
+              {t("p_scroll.sh_empty_body")}
             </p>
           </div>
         </div>
@@ -1148,7 +1150,7 @@ export function ScrollFeedV2({
         <button
           onClick={toggleMute}
           className="fixed right-5 top-5 z-[65] hidden lg:flex h-11 w-11 items-center justify-center rounded-full border border-white/10 bg-black/60 backdrop-blur-sm text-white/70 transition-colors hover:text-[var(--gold)] hover:border-[var(--gold)]/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--gold)] focus-visible:outline-offset-2"
-          aria-label={muted ? "Activer le son" : "Couper le son"}
+          aria-label={muted ? t("p_scroll.sh_unmute") : t("p_scroll.sh_mute")}
           style={{ right: "max(1.25rem, calc(var(--ctx) + 1.25rem))" }}
         >
           {muted ? (
@@ -1193,7 +1195,7 @@ export function ScrollFeedV2({
         className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-4 py-3"
         style={{ paddingTop: "max(0.75rem, env(safe-area-inset-top, 0.75rem))" }}
       >
-        <Link href="/" aria-label="Accueil" className="flex h-9 w-9 items-center justify-center rounded-full bg-black/60 backdrop-blur-sm">
+        <Link href="/" aria-label={t("p_scroll.sh_home")} className="flex h-9 w-9 items-center justify-center rounded-full bg-black/60 backdrop-blur-sm">
           <svg className="h-5 w-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
           </svg>
@@ -1216,7 +1218,7 @@ export function ScrollFeedV2({
           <button
             type="button"
             onClick={() => setSettingsOpen((v) => !v)}
-            aria-label="Réglages du scroll"
+            aria-label={t("p_scroll.sh_settings")}
             aria-expanded={settingsOpen}
             className="flex h-9 w-9 items-center justify-center rounded-full bg-black/60 backdrop-blur-sm hover:bg-black/80 transition-colors"
           >
@@ -1236,7 +1238,7 @@ export function ScrollFeedV2({
           <button
             onClick={toggleMute}
             className="flex h-9 w-9 items-center justify-center rounded-full bg-black/60 backdrop-blur-sm"
-            aria-label={muted ? "Activer le son" : "Couper le son"}
+            aria-label={muted ? t("p_scroll.sh_unmute") : t("p_scroll.sh_mute")}
           >
             {muted ? (
               <svg className="h-4 w-4 text-white/70" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2" /></svg>
@@ -1309,7 +1311,7 @@ export function ScrollFeedV2({
         <button
           onClick={() => setShowHelp(true)}
           className="hidden md:flex fixed bottom-6 left-6 z-40 h-10 w-10 items-center justify-center rounded-full bg-black/60 backdrop-blur-md border border-white/10 text-white/65 transition-colors hover:bg-black/80 hover:text-[var(--gold)] hover:border-[var(--gold)]/40"
-          aria-label="Raccourcis clavier"
+          aria-label={t("p_scroll.sh_keyboard_shortcuts")}
         >
           <span className="font-data text-base font-bold">?</span>
         </button>

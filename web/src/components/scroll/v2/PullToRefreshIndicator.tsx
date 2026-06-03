@@ -21,6 +21,7 @@
 
 import { useEffect, useState } from "react";
 import { m, useMotionValueEvent, type MotionValue } from "motion/react";
+import { useT } from "@/lib/i18n/use-lang";
 
 const PTR_THRESHOLD = 80;
 
@@ -43,6 +44,7 @@ export function PullToRefreshIndicator({
   onRefresh,
   isRefreshing,
 }: Props) {
+  const t = useT();
   /** Current pull distance in px. 0 = idle, >0 = being pulled. */
   const [pullPx, setPullPx] = useState(0);
   /** Have we crossed the threshold this gesture? — controls colour
@@ -147,11 +149,11 @@ export function PullToRefreshIndicator({
         style={{ color: armed || isRefreshing ? "var(--gold)" : "rgba(255,255,255,0.5)" }}
       >
         {isRefreshing
-          ? "Mélange..."
+          ? t("p_scroll.ban_ptr_shuffling")
           : armed
-            ? "Lâcher pour mélanger"
+            ? t("p_scroll.ban_ptr_release")
             : pullPx > 5
-              ? "Tirer"
+              ? t("p_scroll.ban_ptr_pull")
               : ""}
       </p>
     </m.div>

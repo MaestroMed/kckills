@@ -25,6 +25,7 @@
 
 import { useEffect } from "react";
 import { track } from "@/lib/analytics/track";
+import { useT } from "@/lib/i18n/use-lang";
 
 interface Props {
   open: boolean;
@@ -109,6 +110,7 @@ export function ShareSheet({
   shareText,
   shareUrl,
 }: Props) {
+  const t = useT();
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
@@ -146,7 +148,7 @@ export function ShareSheet({
     <div
       role="dialog"
       aria-modal="true"
-      aria-label="Partager le clip"
+      aria-label={t("p_scroll.act_share_clip")}
       className="fixed inset-0 z-[220] flex items-end sm:items-center justify-center"
     >
       <div
@@ -161,12 +163,12 @@ export function ShareSheet({
         <div className="mx-auto sm:hidden mt-1 h-1 w-10 rounded-full bg-white/30" />
         <header className="flex items-center justify-between">
           <h2 className="font-display text-xs font-bold uppercase tracking-widest text-[var(--gold)]">
-            Partager
+            {t("p_scroll.act_share")}
           </h2>
           <button
             type="button"
             onClick={onClose}
-            aria-label="Fermer"
+            aria-label={t("p_scroll.act_close")}
             className="h-7 w-7 inline-flex items-center justify-center rounded-full bg-white/10 text-white/70 hover:bg-white/20"
           >
             ×
@@ -212,13 +214,13 @@ export function ShareSheet({
               ⧉
             </span>
             <span className="text-[10px] font-data uppercase tracking-widest text-[var(--gold)]">
-              Copier
+              {t("p_scroll.act_copy")}
             </span>
           </button>
         </div>
 
         <p className="text-[10px] text-[var(--text-muted)] text-center">
-          Le lien pointe vers <code className="font-mono">{shareUrl}</code>
+          {t("p_scroll.act_link_points_to")} <code className="font-mono">{shareUrl}</code>
         </p>
       </div>
     </div>

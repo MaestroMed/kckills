@@ -25,6 +25,7 @@
 import { useEffect, useRef } from "react";
 import Link from "next/link";
 import { track } from "@/lib/analytics/track";
+import { useT } from "@/lib/i18n/use-lang";
 
 interface Props {
   open: boolean;
@@ -51,6 +52,7 @@ export function LongPressMenu({
   onShare,
   onReport,
 }: Props) {
+  const t = useT();
   const sheetRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -85,7 +87,7 @@ export function LongPressMenu({
     <div
       role="dialog"
       aria-modal="true"
-      aria-label="Menu d'actions"
+      aria-label={t("p_scroll.act_menu_actions")}
       className="fixed inset-0 z-[220] flex items-end sm:items-center justify-center"
     >
       {/* Backdrop */}
@@ -109,7 +111,7 @@ export function LongPressMenu({
           className={itemCls}
         >
           <span className="text-[var(--orange)]" aria-hidden>⊘</span>
-          <span className="flex-1">Pas intéressé</span>
+          <span className="flex-1">{t("p_scroll.act_not_interested")}</span>
           <span className="text-[10px] text-[var(--text-muted)]">V29</span>
         </button>
 
@@ -119,7 +121,7 @@ export function LongPressMenu({
           className={itemCls}
         >
           <span className="text-[var(--gold)]" aria-hidden>★</span>
-          <span className="flex-1">Sauvegarder</span>
+          <span className="flex-1">{t("p_scroll.act_save")}</span>
         </button>
 
         <button
@@ -128,7 +130,7 @@ export function LongPressMenu({
           className={itemCls}
         >
           <span className="text-[var(--cyan)]" aria-hidden>↗</span>
-          <span className="flex-1">Partager</span>
+          <span className="flex-1">{t("p_scroll.act_share")}</span>
         </button>
 
         <Link
@@ -149,7 +151,7 @@ export function LongPressMenu({
           className={itemCls}
         >
           <span className="text-white/70" aria-hidden>↗</span>
-          <span className="flex-1">Voir la page du kill</span>
+          <span className="flex-1">{t("p_scroll.act_view_kill_page")}</span>
         </Link>
 
         {killerPlayerId && (
@@ -159,7 +161,7 @@ export function LongPressMenu({
             className={itemCls}
           >
             <span className="text-[var(--gold)]" aria-hidden>◆</span>
-            <span className="flex-1">Voir le joueur</span>
+            <span className="flex-1">{t("p_scroll.act_view_player")}</span>
           </Link>
         )}
 
@@ -170,7 +172,7 @@ export function LongPressMenu({
             className={itemCls}
           >
             <span className="text-white/70" aria-hidden>◆</span>
-            <span className="flex-1">Champion : {killerChampion}</span>
+            <span className="flex-1">{t("p_scroll.act_champion_label", { champion: killerChampion })}</span>
           </Link>
         )}
 
@@ -181,7 +183,7 @@ export function LongPressMenu({
             className={itemCls}
           >
             <span className="text-white/70" aria-hidden>◆</span>
-            <span className="flex-1">Champion : {victimChampion}</span>
+            <span className="flex-1">{t("p_scroll.act_champion_label", { champion: victimChampion })}</span>
           </Link>
         )}
 
@@ -191,7 +193,7 @@ export function LongPressMenu({
           className={itemCls}
         >
           <span className="text-[var(--red)]" aria-hidden>⚐</span>
-          <span className="flex-1">Signaler</span>
+          <span className="flex-1">{t("p_scroll.act_report")}</span>
         </button>
 
         <button
@@ -199,7 +201,7 @@ export function LongPressMenu({
           onClick={onClose}
           className="block w-full text-center mt-1 px-5 py-3 text-sm font-bold text-[var(--text-muted)] hover:text-[var(--gold)]"
         >
-          Annuler
+          {t("p_scroll.act_cancel")}
         </button>
       </div>
     </div>

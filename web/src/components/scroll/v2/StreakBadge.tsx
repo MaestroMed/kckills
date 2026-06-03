@@ -23,6 +23,7 @@
  */
 
 import { useEffect, useState } from "react";
+import { useT } from "@/lib/i18n/use-lang";
 
 const STORAGE_KEY = "kc_streak_v1";
 
@@ -90,6 +91,7 @@ function tickStreak(prev: StreakState | null, today: string): StreakState {
 }
 
 export function StreakBadge() {
+  const t = useT();
   const [streak, setStreak] = useState<number | null>(null);
 
   useEffect(() => {
@@ -109,12 +111,12 @@ export function StreakBadge() {
   return (
     <span
       role="status"
-      aria-label={`Série de ${streak} jours`}
+      aria-label={t("p_scroll.act_streak_aria", { n: streak })}
       className="inline-flex items-center gap-1 rounded-full bg-[var(--gold)]/15 border border-[var(--gold)]/40 backdrop-blur-sm px-2 py-0.5 text-[10px] font-data font-bold uppercase tracking-widest text-[var(--gold)] pointer-events-none select-none"
-      title={`Tu reviens depuis ${streak} jours d'affilée`}
+      title={t("p_scroll.act_streak_title", { n: streak })}
     >
       <span aria-hidden>🔥</span>
-      <span>Day {streak}</span>
+      <span>{t("p_scroll.act_day_n", { n: streak })}</span>
     </span>
   );
 }

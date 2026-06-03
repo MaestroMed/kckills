@@ -24,6 +24,7 @@ import { ScrollFeedV2 } from "@/components/scroll/v2/ScrollFeedV2";
 import type { GridAxisId } from "@/lib/grid/axis-config";
 import { JsonLd, breadcrumbLD } from "@/lib/seo/jsonld";
 import { pickAssetUrl } from "@/lib/kill-assets";
+import { getServerT } from "@/lib/i18n/server-lang";
 
 const SITE_URL =
   process.env.NEXT_PUBLIC_SITE_URL ??
@@ -127,6 +128,7 @@ export interface ScrollChipFilters {
 }
 
 export default async function ScrollV2Page({ searchParams }: ScrollPageProps) {
+  const { t } = await getServerT();
   const sp = (await searchParams) ?? {};
   const initialKillId = firstString(sp.kill);
   const rawAxis = firstString(sp.axis);
@@ -419,7 +421,7 @@ export default async function ScrollV2Page({ searchParams }: ScrollPageProps) {
           inside ScrollFeedV2 as a <p> (styled chrome), so the page would
           otherwise have no <h1>. sr-only keeps it screen-reader-available
           without altering the TikTok-style layout. */}
-      <h1 className="sr-only">Fil des kills Karmine Corp</h1>
+      <h1 className="sr-only">{t("p_scroll.pg_sr_heading")}</h1>
       <JsonLd data={scrollItemListJsonLd} />
       <JsonLd data={breadcrumbJsonLd} />
       {/* Wave 36 — the desktop wide-stage ScrollContextPanel (match header,

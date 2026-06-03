@@ -29,6 +29,7 @@
 import { useEffect, useRef, useState } from "react";
 import { m, AnimatePresence } from "motion/react";
 import { track } from "@/lib/analytics/track";
+import { useT } from "@/lib/i18n/use-lang";
 
 /**
  * Public hook variant — returns the same isOffline boolean the banner
@@ -57,6 +58,7 @@ export function useIsOffline(): boolean {
 }
 
 export function OfflineBanner() {
+  const t = useT();
   const isOffline = useIsOffline();
   const offlineSinceRef = useRef<number | null>(null);
 
@@ -97,9 +99,9 @@ export function OfflineBanner() {
               className="inline-block h-2 w-2 rounded-full bg-[var(--orange)] motion-safe:animate-pulse"
             />
             <p className="text-[12px] leading-tight text-white/85">
-              <span className="font-bold text-[var(--orange)]">Mode hors ligne</span>
+              <span className="font-bold text-[var(--orange)]">{t("p_scroll.ban_offline_title")}</span>
               <span className="ml-1.5 text-white/60">
-                — les nouveaux clips se chargeront au retour de la connexion
+                {t("p_scroll.ban_offline_body")}
               </span>
             </p>
           </div>

@@ -14,18 +14,20 @@
 
 import { useTransition } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
+import { useT } from "@/lib/i18n/use-lang";
 
 interface Props {
   active: "pour-toi" | "recent" | "top-semaine";
 }
 
-const TABS: Array<{ id: Props["active"]; label: string }> = [
-  { id: "pour-toi", label: "Pour toi" },
-  { id: "recent", label: "Récent" },
-  { id: "top-semaine", label: "Top 7j" },
+const TABS: Array<{ id: Props["active"]; labelKey: string }> = [
+  { id: "pour-toi", labelKey: "p_scroll.rail_tab_pour_toi" },
+  { id: "recent", labelKey: "p_scroll.rail_tab_recent" },
+  { id: "top-semaine", labelKey: "p_scroll.rail_top_7j" },
 ];
 
 export function FeedTabBar({ active }: Props) {
+  const t = useT();
   const router = useRouter();
   const pathname = usePathname();
   const sp = useSearchParams();
@@ -52,7 +54,7 @@ export function FeedTabBar({ active }: Props) {
   return (
     <div
       role="tablist"
-      aria-label="Filtre du feed"
+      aria-label={t("p_scroll.rail_feed_filter_aria")}
       className={
         // `lg:hidden` — from the wide stage up (≥1024), the persistent
         // ScrollRail replaces this floating bar. Below lg the mobile feed
@@ -66,15 +68,15 @@ export function FeedTabBar({ active }: Props) {
         top: "calc(env(safe-area-inset-top, 0.75rem) + 56px)",
       }}
     >
-      {TABS.map((t) => {
-        const isActive = t.id === active;
+      {TABS.map((tab) => {
+        const isActive = tab.id === active;
         return (
           <button
-            key={t.id}
+            key={tab.id}
             type="button"
             role="tab"
             aria-selected={isActive}
-            onClick={() => onClick(t.id)}
+            onClick={() => onClick(tab.id)}
             className={
               "rounded-full px-3 py-1 text-[11px] font-data font-bold uppercase tracking-widest transition-colors " +
               (isActive
@@ -82,7 +84,7 @@ export function FeedTabBar({ active }: Props) {
                 : "text-white/70 hover:text-[var(--gold)]")
             }
           >
-            {t.label}
+            {t(tab.labelKey)}
           </button>
         );
       })}

@@ -37,6 +37,7 @@ import { track } from "@/lib/analytics/track";
 import { LongPressMenu } from "./LongPressMenu";
 import { ShareSheet } from "./ShareSheet";
 import { useNotInterestedStore } from "./hooks/useNotInterestedStore";
+import { useT } from "@/lib/i18n/use-lang";
 
 interface SharedFeedItemProps {
   index: number;
@@ -195,6 +196,7 @@ export function FeedItemVideo({
   onAutoSkipNext,
   isWideStage = false,
 }: FeedItemVideoProps) {
+  const t = useT();
   const isKcKill = item.kcInvolvement === "team_killer";
   // Fire impression beacon after 1.5s of dwell (real engagement signal,
   // filters out flick-pasts).
@@ -236,7 +238,7 @@ export function FeedItemVideo({
     }
     try {
       await navigator.clipboard.writeText(url);
-      setShareToast("Lien copié !");
+      setShareToast(t("p_scroll.item_link_copied"));
       window.setTimeout(() => setShareToast(null), 2000);
       track("clip.shared", {
         entityType: "kill",
@@ -244,10 +246,10 @@ export function FeedItemVideo({
         metadata: { channel: "clipboard", source: "swipe_left" },
       });
     } catch {
-      setShareToast("Copie impossible");
+      setShareToast(t("p_scroll.item_copy_failed"));
       window.setTimeout(() => setShareToast(null), 2000);
     }
-  }, [item.id, item.killerChampion, item.victimChampion, item.aiDescription]);
+  }, [item.id, item.killerChampion, item.victimChampion, item.aiDescription, t]);
 
   // Wave 6 — left-swipe to share. Only enabled on the active item so
   // pool slot neighbours can't accidentally fire. The bind() spreader
@@ -569,11 +571,11 @@ export function FeedItemVideo({
                   : "bg-[var(--red)]/25 border border-[var(--red)]/55 text-[var(--red)]"
               }`}
             >
-              {isKcKill ? "● KC kill" : "○ KC death"}
+              {isKcKill ? t("p_scroll.item_badge_kc_kill") : t("p_scroll.item_badge_kc_death")}
             </span>
             {item.isFirstBlood && (
               <span className="rounded-md bg-[var(--red)]/25 border border-[var(--red)]/55 backdrop-blur-sm px-2.5 py-1 text-[10px] md:text-[11px] font-black text-[var(--red)] uppercase tracking-[0.15em] shadow-[0_4px_12px_rgba(0,0,0,0.5)]">
-                ⚡ First blood
+                {t("p_scroll.item_badge_first_blood")}
               </span>
             )}
             {item.multiKill && (
@@ -632,7 +634,7 @@ export function FeedItemVideo({
               ) : (
                 <span className="text-white/55">?</span>
               )}
-              <span className="text-white/35 mx-2">vs</span>
+              <span className="text-white/35 mx-2">{t("p_scroll.item_vs")}</span>
               {item.victimName ? (
                 <span className={!isKcKill ? "text-[var(--gold)] font-bold" : "text-white/65"}>
                   {item.victimName}
@@ -771,12 +773,14 @@ export function FeedItemVideo({
 
 // ─── Moment item (grouped fight from moments table) ────────────────────
 
-const MOMENT_LABEL: Record<string, string> = {
-  solo_kill: "SOLO KILL",
-  skirmish: "SKIRMISH",
-  teamfight: "TEAMFIGHT",
-  ace: "ACE",
-  objective_fight: "OBJECTIF",
+/** Classification → i18n key. Resolved through t() at render so the
+ *  moment headline label localizes with the active LangProvider. */
+const MOMENT_LABEL_KEY: Record<string, string> = {
+  solo_kill: "p_scroll.item_moment_solo_kill",
+  skirmish: "p_scroll.item_moment_skirmish",
+  teamfight: "p_scroll.item_moment_teamfight",
+  ace: "p_scroll.item_moment_ace",
+  objective_fight: "p_scroll.item_moment_objective_fight",
 };
 
 interface FeedItemMomentProps extends SharedFeedItemProps {
@@ -793,8 +797,12 @@ export function FeedItemMoment({
   isActive,
   onAutoSkipNext,
 }: FeedItemMomentProps) {
+  const t = useT();
   const isKc = item.kcInvolvement === "kc_aggressor" || item.kcInvolvement === "kc_both";
-  const label = MOMENT_LABEL[item.classification] ?? item.classification;
+  const label =
+    MOMENT_LABEL_KEY[item.classification] != null
+      ? t(MOMENT_LABEL_KEY[item.classification])
+      : item.classification;
   useImpressionTracker({ killId: item.id, isActive });
   useFeedItemAnalytics({ itemId: item.id, isActive });
   const errState = useFeedItemError(item.id);
@@ -832,7 +840,7 @@ export function FeedItemMoment({
     }
     try {
       await navigator.clipboard.writeText(url);
-      setShareToast("Lien copié !");
+      setShareToast(t("p_scroll.item_link_copied"));
       window.setTimeout(() => setShareToast(null), 2000);
       track("clip.shared", {
         entityType: "kill",
@@ -840,10 +848,10 @@ export function FeedItemMoment({
         metadata: { channel: "clipboard", source: "swipe_left" },
       });
     } catch {
-      setShareToast("Copie impossible");
+      setShareToast(t("p_scroll.item_copy_failed"));
       window.setTimeout(() => setShareToast(null), 2000);
     }
-  }, [item.id, label, item.killCount, item.aiDescription]);
+  }, [item.id, label, item.killCount, item.aiDescription, t]);
 
   const swipeBind = useSwipeShare({
     enabled: isActive,
@@ -1038,10 +1046,10 @@ export function FeedItemMoment({
           )}
           <p className="font-data text-[10px] md:text-[11px] uppercase tracking-[0.2em] text-white/55">
             {item.kcInvolvement === "kc_aggressor"
-              ? "KC dominant"
+              ? t("p_scroll.item_kc_dominant")
               : item.kcInvolvement === "kc_victim"
-              ? "KC subit"
-              : "Mixte"}
+              ? t("p_scroll.item_kc_subit")
+              : t("p_scroll.item_kc_mixed")}
           </p>
         </div>
       </div>

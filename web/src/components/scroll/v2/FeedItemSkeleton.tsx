@@ -31,6 +31,8 @@
  *     gradient with a subtle opacity hint
  */
 
+import { useT } from "@/lib/i18n/use-lang";
+
 interface Props {
   /** Pixel height of the slot — must match the parent's itemHeight to
    *  keep the snap-anchor math aligned with real FeedItems. */
@@ -38,6 +40,7 @@ interface Props {
 }
 
 export function FeedItemSkeleton({ itemHeight }: Props) {
+  const t = useT();
   return (
     <div
       data-feed-skeleton
@@ -48,7 +51,7 @@ export function FeedItemSkeleton({ itemHeight }: Props) {
       className="relative w-full overflow-hidden bg-black"
     >
       {/* Visually hidden announcement for screen readers. */}
-      <span className="sr-only">Chargement du clip suivant&hellip;</span>
+      <span className="sr-only">{t("p_scroll.item_loading_next")}</span>
 
       {/* Poster area — base dark surface with a faint hextech glow so the
           skeleton doesn't read as a broken black rectangle. */}

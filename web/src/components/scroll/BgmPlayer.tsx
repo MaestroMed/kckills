@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback } from "react";
 import { DEFAULT_PLAYLIST, shufflePlaylist, type BgmTrack } from "@/lib/scroll/bgm-playlist";
+import { useT } from "@/lib/i18n/use-lang";
 
 /**
  * BgmPlayer — background music for /scroll using YouTube IFrame API.
@@ -93,6 +94,7 @@ function loadYouTubeApi(cb: () => void) {
 }
 
 export function BgmPlayer() {
+  const t = useT();
   const [playlist] = useState(() => shufflePlaylist(DEFAULT_PLAYLIST));
   const [currentIdx, setCurrentIdx] = useState(0);
   const [playing, setPlaying] = useState(false);
@@ -222,7 +224,7 @@ export function BgmPlayer() {
         <button
           onClick={togglePlay}
           className="flex h-7 w-7 items-center justify-center rounded-full bg-[var(--gold)]/20 text-[var(--gold)] hover:bg-[var(--gold)]/30 transition-colors"
-          aria-label={playing ? "Pause la musique" : "Jouer la musique"}
+          aria-label={playing ? t("p_scroll.ban_bgm_pause") : t("p_scroll.ban_bgm_play")}
         >
           {playing ? (
             <svg className="h-3 w-3" fill="currentColor" viewBox="0 0 24 24">
@@ -244,7 +246,7 @@ export function BgmPlayer() {
         <button
           onClick={next}
           className="flex h-6 w-6 items-center justify-center rounded-full text-[var(--text-muted)] hover:text-[var(--gold)] transition-colors"
-          aria-label="Piste suivante"
+          aria-label={t("p_scroll.ban_bgm_next")}
         >
           <svg className="h-3 w-3" fill="currentColor" viewBox="0 0 24 24">
             <path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z" />

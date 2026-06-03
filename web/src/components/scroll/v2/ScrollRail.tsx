@@ -41,6 +41,7 @@ import {
   useSearchParams,
 } from "next/navigation";
 import { useTransition } from "react";
+import { useT } from "@/lib/i18n/use-lang";
 import { m, useReducedMotion } from "motion/react";
 import {
   Home,
@@ -70,6 +71,7 @@ interface ScrollRailProps {
 // ════════════════════════════════════════════════════════════════════
 
 export function ScrollRail({ clipCount, collapsed = false }: ScrollRailProps) {
+  const t = useT();
   const router = useRouter();
   const pathname = usePathname();
   const sp = useSearchParams();
@@ -124,7 +126,7 @@ export function ScrollRail({ clipCount, collapsed = false }: ScrollRailProps) {
   return (
     <nav
       role="navigation"
-      aria-label="Navigation KCKILLS"
+      aria-label={t("p_scroll.rail_nav_aria")}
       data-collapsed={collapsed || undefined}
       className={`scroll-rail-shell sticky top-0 flex h-[100dvh] flex-col overflow-y-auto overflow-x-hidden ${
         isPending ? "opacity-90" : ""
@@ -144,7 +146,7 @@ export function ScrollRail({ clipCount, collapsed = false }: ScrollRailProps) {
       <Link
         href="/"
         className="group flex items-center gap-2.5 px-3 pt-4 pb-3 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--gold)] focus-visible:outline-offset-2"
-        aria-label="KCKILLS — accueil"
+        aria-label={t("p_scroll.rail_brand_aria")}
         title={collapsed ? "KCKILLS" : undefined}
       >
         <span className="shrink-0">
@@ -156,7 +158,7 @@ export function ScrollRail({ clipCount, collapsed = false }: ScrollRailProps) {
               KC<span className="text-[var(--gold)]">KILLS</span>
             </span>
             <span className="mt-1.5 inline-flex w-fit items-center rounded-full border border-[var(--border-gold)] bg-[var(--cream-wash)] px-2 py-0.5 font-data text-[10px] uppercase tracking-[0.18em] text-[var(--text-muted)]">
-              v2{typeof clipCount === "number" ? ` · ${clipCount} clips` : ""}
+              v2{typeof clipCount === "number" ? ` · ${t("p_scroll.rail_clip_count", { n: clipCount })}` : ""}
             </span>
           </span>
         )}
@@ -166,31 +168,31 @@ export function ScrollRail({ clipCount, collapsed = false }: ScrollRailProps) {
       <Divider />
 
       {/* ── (3) FEED-LENS group ─────────────────────────────────── */}
-      <Group eyebrow="Le Feed" collapsed={collapsed}>
+      <Group eyebrow={t("p_scroll.rail_group_feed")} collapsed={collapsed}>
         <RailButton
           icon={Sparkles}
-          label="Pour Toi"
+          label={t("p_scroll.rail_pour_toi")}
           collapsed={collapsed}
           active={onScroll && feed === "pour-toi" && !multiOn && !fbOn}
           onClick={() => selectFeed("pour-toi")}
         />
         <RailButton
           icon={Clock}
-          label="Récent"
+          label={t("p_scroll.rail_recent")}
           collapsed={collapsed}
           active={onScroll && feed === "recent"}
           onClick={() => selectFeed("recent")}
         />
         <RailButton
           icon={Trophy}
-          label="Top 7j"
+          label={t("p_scroll.rail_top_7j")}
           collapsed={collapsed}
           active={onScroll && feed === "top-semaine"}
           onClick={() => selectFeed("top-semaine")}
         />
         <RailButton
           icon={Zap}
-          label="Multi"
+          label={t("p_scroll.rail_multi")}
           collapsed={collapsed}
           active={onScroll && multiOn}
           dot="var(--orange)"
@@ -198,7 +200,7 @@ export function ScrollRail({ clipCount, collapsed = false }: ScrollRailProps) {
         />
         <RailButton
           icon={Droplet}
-          label="First Blood"
+          label={t("p_scroll.rail_first_blood")}
           collapsed={collapsed}
           active={onScroll && fbOn}
           dot="var(--red)"
@@ -210,31 +212,31 @@ export function ScrollRail({ clipCount, collapsed = false }: ScrollRailProps) {
       <Divider />
 
       {/* ── (5) NAVIGUER group ──────────────────────────────────── */}
-      <Group eyebrow="Naviguer" collapsed={collapsed}>
+      <Group eyebrow={t("p_scroll.rail_group_navigate")} collapsed={collapsed}>
         <RailLink
           icon={Users}
-          label="Joueurs"
+          label={t("p_scroll.rail_players")}
           href="/players"
           collapsed={collapsed}
           active={isPageActive("/players")}
         />
         <RailLink
           icon={Flame}
-          label="Matchs"
+          label={t("p_scroll.rail_matches")}
           href="/matches"
           collapsed={collapsed}
           active={isPageActive("/matches")}
         />
         <RailLink
           icon={Swords}
-          label="VS Roulette"
+          label={t("p_scroll.rail_vs_roulette")}
           href="/vs"
           collapsed={collapsed}
           active={isPageActive("/vs")}
         />
         <RailLink
           icon={Radio}
-          label="Live"
+          label={t("p_scroll.rail_live")}
           href="/live"
           collapsed={collapsed}
           active={isPageActive("/live")}
@@ -242,7 +244,7 @@ export function ScrollRail({ clipCount, collapsed = false }: ScrollRailProps) {
         />
         <RailLink
           icon={Trophy}
-          label="Classement"
+          label={t("p_scroll.rail_records")}
           href="/records"
           collapsed={collapsed}
           active={isPageActive("/records")}
@@ -256,7 +258,7 @@ export function ScrollRail({ clipCount, collapsed = false }: ScrollRailProps) {
       <div className={collapsed ? "px-2 pb-1 pt-1" : "px-2 pb-1 pt-1"}>
         <RailLink
           icon={Search}
-          label="Rechercher"
+          label={t("p_scroll.rail_search")}
           href="/search"
           collapsed={collapsed}
           active={isPageActive("/search")}

@@ -36,6 +36,7 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
+import { useT } from "@/lib/i18n/use-lang";
 import { m, useReducedMotion } from "motion/react";
 import type { VideoFeedItem } from "@/components/scroll/ScrollFeed";
 import { StarRating } from "@/components/star-rating";
@@ -139,6 +140,7 @@ const MatchHeader = memo(function MatchHeader({
   kcWon,
   gameNumber,
 }: MatchHeaderProps) {
+  const t = useT();
   // matchDate arrives as an ISO string. Render a stable, locale-stamped
   // short date; guard against an unparseable value so a bad row never
   // throws inside the panel.
@@ -156,7 +158,7 @@ const MatchHeader = memo(function MatchHeader({
 
   return (
     <header>
-      <Eyebrow>Match</Eyebrow>
+      <Eyebrow>{t("p_scroll.rail_match")}</Eyebrow>
       {/* Team codes — KC always on the left, opponent on the right. The
           side that scored the kill is highlighted gold. */}
       <div className="flex items-center gap-2.5 font-display text-2xl font-black leading-none">
@@ -164,7 +166,7 @@ const MatchHeader = memo(function MatchHeader({
           KC
         </span>
         <span className="font-data text-xs font-normal text-[var(--text-muted)]">
-          vs
+          {t("p_scroll.rail_vs")}
         </span>
         <span className={!isKcKill ? "text-[var(--gold)]" : "text-white/85"}>
           {opp}
@@ -175,7 +177,7 @@ const MatchHeader = memo(function MatchHeader({
               kcWon ? "text-[var(--green)]" : "text-[var(--red)]"
             }`}
           >
-            {kcWon ? "Victoire" : "Défaite"}
+            {kcWon ? t("p_scroll.rail_victory") : t("p_scroll.rail_defeat")}
           </span>
         )}
       </div>
@@ -186,7 +188,7 @@ const MatchHeader = memo(function MatchHeader({
       <p className="mt-3 font-data text-[11px] leading-relaxed text-[var(--text-muted)]">
         {[
           matchStage || null,
-          gameNumber ? `Game ${gameNumber}` : null,
+          gameNumber ? t("p_scroll.rail_game", { n: gameNumber }) : null,
           matchScore || null,
           dateLabel,
         ]
@@ -219,6 +221,7 @@ const RateSection = memo(function RateSection({
   avgRating,
   ratingCount,
 }: RateSectionProps) {
+  const t = useT();
   const reduceMotion = useReducedMotion();
   // Local mirror of the server-truth aggregate so the avg/count refresh
   // the instant our own rating lands, without a parent re-fetch.
@@ -300,8 +303,8 @@ const RateSection = memo(function RateSection({
   const displayScore = myScore || (avg != null ? Math.round(avg) : 0);
 
   return (
-    <section aria-label="Noter ce kill">
-      <Eyebrow>Ta note</Eyebrow>
+    <section aria-label={t("p_scroll.rail_rate_aria")}>
+      <Eyebrow>{t("p_scroll.rail_your_rating")}</Eyebrow>
       <div className="flex items-center gap-3">
         <div className={pending ? "pointer-events-none opacity-70" : ""}>
           <StarRating rating={displayScore} size="lg" onRate={(s) => void submit(s)} />
@@ -315,12 +318,12 @@ const RateSection = memo(function RateSection({
                 <span className="text-[var(--text-muted)] text-[11px]">/5</span>
               </span>
               <span className="font-data text-[10px] uppercase tracking-widest text-[var(--text-muted)]">
-                {count} {count <= 1 ? "vote" : "votes"}
+                {count <= 1 ? t("p_scroll.rail_vote_one", { n: count }) : t("p_scroll.rail_vote_many", { n: count })}
               </span>
             </>
           ) : (
             <span className="font-data text-[10px] uppercase tracking-widest text-[var(--text-muted)]">
-              Sois le premier
+              {t("p_scroll.rail_be_first")}
             </span>
           )}
         </div>
@@ -332,7 +335,7 @@ const RateSection = memo(function RateSection({
           transition={reduceMotion ? { duration: 0 } : { duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
           className="ml-auto font-data text-[10px] font-bold uppercase tracking-widest text-[var(--green)]"
         >
-          Noté
+          {t("p_scroll.rail_rated")}
         </m.span>
       </div>
 
@@ -355,12 +358,13 @@ const DescriptionSection = memo(function DescriptionSection({
 }: {
   aiDescription: string | null;
 }) {
+  const t = useT();
   // Gate on the same cleanliness pass the feed uses — if the legacy field
   // was moderation-rejected, hide it here too.
   if (!isDescriptionClean(aiDescription) || !aiDescription) return null;
   return (
-    <section aria-label="Description">
-      <Eyebrow>Le moment</Eyebrow>
+    <section aria-label={t("p_scroll.rail_description")}>
+      <Eyebrow>{t("p_scroll.rail_the_moment")}</Eyebrow>
       {/* FULL text — no line-clamp. Serif-adjacent reading size, the long-
           form counterpart to the feed's 3-line teaser. */}
       <p className="text-[15px] leading-relaxed text-[var(--cream)]/90 italic">
@@ -383,11 +387,12 @@ const RelatedThumb = memo(function RelatedThumb({
   item: RelatedFeedCandidate;
   onJumpTo?: (index: number) => void;
 }) {
+  const t = useT();
   return (
     <button
       type="button"
       onClick={() => onJumpTo?.(item.index)}
-      aria-label={`Aller à ${item.killerChampion} élimine ${item.victimChampion}`}
+      aria-label={t("p_scroll.rail_jump_to_aria", { killer: item.killerChampion, victim: item.victimChampion })}
       className="group relative block aspect-[9/16] w-full overflow-hidden rounded-lg border border-[var(--border-gold)] bg-black transition-colors hover:border-[var(--gold)]/50"
     >
       {item.thumbnail ? (
@@ -448,10 +453,11 @@ const RelatedSection = memo(function RelatedSection({
   related: RelatedFeedCandidate[];
   onJumpTo?: (index: number) => void;
 }) {
+  const t = useT();
   if (related.length === 0) return null;
   return (
-    <section aria-label="À suivre">
-      <Eyebrow>À suivre</Eyebrow>
+    <section aria-label={t("p_scroll.rail_up_next")}>
+      <Eyebrow>{t("p_scroll.rail_up_next")}</Eyebrow>
       <div className="grid grid-cols-3 gap-2">
         {related.slice(0, 6).map((item) => (
           <RelatedThumb key={item.id} item={item} onJumpTo={onJumpTo} />
@@ -470,6 +476,7 @@ export function ScrollContextPanel({
   onJumpTo,
   related = [],
 }: ScrollContextPanelProps) {
+  const t = useT();
   const isKcKill = kill.kcInvolvement === "team_killer";
 
   // Exclude the active kill from its own "À suivre" strip — seeing the clip
@@ -482,7 +489,7 @@ export function ScrollContextPanel({
   return (
     <aside
       role="complementary"
-      aria-label="Contexte du kill"
+      aria-label={t("p_scroll.rail_context_aria")}
       className="relative h-full overflow-y-auto bg-[var(--bg-surface)]/70 backdrop-blur-md"
       style={{ width: "var(--ctx)" }}
     >
@@ -526,7 +533,7 @@ export function ScrollContextPanel({
             CommentSheetV2 panel branch owns its own expand/collapse +
             lazy fetch; isOpen/onClose are inert in panel mode but the
             prop contract still requires them. */}
-        <section aria-label="Commentaires">
+        <section aria-label={t("p_scroll.rail_comments")}>
           <CommentSheetV2 killId={kill.id} isOpen={false} onClose={() => {}} mode="panel" />
         </section>
 
@@ -535,7 +542,7 @@ export function ScrollContextPanel({
           href={`/kill/${kill.id}`}
           className="mt-1 inline-flex items-center gap-1.5 font-data text-[10px] uppercase tracking-[0.2em] text-[var(--text-muted)] transition-colors hover:text-[var(--gold)]"
         >
-          Page du kill
+          {t("p_scroll.rail_kill_page")}
           <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
           </svg>

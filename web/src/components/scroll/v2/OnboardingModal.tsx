@@ -22,6 +22,7 @@ import { m, AnimatePresence } from "motion/react";
 import { useFocusTrap } from "@/components/ui/FocusTrapModal";
 import { useAffinityStore } from "./hooks/useAffinityStore";
 import { track } from "@/lib/analytics/track";
+import { useT } from "@/lib/i18n/use-lang";
 
 const FLAG_KEY = "kc_onboarded_v1";
 
@@ -55,6 +56,7 @@ function markDone(value: "true" | "skipped") {
 }
 
 export function OnboardingModal({ roster }: Props) {
+  const t = useT();
   const [open, setOpen] = useState(false);
   const [picked, setPicked] = useState<Set<string>>(new Set());
   const { seedFromOnboarding } = useAffinityStore();
@@ -125,7 +127,7 @@ export function OnboardingModal({ roster }: Props) {
         <m.div
           role="dialog"
           aria-modal="true"
-          aria-label="Choisis tes joueurs favoris"
+          aria-label={t("p_scroll.ov_onb_aria")}
           className="fixed inset-0 z-[400] flex items-end sm:items-center justify-center"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
@@ -150,11 +152,10 @@ export function OnboardingModal({ roster }: Props) {
           >
             <header className="space-y-1">
               <h2 className="font-display text-xl font-black text-[var(--gold)] tracking-tight">
-                Bienvenue sur KCKILLS
+                {t("p_scroll.ov_onb_title")}
               </h2>
               <p className="text-sm text-[var(--text-secondary)]">
-                Choisis tes 2-3 joueurs favoris pour personnaliser ton feed.
-                Tu pourras toujours changer plus tard.
+                {t("p_scroll.ov_onb_subtitle")}
               </p>
             </header>
 
@@ -219,7 +220,7 @@ export function OnboardingModal({ roster }: Props) {
                 onClick={skip}
                 className="flex-1 rounded-full border border-[var(--border-gold)] px-4 py-3 text-sm text-[var(--text-muted)] hover:text-[var(--gold)]"
               >
-                Plus tard
+                {t("p_scroll.ov_onb_later")}
               </button>
               <button
                 type="button"
@@ -228,8 +229,8 @@ export function OnboardingModal({ roster }: Props) {
                 className="flex-[2] rounded-full bg-[var(--gold)] px-4 py-3 text-sm font-bold text-black disabled:opacity-40 disabled:cursor-not-allowed hover:bg-[var(--gold-bright)]"
               >
                 {picked.size === 0
-                  ? "Choisis au moins 1 joueur"
-                  : `Valider (${picked.size})`}
+                  ? t("p_scroll.ov_onb_pick_min")
+                  : t("p_scroll.ov_onb_confirm", { n: picked.size })}
               </button>
             </div>
           </m.div>

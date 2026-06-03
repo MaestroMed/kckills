@@ -22,6 +22,7 @@ import { useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { m, AnimatePresence } from "motion/react";
+import { useT } from "@/lib/i18n/use-lang";
 
 interface Props {
   open: boolean;
@@ -43,6 +44,7 @@ export function PlayerDrawer({
   role,
   playerSlug,
 }: Props) {
+  const t = useT();
   const [following, setFollowing] = useState<boolean | null>(null);
   const [pending, setPending] = useState(false);
 
@@ -90,7 +92,7 @@ export function PlayerDrawer({
         <m.div
           role="dialog"
           aria-modal="true"
-          aria-label={`Profil ${playerName}`}
+          aria-label={t("p_scroll.ov_pd_profile_aria", { name: playerName })}
           className="fixed inset-0 z-[230] flex items-end sm:items-center justify-center"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
@@ -154,7 +156,7 @@ export function PlayerDrawer({
                       : "bg-[var(--gold)] text-black hover:bg-[var(--gold-bright)]")
                   }
                 >
-                  {following ? "Suivi ✓" : "+ Suivre"}
+                  {following ? t("p_scroll.ov_pd_following") : t("p_scroll.ov_pd_follow")}
                 </button>
               )}
               <Link
@@ -162,7 +164,7 @@ export function PlayerDrawer({
                 onClick={onClose}
                 className="flex-1 rounded-full border border-[var(--border-gold)] px-4 py-2.5 text-center text-sm text-[var(--text-secondary)] hover:text-[var(--gold)]"
               >
-                Voir ses kills
+                {t("p_scroll.ov_pd_see_kills")}
               </Link>
             </div>
 
@@ -172,7 +174,7 @@ export function PlayerDrawer({
                 onClick={onClose}
                 className="block text-center text-[11px] text-[var(--text-muted)] hover:text-[var(--gold)]"
               >
-                Profil complet →
+                {t("p_scroll.ov_pd_full_profile")}
               </Link>
             )}
           </m.div>

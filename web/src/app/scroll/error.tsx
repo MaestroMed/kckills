@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect } from "react";
+import { useT } from "@/lib/i18n/use-lang";
 
 export default function ScrollError({
   error,
@@ -10,6 +11,7 @@ export default function ScrollError({
   error: Error & { digest?: string };
   reset: () => void;
 }) {
+  const t = useT();
   useEffect(() => {
     console.error("[kckills/scroll] feed error:", error);
   }, [error]);
@@ -20,11 +22,10 @@ export default function ScrollError({
         AFK
       </p>
       <h1 className="font-display text-xl font-bold text-[var(--text-primary)]">
-        Le feed ne r&eacute;pond plus.
+        {t("p_scroll.ban_err_title")}
       </h1>
       <p className="text-sm text-[var(--text-muted)]">
-        Les clips n&apos;ont pas pu se charger. Tu peux r&eacute;essayer ou revenir
-        au lobby.
+        {t("p_scroll.ban_err_body")}
       </p>
       <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
         <button
@@ -32,13 +33,13 @@ export default function ScrollError({
           onClick={reset}
           className="rounded-lg bg-[var(--gold)] px-4 py-2 text-sm font-semibold text-black hover:opacity-90"
         >
-          R&eacute;essayer
+          {t("p_scroll.ban_err_retry")}
         </button>
         <Link
           href="/"
           className="rounded-lg border border-[var(--border-gold)] px-4 py-2 text-sm text-[var(--text-primary)] hover:border-[var(--gold)]"
         >
-          Retour au lobby
+          {t("p_scroll.ban_err_lobby")}
         </Link>
       </div>
       {error.digest ? (

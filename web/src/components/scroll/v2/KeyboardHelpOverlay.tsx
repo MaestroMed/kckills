@@ -17,44 +17,45 @@
 
 import { useId } from "react";
 import { Modal } from "@/components/ui/FocusTrapModal";
+import { useT } from "@/lib/i18n/use-lang";
 
 interface Props {
   open: boolean;
   onClose: () => void;
 }
 
-const SHORTCUTS: { keys: string[]; label: string }[] = [
-  { keys: ["↓", "J"], label: "Clip suivant" },
-  { keys: ["↑", "K"], label: "Clip précédent" },
-  { keys: ["Espace"], label: "Lecture / pause" },
-  { keys: ["M"], label: "Couper / activer le son" },
-  { keys: ["1 – 5"], label: "Noter le clip (1 à 5)" },
-  { keys: ["L"], label: "Liker" },
-  { keys: ["C"], label: "Ouvrir les commentaires" },
-  { keys: ["B"], label: "Mettre en favori" },
-  { keys: ["S"], label: "Partager" },
-  { keys: ["F"], label: "Mode cinéma" },
-  { keys: ["Esc"], label: "Fermer un panneau" },
-  { keys: ["?"], label: "Afficher cette aide" },
-];
-
 export function KeyboardHelpOverlay({ open, onClose }: Props) {
+  const t = useT();
   const titleId = useId();
+  const SHORTCUTS: { keys: string[]; label: string }[] = [
+    { keys: ["↓", "J"], label: t("p_scroll.ov_kbd_next") },
+    { keys: ["↑", "K"], label: t("p_scroll.ov_kbd_prev") },
+    { keys: ["Espace"], label: t("p_scroll.ov_kbd_play_pause") },
+    { keys: ["M"], label: t("p_scroll.ov_kbd_mute") },
+    { keys: ["1 – 5"], label: t("p_scroll.ov_kbd_rate") },
+    { keys: ["L"], label: t("p_scroll.ov_kbd_like") },
+    { keys: ["C"], label: t("p_scroll.ov_kbd_comments") },
+    { keys: ["B"], label: t("p_scroll.ov_kbd_favorite") },
+    { keys: ["S"], label: t("p_scroll.ov_kbd_share") },
+    { keys: ["F"], label: t("p_scroll.ov_kbd_cinema") },
+    { keys: ["Esc"], label: t("p_scroll.ov_kbd_close_panel") },
+    { keys: ["?"], label: t("p_scroll.ov_kbd_show_help") },
+  ];
   return (
     <Modal
       open={open}
       onClose={onClose}
       labelledBy={titleId}
-      closeLabel="Fermer"
+      closeLabel={t("p_scroll.ov_close")}
       zIndexClassName="z-[200]"
       scrimClassName="bg-black/70 backdrop-blur-md"
       panelClassName="w-full max-w-md rounded-3xl border border-[var(--gold)]/30 bg-[var(--bg-surface)] p-6 shadow-[0_40px_120px_rgba(0,0,0,0.7)]"
     >
       <p className="font-data text-[10px] uppercase tracking-[0.4em] text-[var(--gold)]/65 mb-2">
-        Raccourcis clavier
+        {t("p_scroll.ov_kbd_eyebrow")}
       </p>
       <h2 id={titleId} className="font-display text-2xl font-black text-white mb-5">
-        Pro mode
+        {t("p_scroll.ov_kbd_title")}
       </h2>
 
       <ul className="space-y-2.5">
@@ -79,9 +80,9 @@ export function KeyboardHelpOverlay({ open, onClose }: Props) {
       </ul>
 
       <p className="mt-5 text-[11px] text-white/45 text-center">
-        Astuce : ces raccourcis ne fonctionnent pas quand un champ texte est
-        actif. Utilise <kbd className="px-1 rounded bg-white/10 text-[10px]">Tab</kbd>{" "}
-        pour quitter le focus d&apos;abord.
+        {t("p_scroll.ov_kbd_tip_before")}{" "}
+        <kbd className="px-1 rounded bg-white/10 text-[10px]">Tab</kbd>{" "}
+        {t("p_scroll.ov_kbd_tip_after")}
       </p>
     </Modal>
   );

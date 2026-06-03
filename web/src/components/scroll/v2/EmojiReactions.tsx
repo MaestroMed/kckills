@@ -22,6 +22,7 @@
 import { useEffect, useRef, useState } from "react";
 import { m, AnimatePresence } from "motion/react";
 import { track } from "@/lib/analytics/track";
+import { useT } from "@/lib/i18n/use-lang";
 
 const EMOJIS = ["🔥", "👏", "😂", "😱", "💀", "🐐"] as const;
 type Reaction = (typeof EMOJIS)[number];
@@ -65,6 +66,7 @@ interface Props {
 }
 
 export function EmojiReactions({ killId, visible }: Props) {
+  const t = useT();
   const [counts, setCounts] = useState<Record<string, number>>({});
   const [bursts, setBursts] = useState<FloatingBurst[]>([]);
   const [open, setOpen] = useState(false);
@@ -120,7 +122,7 @@ export function EmojiReactions({ killId, visible }: Props) {
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
-        aria-label="Réactions emoji"
+        aria-label={t("p_scroll.act_reactions_emoji")}
         className="flex flex-col items-center gap-1 group"
       >
         <span
@@ -145,7 +147,7 @@ export function EmojiReactions({ killId, visible }: Props) {
         {open && (
           <m.div
             role="menu"
-            aria-label="Choisir une réaction"
+            aria-label={t("p_scroll.act_choose_reaction")}
             initial={{ opacity: 0, scale: 0.85, y: 10 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.85, y: 10 }}
@@ -161,7 +163,7 @@ export function EmojiReactions({ killId, visible }: Props) {
                   setOpen(false);
                 }}
                 className="text-xl px-1 py-0.5 hover:scale-125 active:scale-90 transition-transform"
-                aria-label={`Réagir ${e}`}
+                aria-label={t("p_scroll.act_react_with", { emoji: e })}
               >
                 {e}
               </button>

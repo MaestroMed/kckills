@@ -20,6 +20,7 @@
  */
 
 import { useEffect, useRef, useState } from "react";
+import { useT } from "@/lib/i18n/use-lang";
 
 const STORAGE_KEY = "kc_scroll_settings_v1";
 
@@ -100,6 +101,7 @@ interface DrawerProps {
 }
 
 export function ScrollSettingsDrawer({ open, onClose }: DrawerProps) {
+  const t = useT();
   const [settings, setSettings] = useState<ScrollSettingsState>(readSettings);
   const drawerRef = useRef<HTMLDivElement>(null);
 
@@ -155,16 +157,16 @@ export function ScrollSettingsDrawer({ open, onClose }: DrawerProps) {
     <div
       ref={drawerRef}
       role="dialog"
-      aria-label="Réglages du scroll"
+      aria-label={t("p_scroll.ov_settings_aria")}
       className="fixed top-16 right-3 z-[210] w-72 rounded-xl border border-[var(--border-gold)] bg-[var(--bg-surface)]/95 backdrop-blur-md shadow-2xl shadow-black/50 p-4 space-y-3 text-sm"
     >
       <header className="flex items-center justify-between">
         <h2 className="font-display text-xs font-bold uppercase tracking-widest text-[var(--gold)]">
-          Réglages
+          {t("p_scroll.ov_settings_title")}
         </h2>
         <button
           type="button"
-          aria-label="Fermer les réglages"
+          aria-label={t("p_scroll.ov_settings_close")}
           onClick={onClose}
           className="h-6 w-6 inline-flex items-center justify-center rounded-full bg-white/10 text-white/70 hover:bg-white/20"
         >
@@ -177,11 +179,10 @@ export function ScrollSettingsDrawer({ open, onClose }: DrawerProps) {
       <label className="flex items-start justify-between gap-3 cursor-pointer">
         <span className="flex-1">
           <span className="block text-[var(--text-primary)] font-semibold">
-            Avancer automatiquement
+            {t("p_scroll.ov_auto_advance_label")}
           </span>
           <span className="block text-[10px] text-[var(--text-muted)] mt-0.5">
-            Passe au clip suivant à la fin de chaque vidéo (au lieu
-            de la boucle).
+            {t("p_scroll.ov_auto_advance_desc")}
           </span>
         </span>
         <input
@@ -196,10 +197,10 @@ export function ScrollSettingsDrawer({ open, onClose }: DrawerProps) {
           (0.5×) or fast-skim of long teamfights (1.5×). */}
       <fieldset className="space-y-2">
         <legend className="block text-[var(--text-primary)] font-semibold">
-          Vitesse de lecture
+          {t("p_scroll.ov_speed_label")}
         </legend>
         <p className="text-[10px] text-[var(--text-muted)] -mt-1">
-          Slow-mo pour les pentas, fast-skim pour les teamfights.
+          {t("p_scroll.ov_speed_desc")}
         </p>
         <div className="flex items-center gap-1.5">
           {SPEED_OPTIONS.map((s) => (

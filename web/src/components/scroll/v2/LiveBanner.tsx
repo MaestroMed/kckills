@@ -27,6 +27,7 @@ import { createPortal } from "react-dom";
 import Link from "next/link";
 import { m, useReducedMotion } from "motion/react";
 import { useLiveViewerCount } from "./hooks/useLiveViewerCount";
+import { useT } from "@/lib/i18n/use-lang";
 
 interface Props {
   isLive: boolean;
@@ -48,6 +49,7 @@ export function LiveBanner({ isLive, matchId, opponentCode, gameNumber, onTap }:
     setPortalTarget(document.body);
   }, []);
 
+  const t = useT();
   const reducedMotion = useReducedMotion();
   // V17 (Wave 23.1) — live viewer count via Supabase Realtime
   // presence. Returns null until subscribed ; below 2 we hide the
@@ -59,9 +61,12 @@ export function LiveBanner({ isLive, matchId, opponentCode, gameNumber, onTap }:
   if (!isLive || !portalTarget) return null;
 
   const opp = opponentCode ?? "?";
-  const game = typeof gameNumber === "number" ? `Game ${gameNumber}` : "EN COURS";
-  const viewerLabel = showViewers ? ` • ${viewerCount} regardent` : "";
-  const label = `KC EN LIVE • vs ${opp} • ${game}${viewerLabel}`;
+  const game =
+    typeof gameNumber === "number"
+      ? t("p_scroll.ban_game_n", { n: gameNumber })
+      : t("p_scroll.ban_in_progress");
+  const viewerLabel = showViewers ? ` • ${t("p_scroll.ban_viewers", { n: viewerCount })}` : "";
+  const label = `${t("p_scroll.ban_live")} • vs ${opp} • ${game}${viewerLabel}`;
   // Repeat the label so the marquee loop doesn't show a visible gap.
   const marqueeText = `${label}     ★     ${label}     ★     `;
 
@@ -131,10 +136,10 @@ export function LiveBanner({ isLive, matchId, opponentCode, gameNumber, onTap }:
   // Wrapper handles the responsive height tweak (md:48px) + click handler.
   // `pointer-events-auto` cancels the parent's `pointer-events-none` if any.
   const ariaLabel = onTap
-    ? "KC en live — voir le dernier kill"
+    ? t("p_scroll.ban_aria_last_kill")
     : matchId
-      ? `KC en live vs ${opp} — voir le match`
-      : "KC en live";
+      ? t("p_scroll.ban_aria_view_match", { opp })
+      : t("p_scroll.ban_aria_live");
 
   const wrapperClass =
     "fixed left-0 right-0 top-0 z-[120] cursor-pointer pointer-events-auto md:[&_>div]:!h-[48px]";

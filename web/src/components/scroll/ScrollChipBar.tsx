@@ -2,6 +2,7 @@
 
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { useState, useTransition } from "react";
+import { useT } from "@/lib/i18n/use-lang";
 
 /**
  * ScrollChipBar — sticky filter chip strip rendered above the feed.
@@ -53,17 +54,18 @@ interface Props {
   rosterChips?: PlayerChipDef[];
 }
 
-const FIGHT_CHIPS: { value: string; label: string }[] = [
-  { value: "solo_kill", label: "Solo" },
-  { value: "skirmish_2v2", label: "2v2" },
-  { value: "skirmish_3v3", label: "3v3" },
-  { value: "teamfight_4v4", label: "Teamfight" },
-  { value: "teamfight_5v5", label: "5v5" },
-  { value: "gank", label: "Gank" },
-  { value: "pick", label: "Pick" },
+const FIGHT_CHIPS: { value: string; labelKey: string }[] = [
+  { value: "solo_kill", labelKey: "p_scroll.rail_fight_solo" },
+  { value: "skirmish_2v2", labelKey: "p_scroll.rail_fight_2v2" },
+  { value: "skirmish_3v3", labelKey: "p_scroll.rail_fight_3v3" },
+  { value: "teamfight_4v4", labelKey: "p_scroll.rail_fight_teamfight" },
+  { value: "teamfight_5v5", labelKey: "p_scroll.rail_fight_5v5" },
+  { value: "gank", labelKey: "p_scroll.rail_fight_gank" },
+  { value: "pick", labelKey: "p_scroll.rail_fight_pick" },
 ];
 
 export function ScrollChipBar({ filters, rosterChips = [] }: Props) {
+  const t = useT();
   const router = useRouter();
   const pathname = usePathname();
   const sp = useSearchParams();
@@ -139,7 +141,7 @@ export function ScrollChipBar({ filters, rosterChips = [] }: Props) {
           <ChipButton
             active={hasAny}
             onClick={() => setExpanded((v) => !v)}
-            ariaLabel="Filtres"
+            ariaLabel={t("p_scroll.rail_filters")}
             compact
           >
             <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -158,7 +160,7 @@ export function ScrollChipBar({ filters, rosterChips = [] }: Props) {
             onClick={() => toggleBoolean("multi", filters.multiKillsOnly)}
             accent="var(--orange)"
           >
-            ★ Multi
+            ★ {t("p_scroll.rail_multi")}
           </ChipButton>
           {/* V14 — when a tag is pinned (deep-linked from a feed item),
               show a clearable pill so the user can unfilter without
@@ -169,7 +171,7 @@ export function ScrollChipBar({ filters, rosterChips = [] }: Props) {
             <ChipButton
               active
               onClick={clearTag}
-              ariaLabel={`Effacer le filtre #${filters.tag}`}
+              ariaLabel={t("p_scroll.rail_clear_tag_aria", { tag: filters.tag })}
               accent="var(--cyan)"
             >
               #{filters.tag}
@@ -181,30 +183,30 @@ export function ScrollChipBar({ filters, rosterChips = [] }: Props) {
             onClick={() => toggleBoolean("fb", filters.firstBloodsOnly)}
             accent="var(--red)"
           >
-            ☠ FB
+            ☠ {t("p_scroll.rail_fb")}
           </ChipButton>
           <ChipButton
             active={filters.side === "kc"}
             onClick={() => toggleSide("kc")}
             accent="var(--gold)"
           >
-            KC
+            {t("p_scroll.rail_side_kc")}
           </ChipButton>
           <ChipButton
             active={filters.side === "vs"}
             onClick={() => toggleSide("vs")}
             accent="var(--red)"
           >
-            vs KC
+            {t("p_scroll.rail_side_vs_kc")}
           </ChipButton>
 
           {hasAny && (
             <button
               onClick={clearAll}
               className="ml-auto rounded-full px-2 py-1 text-[10px] font-data uppercase tracking-widest text-white/55 hover:text-white transition-colors flex-shrink-0"
-              aria-label="Reset filters"
+              aria-label={t("p_scroll.rail_reset_aria")}
             >
-              Reset
+              {t("p_scroll.rail_reset")}
             </button>
           )}
         </div>
@@ -214,7 +216,7 @@ export function ScrollChipBar({ filters, rosterChips = [] }: Props) {
           <div className="border-t border-white/10 px-2 py-2 space-y-2">
             <div>
               <p className="px-1 pb-1 text-[9px] font-data uppercase tracking-widest text-white/45">
-                Fight type
+                {t("p_scroll.rail_fight_type")}
               </p>
               <div className="flex flex-wrap gap-1.5">
                 {FIGHT_CHIPS.map((f) => (
@@ -224,7 +226,7 @@ export function ScrollChipBar({ filters, rosterChips = [] }: Props) {
                     onClick={() => toggleFight(f.value)}
                     accent="var(--cyan)"
                   >
-                    {f.label}
+                    {t(f.labelKey)}
                   </ChipButton>
                 ))}
               </div>
@@ -233,7 +235,7 @@ export function ScrollChipBar({ filters, rosterChips = [] }: Props) {
             {rosterChips.length > 0 && (
               <div>
                 <p className="px-1 pb-1 text-[9px] font-data uppercase tracking-widest text-white/45">
-                  Joueur
+                  {t("p_scroll.rail_player")}
                 </p>
                 <div className="flex flex-wrap gap-1.5">
                   {rosterChips.map((p) => (

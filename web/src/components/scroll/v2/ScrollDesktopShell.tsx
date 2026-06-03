@@ -44,6 +44,7 @@ import type { VideoFeedItem } from "@/components/scroll/ScrollFeed";
 import { ScrollRail } from "./ScrollRail";
 import { ScrollContextPanel, type RelatedFeedCandidate } from "./ScrollContextPanel";
 import { StageFrame } from "./StageFrame";
+import { useT } from "@/lib/i18n/use-lang";
 
 interface ScrollDesktopShellProps {
   /** The FeedPlayerPool subtree — rendered inside the bounded StageFrame. */
@@ -70,6 +71,7 @@ export function ScrollDesktopShell({
   related = [],
   cinema = false,
 }: ScrollDesktopShellProps) {
+  const t = useT();
   const reduce = useReducedMotion();
 
   // ─── In-between band detection (1024–1279) ──────────────────────────
@@ -173,7 +175,7 @@ export function ScrollDesktopShell({
             <button
               type="button"
               onClick={() => setDrawerOpen(true)}
-              aria-label="Ouvrir le contexte du kill"
+              aria-label={t("p_scroll.sh_open_context")}
               aria-keyshortcuts="C"
               className="group fixed right-5 top-5 z-[70] flex h-12 w-12 items-center justify-center rounded-full border border-[var(--gold)]/45 bg-[var(--bg-surface)]/80 backdrop-blur-md text-[var(--gold)] shadow-[0_8px_26px_rgba(0,0,0,0.5)] transition-colors hover:border-[var(--gold)] hover:bg-[var(--bg-elevated)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--gold)] focus-visible:outline-offset-2"
             >
@@ -231,6 +233,7 @@ function ContextDrawer({
   reduce: boolean;
   children: React.ReactNode;
 }) {
+  const t = useT();
   const panelRef = useRef<HTMLDivElement>(null);
   const restoreFocusRef = useRef<HTMLElement | null>(null);
 
@@ -314,7 +317,7 @@ function ContextDrawer({
             ref={panelRef}
             role="dialog"
             aria-modal="true"
-            aria-label="Contexte du kill"
+            aria-label={t("p_scroll.sh_context_label")}
             tabIndex={-1}
             className="relative h-full max-w-[90vw] outline-none"
             initial={reduce ? { opacity: 0 } : { x: "100%" }}
@@ -330,7 +333,7 @@ function ContextDrawer({
             <button
               type="button"
               onClick={onClose}
-              aria-label="Fermer le contexte"
+              aria-label={t("p_scroll.sh_close_context")}
               className="absolute right-3 top-3 z-[90] flex h-9 w-9 items-center justify-center rounded-full bg-black/50 text-white/75 backdrop-blur-sm transition-colors hover:bg-black/70 hover:text-[var(--gold)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--gold)] focus-visible:outline-offset-2"
             >
               <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
@@ -351,10 +354,11 @@ function ContextDrawer({
 // ════════════════════════════════════════════════════════════════════
 
 function ContextPanelEmpty() {
+  const t = useT();
   return (
     <aside
       role="complementary"
-      aria-label="Contexte du kill"
+      aria-label={t("p_scroll.sh_context_label")}
       className="relative flex h-full items-center justify-center bg-[var(--bg-surface)]/70 px-6 backdrop-blur-md"
       style={{ width: "var(--ctx)" }}
     >
@@ -367,9 +371,9 @@ function ContextPanelEmpty() {
         }}
       />
       <p className="text-center font-data text-[11px] uppercase tracking-[0.28em] text-[var(--text-muted)]">
-        Scrolle vers un kill
+        {t("p_scroll.sh_empty_panel_l1")}
         <br />
-        pour voir le contexte
+        {t("p_scroll.sh_empty_panel_l2")}
       </p>
     </aside>
   );

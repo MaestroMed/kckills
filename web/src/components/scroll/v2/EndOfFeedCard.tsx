@@ -20,6 +20,7 @@
  */
 
 import Link from "next/link";
+import { useT } from "@/lib/i18n/use-lang";
 
 interface Props {
   itemHeight: number;
@@ -31,6 +32,7 @@ interface Props {
 }
 
 export function EndOfFeedCard({ itemHeight, onReshuffle, totalSeen }: Props) {
+  const t = useT();
   return (
     <div
       data-feed-end
@@ -49,15 +51,15 @@ export function EndOfFeedCard({ itemHeight, onReshuffle, totalSeen }: Props) {
 
       <div className="relative z-10 w-full max-w-md text-center">
         <p className="font-data text-[10px] uppercase tracking-[0.4em] text-[var(--gold)]/60 mb-4">
-          Fin du feed
+          {t("p_scroll.item_end_eyebrow")}
         </p>
         <h1 className="font-display text-3xl md:text-4xl font-black text-white mb-3">
-          Tu as vu les{" "}
-          <span className="text-[var(--gold)]">{totalSeen}</span> clips
+          {t("p_scroll.item_end_seen_pre")}{" "}
+          <span className="text-[var(--gold)]">{totalSeen}</span>{" "}
+          {t("p_scroll.item_end_seen_post")}
         </h1>
         <p className="text-sm text-[var(--text-muted)] mb-8 leading-relaxed">
-          La suite du KCKILLS, à toi de choisir le rythme. Ré-explore le même
-          feed dans un autre ordre, ou plonge dans une sélection plus serrée.
+          {t("p_scroll.item_end_body")}
         </p>
 
         <div className="space-y-3">
@@ -65,7 +67,7 @@ export function EndOfFeedCard({ itemHeight, onReshuffle, totalSeen }: Props) {
             onClick={onReshuffle}
             className="w-full rounded-2xl bg-[var(--gold)] py-4 px-6 font-display text-sm font-black uppercase tracking-widest text-[var(--bg-primary)] transition-all hover:bg-[var(--gold-bright)] hover:shadow-2xl hover:shadow-[var(--gold)]/30 active:scale-95"
           >
-            Mélanger à nouveau
+            {t("p_scroll.item_end_reshuffle")}
           </button>
 
           <div className="grid grid-cols-2 gap-3">
@@ -73,13 +75,13 @@ export function EndOfFeedCard({ itemHeight, onReshuffle, totalSeen }: Props) {
               href="/best"
               className="rounded-2xl border border-[var(--gold)]/40 bg-black/40 backdrop-blur-md py-3 px-4 font-display text-xs font-bold uppercase tracking-widest text-[var(--gold)] transition-all hover:bg-[var(--gold)]/10 active:scale-95"
             >
-              ★ Meilleurs
+              {t("p_scroll.item_end_best")}
             </Link>
             <Link
               href="/multikills"
               className="rounded-2xl border border-[var(--orange)]/40 bg-black/40 backdrop-blur-md py-3 px-4 font-display text-xs font-bold uppercase tracking-widest text-[var(--orange)] transition-all hover:bg-[var(--orange)]/10 active:scale-95"
             >
-              ✦ Multi-kills
+              {t("p_scroll.item_end_multikills")}
             </Link>
           </div>
 
@@ -88,19 +90,19 @@ export function EndOfFeedCard({ itemHeight, onReshuffle, totalSeen }: Props) {
               href="/first-bloods"
               className="rounded-xl border border-white/10 bg-black/30 py-2 text-[10px] font-data uppercase tracking-widest text-white/60 transition-colors hover:text-white"
             >
-              FB
+              {t("p_scroll.item_end_fb")}
             </Link>
             <Link
               href="/matchups"
               className="rounded-xl border border-white/10 bg-black/30 py-2 text-[10px] font-data uppercase tracking-widest text-white/60 transition-colors hover:text-white"
             >
-              Matchups
+              {t("p_scroll.item_end_matchups")}
             </Link>
             <Link
               href="/recent"
               className="rounded-xl border border-white/10 bg-black/30 py-2 text-[10px] font-data uppercase tracking-widest text-white/60 transition-colors hover:text-white"
             >
-              Recent
+              {t("p_scroll.item_end_recent")}
             </Link>
           </div>
         </div>

@@ -24,6 +24,7 @@
 
 import { useEffect, useRef } from "react";
 import { track } from "@/lib/analytics/track";
+import { useT } from "@/lib/i18n/use-lang";
 
 interface Props {
   killId: string;
@@ -56,6 +57,7 @@ export function FeedItemError({
   onAutoSkip,
   isActive,
 }: Props) {
+  const t = useT();
   const firedRef = useRef(false);
 
   // Fire analytics ONCE per mount when this becomes the active item.
@@ -127,10 +129,10 @@ export function FeedItemError({
         </div>
 
         <h2 className="font-display text-lg font-bold text-white mb-2">
-          Ce clip est temporairement indisponible
+          {t("p_scroll.item_error_title")}
         </h2>
         <p className="font-data text-[10px] uppercase tracking-widest text-white/45 mb-6">
-          {errorCode ? `Code: ${errorCode}` : "Erreur de lecture"}
+          {errorCode ? t("p_scroll.item_error_code", { code: errorCode }) : t("p_scroll.item_error_generic")}
         </p>
 
         <button
@@ -142,7 +144,7 @@ export function FeedItemError({
             onRetry();
           }}
           className="inline-flex items-center gap-2 rounded-2xl bg-[var(--gold)] px-6 py-3 font-display text-sm font-black uppercase tracking-widest text-[var(--bg-primary)] transition-all hover:bg-[var(--gold-bright)] hover:shadow-2xl hover:shadow-[var(--gold)]/30 active:scale-95"
-          aria-label="Réessayer le chargement du clip"
+          aria-label={t("p_scroll.item_retry_aria")}
         >
           <svg
             aria-hidden
@@ -158,14 +160,14 @@ export function FeedItemError({
               d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
             />
           </svg>
-          Réessayer
+          {t("p_scroll.item_retry")}
         </button>
 
         {/* Auto-skip hint — only show when isActive AND not under
             reduced-motion (the timer is suppressed in that case). */}
         {isActive && (
           <p className="mt-4 font-data text-[10px] text-white/35 motion-reduce:hidden">
-            Passage automatique au prochain clip dans 3 s
+            {t("p_scroll.item_auto_skip_hint")}
           </p>
         )}
       </div>
