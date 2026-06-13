@@ -196,7 +196,7 @@ export default async function MatchesPage() {
               />
               {t("p_matches.n_matches", { n: allMatches.length })}
               {winRate != null && (
-                <span>\u00B7 {t("p_matches.winrate", { rate: winRate })}</span>
+                <span>· {t("p_matches.winrate", { rate: winRate })}</span>
               )}
             </p>
             <h1 className="font-display text-5xl md:text-7xl lg:text-8xl font-black leading-none tracking-tight">
