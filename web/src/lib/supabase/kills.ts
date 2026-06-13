@@ -808,6 +808,13 @@ export const getRecentPublishedKills = cache(
  * `game_participants` has no Vi rows in the DB, so any % would be fabricated.
  * The winrate is an editorial constant owned by the component instead.
  */
+/** A player×champion line from player_champion_stats (migration 082). */
+export interface ChampionStat {
+  games: number;
+  winrate: number;
+  kda: number;
+}
+
 export interface ViShowcaseData {
   clips: PublishedKillRow[];
   /** Total published Vi clips (not just the displayed slice). */
@@ -816,13 +823,21 @@ export interface ViShowcaseData {
   topScore: number | null;
   /** How many Vi clips are multi-kills (double+). */
   multiKills: number;
+  /** Yike's career Vi record (player_champion_stats, scope 'all'). null
+   *  until the backfill has run — the component falls back to a constant. */
+  yikeViCareer: ChampionStat | null;
+  /** Yike's 2026 Vi record (scope 'y2026') — the current-era dominance. */
+  yikeViRecent: ChampionStat | null;
 }
 
 export const getViShowcase = cache(async function getViShowcase(
   opts: { buildTime?: boolean; limit?: number } = {},
 ): Promise<ViShowcaseData> {
   const limit = opts.limit ?? 12;
-  const empty: ViShowcaseData = { clips: [], clipCount: 0, topScore: null, multiKills: 0 };
+  const empty: ViShowcaseData = {
+    clips: [], clipCount: 0, topScore: null, multiKills: 0,
+    yikeViCareer: null, yikeViRecent: null,
+  };
   try {
     const supabase = opts.buildTime
       ? createAnonSupabase()
@@ -864,11 +879,33 @@ export const getViShowcase = cache(async function getViShowcase(
       .not("clip_url_vertical", "is", null)
       .not("multi_kill", "is", null);
 
+    // Live Vi performance from player_champion_stats (migration 082,
+    // backfilled by worker/scripts/backfill_player_champion_stats.py).
+    // The table may not exist / be empty yet → swallow the error and let
+    // the component fall back to its sourced constant.
+    let yikeViCareer: ChampionStat | null = null;
+    let yikeViRecent: ChampionStat | null = null;
+    const { data: vs, error: vErr } = await supabase
+      .from("player_champion_stats")
+      .select("scope,games,winrate,kda")
+      .eq("player_link", "Yike")
+      .eq("champion", "Vi")
+      .in("scope", ["all", "y2026"]);
+    if (!vErr) {
+      for (const row of (vs ?? []) as { scope: string; games: number; winrate: number; kda: number }[]) {
+        const v: ChampionStat = { games: row.games, winrate: Number(row.winrate), kda: Number(row.kda) };
+        if (row.scope === "all") yikeViCareer = v;
+        else if (row.scope === "y2026") yikeViRecent = v;
+      }
+    }
+
     return {
       clips,
       clipCount: count ?? clips.length,
       topScore: clips[0]?.highlight_score ?? null,
       multiKills: mkCount ?? 0,
+      yikeViCareer,
+      yikeViRecent,
     };
   } catch (err) {
     rethrowIfDynamic(err);
