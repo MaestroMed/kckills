@@ -26,6 +26,7 @@ import { m, useReducedMotion } from "motion/react";
 
 import { championIconUrl, championSplashUrl } from "@/lib/constants";
 import type { PublishedKillRow, ViShowcaseData } from "@/lib/supabase/kills";
+import { useT } from "@/lib/i18n/use-lang";
 
 /**
  * FALLBACK Vi stats — used only until player_champion_stats (migration 082)
@@ -54,6 +55,7 @@ export function ViShowcase({
   yikeViRecent,
 }: ViShowcaseData) {
   const reduced = useReducedMotion();
+  const t = useT();
   if (clips.length === 0) return null;
 
   // Prefer live DB stats (player_champion_stats); fall back to the sourced
@@ -68,7 +70,7 @@ export function ViShowcase({
     winrate: VI_STATS.recentWinrate,
     kda: VI_STATS.recentKda,
   };
-  const recentLabel = yikeViRecent ? "en 2026" : "Spring 26";
+  const recentLabel = yikeViRecent ? t("p_vi.label_2026") : t("p_vi.label_spring");
 
   const splash = championSplashUrl("Vi", 0);
   const enter = (i: number) =>
@@ -131,7 +133,7 @@ export function ViShowcase({
             className="font-data text-[10px] md:text-[11px] uppercase tracking-[0.35em] font-bold"
             style={{ color: CYAN }}
           >
-            Pioche signature · Yike
+            {t("p_vi.eyebrow")}
           </m.p>
 
           {/* Title + winrate */}
@@ -156,7 +158,7 @@ export function ViShowcase({
                 {recent.winrate}%
               </span>
               <span className="mb-1 font-display text-[10px] md:text-xs font-bold uppercase tracking-[0.2em] text-[var(--text-secondary)]">
-                Winrate
+                {t("p_vi.winrate")}
                 <br />
                 {recentLabel}
               </span>
@@ -168,39 +170,41 @@ export function ViShowcase({
             {...enter(2)}
             className="mt-4 max-w-xl text-sm md:text-base leading-relaxed text-[var(--text-secondary)]"
           >
-            La pioche n°1 de Yike — {career.games} games en carrière.
-            Longtemps en dents de scie… mais récemment, c&apos;est {recent.games}
-            {" "}games à {recent.winrate}% de winrate et {recent.kda} de KDA.
-            Quand la Karmine sort Vi, c&apos;est game over.
+            {t("p_vi.narrative", {
+              career: career.games,
+              recent: recent.games,
+              wr: recent.winrate,
+              kda: recent.kda,
+            })}
           </m.p>
 
           {/* Real-data stat pills */}
           <m.div {...enter(3)} className="mt-5 flex flex-wrap items-center gap-2">
-            <Pill value={career.games} label="Games carrière" />
-            <Pill value={recent.kda} label="KDA récent" />
-            <Pill value={clipCount} label="Highlights" />
-            {topScore !== null && <Pill value={`${topScore.toFixed(1)}`} label="Top score IA" suffix="/10" />}
-            {multiKills > 0 && <Pill value={multiKills} label="Multi-kills" />}
+            <Pill value={career.games} label={t("p_vi.pill_career")} />
+            <Pill value={recent.kda} label={t("p_vi.pill_kda")} />
+            <Pill value={clipCount} label={t("p_vi.pill_highlights")} />
+            {topScore !== null && <Pill value={`${topScore.toFixed(1)}`} label={t("p_vi.pill_score")} suffix="/10" />}
+            {multiKills > 0 && <Pill value={multiKills} label={t("p_vi.pill_multikills")} />}
           </m.div>
 
           {/* ─── Clip strip ─────────────────────────────────────────── */}
           <div className="mt-7">
             <div className="mb-3 flex items-center justify-between">
               <span className="font-data text-[10px] uppercase tracking-[0.3em] font-bold text-white/80">
-                Les meilleurs moments sur Vi
+                {t("p_vi.strip_heading")}
               </span>
               <Link
                 href="/champion/Vi"
                 className="inline-flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-widest transition-colors"
                 style={{ color: CYAN }}
               >
-                Toute l&apos;histoire <span aria-hidden>→</span>
+                {t("p_vi.cta")} <span aria-hidden>→</span>
               </Link>
             </div>
 
             <ol
               role="list"
-              aria-label="Clips Karmine Corp sur Vi, du mieux noté au moins bien noté"
+              aria-label={t("p_vi.strip_aria")}
               className="flex gap-3 overflow-x-auto pb-2 snap-x snap-mandatory -mx-2 px-2"
               style={{ WebkitOverflowScrolling: "touch" }}
             >
@@ -228,6 +232,7 @@ function ViClip({
   index: number;
   reduced: boolean;
 }) {
+  const t = useT();
   return (
     <m.li
       role="listitem"
@@ -241,9 +246,14 @@ function ViClip({
         href={`/scroll?kill=${clip.id}`}
         className="group relative block aspect-[9/16] w-28 md:w-32 overflow-hidden rounded-xl border bg-[var(--bg-surface)] transition-all hover:-translate-y-1 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--cyan)]"
         style={{ borderColor: "rgba(10,200,185,0.25)" }}
-        aria-label={`Clip Vi contre ${clip.victim_champion ?? "?"}${
-          clip.highlight_score !== null ? `, score ${clip.highlight_score.toFixed(1)} sur 10` : ""
-        }`}
+        aria-label={
+          clip.highlight_score !== null
+            ? t("p_vi.clip_aria_scored", {
+                victim: clip.victim_champion ?? "?",
+                n: clip.highlight_score.toFixed(1),
+              })
+            : t("p_vi.clip_aria", { victim: clip.victim_champion ?? "?" })
+        }
       >
         {clip.thumbnail_url && (
           <Image

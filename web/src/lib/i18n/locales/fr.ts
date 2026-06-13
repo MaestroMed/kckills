@@ -2447,6 +2447,23 @@ const _fr = {
     "no_badge_yet": "Aucun badge encore. Voir le catalogue",
     "see_all": "Voir tout",
   },
+  p_vi: {
+    "eyebrow": "Pioche signature · Yike",
+    "winrate": "Winrate",
+    "label_2026": "en 2026",
+    "label_spring": "Spring 26",
+    "narrative": "La pioche n°1 de Yike — {career} games en carrière. Longtemps en dents de scie… mais récemment, c'est {recent} games à {wr}% de winrate et {kda} de KDA. Quand la Karmine sort Vi, c'est game over.",
+    "pill_career": "Games carrière",
+    "pill_kda": "KDA récent",
+    "pill_highlights": "Highlights",
+    "pill_score": "Top score IA",
+    "pill_multikills": "Multi-kills",
+    "strip_heading": "Les meilleurs moments sur Vi",
+    "cta": "Toute l'histoire",
+    "strip_aria": "Clips Karmine Corp sur Vi, du mieux noté au moins bien noté",
+    "clip_aria": "Clip Vi contre {victim}",
+    "clip_aria_scored": "Clip Vi contre {victim}, score {n} sur 10",
+  },
 } as const;
 
 /** Widened dict type — other locales mirror the shape but use `string` leaves. */
