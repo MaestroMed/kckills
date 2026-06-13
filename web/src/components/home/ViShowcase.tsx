@@ -28,11 +28,17 @@ import { championIconUrl, championSplashUrl } from "@/lib/constants";
 import type { PublishedKillRow, ViShowcaseData } from "@/lib/supabase/kills";
 
 /**
- * Yike's official winrate on Vi — EDITORIAL.
- * The DB's game_participants table has no Vi rows, so this can't be derived;
- * it's maintained by hand. Update this single number when it moves.
+ * Yike's Vi record — sourced from gol.gg (player id 3406) on 2026-06-13.
+ * Our DB's game_participants table is empty, so these are transcribed from
+ * the public pro-stats source rather than computed. Refresh them via the
+ * esports data-retrieval protocol — see .claude/skills/esports-data-retrieval.
  */
-const YIKE_VI_WINRATE = 88;
+const VI_STATS = {
+  winrateSplit: 90.9, // LEC Spring 2026
+  gamesSplit: 11,
+  kdaSplit: 6.3,
+  gamesCareer: 52, // Vi = Yike's #1 most-played champion (tied)
+};
 
 const CYAN = "var(--cyan)";
 
@@ -128,12 +134,12 @@ export function ViShowcase({
                 className="font-data text-5xl md:text-6xl font-black tabular-nums leading-none"
                 style={{ color: CYAN, textShadow: "0 0 40px rgba(10,200,185,0.5)" }}
               >
-                {YIKE_VI_WINRATE}%
+                {VI_STATS.winrateSplit}%
               </span>
               <span className="mb-1 font-display text-[10px] md:text-xs font-bold uppercase tracking-[0.2em] text-[var(--text-secondary)]">
                 Winrate
                 <br />
-                en offi
+                Spring 26
               </span>
             </div>
           </m.div>
@@ -143,13 +149,17 @@ export function ViShowcase({
             {...enter(2)}
             className="mt-4 max-w-xl text-sm md:text-base leading-relaxed text-[var(--text-secondary)]"
           >
-            La pioche qui ne pardonnait jamais… jusqu&apos;à ce que Yike la
-            dompte. De l&apos;arme à double tranchant à l&apos;arme fatale&nbsp;:
-            quand la Karmine sort Vi sur la Faille, c&apos;est devenu game over.
+            La pioche n°1 de Yike — {VI_STATS.gamesCareer} games en carrière.
+            Longtemps en dents de scie… mais ce Spring, c&apos;est{" "}
+            {VI_STATS.gamesSplit} games, {VI_STATS.winrateSplit}% de winrate et
+            {" "}{VI_STATS.kdaSplit} de KDA. Quand la Karmine sort Vi, c&apos;est
+            game over.
           </m.p>
 
           {/* Real-data stat pills */}
           <m.div {...enter(3)} className="mt-5 flex flex-wrap items-center gap-2">
+            <Pill value={VI_STATS.gamesCareer} label="Games carrière" />
+            <Pill value={VI_STATS.kdaSplit} label="KDA Spring" />
             <Pill value={clipCount} label="Highlights" />
             {topScore !== null && <Pill value={`${topScore.toFixed(1)}`} label="Top score IA" suffix="/10" />}
             {multiKills > 0 && <Pill value={multiKills} label="Multi-kills" />}
