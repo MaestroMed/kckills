@@ -796,6 +796,88 @@ export const getRecentPublishedKills = cache(
 );
 
 /**
+ * Vi showcase data — KC's signature jungle pick.
+ *
+ * The `<ViShowcase />` home section celebrates Karmine Corp on Vi: the
+ * best highlights + the real catalog stats (total clips, top score,
+ * multi-kills). Filters to `killer_champion = 'Vi'` (+ the usual
+ * team_killer / visible / has-clip gates) and orders by highlight_score
+ * so the strip leads with the cleanest plays.
+ *
+ * NOTE: Yike's official Vi *winrate* is intentionally NOT computed here —
+ * `game_participants` has no Vi rows in the DB, so any % would be fabricated.
+ * The winrate is an editorial constant owned by the component instead.
+ */
+export interface ViShowcaseData {
+  clips: PublishedKillRow[];
+  /** Total published Vi clips (not just the displayed slice). */
+  clipCount: number;
+  /** Highest highlight_score among Vi clips (the displayed top one). */
+  topScore: number | null;
+  /** How many Vi clips are multi-kills (double+). */
+  multiKills: number;
+}
+
+export const getViShowcase = cache(async function getViShowcase(
+  opts: { buildTime?: boolean; limit?: number } = {},
+): Promise<ViShowcaseData> {
+  const limit = opts.limit ?? 12;
+  const empty: ViShowcaseData = { clips: [], clipCount: 0, topScore: null, multiKills: 0 };
+  try {
+    const supabase = opts.buildTime
+      ? createAnonSupabase()
+      : await createServerSupabase();
+
+    // Display slice + exact total in one round trip (count rides the
+    // Content-Range header regardless of the limit).
+    const { data, error, count } = await supabase
+      .from("kills")
+      .select(KILL_SELECT, { count: "exact" })
+      .or(
+        "publication_status.eq.published," +
+          "and(publication_status.is.null,status.eq.published)",
+      )
+      .eq("kill_visible", true)
+      .eq("tracked_team_involvement", "team_killer")
+      .eq("killer_champion", "Vi")
+      .not("clip_url_vertical", "is", null)
+      .not("thumbnail_url", "is", null)
+      .order("highlight_score", { ascending: false, nullsFirst: false })
+      .limit(limit);
+    if (error) {
+      console.warn("[supabase/kills] getViShowcase error:", error.message);
+      return empty;
+    }
+    const clips = (data ?? []).map((row) => normalize(row as unknown as RawKillSelect));
+
+    // Multi-kill tally across the full Vi catalog (head = count only).
+    const { count: mkCount } = await supabase
+      .from("kills")
+      .select("id", { count: "exact", head: true })
+      .or(
+        "publication_status.eq.published," +
+          "and(publication_status.is.null,status.eq.published)",
+      )
+      .eq("kill_visible", true)
+      .eq("tracked_team_involvement", "team_killer")
+      .eq("killer_champion", "Vi")
+      .not("clip_url_vertical", "is", null)
+      .not("multi_kill", "is", null);
+
+    return {
+      clips,
+      clipCount: count ?? clips.length,
+      topScore: clips[0]?.highlight_score ?? null,
+      multiKills: mkCount ?? 0,
+    };
+  } catch (err) {
+    rethrowIfDynamic(err);
+    console.warn("[supabase/kills] getViShowcase threw:", err);
+    return empty;
+  }
+});
+
+/**
  * getWeekendBestClips — top published clips during a date window.
  *
  * Used by `<HomeWeekendBestClips />` to surface the freshest, best-rated

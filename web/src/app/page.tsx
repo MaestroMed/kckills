@@ -4,7 +4,7 @@ import { Suspense } from "react";
 import { loadRealData, getCurrentRoster, getTeamStats, getMatchesSorted, displayRole } from "@/lib/real-data";
 import { championIconUrl, championSplashUrl } from "@/lib/constants";
 import { PLAYER_PHOTOS, TEAM_LOGOS, KC_LOGO } from "@/lib/kc-assets";
-import { getPublishedKills } from "@/lib/supabase/kills";
+import { getPublishedKills, getViShowcase } from "@/lib/supabase/kills";
 import { loadHeroVideos } from "@/lib/hero-videos/storage";
 import { getEraRosters } from "@/lib/era-rosters";
 import { getServerT } from "@/lib/i18n/server-lang";
@@ -41,7 +41,7 @@ import { HomeYouTubeShowcase } from "@/components/HomeYouTubeShowcase";
 import { KillOfTheWeek } from "@/components/KillOfTheWeek";
 import { HomeRecentClips } from "@/components/HomeRecentClips";
 import { HomeWeekendBestClips } from "@/components/HomeWeekendBestClips";
-import { TrainVi } from "@/components/home/TrainVi";
+import { ViShowcase } from "@/components/home/ViShowcase";
 import { FormCalendar } from "@/components/home/FormCalendar";
 import { ChampionLadders } from "@/components/home/ChampionLadders";
 import { PlayerSpotlight } from "@/components/home/PlayerSpotlight";
@@ -183,6 +183,7 @@ export default async function HomePage() {
   const allMatches = getMatchesSorted(data);
   const isEmpty = data.total_matches === 0;
   const HERO_CLIPS = await buildHeroClips();
+  const viShowcase = await getViShowcase({ buildTime: true });
 
   // Wave 13h (2026-05-07) — the four Supabase queries that feed the
   // hero RIGHT column (clip count, last match, career stats, top
@@ -378,12 +379,12 @@ export default async function HomePage() {
         <KillOfTheWeek />
       </Suspense>
 
-      {/* ═══ LE TRAIN VI — momentum tracker (Wave 32) ═══════════════════
-          Visualises the last 10 KC matches as a Hextech train rolling out
-          of a Vi-themed locomotive. Wins glow gold, losses look derailed.
-          The locomotive face shows the current consecutive streak so the
-          user can read momentum at a glance. */}
-      <TrainVi matches={allMatches.slice(0, 10)} />
+      {/* ═══ VI — KC's signature champion showcase ══════════════════════
+          Replaces the old "Train Vi" momentum tracker (misread as champion
+          Vi). Celebrates Karmine Corp on Vi: the redemption arc, Yike's
+          near-unbeatable winrate, and a browsable strip of the best Vi
+          highlights — over a Vi splash hero. */}
+      <ViShowcase {...viShowcase} />
 
       {/* ═══ PLAYER SPOTLIGHT — who's carrying right now (Wave 32) ══════
           Picks the top KC performer over the last 5 series via a weighted
