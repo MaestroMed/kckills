@@ -39,7 +39,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { createHash } from "crypto";
-import { createServerSupabase } from "@/lib/supabase/server";
+import { createServerSupabase, createServiceSupabase } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -174,7 +174,16 @@ export async function POST(request: NextRequest) {
     reason_text: reasonText,
   };
 
-  const { error: insertErr } = await sb.from("reports").insert(insertRow);
+  // Migration 083 dropped the public INSERT policy on reports (it let
+  // direct PostgREST callers spam the queue with spoofed reporter_id).
+  // This route is the single write path and inserts as service role.
+  const svc = createServiceSupabase();
+  if (!svc) {
+    console.error("[api/report] SUPABASE_SERVICE_ROLE_KEY missing — cannot record report");
+    return NextResponse.json({ error: "Signalement indisponible" }, { status: 503 });
+  }
+
+  const { error: insertErr } = await svc.from("reports").insert(insertRow);
 
   if (insertErr) {
     if (isUniqueViolation(insertErr)) {
@@ -197,7 +206,7 @@ export async function POST(request: NextRequest) {
       // The unique partial index on (type, entity_type, entity_id)
       // WHERE status IN ('pending','claimed') makes this idempotent —
       // duplicate enqueues silently no-op via 23505.
-      const { error: enqueueErr } = await sb.from("pipeline_jobs").insert({
+      const { error: enqueueErr } = await svc.from("pipeline_jobs").insert({
         type: "qc.verify",
         entity_type: "kill",
         entity_id: targetId,
