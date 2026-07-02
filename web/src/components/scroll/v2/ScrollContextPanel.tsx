@@ -36,7 +36,8 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { useT } from "@/lib/i18n/use-lang";
+import { useLang, useT } from "@/lib/i18n/use-lang";
+import { formatDate } from "@/lib/i18n/lang";
 import { m, useReducedMotion } from "motion/react";
 import type { VideoFeedItem } from "@/components/scroll/ScrollFeed";
 import { StarRating } from "@/components/star-rating";
@@ -141,18 +142,19 @@ const MatchHeader = memo(function MatchHeader({
   gameNumber,
 }: MatchHeaderProps) {
   const t = useT();
+  const { lang } = useLang();
   // matchDate arrives as an ISO string. Render a stable, locale-stamped
   // short date; guard against an unparseable value so a bad row never
   // throws inside the panel.
   const dateLabel = useMemo(() => {
     const d = new Date(matchDate);
     if (Number.isNaN(d.getTime())) return null;
-    return d.toLocaleDateString("fr-FR", {
+    return formatDate(lang, d, {
       day: "numeric",
       month: "short",
       year: "numeric",
     });
-  }, [matchDate]);
+  }, [matchDate, lang]);
 
   const opp = opponentCode || "LEC";
 

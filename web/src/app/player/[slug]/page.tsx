@@ -30,6 +30,7 @@ import { PrevNextNavCard } from "@/components/player/PrevNextNavCard";
 import { HeadToHead } from "@/components/player/HeadToHead";
 import { ERAS, type Era } from "@/lib/eras";
 import { getServerT } from "@/lib/i18n/server-lang";
+import { formatDate } from "@/lib/i18n/lang";
 
 /**
  * Safe decode for route params. Next already decodes params once —
@@ -172,7 +173,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 export default async function PlayerPage({ params }: Props) {
   const { slug } = await params;
   const name = safeDecode(slug);
-  const { t } = await getServerT();
+  const { lang, t } = await getServerT();
   const data = loadRealData();
   const stats = getPlayerStats(data, name);
 
@@ -494,7 +495,7 @@ export default async function PlayerPage({ params }: Props) {
               {riotStats.linkedAt && (
                 <p className="text-[10px] text-[var(--text-muted)] opacity-70">
                   {t("p_player.linked_on")}{" "}
-                  {new Date(riotStats.linkedAt).toLocaleDateString("fr-FR", {
+                  {formatDate(lang, riotStats.linkedAt, {
                     day: "numeric",
                     month: "short",
                     year: "numeric",

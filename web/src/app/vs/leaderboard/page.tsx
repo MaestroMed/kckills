@@ -34,6 +34,7 @@ import { JsonLd, breadcrumbLD } from "@/lib/seo/jsonld";
 import { getServerT } from "@/lib/i18n/server-lang";
 
 import { VSLeaderboard } from "@/components/vs-leaderboard/VSLeaderboard";
+import { formatNumber } from "@/lib/i18n/lang";
 
 export const revalidate = 300;
 
@@ -59,7 +60,7 @@ export const metadata: Metadata = {
 };
 
 export default async function VSLeaderboardPage() {
-  const { t } = await getServerT();
+  const { lang, t } = await getServerT();
 
   // ─── Parallel pre-fetch ────────────────────────────────────────────
   const [initialRows, initialStats, champions] = await Promise.all([
@@ -176,12 +177,12 @@ export default async function VSLeaderboardPage() {
           <div className="glass gold-glow mt-7 inline-flex items-center gap-4 md:gap-6 flex-wrap justify-center rounded-2xl border border-[var(--border-gold)] px-5 py-3">
             <Bilan
               label={t("p_vslb.bilan_battles")}
-              value={initialStats.total_battles.toLocaleString("fr-FR")}
+              value={formatNumber(lang, initialStats.total_battles)}
             />
             <BilanSep />
             <Bilan
               label={t("p_vslb.bilan_ranked_kills")}
-              value={initialStats.total_kills_with_battles.toLocaleString("fr-FR")}
+              value={formatNumber(lang, initialStats.total_kills_with_battles)}
               accent="var(--gold-bright)"
             />
             <BilanSep />

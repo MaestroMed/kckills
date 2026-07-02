@@ -30,8 +30,9 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { m, useReducedMotion } from "motion/react";
 
-import { useT, type TranslateFn } from "@/lib/i18n/use-lang";
+import { useLang, useT, type TranslateFn } from "@/lib/i18n/use-lang";
 import type { RealMatch } from "@/lib/real-data";
+import { LANG_META } from "@/lib/i18n/lang";
 
 interface Props {
   matches: RealMatch[];
@@ -142,21 +143,24 @@ function cellColor(b: DayBucket): { bg: string; border: string } {
   };
 }
 
-const dayLabelFmt = new Intl.DateTimeFormat("fr-FR", {
-  day: "numeric",
-  month: "short",
-});
-
-const dayLabelLongFmt = new Intl.DateTimeFormat("fr-FR", {
-  weekday: "short",
-  day: "numeric",
-  month: "long",
-});
+// Audit 2026-07-02 : were module-level "fr-FR" formatters — EN/KO/ES
+// visitors saw French dates. Built per-lang inside the component now.
+function makeDayFormatters(htmlLang: string) {
+  return {
+    short: new Intl.DateTimeFormat(htmlLang, { day: "numeric", month: "short" }),
+    long: new Intl.DateTimeFormat(htmlLang, { weekday: "short", day: "numeric", month: "long" }),
+  };
+}
 
 export function FormCalendar({ matches, days = 84 }: Props) {
   const t = useT();
+  const { lang } = useLang();
   const reduced = useReducedMotion();
   const [activeDate, setActiveDate] = useState<string | null>(null);
+  const { short: dayLabelFmt, long: dayLabelLongFmt } = useMemo(
+    () => makeDayFormatters(LANG_META[lang].htmlLang),
+    [lang],
+  );
 
   // Weekday axis initials (L M M J V S D in FR) — comma-joined in the
   // dict so each locale can supply its own 7-letter sequence.
@@ -470,6 +474,11 @@ function KpiBlock({
 }
 
 function ActiveDayPanel({ bucket, t }: { bucket: DayBucket; t: TranslateFn }) {
+  const { lang } = useLang();
+  const dayLabelLongFmt = useMemo(
+    () => makeDayFormatters(LANG_META[lang].htmlLang).long,
+    [lang],
+  );
   const date = new Date(bucket.date + "T00:00:00Z");
   return (
     <div>

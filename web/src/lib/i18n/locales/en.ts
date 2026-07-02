@@ -36,6 +36,13 @@ export const en: FrDict = {
     just_now: "just now",
   },
 
+  footer: {
+    week: "This week",
+    records: "Records",
+    privacy: "Privacy",
+    discord_login: "Sign in with Discord",
+    fan_disclaimer: "Fan-made community site. Not affiliated with Karmine Corp. © 2026",
+  },
   nav: {
     home: "Home",
     scroll: "Scroll",

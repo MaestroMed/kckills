@@ -42,6 +42,13 @@ export const ko: FrDict = {
     just_now: "방금 전",
   },
 
+  footer: {
+    week: "이번 주",
+    records: "기록",
+    privacy: "개인정보",
+    discord_login: "Discord 로그인",
+    fan_disclaimer: "팬이 만든 커뮤니티 사이트입니다. Karmine Corp와 무관합니다. © 2026",
+  },
   nav: {
     home: "홈",
     scroll: "스크롤",
