@@ -322,12 +322,21 @@ export function ScrollFeedV2({
   // because the browser already downloaded them.
   const isOffline = useIsOffline();
 
-  // SSR feed refresh cadence — 15s when live, 30s otherwise. Single
-  // setInterval whose callback dynamically reads `live.isLive` + `offline`
-  // from refs so we don't reschedule on every state change (which would
-  // make the first tick land at 15s+30s instead of at 15s after a live
-  // flip). Pattern matches the spec's "don't remount the query — adjust
-  // the option dynamically" requirement.
+  // SSR feed refresh cadence — 10 min normally, 2 min when live.
+  //
+  // Audit 2026-07-02 : the previous 30s/15s cadence was the single
+  // biggest egress driver of the site. Each router.refresh() re-runs
+  // the whole /scroll RSC render (getPublishedKills(250) with the fat
+  // KILL_SELECT) for EVERY connected client — with 2 000 viewers during
+  // a stream that alone could exhaust the Supabase free tier in
+  // minutes, and the per-refresh weightedShuffle re-ordered the feed
+  // under the viewer's thumb (clip swapped mid-watch).
+  //
+  // New clips land 1-2× per hour at most, so 10 min matches the real
+  // data churn; 2 min during a live match is enough for "new kill just
+  // dropped" freshness. The data layer is also cached server-side now
+  // (createCachedAnonSupabase), so refreshes that DO happen are served
+  // from the Next Data Cache instead of hitting Supabase.
   const isLiveRef = useRef(live.isLive);
   useEffect(() => {
     isLiveRef.current = live.isLive;
@@ -350,11 +359,11 @@ export function ScrollFeedV2({
           // ignore — refresh is best-effort
         }
       }
-      const next = isLiveRef.current ? 15_000 : 30_000;
+      const next = isLiveRef.current ? 120_000 : 600_000;
       timeoutId = window.setTimeout(tick, next);
     };
     // Bootstrap with the current cadence so the first tick aligns.
-    timeoutId = window.setTimeout(tick, isLiveRef.current ? 15_000 : 30_000);
+    timeoutId = window.setTimeout(tick, isLiveRef.current ? 120_000 : 600_000);
     return () => {
       if (timeoutId != null) window.clearTimeout(timeoutId);
     };

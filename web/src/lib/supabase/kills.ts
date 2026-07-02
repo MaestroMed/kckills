@@ -12,7 +12,7 @@
 
 import "server-only";
 import { cache } from "react";
-import { createAnonSupabase, createServerSupabase, rethrowIfDynamic } from "./server";
+import { createCachedAnonSupabase, rethrowIfDynamic } from "./server";
 
 export type LanePhase = "early" | "mid" | "late";
 export type FightType =
@@ -617,9 +617,7 @@ export const getPublishedKcKillCount = cache(
     opts: { buildTime?: boolean } = {},
   ): Promise<number> {
     try {
-      const supabase = opts.buildTime
-        ? createAnonSupabase()
-        : await createServerSupabase();
+      const supabase = createCachedAnonSupabase();
       const { count, error } = await supabase
         .from("kills")
         .select("id", { count: "exact", head: true })
@@ -655,9 +653,7 @@ export const getPublishedKills = cache(async function getPublishedKills(
   opts: { buildTime?: boolean } = {},
 ): Promise<PublishedKillRow[]> {
   try {
-    const supabase = opts.buildTime
-      ? createAnonSupabase()
-      : await createServerSupabase();
+    const supabase = createCachedAnonSupabase();
     const { data, error } = await supabase
       .from("kills")
       .select(KILL_SELECT)
@@ -709,9 +705,7 @@ export const getCardKills = cache(async function getCardKills(
   opts: { buildTime?: boolean } = {},
 ): Promise<CardKillRow[]> {
   try {
-    const supabase = opts.buildTime
-      ? createAnonSupabase()
-      : await createServerSupabase();
+    const supabase = createCachedAnonSupabase();
     const { data, error } = await supabase
       .from("kills")
       .select(CARD_SELECT)
@@ -760,9 +754,7 @@ export const getRecentPublishedKills = cache(
     opts: { buildTime?: boolean } = {},
   ): Promise<PublishedKillRow[]> {
     try {
-      const supabase = opts.buildTime
-        ? createAnonSupabase()
-        : await createServerSupabase();
+      const supabase = createCachedAnonSupabase();
       const { data, error } = await supabase
         .from("kills")
         .select(KILL_SELECT)
@@ -839,9 +831,7 @@ export const getViShowcase = cache(async function getViShowcase(
     yikeViCareer: null, yikeViRecent: null,
   };
   try {
-    const supabase = opts.buildTime
-      ? createAnonSupabase()
-      : await createServerSupabase();
+    const supabase = createCachedAnonSupabase();
 
     // Display slice + exact total in one round trip (count rides the
     // Content-Range header regardless of the limit).
@@ -954,9 +944,7 @@ export const getWeekendBestClips = cache(async function getWeekendBestClips(
 ): Promise<PublishedKillRow[]> {
   const limit = opts.limit ?? 12;
   try {
-    const supabase = opts.buildTime
-      ? createAnonSupabase()
-      : await createServerSupabase();
+    const supabase = createCachedAnonSupabase();
 
     // --- 1. Try the weekend window ---
     const { data: windowed, error } = await supabase
@@ -1064,9 +1052,7 @@ export const getKillsForGrid = cache(async function getKillsForGrid(
   opts: { buildTime?: boolean; killerChampion?: string; matchExternalId?: string } = {},
 ): Promise<PublishedKillRow[]> {
   try {
-    const supabase = opts.buildTime
-      ? createAnonSupabase()
-      : await createServerSupabase();
+    const supabase = createCachedAnonSupabase();
 
     // Bucket 1 : full clip cards.
     // PR23 split-status : "published" check uses publication_status when
@@ -1199,9 +1185,7 @@ export async function getKillById(
     // 2026-04-26 cache fix : opt-in cookie-less anon client. Without
     // this, callers (KillOfTheWeek, /kill/[id]) opt the page into
     // dynamic rendering via cookies(), killing ISR.
-    const supabase = opts.buildTime
-      ? createAnonSupabase()
-      : await createServerSupabase();
+    const supabase = createCachedAnonSupabase();
     const { data, error } = await supabase
       .from("kills")
       .select(KILL_SELECT)
@@ -1244,9 +1228,7 @@ export async function getKillsByMatchExternalId(
     // this, /match/[slug] runs SSR for every visitor (cookies() in the
     // server client opts the page into dynamic rendering, killing the
     // `revalidate = 600` ISR setting).
-    const supabase = opts.buildTime
-      ? createAnonSupabase()
-      : await createServerSupabase();
+    const supabase = createCachedAnonSupabase();
 
     const [publishedRes, golggRes, livestatsRes] = await Promise.all([
       supabase
@@ -1332,7 +1314,7 @@ export async function getKillsByKillerChampion(
   limit = 50
 ): Promise<PublishedKillRow[]> {
   try {
-    const supabase = await createServerSupabase();
+    const supabase = createCachedAnonSupabase();
 
     const [publishedRes, golggRes, livestatsRes] = await Promise.all([
       supabase
@@ -1456,9 +1438,7 @@ export const countKillsByEra = cache(async function countKillsByEra(
   const endMs = Date.parse(`${opts.endDate}T23:59:59Z`);
   if (!Number.isFinite(startMs) || !Number.isFinite(endMs)) return 0;
   try {
-    const supabase = opts.buildTime
-      ? createAnonSupabase()
-      : await createServerSupabase();
+    const supabase = createCachedAnonSupabase();
     // count=exact rather than count=planned — Postgres' planner badly
     // underestimates row counts with a multi-column AND chain (status +
     // kill_visible + event_epoch range + clip_url_vertical NOT NULL),
@@ -1527,9 +1507,7 @@ export const getKillsByEra = cache(async function getKillsByEra(
   const endMs = Date.parse(`${opts.endDate}T23:59:59Z`);
   if (!Number.isFinite(startMs) || !Number.isFinite(endMs)) return [];
   try {
-    const supabase = opts.buildTime
-      ? createAnonSupabase()
-      : await createServerSupabase();
+    const supabase = createCachedAnonSupabase();
     const { data, error } = await supabase
       .from("kills")
       .select(KILL_SELECT)

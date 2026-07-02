@@ -493,13 +493,36 @@ function videoMatchesChips(v: VideoFeedItem, c: ScrollChipFilters): boolean {
  * if no candidate clears the caps (avoid infinite loops on small
  * filtered feeds).
  */
+/**
+ * Deterministic PRNG (mulberry32) seeded on a 10-minute window.
+ *
+ * Audit 2026-07-02 : `Math.random()` here meant every SSR render
+ * produced a different feed order, and each client `router.refresh()`
+ * replaced the list under the viewer — the playing clip visibly
+ * swapped mid-watch. Seeding on `floor(now / 10 min)` keeps the
+ * variety across visits (a new order every 10 minutes, aligned with
+ * the refresh cadence) while making renders within the window
+ * byte-identical, so refreshes are invisible to the user.
+ */
+function seededRandom(seed: number): () => number {
+  let a = seed >>> 0;
+  return () => {
+    a |= 0;
+    a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
 function weightedShuffle(items: FeedItem[]): FeedItem[] {
   if (items.length <= 2) return items;
+  const rand = seededRandom(Math.floor(Date.now() / 600_000));
   const maxScore = Math.max(1, ...items.map((i) => i.score));
   const jittered = items
     .map((item) => ({
       item,
-      sortKey: item.score + Math.random() * maxScore * 1.5,
+      sortKey: item.score + rand() * maxScore * 1.5,
     }))
     .sort((a, b) => b.sortKey - a.sortKey)
     .map((j) => j.item);
