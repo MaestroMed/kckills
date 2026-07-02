@@ -271,16 +271,33 @@ async def package_clip(kill_id: str, mp4_url: str) -> str | None:
                     )
             return None
 
-        # Upload all .m3u8 + .ts files to R2
+        # Upload all .m3u8 + .ts files to R2.
+        #
+        # Audit 2026-07-02 : only master.m3u8's upload result was ever
+        # checked — a single failed .ts segment still published
+        # hls_master_url, giving the player 404s/stalls mid-clip, and
+        # the kill never re-entered the queue (the scanner filters on
+        # hls_master_url IS NULL). The packaging is now atomic: any
+        # failed upload aborts the whole thing (→ retried next cycle),
+        # and master.m3u8 is uploaded LAST so a crash mid-upload can't
+        # leave a referenced-but-incomplete rendition set behind.
         log.info("hls_upload_start", kill_id=kill_id[:8])
+        files = sorted(
+            (f for f in os.listdir(work_dir) if f.endswith((".m3u8", ".ts"))),
+            key=lambda f: f == "master.m3u8",  # False < True → master last
+        )
         master_url = None
-        for fname in os.listdir(work_dir):
-            if not (fname.endswith(".m3u8") or fname.endswith(".ts")):
-                continue
+        for fname in files:
             local = os.path.join(work_dir, fname)
             key = f"hls/{kill_id}/{fname}"
             content_type = "application/vnd.apple.mpegurl" if fname.endswith(".m3u8") else "video/mp2t"
             url = await r2_client.upload(local, key, content_type=content_type)
+            if url is None:
+                log.error(
+                    "hls_upload_segment_failed",
+                    kill_id=kill_id[:8], file=fname,
+                )
+                return None
             if fname == "master.m3u8":
                 master_url = url
 

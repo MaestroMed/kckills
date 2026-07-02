@@ -48,6 +48,13 @@ os.environ.setdefault("SUPABASE_SERVICE_KEY", "test-service-key")
 # ─── Shared fixtures ─────────────────────────────────────────────────
 
 
+
+def _async2(value):
+    """The finder helpers went async (Wave 27.5) — wrap fixtures accordingly."""
+    async def _f(*args, **kwargs):
+        return value
+    return _f
+
 @pytest.fixture
 def patch_observability(monkeypatch):
     """Silence the @run_logged decorator's Supabase calls."""
@@ -199,7 +206,7 @@ def test_run_no_db_returns_zero(monkeypatch, patch_observability):
 def test_run_no_pending_games_returns_zero(monkeypatch, patched_module):
     """If _games_missing_vod returns [], daemon is a clean no-op."""
     mod = patched_module.module
-    monkeypatch.setattr(mod, "_games_missing_vod", lambda db, limit: [])
+    monkeypatch.setattr(mod, "_games_missing_vod", _async2([]))
     result = asyncio.run(mod.run())
     assert result == 0
     assert patched_module.upsert_calls == []
@@ -235,11 +242,11 @@ def test_run_promotes_official_lec_video_to_game(monkeypatch, patched_module):
         ],
     }
 
-    monkeypatch.setattr(mod, "_games_missing_vod", lambda db, limit: fake_games)
-    monkeypatch.setattr(
-        mod, "_videos_for_match",
-        lambda db, mext: fake_videos_for_match.get(mext, []),
-    )
+    monkeypatch.setattr(mod, "_games_missing_vod", _async2(fake_games))
+    async def _fake_videos(db, mext):
+        return fake_videos_for_match.get(mext, [])
+
+    monkeypatch.setattr(mod, "_videos_for_match", _fake_videos)
 
     result = asyncio.run(mod.run())
 
@@ -288,11 +295,11 @@ def test_run_picks_highest_priority_among_multiple_sources(
         ],
     }
 
-    monkeypatch.setattr(mod, "_games_missing_vod", lambda db, limit: fake_games)
-    monkeypatch.setattr(
-        mod, "_videos_for_match",
-        lambda db, mext: fake_videos_for_match.get(mext, []),
-    )
+    monkeypatch.setattr(mod, "_games_missing_vod", _async2(fake_games))
+    async def _fake_videos(db, mext):
+        return fake_videos_for_match.get(mext, [])
+
+    monkeypatch.setattr(mod, "_videos_for_match", _fake_videos)
 
     result = asyncio.run(mod.run())
     assert result == 1
@@ -325,8 +332,8 @@ def test_run_skips_when_no_videos_for_match(monkeypatch, patched_module):
             "match": {"external_id": "match-no-videos"},
         },
     ]
-    monkeypatch.setattr(mod, "_games_missing_vod", lambda db, limit: fake_games)
-    monkeypatch.setattr(mod, "_videos_for_match", lambda db, mext: [])
+    monkeypatch.setattr(mod, "_games_missing_vod", _async2(fake_games))
+    monkeypatch.setattr(mod, "_videos_for_match", _async2([]))
 
     result = asyncio.run(mod.run())
     assert result == 0
@@ -342,10 +349,10 @@ def test_run_no_op_when_game_already_has_vod(monkeypatch, patched_module):
     mod = patched_module.module
 
     # Game has vod_youtube_id set — _games_missing_vod would never include it
-    monkeypatch.setattr(mod, "_games_missing_vod", lambda db, limit: [])
-    monkeypatch.setattr(mod, "_videos_for_match", lambda db, mext: [
+    monkeypatch.setattr(mod, "_games_missing_vod", _async2([]))
+    monkeypatch.setattr(mod, "_videos_for_match", _async2([
         {"id": "yt-fresh", "title": "x", "channels": {"role": "lec_highlights"}},
-    ])
+    ]))
 
     result = asyncio.run(mod.run())
     # Nothing should have been promoted because the game wasn't returned.

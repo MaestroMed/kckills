@@ -23,9 +23,15 @@ Safe to re-run — each stage upserts or checks existing data first.
 from __future__ import annotations
 
 import asyncio
+import os
+
 import structlog
 
-from services import lolesports_api
+# Audit 2026-07-02 : `os` and `discord_webhook` were used at lines
+# ~424/442/714 without being imported — the NameError was swallowed by
+# broad `except Exception` blocks, so downloaded VODs (several GB each)
+# were never cleaned up and the "top 3 kills" Discord post never fired.
+from services import discord_webhook, lolesports_api
 from services.schema_cache import table_exists
 from services.supabase_client import safe_select, safe_upsert, safe_update, safe_insert
 from modules import harvester, clipper, analyzer, og_generator, qc

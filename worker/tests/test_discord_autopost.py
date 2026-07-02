@@ -18,6 +18,7 @@ import pytest
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 from modules import discord_autopost  # noqa: E402
+from services import http_pool  # noqa: E402
 
 
 # ─── Helpers ──────────────────────────────────────────────────────────
@@ -63,6 +64,11 @@ def _mock_response(status: int, json_body: Any | None = None,
 
 class _FakeAsyncClient:
     """Drop-in replacement for httpx.AsyncClient that records POST calls."""
+
+    # http_pool.get_client() probes `is_closed` on cached clients — the
+    # real AsyncClient exposes it; without it the pool raises
+    # AttributeError once this fake lands in the singleton cache.
+    is_closed = False
 
     def __init__(self, responses: list):
         self._responses = list(responses)
@@ -179,7 +185,7 @@ async def test_high_score_kill_posted_and_stamped():
     with patch.object(discord_autopost, "_fetch_eligible", return_value=[kill]), \
          patch.object(discord_autopost, "get_db", return_value=MagicMock()), \
          patch.object(discord_autopost, "_stamp_posted", side_effect=fake_stamp), \
-         patch.object(discord_autopost.httpx, "AsyncClient", return_value=fake_client):
+         patch.object(http_pool, "get", return_value=fake_client):
         posted = await discord_autopost.run()
 
     assert posted == 1
@@ -202,7 +208,7 @@ async def test_low_score_kill_skipped():
 
     with patch.object(discord_autopost, "_fetch_eligible", return_value=[]), \
          patch.object(discord_autopost, "get_db", return_value=MagicMock()), \
-         patch.object(discord_autopost.httpx, "AsyncClient", return_value=fake_client):
+         patch.object(http_pool, "get", return_value=fake_client):
         posted = await discord_autopost.run()
 
     assert posted == 0
@@ -224,7 +230,7 @@ async def test_already_posted_kill_excluded_by_query():
          patch.object(discord_autopost, "get_db", return_value=MagicMock()), \
          patch.object(discord_autopost, "_stamp_posted",
                       side_effect=lambda kid: stamp_calls.append(kid) or True), \
-         patch.object(discord_autopost.httpx, "AsyncClient", return_value=fake_client):
+         patch.object(http_pool, "get", return_value=fake_client):
         posted = await discord_autopost.run()
 
     assert posted == 0
@@ -254,7 +260,7 @@ async def test_429_skips_rest_of_batch_no_db_update():
                       return_value=[kill_a, kill_b, kill_c]), \
          patch.object(discord_autopost, "get_db", return_value=MagicMock()), \
          patch.object(discord_autopost, "_stamp_posted", side_effect=fake_stamp), \
-         patch.object(discord_autopost.httpx, "AsyncClient", return_value=fake_client):
+         patch.object(http_pool, "get", return_value=fake_client):
         posted = await discord_autopost.run()
 
     # kill_a stamped, kill_b NOT stamped (429), kill_c never attempted
@@ -275,7 +281,7 @@ async def test_5xx_response_leaves_kill_unposted():
          patch.object(discord_autopost, "get_db", return_value=MagicMock()), \
          patch.object(discord_autopost, "_stamp_posted",
                       side_effect=lambda kid: stamp_calls.append(kid) or True), \
-         patch.object(discord_autopost.httpx, "AsyncClient", return_value=fake_client):
+         patch.object(http_pool, "get", return_value=fake_client):
         posted = await discord_autopost.run()
 
     assert posted == 0
@@ -297,7 +303,7 @@ async def test_missing_webhook_no_op_no_crash(monkeypatch):
         return []
 
     with patch.object(discord_autopost, "_fetch_eligible", side_effect=_fetch_marker), \
-         patch.object(discord_autopost.httpx, "AsyncClient", return_value=fake_client):
+         patch.object(http_pool, "get", return_value=fake_client):
         posted = await discord_autopost.run()
 
     assert posted == 0

@@ -148,6 +148,13 @@ def test_parse_vague_kc_highlights_returns_none():
 # ─── Fuzzy fallback tests ────────────────────────────────────────────
 
 
+
+def _async_in_window(value):
+    """`_matches_in_window` went async (Wave 27.5) — wrap fixtures accordingly."""
+    async def _f(db, *, window_start, window_end):
+        return value
+    return _f
+
 @pytest.fixture
 def fake_db():
     db = MagicMock(name="fake_db")
@@ -162,7 +169,8 @@ def test_fuzzy_match_single_recent_kc_returns_external_id(monkeypatch, fake_db):
 
     monkeypatch.setattr(
         mod, "_matches_in_window",
-        lambda db, *, window_start, window_end: [
+
+        _async_in_window([
             {
                 "id": "m-1",
                 "external_id": "ext-kc-th-2026-04-10",
@@ -170,7 +178,7 @@ def test_fuzzy_match_single_recent_kc_returns_external_id(monkeypatch, fake_db):
                 "team_blue": {"code": "KC"},
                 "team_red": {"code": "TH"},
             },
-        ],
+        ]),
     )
 
     pivot = datetime(2026, 4, 12, 0, 0, tzinfo=timezone.utc)
@@ -190,7 +198,8 @@ def test_fuzzy_match_multiple_kc_matches_returns_none(monkeypatch, fake_db):
 
     monkeypatch.setattr(
         mod, "_matches_in_window",
-        lambda db, *, window_start, window_end: [
+
+        _async_in_window([
             {
                 "id": "m-1", "external_id": "ext-kc-th",
                 "scheduled_at": "2026-04-10T18:00:00Z",
@@ -201,7 +210,7 @@ def test_fuzzy_match_multiple_kc_matches_returns_none(monkeypatch, fake_db):
                 "scheduled_at": "2026-04-12T18:00:00Z",
                 "team_blue": {"code": "KOI"}, "team_red": {"code": "KC"},
             },
-        ],
+        ]),
     )
 
     pivot = datetime(2026, 4, 12, 0, 0, tzinfo=timezone.utc)
