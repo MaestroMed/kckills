@@ -31,6 +31,20 @@ import { HeadToHead } from "@/components/player/HeadToHead";
 import { ERAS, type Era } from "@/lib/eras";
 import { getServerT } from "@/lib/i18n/server-lang";
 
+/**
+ * Safe decode for route params. Next already decodes params once —
+ * decoding again can throw URIError on inputs like "50%25" and turn a
+ * bad URL into a 500. Malformed input degrades to the raw string
+ * (downstream lookups then 404 cleanly).
+ */
+function safeDecode(value: string): string {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
+}
+
 // Wave 13d (2026-04-28) : 300 → 1800. Player stats are essentially
 // static between matches (one new game every 1-3 days for KC).
 export const revalidate = 1800;
@@ -120,7 +134,7 @@ async function getRealKillsForPlayer(
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params;
-  const name = decodeURIComponent(slug);
+  const name = safeDecode(slug);
   const data = loadRealData();
   const stats = getPlayerStats(data, name);
   const photo = PLAYER_PHOTOS[name];
@@ -157,7 +171,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
 export default async function PlayerPage({ params }: Props) {
   const { slug } = await params;
-  const name = decodeURIComponent(slug);
+  const name = safeDecode(slug);
   const { t } = await getServerT();
   const data = loadRealData();
   const stats = getPlayerStats(data, name);

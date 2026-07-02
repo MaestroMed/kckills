@@ -9,6 +9,20 @@ import { getClipsFiltered } from "@/lib/supabase/clips";
 import { Breadcrumb } from "@/components/Breadcrumb";
 import { getServerT } from "@/lib/i18n/server-lang";
 
+/**
+ * Safe decode for route params. Next already decodes params once —
+ * decoding again can throw URIError on inputs like "50%25" and turn a
+ * bad URL into a 500. Malformed input degrades to the raw string
+ * (downstream lookups then 404 cleanly).
+ */
+function safeDecode(value: string): string {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
+}
+
 export const revalidate = 600;
 
 interface Props {
@@ -17,8 +31,8 @@ interface Props {
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { champA, champB } = await params;
-  const a = decodeURIComponent(champA);
-  const b = decodeURIComponent(champB);
+  const a = safeDecode(champA);
+  const b = safeDecode(champB);
   const title = `${a} vs ${b} — Match-up KC`;
   const description = `Tous les clips de la confrontation ${a} contre ${b} c\u00f4t\u00e9 Karmine Corp : qui domine, qui se fait piquer.`;
   const canonicalPath = `/matchup/${encodeURIComponent(a)}/vs/${encodeURIComponent(b)}`;
@@ -45,8 +59,8 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
 export default async function MatchupPage({ params }: Props) {
   const { champA, champB } = await params;
-  const a = decodeURIComponent(champA);
-  const b = decodeURIComponent(champB);
+  const a = safeDecode(champA);
+  const b = safeDecode(champB);
 
   // Pull both directions of the matchup in parallel.
   const [aKillsB, bKillsA] = await Promise.all([

@@ -14,7 +14,7 @@
  */
 
 import { loadRealData } from "@/lib/real-data";
-import { getPublishedKills } from "@/lib/supabase/kills";
+import { getKillById, getPublishedKills } from "@/lib/supabase/kills";
 import { getTrackedRoster } from "@/lib/supabase/players";
 import {
   type FeedItem,
@@ -210,15 +210,21 @@ export default async function ScrollV2Page({ searchParams }: ScrollPageProps) {
     .filter((p) => ROLE_FOR_IGN[p.ign])
     .map((p) => ({ id: p.id, ign: p.ign, role: ROLE_FOR_IGN[p.ign] }));
 
+  // Audit 2026-07-02 : the « VS KC » chip (?side=vs) filtered for
+  // team_victim AFTER this pre-filter kept only team_killer — the
+  // intersection was empty by construction. When the chip asks for the
+  // victim side, fetch that side.
   const supabaseKills = allKills.filter(
     (k) =>
-      k.tracked_team_involvement === "team_killer" &&
+      (chipFilters.side === "vs"
+        ? k.tracked_team_involvement === "team_victim"
+        : k.tracked_team_involvement === "team_killer") &&
       k.kill_visible === true &&
       !!k.clip_url_vertical &&
       !!k.thumbnail_url,
   );
 
-  const videoItems: VideoFeedItem[] = supabaseKills.map((k) => {
+  const buildVideoItem = (k: (typeof allKills)[number]): VideoFeedItem => {
     const matchMeta = k.games?.matches;
     const matchJson = data.matches.find((m) => m.id === (matchMeta?.external_id ?? ""));
     const opponentCode = matchJson?.opponent.code ?? "LEC";
@@ -304,13 +310,34 @@ export default async function ScrollV2Page({ searchParams }: ScrollPageProps) {
       kcWon,
       matchScore,
     };
-  });
+  };
 
+  const videoItems: VideoFeedItem[] = supabaseKills.map(buildVideoItem);
+
+  // Audit 2026-07-02 : the feed is the top-N by highlight_score, so a
+  // deep-link (?kill=) to anything outside that slice — OnThisDay,
+  // records, week, share links — used to land silently on index 0.
+  // If the requested kill isn't in the SSR batch, fetch it individually
+  // and put it at the head of the feed.
+  if (initialKillId && !videoItems.some((v) => v.id === initialKillId)) {
+    const row = await getKillById(initialKillId);
+    if (row?.clip_url_vertical && row.thumbnail_url) {
+      videoItems.unshift(buildVideoItem(row));
+    }
+  }
+
+  // The deep-linked kill is exempt from axis/chip filters — dropping the
+  // very clip the user clicked (e.g. opponentCode fell back to "LEC")
+  // would silently land them on index 0.
   let filteredVideos = filterAxis && filterValue
-    ? videoItems.filter((v) => videoMatchesFilter(v, filterAxis, filterValue))
+    ? videoItems.filter(
+        (v) => v.id === initialKillId || videoMatchesFilter(v, filterAxis, filterValue),
+      )
     : videoItems;
   if (hasChipFilter) {
-    filteredVideos = filteredVideos.filter((v) => videoMatchesChips(v, chipFilters));
+    filteredVideos = filteredVideos.filter(
+      (v) => v.id === initialKillId || videoMatchesChips(v, chipFilters),
+    );
   }
 
   // Moments disabled — duplicate kills without adding value
