@@ -93,13 +93,16 @@ async def test_moderate_comment_haiku_approves():
         result = await moderator.moderate_comment("Caliste", "GG WP les gars")
     assert result["action"] == "approve"
     assert result["toxicity"] == 0.5
-    # Verify the prompt actually went through — the username and content
-    # must appear in the user message body.
+    # Verify the prompt actually went through — the content must appear
+    # inside the <comment> delimiters. The username is deliberately NOT
+    # sent anymore (PII, audit 2026-07-02) and the delimiters are the
+    # prompt-injection guard.
     call_kwargs = fake_client.messages.create.call_args.kwargs
     assert call_kwargs["model"] == "claude-haiku-4-5-20251001"
     user_msg = call_kwargs["messages"][0]["content"]
-    assert "Caliste" in user_msg
+    assert "Caliste" not in user_msg
     assert "GG WP les gars" in user_msg
+    assert "<comment>" in user_msg and "</comment>" in user_msg
 
 
 @pytest.mark.asyncio
@@ -134,14 +137,20 @@ async def test_moderate_comment_haiku_invalid_json():
 
 @pytest.mark.asyncio
 async def test_moderate_comment_haiku_exception():
-    """Network/SDK exception → auto-approve so users aren't censored."""
+    """Runtime exception → flag for human review (fail-closed).
+
+    Audit 2026-07-02 : was auto-approve — but an attacker can craft a
+    comment that forces an exception, so fail-open here meant a
+    guaranteed publish. Infra-off paths (no key, quota, SDK missing)
+    still auto-approve; those are covered by their own tests.
+    """
     fake_anthropic = MagicMock()
     fake_client = MagicMock()
     fake_client.messages.create.side_effect = RuntimeError("network down")
     fake_anthropic.Anthropic.return_value = fake_client
     with patch.dict(sys.modules, {"anthropic": fake_anthropic}):
         result = await moderator.moderate_comment("user", "anything")
-    assert result["action"] == "approve"
+    assert result["action"] == "flag"
     assert "error: network down" in result["reason"]
 
 

@@ -7,7 +7,7 @@
  */
 
 import "server-only";
-import { createServerSupabase, rethrowIfDynamic } from "./server";
+import { createCachedAnonSupabase, rethrowIfDynamic } from "./server";
 
 export interface PlayerRow {
   id: string;
@@ -35,7 +35,7 @@ function normalizePlayer(row: RawPlayerRow): PlayerRow {
 
 export async function getTrackedRoster(): Promise<PlayerRow[]> {
   try {
-    const supabase = await createServerSupabase();
+    const supabase = createCachedAnonSupabase();
     const { data, error } = await supabase
       .from("players")
       .select("id, ign, role, image_url, teams!inner(is_tracked)")
@@ -59,7 +59,7 @@ export async function getTrackedRoster(): Promise<PlayerRow[]> {
  */
 export async function getPlayerByIgn(ign: string): Promise<PlayerRow | null> {
   try {
-    const supabase = await createServerSupabase();
+    const supabase = createCachedAnonSupabase();
     const { data, error } = await supabase
       .from("players")
       .select("id, ign, role, image_url")

@@ -20,6 +20,13 @@ import { Pagination } from "@/lib/schemas/pagination";
 const Query = Pagination.extend({
   champion: z.string().min(1).max(64).optional(),
   involvement: z.enum(["team_killer", "team_victim"]).optional(),
+  /** Vague 2 — comma-separated kill UUIDs (max 100). Powers the /saved
+   *  page which resolves bookmark ids into renderable cards. */
+  ids: z
+    .string()
+    .max(3700)
+    .regex(/^[0-9a-f-]{36}(,[0-9a-f-]{36})*$/i)
+    .optional(),
   sort: z
     .enum(["highlight_score", "created_at", "game_time_seconds"])
     .default("highlight_score"),
@@ -34,7 +41,7 @@ export async function GET(request: NextRequest) {
       { status: 400 },
     );
   }
-  const { limit, offset, champion, involvement, sort } = parsed.data;
+  const { limit, offset, champion, involvement, ids, sort } = parsed.data;
 
   const supabase = await createServerSupabase();
 
@@ -56,6 +63,9 @@ export async function GET(request: NextRequest) {
   }
   if (involvement) {
     query = query.eq("tracked_team_involvement", involvement);
+  }
+  if (ids) {
+    query = query.in("id", ids.split(",").slice(0, 100));
   }
 
   query = query

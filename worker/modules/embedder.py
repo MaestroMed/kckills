@@ -39,6 +39,27 @@ EMBEDDING_DIM = 768
 BATCH_SIZE = 50
 TASK_TYPE = "RETRIEVAL_DOCUMENT"
 LEASE_SECONDS = 60
+
+# Audit 2026-07-02 — soft daily ceiling on embedder Gemini calls.
+# The 950 RPD free-tier budget is SHARED with analyzer + QC +
+# quote_extractor ; when the embedder wakes up with ~1650 kills to
+# backfill it would otherwise drain the whole day's quota in a few
+# cycles and starve clip analysis. 350/day ≈ backfill done in ~5 days
+# while leaving ~600 calls for the rest of the pipeline. Steady-state
+# (a few new kills per match day) never comes close to the cap.
+# Resets at 07:00 UTC like the scheduler's daily counters.
+EMBEDDER_DAILY_CAP = int(os.getenv("KCKILLS_EMBEDDER_DAILY_CAP", "350"))
+_cap_state = {"day": "", "count": 0}
+
+
+def _cap_remaining() -> int:
+    from datetime import datetime, timedelta, timezone
+
+    day = (datetime.now(timezone.utc) - timedelta(hours=7)).strftime("%Y-%m-%d")
+    if _cap_state["day"] != day:
+        _cap_state["day"] = day
+        _cap_state["count"] = 0
+    return max(0, EMBEDDER_DAILY_CAP - _cap_state["count"])
 # Note : text-embedding-004 was deprecated 2026-04 and the API now returns
 # 404 for it. gemini-embedding-001 is the current Google-recommended
 # replacement, same 768-dim output by default (output_dimensionality=768),
@@ -219,6 +240,13 @@ async def run() -> int:
 
     log.info("embedder_scan_start")
 
+    # Daily cap check BEFORE claiming — don't lease jobs we can't run.
+    cap_left = _cap_remaining()
+    if cap_left <= 0:
+        log.info("embedder_daily_cap_reached", cap=EMBEDDER_DAILY_CAP)
+        return 0
+    batch = min(BATCH_SIZE, cap_left)
+
     worker_id = f"embedder-{os.getpid()}"
 
     # ─── 1. Queue-first claim ──────────────────────────────────────
@@ -226,7 +254,7 @@ async def run() -> int:
         job_queue.claim,
         worker_id,
         ["embedding.compute"],
-        BATCH_SIZE,
+        batch,
         LEASE_SECONDS,
     )
 
@@ -265,7 +293,7 @@ async def run() -> int:
             log.info("embedder_no_pending")
             return 0
 
-        pending = pending[:BATCH_SIZE]
+        pending = pending[:batch]
 
         # Enqueue for next pass so subsequent runs go through the queue.
         # Idempotent via the unique index on (type, entity_type, entity_id).
@@ -292,18 +320,22 @@ async def run() -> int:
     # scheduler so concurrency wouldn't help here. Quota check inside
     # _process_kill stops the loop early on drain.
     counters = {"embedded": 0}
-    for kill in work_kills:
+    for idx, kill in enumerate(work_kills):
         # Re-check quota each iteration — long passes can drain mid-batch.
         remaining = scheduler.get_remaining("gemini")
         if remaining is not None and remaining <= 0:
             log.warn(
                 "embedder_daily_quota_reached_mid_batch",
                 embedded=counters["embedded"],
-                remaining_in_batch=len(work_kills) - counters["embedded"],
+                remaining_in_batch=len(work_kills) - idx,
             )
             # Fail any remaining queued jobs with a long retry so they
-            # come back tomorrow.
-            for k in work_kills[counters["embedded"]:]:
+            # come back tomorrow. Audit 2026-07-02 : this used to slice
+            # on counters["embedded"] (the SUCCESS count) instead of the
+            # loop position — jobs whose embed had failed mid-batch were
+            # skipped by the re-fail pass, and already-succeeded jobs
+            # could be re-failed, double-spending Gemini the next day.
+            for k in work_kills[idx:]:
                 job = k.get("_pipeline_job")
                 if job is not None:
                     await asyncio.to_thread(
@@ -313,10 +345,14 @@ async def run() -> int:
             break
         await _process_kill(kill, counters)
 
+    _cap_state["count"] += counters["embedded"]
+
     log.info(
         "embedder_done",
         embedded=counters["embedded"],
         batch_size=len(work_kills),
+        cap_used_today=_cap_state["count"],
+        cap=EMBEDDER_DAILY_CAP,
         legacy_fallback=legacy_fallback_used,
     )
     return counters["embedded"]

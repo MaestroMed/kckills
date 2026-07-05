@@ -103,6 +103,15 @@ DEFAULTS: Final[dict[str, dict[str, int]]] = {
     # release_stale_locks handles its own 5-min staleness window via RPC.
     "queue_health":        {"parallel": 1, "interval":  900, "batch":   1, "lease":   60},
     "dlq_drainer":         {"parallel": 1, "interval": 1800, "batch":  50, "lease":  120},
+    # Publication / engagement --------------------------------------------
+    # Audit 2026-07-02 : these two were referenced by the orchestrator's
+    # `control` role but absent from DAEMON_MODULES — the intersection
+    # filter dropped them, so KOTW selection and push delivery never ran
+    # in orchestrator mode. kill_of_the_week self-gates on a weekly
+    # window (hourly checks are cheap no-ops outside it) ; push_notifier
+    # drains the push queue and no-ops without VAPID env.
+    "kill_of_the_week":    {"parallel": 1, "interval": 3600, "batch":   1, "lease":  300},
+    "push_notifier":       {"parallel": 1, "interval":  300, "batch":  50, "lease":  120},
 }
 
 # Generic fallback when a module isn't listed above. Conservative on

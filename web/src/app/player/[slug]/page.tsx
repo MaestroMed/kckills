@@ -30,6 +30,21 @@ import { PrevNextNavCard } from "@/components/player/PrevNextNavCard";
 import { HeadToHead } from "@/components/player/HeadToHead";
 import { ERAS, type Era } from "@/lib/eras";
 import { getServerT } from "@/lib/i18n/server-lang";
+import { formatDate } from "@/lib/i18n/lang";
+
+/**
+ * Safe decode for route params. Next already decodes params once —
+ * decoding again can throw URIError on inputs like "50%25" and turn a
+ * bad URL into a 500. Malformed input degrades to the raw string
+ * (downstream lookups then 404 cleanly).
+ */
+function safeDecode(value: string): string {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
+}
 
 // Wave 13d (2026-04-28) : 300 → 1800. Player stats are essentially
 // static between matches (one new game every 1-3 days for KC).
@@ -120,7 +135,7 @@ async function getRealKillsForPlayer(
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params;
-  const name = decodeURIComponent(slug);
+  const name = safeDecode(slug);
   const data = loadRealData();
   const stats = getPlayerStats(data, name);
   const photo = PLAYER_PHOTOS[name];
@@ -157,8 +172,8 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
 export default async function PlayerPage({ params }: Props) {
   const { slug } = await params;
-  const name = decodeURIComponent(slug);
-  const { t } = await getServerT();
+  const name = safeDecode(slug);
+  const { lang, t } = await getServerT();
   const data = loadRealData();
   const stats = getPlayerStats(data, name);
 
@@ -480,7 +495,7 @@ export default async function PlayerPage({ params }: Props) {
               {riotStats.linkedAt && (
                 <p className="text-[10px] text-[var(--text-muted)] opacity-70">
                   {t("p_player.linked_on")}{" "}
-                  {new Date(riotStats.linkedAt).toLocaleDateString("fr-FR", {
+                  {formatDate(lang, riotStats.linkedAt, {
                     day: "numeric",
                     month: "short",
                     year: "numeric",

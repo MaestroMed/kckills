@@ -36,7 +36,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { createServerSupabase } from "@/lib/supabase/server";
+import { createServerSupabase, createServiceSupabase } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -410,22 +410,24 @@ export async function POST(request: NextRequest) {
   }
   const toInsert = allowedCount < normalised.length ? normalised.slice(0, allowedCount) : normalised;
 
-  // Resolve auth.users.id (best-effort). RLS allows INSERT regardless,
-  // but we still want user_id populated when we know it.
+  // Resolve auth.users.id (best-effort) — user client for identity only.
   let userId: string | null = null;
-  let supabase;
   try {
-    supabase = await createServerSupabase();
-    const { data } = await supabase.auth.getUser();
+    const authClient = await createServerSupabase();
+    const { data } = await authClient.auth.getUser();
     if (data.user) userId = data.user.id;
   } catch {
     // Cookie store unavailable / sandboxed — proceed as anonymous.
-    try {
-      supabase = await createServerSupabase();
-    } catch {
-      // No supabase at all — silently drop. Don't error the client.
-      return new NextResponse(null, { status: 204 });
-    }
+  }
+
+  // Migration 083 dropped the public INSERT policy on user_events (it
+  // let anyone poison feed-ranking via direct PostgREST). Writes now go
+  // through the service role; this route stays the single entry point
+  // and already rate-limits + sanitises upstream.
+  const supabase = createServiceSupabase();
+  if (!supabase) {
+    console.warn("[/api/track] SUPABASE_SERVICE_ROLE_KEY missing — events dropped");
+    return new NextResponse(null, { status: 204 });
   }
 
   // Build the rows. user_id from session, all other fields from the event.

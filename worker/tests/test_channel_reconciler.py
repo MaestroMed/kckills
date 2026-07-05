@@ -160,6 +160,13 @@ def test_reconcile_statuses_includes_all_three():
 # ─── find_match_candidates: published_at + team-set logic ────────────
 
 
+
+def _async_in_window(value):
+    """`_matches_in_window` went async (Wave 27.5) — wrap fixtures accordingly."""
+    async def _f(db, *, window_start, window_end):
+        return value
+    return _f
+
 @pytest.fixture
 def fake_db():
     db = MagicMock(name="fake_db")
@@ -192,7 +199,7 @@ def test_find_match_candidates_team_set_match(monkeypatch, fake_db):
     ]
     monkeypatch.setattr(
         mod, "_matches_in_window",
-        lambda db, *, window_start, window_end: candidates_pool,
+        _async_in_window(candidates_pool),
     )
 
     parsed = {"team_a": "TH", "team_b": "KC", "year": 2026}
@@ -210,7 +217,7 @@ def test_find_match_candidates_published_at_window_used(monkeypatch, fake_db):
 
     captured: dict = {}
 
-    def fake_in_window(db, *, window_start, window_end):
+    async def fake_in_window(db, *, window_start, window_end):
         captured["window_start"] = window_start
         captured["window_end"] = window_end
         return []
@@ -255,7 +262,7 @@ def test_find_match_candidates_year_only_uses_full_year_window(
 
     captured: dict = {}
 
-    def fake_in_window(db, *, window_start, window_end):
+    async def fake_in_window(db, *, window_start, window_end):
         captured["window_start"] = window_start
         captured["window_end"] = window_end
         return []

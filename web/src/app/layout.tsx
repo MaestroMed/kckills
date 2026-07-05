@@ -302,6 +302,37 @@ export default async function RootLayout({
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLdSportsTeam) }}
         />
+        {/* Vague 6 (2026-07-05) — Speculation Rules API : hovering a
+            kill/player card prerenders the target page, making the most
+            common navigations feel instant. `moderate` eagerness =
+            hover/pointerdown only (no blind prefetch storm), and the
+            API is a progressive enhancement — unsupported browsers
+            ignore the script entirely. /scroll is excluded: it's a
+            heavy dynamic page and prerendering it wastes an SSR. */}
+        <script
+          type="speculationrules"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify({
+              prerender: [
+                {
+                  where: {
+                    and: [
+                      { href_matches: "/kill/*" },
+                      { not: { selector_matches: "[data-no-prerender]" } },
+                    ],
+                  },
+                  eagerness: "moderate",
+                },
+              ],
+              prefetch: [
+                {
+                  where: { href_matches: "/player/*" },
+                  eagerness: "moderate",
+                },
+              ],
+            }),
+          }}
+        />
       </head>
       <body className="min-h-screen antialiased">
         {/* a11y: skip to content */}

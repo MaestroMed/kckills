@@ -6,13 +6,26 @@ Buffers writes locally and flushes when connection returns.
 import sqlite3
 import json
 import os
+import threading
 from config import config
 
 
 class LocalCache:
+    """Thread-safe SQLite buffer.
+
+    Audit 2026-07-02 : callers reach this from `asyncio.to_thread`
+    workers, but the single connection was created with the default
+    `check_same_thread=True` — during a Supabase outage the fallback
+    itself raised sqlite3.ProgrammingError and the buffered write was
+    lost. The connection now allows cross-thread use and every access
+    is serialized through a lock (SQLite connections are not safe for
+    CONCURRENT use even with check_same_thread=False).
+    """
+
     def __init__(self, db_path: str = config.CACHE_DB):
         self.db_path = db_path
         self._conn: sqlite3.Connection | None = None
+        self._lock = threading.Lock()
         self._init_db()
 
     def _init_db(self):
@@ -38,59 +51,73 @@ class LocalCache:
 
     def _get_conn(self) -> sqlite3.Connection:
         if self._conn is None:
-            self._conn = sqlite3.connect(self.db_path)
+            self._conn = sqlite3.connect(self.db_path, check_same_thread=False)
             self._conn.row_factory = sqlite3.Row
         return self._conn
 
     def buffer_write(self, table: str, operation: str, data: dict):
         """Buffer a write operation for later flush to Supabase."""
-        conn = self._get_conn()
-        conn.execute(
-            "INSERT INTO pending_writes (table_name, operation, data) VALUES (?, ?, ?)",
-            (table, operation, json.dumps(data)),
-        )
-        conn.commit()
+        with self._lock:
+            conn = self._get_conn()
+            conn.execute(
+                "INSERT INTO pending_writes (table_name, operation, data) VALUES (?, ?, ?)",
+                (table, operation, json.dumps(data)),
+            )
+            conn.commit()
 
     def get_pending_writes(self) -> list[dict]:
         """Get all unflushed writes."""
-        conn = self._get_conn()
-        rows = conn.execute(
-            "SELECT id, table_name, operation, data FROM pending_writes WHERE flushed = 0 ORDER BY id"
-        ).fetchall()
+        with self._lock:
+            conn = self._get_conn()
+            rows = conn.execute(
+                "SELECT id, table_name, operation, data FROM pending_writes WHERE flushed = 0 ORDER BY id"
+            ).fetchall()
         return [
             {"id": r["id"], "table": r["table_name"], "operation": r["operation"], "data": json.loads(r["data"])}
             for r in rows
         ]
 
     def mark_flushed(self, ids: list[int]):
-        """Mark writes as flushed."""
+        """Mark writes as flushed, then purge old flushed rows.
+
+        Audit 2026-07-02 : rows were only ever UPDATEd, never deleted —
+        local_cache.db grew without bound on a 24/7 daemon. Flushed rows
+        older than 7 days are purged on each call.
+        """
         if not ids:
             return
-        conn = self._get_conn()
-        placeholders = ",".join("?" for _ in ids)
-        conn.execute(f"UPDATE pending_writes SET flushed = 1 WHERE id IN ({placeholders})", ids)
-        conn.commit()
+        with self._lock:
+            conn = self._get_conn()
+            placeholders = ",".join("?" for _ in ids)
+            conn.execute(f"UPDATE pending_writes SET flushed = 1 WHERE id IN ({placeholders})", ids)
+            conn.execute(
+                "DELETE FROM pending_writes WHERE flushed = 1 AND created_at < datetime('now', '-7 days')"
+            )
+            conn.commit()
 
     def set(self, key: str, value):
         """Set a key-value pair."""
-        conn = self._get_conn()
-        conn.execute(
-            "INSERT OR REPLACE INTO kv_store (key, value, updated_at) VALUES (?, ?, datetime('now'))",
-            (key, json.dumps(value)),
-        )
-        conn.commit()
+        with self._lock:
+            conn = self._get_conn()
+            conn.execute(
+                "INSERT OR REPLACE INTO kv_store (key, value, updated_at) VALUES (?, ?, datetime('now'))",
+                (key, json.dumps(value)),
+            )
+            conn.commit()
 
     def get(self, key: str, default=None):
         """Get a value by key."""
-        conn = self._get_conn()
-        row = conn.execute("SELECT value FROM kv_store WHERE key = ?", (key,)).fetchone()
+        with self._lock:
+            conn = self._get_conn()
+            row = conn.execute("SELECT value FROM kv_store WHERE key = ?", (key,)).fetchone()
         if row:
             return json.loads(row["value"])
         return default
 
     def pending_count(self) -> int:
-        conn = self._get_conn()
-        row = conn.execute("SELECT COUNT(*) as c FROM pending_writes WHERE flushed = 0").fetchone()
+        with self._lock:
+            conn = self._get_conn()
+            row = conn.execute("SELECT COUNT(*) as c FROM pending_writes WHERE flushed = 0").fetchone()
         return row["c"]
 
     # Alias to match LocalCacheRedis public API.

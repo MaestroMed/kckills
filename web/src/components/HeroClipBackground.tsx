@@ -18,6 +18,17 @@ const HeroClipMotionLayer = dynamic(
   { ssr: false, loading: () => null },
 );
 
+// Vague 6 (2026-07-05) — the living mobile hero. The video rotator is
+// disabled < 768 px (iOS crash mitigation Tier 2), which left mobile —
+// the #1 audience — with a frozen poster. The cube-portrait morph is a
+// single lightweight canvas (already pauses offscreen/tab-hidden and
+// honours reduced-motion), so it restores the "alive" feeling without
+// the GPU/memory pressure that killed the videos.
+const PortraitCubeMorphLazy = dynamic(
+  () => import("./PortraitCubeMorph").then((m) => m.PortraitCubeMorph),
+  { ssr: false, loading: () => null },
+);
+
 interface ClipEntry {
   /** YouTube 11-char videoId. Omit if using mp4Url instead. */
   videoId?: string;
@@ -43,6 +54,9 @@ interface HeroClipBackgroundProps {
   clips: ClipEntry[];
   /** Fallback poster image while the iframe is loading (must exist in /public). */
   posterSrc?: string;
+  /** Champion splash URLs for the MOBILE cube-morph hero layer.
+   *  Empty/omitted → mobile keeps the static poster (previous behaviour). */
+  mobileMorphImages?: string[];
 }
 
 const LS_AUDIO_OPTED = "kc_audio_enabled";
@@ -73,7 +87,7 @@ const LS_AUDIO_OPTED = "kc_audio_enabled";
  * Dark overlay + vignette is rendered by the parent — this component only
  * owns the video/image layers.
  */
-export function HeroClipBackground({ clips, posterSrc = "/images/hero-bg.jpg" }: HeroClipBackgroundProps) {
+export function HeroClipBackground({ clips, posterSrc = "/images/hero-bg.jpg", mobileMorphImages }: HeroClipBackgroundProps) {
   const t = useT();
   const [index, setIndex] = useState(0);
   const [reducedMotion, setReducedMotion] = useState(false);
@@ -286,6 +300,17 @@ export function HeroClipBackground({ clips, posterSrc = "/images/hero-bg.jpg" }:
           Wave 18 — the motion-using rotating overlay + caption are
           now rendered inside the lazy `HeroClipMotionLayer` so
           motion/react no longer ships in the homepage initial JS. */}
+      {isMobile && !reducedMotion && (mobileMorphImages?.length ?? 0) > 0 && (
+        <PortraitCubeMorphLazy
+          images={mobileMorphImages!}
+          cols={56}
+          aspect={9 / 16}
+          holdMs={5200}
+          morphMs={1900}
+          className="absolute inset-0 mix-blend-screen opacity-80"
+        />
+      )}
+
       {!isMobile && (
         <HeroClipMotionLayer
           current={current}

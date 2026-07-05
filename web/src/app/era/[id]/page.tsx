@@ -12,6 +12,7 @@ import { QuoteRow } from "@/components/QuoteCard";
 import { PortraitCubeMorph } from "@/components/PortraitCubeMorph";
 import { countKillsByEra } from "@/lib/supabase/kills";
 import { getServerT, type ServerTranslateFn } from "@/lib/i18n/server-lang";
+import { formatDate } from "@/lib/i18n/lang";
 
 export const revalidate = 3600;
 
@@ -85,7 +86,7 @@ export default async function EraPage({ params }: Props) {
   const era = getEraById(id);
   if (!era) notFound();
 
-  const { t } = await getServerT();
+  const { lang, t } = await getServerT();
   const data = loadRealData();
   const periodMatches = matchesInEra(data.matches, era);
   const wins = periodMatches.filter((m) => m.kc_won).length;
@@ -487,7 +488,7 @@ export default async function EraPage({ params }: Props) {
                       {match.kc_won ? t("p_era.win") : t("p_era.loss")}
                     </div>
                     <span className="text-[10px] text-white/50 font-medium">
-                      {date.toLocaleDateString("fr-FR", {
+                      {formatDate(lang, date, {
                         day: "numeric",
                         month: "short",
                       })}

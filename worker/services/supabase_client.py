@@ -147,7 +147,12 @@ def safe_insert(table: str, data: dict) -> dict | None:
             )
         except Exception as e:
             log.warn("supabase_insert_failed", table=table, error=str(e))
-    cache.buffer_write(table, "insert", data)
+    # Audit 2026-07-02 : the buffer itself can fail (disk full, SQLite
+    # error) — never let the fallback path raise out of safe_insert().
+    try:
+        cache.buffer_write(table, "insert", data)
+    except Exception as e:
+        log.error("local_cache_buffer_failed", table=table, error=str(e))
     return None
 
 
@@ -165,7 +170,12 @@ def safe_upsert(table: str, data: dict, on_conflict: str | None = None) -> dict 
             )
         except Exception as e:
             log.warn("supabase_upsert_failed", table=table, error=str(e))
-    cache.buffer_write(table, "upsert", data)
+    # Audit 2026-07-02 : the buffer itself can fail (disk full, SQLite
+    # error) — never let the fallback path raise out of safe_upsert().
+    try:
+        cache.buffer_write(table, "upsert", data)
+    except Exception as e:
+        log.error("local_cache_buffer_failed", table=table, error=str(e))
     return None
 
 
@@ -185,7 +195,12 @@ def safe_update(table: str, data: dict, match_col: str, match_val: str) -> bool:
             )
         except Exception as e:
             log.warn("supabase_update_failed", table=table, error=str(e))
-    cache.buffer_write(table, "update", {**data, "_match": {match_col: match_val}})
+    # Audit 2026-07-02 : the buffer itself can fail (disk full, SQLite
+    # error) — never let the fallback path raise out of safe_update().
+    try:
+        cache.buffer_write(table, "update", {**data, "_match": {match_col: match_val}})
+    except Exception as e:
+        log.error("local_cache_buffer_failed", table=table, error=str(e))
     return False
 
 

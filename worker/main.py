@@ -167,6 +167,13 @@ DAEMON_MODULES: list[tuple[str, int, str]] = [
     ("watchdog",          _get_interval("watchdog"),          "modules.watchdog"),               # default 1800s  — 30 min
     ("queue_health",      _get_interval("queue_health"),      "modules.queue_health"),           # default 300s   — Wave 6 P2 : stale-lock + queue snapshot
     ("dlq_drainer",       _get_interval("dlq_drainer"),       "modules.dlq_drainer"),            # default 1800s  — Wave 9 : auto-recover fresh DLQ entries
+    # Audit 2026-07-02 : both were referenced by the orchestrator's
+    # `control` role but missing here — the role filter intersects with
+    # THIS list, so they never ran in production. kill_of_the_week
+    # self-gates on its weekly window ; push_notifier no-ops without
+    # VAPID env, so both are safe as always-scheduled daemons.
+    ("kill_of_the_week",  _get_interval("kill_of_the_week"),  "modules.kill_of_the_week"),       # default 3600s  — weekly KOTW pin (window-gated)
+    ("push_notifier",     _get_interval("push_notifier"),     "modules.push_notifier"),          # default 300s   — drain push queue (VAPID-gated)
 ]
 
 RESTART_DELAY = 10  # seconds between a module crash and its next attempt

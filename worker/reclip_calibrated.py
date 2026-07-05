@@ -338,15 +338,24 @@ async def main():
                         local_vod_path=local_vod,
                     )
                     if result:
-                        patch = {}
-                        if result.get("clip_h"):
-                            patch["clip_url_horizontal"] = result["clip_h"]
-                        if result.get("clip_v"):
-                            patch["clip_url_vertical"] = result["clip_v"]
-                        if result.get("clip_vl"):
-                            patch["clip_url_vertical_low"] = result["clip_vl"]
-                        if result.get("thumb"):
-                            patch["thumbnail_url"] = result["thumb"]
+                        # Audit 2026-07-02 : ce bloc lisait les clés
+                        # "clip_h"/"clip_v"/"thumb" alors que clip_kill()
+                        # retourne "clip_url_horizontal"/… — le patch
+                        # était TOUJOURS vide : le script téléchargeait
+                        # les VODs, ré-encodait tout, et n'écrivait
+                        # jamais rien en DB (100% du travail refait à
+                        # chaque relance). Clés alignées sur le retour
+                        # réel (cf. reclip_corrupted.py:121).
+                        patch = {
+                            k: result[k]
+                            for k in (
+                                "clip_url_horizontal",
+                                "clip_url_vertical",
+                                "clip_url_vertical_low",
+                                "thumbnail_url",
+                            )
+                            if result.get(k)
+                        }
                         if patch:
                             safe_update("kills", patch, "id", kid)
                         total_done += 1

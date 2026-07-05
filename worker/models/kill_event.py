@@ -154,4 +154,32 @@ class KillEvent:
             d["killer_player_id"] = self.killer_player_id
         if self.victim_player_id is not None:
             d["victim_player_id"] = self.victim_player_id
+        # Audit 2026-07-02 — game_minute_bucket + lane_phase are pure
+        # functions of game_time_seconds (no Gemini needed) but had no
+        # active writer since the Scroll Vivant analyzer refactor was
+        # dropped: the /clips minute/phase filters always returned 0
+        # results. Computed here at insertion; migration 084 backfills
+        # the existing rows with the same formulas.
+        if self.game_time_seconds is not None:
+            d["game_minute_bucket"] = minute_bucket_from_seconds(self.game_time_seconds)
+            d["lane_phase"] = lane_phase_from_seconds(self.game_time_seconds)
         return d
+
+
+def minute_bucket_from_seconds(seconds: int) -> str:
+    """5-minute display bucket, mirroring migration 004's CHECK values."""
+    minute = max(0, seconds) // 60
+    if minute >= 35:
+        return "35+"
+    lo = (minute // 5) * 5
+    return f"{lo}-{lo + 5}"
+
+
+def lane_phase_from_seconds(seconds: int) -> str:
+    """early <14min / mid 14-25min / late >25min (spec Scroll Vivant §1.1)."""
+    minute = max(0, seconds) // 60
+    if minute < 14:
+        return "early"
+    if minute <= 25:
+        return "mid"
+    return "late"

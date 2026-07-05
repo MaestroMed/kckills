@@ -7,7 +7,7 @@
  */
 
 import "server-only";
-import { createServerSupabase, rethrowIfDynamic } from "./server";
+import { createCachedAnonSupabase, rethrowIfDynamic } from "./server";
 import type { GridAxisId } from "@/lib/grid/axis-config";
 
 export interface GridCellRow {
@@ -43,12 +43,20 @@ export async function getGridCells(
   filters: GridFilters = {},
 ): Promise<GridCellRow[]> {
   try {
-    const supabase = await createServerSupabase();
-    const { data, error } = await supabase.rpc("fn_get_grid_cells", {
-      p_axis_x: axisX,
-      p_axis_y: axisY,
-      p_filters: filters,
-    });
+    // Vague 3 (audit 2026-07-05) — public read on the homepage: cached
+    // anon client + GET-mode RPC (the function is STABLE) so N visitors
+    // in the 30 min window cost ONE Supabase call. A plain .rpc() would
+    // POST and bypass the Next Data Cache entirely.
+    const supabase = createCachedAnonSupabase(1800);
+    const { data, error } = await supabase.rpc(
+      "fn_get_grid_cells",
+      {
+        p_axis_x: axisX,
+        p_axis_y: axisY,
+        p_filters: filters,
+      },
+      { get: true },
+    );
     if (error) {
       console.warn("[supabase/grid] fn_get_grid_cells error:", error.message);
       return [];

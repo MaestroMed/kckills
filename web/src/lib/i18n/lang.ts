@@ -72,3 +72,28 @@ export const LANG_COOKIE = "kc_lang";
 
 /** 1 year in seconds — Lang choice persists across sessions. */
 export const LANG_COOKIE_MAX_AGE = 60 * 60 * 24 * 365;
+
+/**
+ * Locale-aware date/number formatting (audit 2026-07-02).
+ *
+ * ~50 call sites used to hardcode toLocaleDateString("fr-FR"), so EN/KO/ES
+ * visitors saw French dates despite the Wave 36 i18n. Pass the resolved
+ * `lang` (from useLang() client-side or getServerLang() server-side).
+ */
+export function formatDate(
+  lang: Lang,
+  date: Date | string | number,
+  options?: Intl.DateTimeFormatOptions,
+): string {
+  const d = date instanceof Date ? date : new Date(date);
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toLocaleDateString(LANG_META[lang].htmlLang, options);
+}
+
+export function formatNumber(
+  lang: Lang,
+  value: number,
+  options?: Intl.NumberFormatOptions,
+): string {
+  return value.toLocaleString(LANG_META[lang].htmlLang, options);
+}

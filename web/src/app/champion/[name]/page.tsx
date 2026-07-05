@@ -8,6 +8,20 @@ import { PortraitCubeMorph } from "@/components/PortraitCubeMorph";
 import { getClipsFiltered } from "@/lib/supabase/clips";
 import { getServerT } from "@/lib/i18n/server-lang";
 
+/**
+ * Safe decode for route params. Next already decodes params once —
+ * decoding again can throw URIError on inputs like "50%25" and turn a
+ * bad URL into a 500. Malformed input degrades to the raw string
+ * (downstream lookups then 404 cleanly).
+ */
+function safeDecode(value: string): string {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
+}
+
 export const revalidate = 600;
 
 interface Props {
@@ -16,7 +30,7 @@ interface Props {
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { name } = await params;
-  const champ = decodeURIComponent(name);
+  const champ = safeDecode(name);
   const title = `${champ} — Plays Karmine Corp`;
   const description = `Tous les kills LEC du champion ${champ} cote KC : kills donnes, kills subis, multi-kills, top highlights IA.`;
   return {
@@ -43,7 +57,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 export default async function ChampionPage({ params }: Props) {
   const { t } = await getServerT();
   const { name } = await params;
-  const champ = decodeURIComponent(name);
+  const champ = safeDecode(name);
 
   // Pull both sides upfront — we'll reuse for the matchup frequency
   // computation so no extra RPC round trip.

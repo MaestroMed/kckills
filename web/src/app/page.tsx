@@ -57,9 +57,13 @@ import { MacronEasterEgg } from "@/components/MacronEasterEgg";
 import { HeroClipBackground } from "@/components/HeroClipBackground";
 import { NextMatchOverlay } from "@/components/NextMatchOverlay";
 import { PageViewTracker } from "@/components/analytics/PageViewTracker";
-// ScrollVivantSection deleted (2026-04-20) — was a dead grid prototype that
-// never made it to production. The /scroll v2 player handles the live feed
-// and /clips handles the cards-grid use case it was meant to fill.
+// Scroll Vivant grid — resurrected 2026-07-05 (Vague 3 of the
+// award-winning plan) as the homepage marquee feature. Deleted
+// 2026-04-20 as a "dead prototype" because its data dimensions were
+// never populated; migrations 084 (deterministic time buckets) + 087
+// (aligned WHERE) fixed the starvation. Desktop = full 2D engine,
+// mobile = lightweight snap row, <4 cells = renders nothing.
+import { HomeGridSection } from "@/components/home/HomeGridSection";
 
 /** Iconic clips that play in the hero background, one after the other.
  *
@@ -181,6 +185,23 @@ export default async function HomePage() {
   const roster = getCurrentRoster(data);
   const stats = getTeamStats(data);
   const allMatches = getMatchesSorted(data);
+
+  // Vague 6 — mobile hero cube-morph feed: the 6 most-picked KC
+  // champions across every tracked game, as DDragon splash URLs.
+  const championPickCounts = new Map<string, number>();
+  for (const m of allMatches) {
+    for (const g of m.games) {
+      for (const p of g.kc_players) {
+        if (p.champion) {
+          championPickCounts.set(p.champion, (championPickCounts.get(p.champion) ?? 0) + 1);
+        }
+      }
+    }
+  }
+  const heroMorphImages = [...championPickCounts.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 6)
+    .map(([name]) => championSplashUrl(name));
   const isEmpty = data.total_matches === 0;
   const HERO_CLIPS = await buildHeroClips();
   const viShowcase = await getViShowcase({ buildTime: true });
@@ -224,7 +245,11 @@ export default async function HomePage() {
 
       {/* ═══ HERO — 2-col layout with clip rotator (full-bleed via parent) ═══ */}
       <section className="relative min-h-[100vh] md:min-h-[92vh] overflow-hidden">
-        <HeroClipBackground clips={HERO_CLIPS} posterSrc="/images/hero-bg.jpg" />
+        <HeroClipBackground
+          clips={HERO_CLIPS}
+          posterSrc="/images/hero-bg.jpg"
+          mobileMorphImages={heroMorphImages}
+        />
 
         {/* Very light overlays — let the video breathe and feel alive.
             Only the bottom fade stays strong to blend into the next section.
@@ -362,6 +387,16 @@ export default async function HomePage() {
           de semaine). Re-ranke par score IA + boost multi-kill +
           boost communauté. Ne s'affiche pas si zéro clip dans le
           système (fresh deploy / worker pas encore tourné). */}
+      {/* ═══ SCROLL VIVANT — the kill grid (marquee, Vague 3) ═══════════
+          The "second screen": full-bleed 2D navigable grid right under
+          the hero — this is what defines the site's identity after the
+          title. Desktop gets the full engine (keyboard/wheel/diagonal
+          pivots), mobile a snap row. Renders nothing when the RPC has
+          fewer than 4 populated cells (pre-migration-087 fallback). */}
+      <Suspense fallback={<SectionSkeleton size="lg" label={t("p_grid.heading")} />}>
+        <HomeGridSection />
+      </Suspense>
+
       {/* ═══ ON THIS DAY — nostalgia banner ════════════════════════════
           Surfaces kills played on today's calendar date in past years.
           Wave 28 (2026-05-11). Renders nothing when no historical match

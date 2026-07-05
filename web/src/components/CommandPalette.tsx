@@ -71,6 +71,15 @@ const PAGES: Entry[] = [
   // the real community_clips submit page ships.
   { id: "page-api",     group: "page", label: "API Docs",       subtitle: "Documentation",    href: "/api-docs",    searchText: "api documentation endpoints rest developers" },
   { id: "page-review",  group: "page", label: "Review QA",      subtitle: "Clip quality",     href: "/review",      searchText: "review qa quality test noter clips" },
+  // Audit 2026-07-02 — community features shipped without palette
+  // entries (several were unreachable from any public surface).
+  { id: "page-vs",      group: "page", label: "VS — Duels",     subtitle: "Vote 1v1 de clips", href: "/vs",         searchText: "vs versus duel vote roulette elo battle" },
+  { id: "page-vs-lb",   group: "page", label: "VS Leaderboard", subtitle: "Classement Elo",   href: "/vs/leaderboard", searchText: "vs leaderboard elo classement ranking top duels" },
+  { id: "page-quotes",  group: "page", label: "Quotes casters", subtitle: "Punchlines LEC",   href: "/quotes",      searchText: "quotes citations casters punchlines hype commentateurs" },
+  { id: "page-faceoff", group: "page", label: "Face-Off",       subtitle: "Joueur vs joueur", href: "/face-off",    searchText: "face-off faceoff duel joueurs comparaison stats" },
+  { id: "page-achievements", group: "page", label: "Achievements", subtitle: "Badges & succes", href: "/achievements", searchText: "achievements succes badges trophees progression" },
+  { id: "page-bracket", group: "page", label: "Bracket",        subtitle: "Tournoi des clips", href: "/bracket",    searchText: "bracket tournoi elimination vote communaute" },
+  { id: "page-compilation", group: "page", label: "Compilations", subtitle: "Best-of generes", href: "/compilation", searchText: "compilation best-of montage clips generes" },
   { id: "page-settings",group: "page", label: "Parametres",    subtitle: "Profil",           href: "/settings",    searchText: "settings parametres profil" },
 ];
 

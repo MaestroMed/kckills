@@ -25,7 +25,17 @@ export const metadata: Metadata = {
 
 export default async function MatchesPage() {
   const { t } = await getServerT();
-  const sb = await createAnonSupabase();
+  // Audit 2026-07-02 : createAnonSupabase() throws when the Supabase
+  // env is absent (this page was the ONLY one killing `next build` in
+  // env-less contexts — every other page degrades). Null client →
+  // static-JSON-only rendering, same as a Supabase outage.
+  let sb: ReturnType<typeof createAnonSupabase> | null = null;
+  try {
+    sb = createAnonSupabase();
+  } catch {
+    console.warn("[matches] Supabase env missing — rendering static data only");
+  }
+  const emptyRes = { data: null, error: null } as const;
   // Wave 34 T2.2 — trim 500 → 300.
   // The list iterates `allClips` only to compute `clipsByMatch.size`
   // counters and a single total `allClips.length` for the header chip.
@@ -37,8 +47,10 @@ export default async function MatchesPage() {
   const [data, allClips, dbMatchesRes, dbTeamsRes] = await Promise.all([
     Promise.resolve(loadRealData()),
     getPublishedKills(300),
-    sb.from("matches").select("external_id,scheduled_at,stage,format,team_blue_id,team_red_id,winner_team_id"),
-    sb.from("teams").select("id,code,name"),
+    sb
+      ? sb.from("matches").select("external_id,scheduled_at,stage,format,team_blue_id,team_red_id,winner_team_id")
+      : Promise.resolve(emptyRes),
+    sb ? sb.from("teams").select("id,code,name") : Promise.resolve(emptyRes),
   ]);
   const matches = getMatchesSorted(data);
 
