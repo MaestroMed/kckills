@@ -9,7 +9,7 @@ import { DirectionHint } from "./DirectionHint";
 import { useGridEngine } from "@/hooks/useGridEngine";
 import { trackGridEvent } from "@/lib/grid/analytics";
 import type { GridAxisId } from "@/lib/grid/axis-config";
-import { GRID_AXES } from "@/lib/grid/axis-config";
+import { useT } from "@/lib/i18n/use-lang";
 
 interface GridCanvasProps {
   cells: GridCellData[];
@@ -38,6 +38,7 @@ export function GridCanvas({
   axisValues,
 }: GridCanvasProps) {
   const router = useRouter();
+  const t = useT();
   const engine = useGridEngine({ axisXInitial, axisYInitial, cells, axisValues });
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [tilt, setTilt] = useState<"none" | "br" | "bl">("none");
@@ -286,7 +287,7 @@ export function GridCanvas({
         ref={containerRef}
         tabIndex={0}
         role="application"
-        aria-label={`Grille KCKills — axe horizontal ${GRID_AXES[engine.axisX].label}, axe vertical ${GRID_AXES[engine.axisY].label}`}
+        aria-label={t("p_grid.canvas_aria", { x: t(`p_grid.axis_${engine.axisX}`), y: t(`p_grid.axis_${engine.axisY}`) })}
         onWheel={handleWheel}
         onTouchStart={onTouchStart}
         onTouchMove={onTouchMove}

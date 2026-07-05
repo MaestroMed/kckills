@@ -1,7 +1,7 @@
 "use client";
 
 import type { GridAxisId } from "@/lib/grid/axis-config";
-import { GRID_AXES } from "@/lib/grid/axis-config";
+import { useT } from "@/lib/i18n/use-lang";
 
 interface NavIndicatorProps {
   axisX: GridAxisId;
@@ -30,8 +30,9 @@ export function NavIndicator({
   prevYLabel,
   nextYLabel,
 }: NavIndicatorProps) {
-  const xAxis = GRID_AXES[axisX];
-  const yAxis = GRID_AXES[axisY];
+  const t = useT();
+  const xShort = t(`p_grid.axis_${axisX}`);
+  const yShort = t(`p_grid.axis_${axisY}`);
 
   return (
     <div
@@ -42,7 +43,7 @@ export function NavIndicator({
       {/* Top: current X-axis bucket */}
       <div className="absolute inset-x-0 top-3 flex justify-center">
         <span className="rounded-full border border-[var(--gold)]/30 bg-black/60 px-3 py-1 backdrop-blur-md">
-          <span className="text-white/50 mr-2">{xAxis.short}</span>
+          <span className="text-white/50 mr-2">{xShort}</span>
           <span className="text-[var(--gold)]">{cellX ?? "—"}</span>
         </span>
       </div>
@@ -50,7 +51,7 @@ export function NavIndicator({
       {/* Bottom: current Y-axis bucket */}
       <div className="absolute inset-x-0 bottom-3 flex justify-center">
         <span className="rounded-full border border-[var(--cyan)]/30 bg-black/60 px-3 py-1 backdrop-blur-md">
-          <span className="text-white/50 mr-2">{yAxis.short}</span>
+          <span className="text-white/50 mr-2">{yShort}</span>
           <span className="text-[var(--cyan)]">{cellY ?? "—"}</span>
         </span>
       </div>

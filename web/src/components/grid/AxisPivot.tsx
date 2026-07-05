@@ -2,7 +2,8 @@
 
 import { FilterChips } from "@/components/ui/FilterChips";
 import type { GridAxisId } from "@/lib/grid/axis-config";
-import { GRID_AXES, allowedAxesExcept } from "@/lib/grid/axis-config";
+import { allowedAxesExcept } from "@/lib/grid/axis-config";
+import { useT } from "@/lib/i18n/use-lang";
 
 interface AxisPivotProps {
   axisX: GridAxisId;
@@ -17,13 +18,14 @@ interface AxisPivotProps {
  * that — these chips are always visible so nobody is blocked.
  */
 export function AxisPivot({ axisX, axisY, onChangeX, onChangeY }: AxisPivotProps) {
+  const t = useT();
   const xOptions = allowedAxesExcept(axisY).map((a) => ({
     value: a.id,
-    label: a.short,
+    label: t(`p_grid.axis_${a.id}`),
   }));
   const yOptions = allowedAxesExcept(axisX).map((a) => ({
     value: a.id,
-    label: a.short,
+    label: t(`p_grid.axis_${a.id}`),
   }));
 
   return (
@@ -36,7 +38,7 @@ export function AxisPivot({ axisX, axisY, onChangeX, onChangeY }: AxisPivotProps
           options={xOptions}
           value={axisX}
           onChange={onChangeX}
-          label={`Axe horizontal (actuellement ${GRID_AXES[axisX].label})`}
+          label={t("p_grid.axis_x_label", { axis: t(`p_grid.axis_${axisX}`) })}
         />
       </div>
       <div className="flex items-center gap-2">
@@ -47,7 +49,7 @@ export function AxisPivot({ axisX, axisY, onChangeX, onChangeY }: AxisPivotProps
           options={yOptions}
           value={axisY}
           onChange={onChangeY}
-          label={`Axe vertical (actuellement ${GRID_AXES[axisY].label})`}
+          label={t("p_grid.axis_y_label", { axis: t(`p_grid.axis_${axisY}`) })}
         />
       </div>
     </div>
