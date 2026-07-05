@@ -21,14 +21,47 @@ import { useT } from "@/lib/i18n/use-lang";
 // flip on the LoLTok multi-team navigation.
 const LOLTOK_PUBLIC = process.env.NEXT_PUBLIC_LOLTOK_PUBLIC === "true";
 
-// Clip-centric nav — only what matters. Logo links to home, no "Accueil" item.
-// /best and /recent merged into /clips (filterable + chronological by default).
-// Labels are i18n keys (resolved via t() inside the component).
-const NAV_LINKS: { href: string; tKey: string }[] = [
+// Vague 5 (audit 2026-07-05) — the flat 4-link nav left ~10 rich pages
+// (/vs, /quotes, /face-off, /bracket, /achievements, /records, /week,
+// /alumni…) unreachable from any public surface. Four universes now
+// expose everything: direct links for the two core surfaces + three
+// dropdown groups. Labels are i18n keys resolved via t().
+const NAV_DIRECT: { href: string; tKey: string }[] = [
   { href: "/scroll", tKey: "nav.scroll" },
   { href: "/clips", tKey: "nav.clips" },
-  { href: "/players", tKey: "nav.players" },
-  { href: "/matches", tKey: "nav.matches" },
+];
+
+const NAV_GROUPS: { tKey: string; items: { href: string; tKey: string }[] }[] = [
+  {
+    tKey: "nav.g_discover",
+    items: [
+      { href: "/week", tKey: "nav.week" },
+      { href: "/best", tKey: "nav.best" },
+      { href: "/records", tKey: "nav.records" },
+      { href: "/saved", tKey: "nav.saved" },
+    ],
+  },
+  {
+    tKey: "nav.g_compete",
+    items: [
+      { href: "/vs", tKey: "nav.vs" },
+      { href: "/vs/leaderboard", tKey: "nav.vs_leaderboard" },
+      { href: "/face-off", tKey: "nav.face_off" },
+      { href: "/bracket", tKey: "nav.bracket" },
+      { href: "/quotes", tKey: "nav.quotes" },
+    ],
+  },
+  {
+    tKey: "nav.g_club",
+    items: [
+      { href: "/players", tKey: "nav.players" },
+      { href: "/matches", tKey: "nav.matches" },
+      { href: "/achievements", tKey: "nav.achievements" },
+      { href: "/community", tKey: "nav.community" },
+      { href: "/alumni", tKey: "nav.alumni" },
+      { href: "/hall-of-fame", tKey: "nav.hall_of_fame" },
+    ],
+  },
 ];
 
 export function Navbar() {
@@ -133,9 +166,9 @@ export function Navbar() {
           </span>
         </Link>
 
-        {/* Desktop nav */}
+        {/* Desktop nav — 2 direct links + 3 universe dropdowns */}
         <div className="hidden items-center gap-5 md:flex">
-          {NAV_LINKS.map((link) => {
+          {NAV_DIRECT.map((link) => {
             const active = isActiveLink(link.href);
             return (
               <Link
@@ -150,6 +183,57 @@ export function Navbar() {
               >
                 {t(link.tKey)}
               </Link>
+            );
+          })}
+          {NAV_GROUPS.map((group) => {
+            const groupActive = group.items.some((i) => isActiveLink(i.href));
+            return (
+              // CSS-driven dropdown: opens on hover AND :focus-within, so
+              // it's fully keyboard-navigable without any JS state (Tab
+              // into the button, Tab through the items, Esc/blur closes).
+              <div key={group.tKey} className="group/nav relative">
+                <button
+                  type="button"
+                  aria-haspopup="true"
+                  className={`relative flex items-center gap-1 text-sm transition-colors after:absolute after:bottom-[-7px] after:left-0 after:right-0 after:h-[2px] after:rounded-full after:origin-left after:transition-transform after:duration-300 after:[background-image:linear-gradient(90deg,var(--gold),var(--blue-kc))] group-hover/nav:after:scale-x-100 ${
+                    groupActive
+                      ? "text-[var(--gold-bright)] after:scale-x-100"
+                      : "text-[var(--text-muted)] hover:text-[var(--gold)] after:scale-x-0"
+                  }`}
+                >
+                  {t(group.tKey)}
+                  <svg
+                    className="h-3 w-3 opacity-60 transition-transform group-hover/nav:rotate-180 group-focus-within/nav:rotate-180"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                    aria-hidden
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+                <div className="invisible absolute left-1/2 top-full z-50 -translate-x-1/2 pt-3 opacity-0 transition-all duration-150 group-hover/nav:visible group-hover/nav:opacity-100 group-focus-within/nav:visible group-focus-within/nav:opacity-100">
+                  <div className="min-w-[200px] rounded-xl border border-[var(--border-gold)] bg-[var(--bg-primary)]/95 p-1.5 shadow-2xl shadow-black/60 backdrop-blur-xl">
+                    {group.items.map((item) => {
+                      const active = isActiveLink(item.href);
+                      return (
+                        <Link
+                          key={item.href}
+                          href={item.href}
+                          aria-current={active ? "page" : undefined}
+                          className={`block rounded-lg px-3 py-2 text-sm transition-colors ${
+                            active
+                              ? "bg-[var(--bg-elevated)] text-[var(--gold-bright)]"
+                              : "text-[var(--text-secondary)] hover:bg-[var(--bg-elevated)] hover:text-[var(--gold)]"
+                          }`}
+                        >
+                          {t(item.tKey)}
+                        </Link>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
             );
           })}
         </div>
@@ -200,16 +284,21 @@ export function Navbar() {
           </Link>
         </div>
 
-        {/* Mobile : search icon + menu button */}
-        <Link
-          href="/search"
+        {/* Mobile : palette trigger + menu button.
+            Vague 5 — this icon used to link to /search; the CommandPalette
+            (the only entry point to ~80% of the content) was undiscoverable
+            on mobile. It now opens the palette; /search stays reachable
+            through the drawer's SearchBar. */}
+        <button
+          type="button"
+          onClick={() => window.dispatchEvent(new Event("kckills:open-palette"))}
           className="md:hidden flex h-11 w-11 items-center justify-center rounded-lg text-[var(--text-secondary)] hover:text-[var(--gold)] hover:bg-[var(--bg-elevated)] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--gold)]"
-          aria-label={t("nav.search")}
+          aria-label={t("nav.search_aria")}
         >
           <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 1 1-14 0 7 7 0 0 1 14 0z" />
           </svg>
-        </Link>
+        </button>
 
         {/* Mobile menu button — meets WCAG 4.4 (target ≥ 44px on touch) */}
         <button
@@ -248,7 +337,7 @@ export function Navbar() {
           <div className="pb-2">
             <SearchBar />
           </div>
-          {NAV_LINKS.map((link) => {
+          {NAV_DIRECT.map((link) => {
             const active = isActiveLink(link.href);
             return (
               <Link
@@ -266,6 +355,31 @@ export function Navbar() {
               </Link>
             );
           })}
+          {NAV_GROUPS.map((group) => (
+            <div key={group.tKey} className="pt-1">
+              <p className="px-3 pb-1 font-data text-[10px] uppercase tracking-[0.25em] text-[var(--gold)]/60">
+                {t(group.tKey)}
+              </p>
+              {group.items.map((item) => {
+                const active = isActiveLink(item.href);
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    aria-current={active ? "page" : undefined}
+                    className={`block rounded-lg py-2 px-3 text-sm transition-colors ${
+                      active
+                        ? "bg-[var(--bg-elevated)] text-[var(--gold-bright)] border-l-2 border-[var(--gold)]"
+                        : "text-[var(--text-secondary)] hover:bg-[var(--bg-elevated)]"
+                    }`}
+                    onClick={() => setMobileOpen(false)}
+                  >
+                    {t(item.tKey)}
+                  </Link>
+                );
+              })}
+            </div>
+          ))}
           {/* Lang switcher (full width on mobile) */}
           <div className="pt-2 pb-1 flex justify-center">
             <LangSwitcher variant="full" />
