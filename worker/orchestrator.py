@@ -57,15 +57,27 @@ log = structlog.get_logger()
 # ──────────────────────────────────────────────────────────────────────
 # Re-uses the (name, interval, dotted) tuples from main.DAEMON_MODULES
 # so we keep a single source of truth for intervals.
+# Audit 2026-07-02 — this map had silently drifted from DAEMON_MODULES:
+# embedder / quote_extractor / translator / achievement_evaluator /
+# discord_autopost / admin_job_runner / queue_health / dlq_drainer were
+# in DAEMON_MODULES but in NO role → they never ran in orchestrator mode
+# (= production). The whole recommendation engine (kills.embedding →
+# fn_recommend_kills / fn_similar_kills), the /quotes page and the
+# proactive achievement pushes were built but starved. Conversely
+# kill_of_the_week + push_notifier were referenced here but missing from
+# DAEMON_MODULES, so the intersection filter silently dropped them.
+# tests/test_orchestrator_roles.py now locks the two lists together.
 ROLE_MODULES: dict[str, list[str]] = {
     "clipper":   ["clipper", "hls_packager"],
-    "analyzer":  ["analyzer", "qc_sampler", "og_generator", "event_publisher"],
+    "analyzer":  ["analyzer", "qc_sampler", "og_generator", "event_publisher",
+                  "embedder", "quote_extractor", "translator"],
     "discovery": ["sentinel", "harvester", "transitioner", "channel_discoverer",
                   "channel_reconciler", "vod_fallback_finder",
                   "match_planner", "event_mapper", "vod_offset_finder"],
     "control":   ["moderator", "job_runner", "job_dispatcher",
                   "kill_of_the_week", "push_notifier", "heartbeat",
-                  "watchdog"],
+                  "watchdog", "achievement_evaluator", "discord_autopost",
+                  "admin_job_runner", "queue_health", "dlq_drainer"],
 }
 
 ROLES = tuple(ROLE_MODULES.keys())

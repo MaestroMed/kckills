@@ -2,10 +2,12 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useEffect } from "react";
 import { Navbar } from "@/components/navbar";
 import { LiveBanner } from "@/components/LiveBanner";
 import { PushOptIn } from "@/components/PushOptIn";
 import { useT } from "@/lib/i18n/use-lang";
+import { mergeLocalBookmarksOnce } from "@/lib/bookmarks";
 
 /**
  * Conditionally renders the site chrome (navbar, footer) based on pathname.
@@ -16,6 +18,13 @@ export function LayoutChrome({ children }: { children: React.ReactNode }) {
   const t = useT();
   const isImmersive = pathname === "/scroll";
   const isAdmin = pathname.startsWith("/admin");
+
+  // Vague 1 (audit 2026-07-02) — one-time merge of anonymous
+  // localStorage bookmarks into the DB once a session exists. No-ops
+  // instantly (single localStorage read) after the first success.
+  useEffect(() => {
+    void mergeLocalBookmarksOnce();
+  }, []);
 
   // Admin routes use their own layout (sidebar-based). Skip public chrome entirely.
   if (isAdmin) {

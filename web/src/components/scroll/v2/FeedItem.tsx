@@ -34,6 +34,7 @@ import { FeedSidebarV2 } from "@/components/community/FeedSidebarV2";
 import { DoubleTapHeart } from "@/components/community/DoubleTapHeart";
 import { FeedItemError } from "./FeedItemError";
 import { track } from "@/lib/analytics/track";
+import { setBookmark } from "@/lib/bookmarks";
 import { LongPressMenu } from "./LongPressMenu";
 import { ShareSheet } from "./ShareSheet";
 import { useNotInterestedStore } from "./hooks/useNotInterestedStore";
@@ -446,23 +447,9 @@ export function FeedItemVideo({
             onAutoSkipNext?.();
           }}
           onSave={() => {
-            // V10 (deferred) — persist the bookmark. For now we
-            // localStorage-only-fallback save, the V10 commit will
-            // wire it to /api/bookmarks + DB.
-            try {
-              const raw = window.localStorage.getItem("kc_bookmarks_v1");
-              const arr: string[] = raw ? JSON.parse(raw) : [];
-              if (!arr.includes(item.id)) {
-                arr.push(item.id);
-                window.localStorage.setItem(
-                  "kc_bookmarks_v1",
-                  JSON.stringify(arr.slice(-200)),
-                );
-                window.dispatchEvent(new CustomEvent("kc:bookmarks-changed"));
-              }
-            } catch {
-              /* storage disabled */
-            }
+            // Vague 1 (audit 2026-07-02) — persists to /api/bookmarks
+            // for signed-in users, localStorage for anonymous.
+            setBookmark(item.id, true);
           }}
           onShare={() => setShareSheetOpen(true)}
           onReport={() => {
@@ -513,20 +500,9 @@ export function FeedItemVideo({
         killerPlayerId={item.killerPlayerId}
         killerChampion={item.killerChampion}
         onBookmark={(killId, next) => {
-          try {
-            const raw = window.localStorage.getItem("kc_bookmarks_v1");
-            const arr: string[] = raw ? JSON.parse(raw) : [];
-            const set = new Set(arr);
-            if (next) set.add(killId);
-            else set.delete(killId);
-            window.localStorage.setItem(
-              "kc_bookmarks_v1",
-              JSON.stringify([...set].slice(-200)),
-            );
-            window.dispatchEvent(new CustomEvent("kc:bookmarks-changed"));
-          } catch {
-            /* storage disabled — best-effort */
-          }
+          // Vague 1 (audit 2026-07-02) — persists to /api/bookmarks
+          // for signed-in users, localStorage for anonymous.
+          setBookmark(killId, next);
         }}
         visible={isActive}
       />
