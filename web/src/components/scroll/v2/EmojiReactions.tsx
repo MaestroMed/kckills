@@ -8,11 +8,13 @@
  * the chip. Mirrors the Twitch-style hype reactions used during
  * matches without needing comment authoring.
  *
- * Storage : per-clip counts buffered in localStorage so the user
- * sees their own contribution immediately. Server-side aggregation
- * (V16b) lands in a follow-up : a `kill_reactions` table + RPC that
- * the worker batches every 30 s. For now, the floating-reaction
- * animation is purely client-side — every user sees their own.
+ * Storage (V16b, Vague 2 — audit 2026-07-05) : reactions are now
+ * PERSISTED server-side (`kill_reactions` table, migration 085, via
+ * POST /api/kills/[id]/react). The chip shows the aggregate of ALL
+ * users. Taps are optimistic + batched (800 ms) before POSTing so a
+ * tap-storm costs one request. localStorage keeps a per-clip seed so
+ * the count paints instantly while the GET is in flight; anonymous
+ * users persist too (server-side fingerprint, rate-limited).
  *
  * The 6 emojis cover the LoL fan reaction-vocabulary :
  *   🔥 hype          👏 clean play       😂 funny
@@ -71,11 +73,59 @@ export function EmojiReactions({ killId, visible }: Props) {
   const [bursts, setBursts] = useState<FloatingBurst[]>([]);
   const [open, setOpen] = useState(false);
   const burstSeqRef = useRef(0);
+  const pendingRef = useRef<Record<string, number>>({});
+  const flushTimerRef = useRef<number | null>(null);
+  const fetchedForRef = useRef<string | null>(null);
 
-  // Hydrate per-clip counts from localStorage.
+  // Hydrate: localStorage seed (instant paint) then server aggregate.
   useEffect(() => {
     setCounts(readReactions()[killId] ?? {});
   }, [killId]);
+
+  useEffect(() => {
+    if (!visible || fetchedForRef.current === killId) return;
+    fetchedForRef.current = killId;
+    let cancelled = false;
+    void fetch(`/api/kills/${killId}/react`, { credentials: "same-origin" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((body: { counts?: Record<string, number> } | null) => {
+        if (cancelled || !body?.counts) return;
+        setCounts((prev) => {
+          // Server totals win; keep any taps fired while fetching.
+          const merged = { ...body.counts } as Record<string, number>;
+          for (const [e, n] of Object.entries(pendingRef.current)) {
+            merged[e] = (merged[e] ?? 0) + n;
+          }
+          const all = readReactions();
+          all[killId] = merged;
+          writeReactions(all);
+          return merged;
+        });
+      })
+      .catch(() => {
+        /* offline — localStorage seed stays */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [killId, visible]);
+
+  // Batch pending taps into one POST per emoji burst (800 ms).
+  const flushPending = () => {
+    const pending = pendingRef.current;
+    pendingRef.current = {};
+    flushTimerRef.current = null;
+    for (const [emoji, delta] of Object.entries(pending)) {
+      void fetch(`/api/kills/${killId}/react`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ emoji, delta }),
+        credentials: "same-origin",
+      }).catch(() => {
+        /* best-effort — optimistic count already painted */
+      });
+    }
+  };
 
   const fire = (emoji: Reaction) => {
     // Floating animation
@@ -85,7 +135,11 @@ export function EmojiReactions({ killId, visible }: Props) {
       setBursts((prev) => prev.filter((b) => b.id !== id));
     }, 1400);
 
-    // Local count + persist
+    // Optimistic count + localStorage cache + batched server write.
+    pendingRef.current[emoji] = (pendingRef.current[emoji] ?? 0) + 1;
+    if (flushTimerRef.current == null) {
+      flushTimerRef.current = window.setTimeout(flushPending, 800);
+    }
     setCounts((prev) => {
       const next = { ...prev, [emoji]: (prev[emoji] ?? 0) + 1 };
       const all = readReactions();
