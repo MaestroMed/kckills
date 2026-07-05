@@ -73,6 +73,7 @@ import type { RecommendedKillRow } from "@/lib/supabase/recommendations";
 import { rateKill } from "@/components/community/actions";
 import { track } from "@/lib/analytics/track";
 import { useT } from "@/lib/i18n/use-lang";
+import { useFeedMediaSession } from "@/hooks/useFeedMediaSession";
 
 /**
  * Recommendation engine feature flag.
@@ -486,6 +487,27 @@ export function ScrollFeedV2({
     onActiveChange: handleActiveChange,
   });
   const isAtEndOfFeed = activeIndex === visibleItems.length;
+
+  // ─── MediaSession + Wake Lock (Vague 6) ───────────────────────────
+  // Lockscreen metadata + native prev/next for the active clip, and
+  // the screen stays awake during a hands-free viewing chain.
+  const msActive = visibleItems[activeIndex];
+  useFeedMediaSession(
+    msActive && msActive.kind === "video"
+      ? {
+          id: msActive.id,
+          title: `${msActive.killerChampion} → ${msActive.victimChampion}`,
+          artist: msActive.killerName
+            ? `${msActive.killerName} · Karmine Corp`
+            : "Karmine Corp",
+          thumbnailUrl: msActive.thumbnail ?? null,
+        }
+      : null,
+    {
+      onNext: () => jumpTo(Math.min(activeIndex + 1, visibleItems.length - 1)),
+      onPrev: () => jumpTo(Math.max(activeIndex - 1, 0)),
+    },
+  );
 
   // ─── Speculative buffer (PR5-A) ───────────────────────────────────
   // Two layers : thumbnail preload (15 ahead on ultra) + video manifest

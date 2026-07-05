@@ -185,6 +185,23 @@ export default async function HomePage() {
   const roster = getCurrentRoster(data);
   const stats = getTeamStats(data);
   const allMatches = getMatchesSorted(data);
+
+  // Vague 6 — mobile hero cube-morph feed: the 6 most-picked KC
+  // champions across every tracked game, as DDragon splash URLs.
+  const championPickCounts = new Map<string, number>();
+  for (const m of allMatches) {
+    for (const g of m.games) {
+      for (const p of g.kc_players) {
+        if (p.champion) {
+          championPickCounts.set(p.champion, (championPickCounts.get(p.champion) ?? 0) + 1);
+        }
+      }
+    }
+  }
+  const heroMorphImages = [...championPickCounts.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 6)
+    .map(([name]) => championSplashUrl(name));
   const isEmpty = data.total_matches === 0;
   const HERO_CLIPS = await buildHeroClips();
   const viShowcase = await getViShowcase({ buildTime: true });
@@ -228,7 +245,11 @@ export default async function HomePage() {
 
       {/* ═══ HERO — 2-col layout with clip rotator (full-bleed via parent) ═══ */}
       <section className="relative min-h-[100vh] md:min-h-[92vh] overflow-hidden">
-        <HeroClipBackground clips={HERO_CLIPS} posterSrc="/images/hero-bg.jpg" />
+        <HeroClipBackground
+          clips={HERO_CLIPS}
+          posterSrc="/images/hero-bg.jpg"
+          mobileMorphImages={heroMorphImages}
+        />
 
         {/* Very light overlays — let the video breathe and feel alive.
             Only the bottom fade stays strong to blend into the next section.
