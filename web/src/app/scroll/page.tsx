@@ -13,8 +13,13 @@
  * Legacy v1 backed up at scroll/page-v1-backup.tsx for rollback.
  */
 
+import { cookies, headers } from "next/headers";
 import { loadRealData } from "@/lib/real-data";
-import { getKillById, getPublishedKills } from "@/lib/supabase/kills";
+import {
+  getKillById,
+  getPublishedKcKillCount,
+  getPublishedKills,
+} from "@/lib/supabase/kills";
 import { getTrackedRoster } from "@/lib/supabase/players";
 import {
   type FeedItem,
@@ -158,6 +163,37 @@ export default async function ScrollV2Page({ searchParams }: ScrollPageProps) {
     chipFilters.tag !== null ||
     chipFilters.side !== null;
 
+  // Wave 37 — per-visit shuffle seed.
+  //
+  // Full document loads mint a fresh random seed, so a reload or a new
+  // visit NEVER starts on the same first clip. RSC requests — the
+  // 10-minute router.refresh() and client-side navigations — carry the
+  // `RSC` header and reuse the seed the client persisted in the
+  // `kc_feed_seed` session cookie, so in-session re-renders stay
+  // byte-identical and the playing clip never swaps mid-watch (the
+  // 2026-07-02 audit guarantee, previously enforced by a GLOBAL
+  // 10-minute window seed that gave every visitor the same order).
+  // Cookie absent on an RSC request (first nav before the client
+  // persisted it, cookie cleared) → fall back to the legacy 10-minute
+  // window so the refresh cadence still lines up.
+  const [hdrs, cookieStore] = await Promise.all([headers(), cookies()]);
+  const isRscRequest =
+    hdrs.get("rsc") === "1" || hdrs.has("next-router-state-tree");
+  const rawSeedCookie = cookieStore.get("kc_feed_seed")?.value ?? "";
+  const cookieSeed = /^\d{1,10}$/.test(rawSeedCookie)
+    ? Number(rawSeedCookie) >>> 0
+    : null;
+  const feedSeed =
+    isRscRequest && cookieSeed !== null
+      ? cookieSeed
+      : Math.floor(Math.random() * 4294967296) >>> 0;
+
+  // Wave 37 — the catalogue backfill only makes sense on the default
+  // unfiltered feed : chip/axis-filtered views and the recent /
+  // top-semaine tabs keep their bounded semantics.
+  const catalogEnabled =
+    feedTab === "pour-toi" && !hasChipFilter && filterAxis === null;
+
   // SSR fetch limits — env-overridable for ops tuning.
   //
   // History
@@ -193,10 +229,13 @@ export default async function ScrollV2Page({ searchParams }: ScrollPageProps) {
     500,
   );
 
-  const [data, allKills, roster] = await Promise.all([
+  const [data, allKills, roster, catalogTotal] = await Promise.all([
     Promise.resolve(loadRealData()),
     getPublishedKills(KILLS_LIMIT),
     getTrackedRoster(),
+    // Wave 37 — real catalogue size for the clip counter (HEAD count,
+    // ~150 bytes). 0 on error → the counter falls back to slice length.
+    getPublishedKcKillCount(),
   ]);
 
   const ROLE_FOR_IGN: Record<string, "TOP" | "JGL" | "MID" | "ADC" | "SUP"> = {
@@ -388,7 +427,7 @@ export default async function ScrollV2Page({ searchParams }: ScrollPageProps) {
     // V25 multi-axis anti-repeat caps. When the recommendation
     // engine kicks in (post-V21 dwell signals), it folds personalised
     // suggestions into the tail of this list.
-    items = weightedShuffle(recencyBoosted);
+    items = weightedShuffle(recencyBoosted, feedSeed);
   }
   const clipCount = items.length;
 
@@ -469,6 +508,9 @@ export default async function ScrollV2Page({ searchParams }: ScrollPageProps) {
         chipFilters={chipFilters}
         rosterChips={rosterChips}
         feedTab={feedTab}
+        feedSeed={feedSeed}
+        catalogEnabled={catalogEnabled}
+        catalogTotal={catalogTotal}
       />
     </>
   );
@@ -521,15 +563,17 @@ function videoMatchesChips(v: VideoFeedItem, c: ScrollChipFilters): boolean {
  * filtered feeds).
  */
 /**
- * Deterministic PRNG (mulberry32) seeded on a 10-minute window.
+ * Deterministic PRNG (mulberry32).
  *
  * Audit 2026-07-02 : `Math.random()` here meant every SSR render
  * produced a different feed order, and each client `router.refresh()`
  * replaced the list under the viewer — the playing clip visibly
- * swapped mid-watch. Seeding on `floor(now / 10 min)` keeps the
- * variety across visits (a new order every 10 minutes, aligned with
- * the refresh cadence) while making renders within the window
- * byte-identical, so refreshes are invisible to the user.
+ * swapped mid-watch. Determinism per seed keeps refreshes invisible.
+ *
+ * Wave 37 : the seed is now PER-VISIT (fresh random on document loads,
+ * reused from the `kc_feed_seed` session cookie on RSC refreshes)
+ * instead of a global 10-minute window — every visit starts on a
+ * different first clip while in-session refreshes stay byte-identical.
  */
 function seededRandom(seed: number): () => number {
   let a = seed >>> 0;
@@ -542,9 +586,16 @@ function seededRandom(seed: number): () => number {
   };
 }
 
-function weightedShuffle(items: FeedItem[]): FeedItem[] {
+function weightedShuffle(items: FeedItem[], seed?: number): FeedItem[] {
   if (items.length <= 2) return items;
-  const rand = seededRandom(Math.floor(Date.now() / 600_000));
+  // No caller-provided seed → legacy 10-minute window (kept as the
+  // fallback so a missing cookie on an RSC refresh still aligns with
+  // the refresh cadence instead of reshuffling under the viewer).
+  const rand = seededRandom(
+    typeof seed === "number" && Number.isFinite(seed)
+      ? seed >>> 0
+      : Math.floor(Date.now() / 600_000),
+  );
   const maxScore = Math.max(1, ...items.map((i) => i.score));
   const jittered = items
     .map((item) => ({

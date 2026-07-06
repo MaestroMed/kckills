@@ -648,6 +648,54 @@ export const getPublishedKcKillCount = cache(
   },
 );
 
+/**
+ * Wave 37 — one cursor page over the FULL KC-positive catalogue.
+ *
+ * Same predicate as the /scroll feed (published + kill_visible +
+ * team_killer + real clip + thumbnail) but paged by offset instead of
+ * capped, so the client-side backfill can walk all ~850 clips instead
+ * of stopping at the SSR anti-crash cap. Consumed by
+ * /api/scroll/catalog, which the useCatalogBackfill hook pages through
+ * as the viewer nears the feed tail.
+ *
+ * The third `.order("id")` is load-bearing : highlight_score and
+ * created_at both carry ties (same game, same analyzer batch), and
+ * without a total order two adjacent pages can duplicate or skip rows
+ * at the boundary.
+ */
+export async function getPublishedKcKillsPage(
+  offset: number,
+  limit: number,
+): Promise<PublishedKillRow[]> {
+  try {
+    const supabase = createCachedAnonSupabase();
+    const { data, error } = await supabase
+      .from("kills")
+      .select(KILL_SELECT)
+      .or(
+        "publication_status.eq.published," +
+          "and(publication_status.is.null,status.eq.published)",
+      )
+      .eq("kill_visible", true)
+      .eq("tracked_team_involvement", "team_killer")
+      .not("clip_url_vertical", "is", null)
+      .not("thumbnail_url", "is", null)
+      .order("highlight_score", { ascending: false, nullsFirst: false })
+      .order("created_at", { ascending: false })
+      .order("id", { ascending: true })
+      .range(offset, offset + limit - 1);
+    if (error) {
+      console.warn("[supabase/kills] getPublishedKcKillsPage error:", error.message);
+      return [];
+    }
+    return (data ?? []).map((row) => normalize(row as unknown as RawKillSelect));
+  } catch (err) {
+    rethrowIfDynamic(err);
+    console.warn("[supabase/kills] getPublishedKcKillsPage threw:", err);
+    return [];
+  }
+}
+
 export const getPublishedKills = cache(async function getPublishedKills(
   limit = 50,
   opts: { buildTime?: boolean } = {},

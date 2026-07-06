@@ -49,6 +49,7 @@ import { useFeedBuffer } from "./hooks/useFeedBuffer";
 import { useKeyboardShortcuts } from "./hooks/useKeyboardShortcuts";
 import { useLiveMatch } from "./hooks/useLiveMatch";
 import { useRecommendationFeed } from "./hooks/useRecommendationFeed";
+import { useCatalogBackfill } from "./hooks/useCatalogBackfill";
 import { EndOfFeedCard } from "./EndOfFeedCard";
 import { PullToRefreshIndicator } from "./PullToRefreshIndicator";
 import { KeyboardHelpOverlay } from "./KeyboardHelpOverlay";
@@ -177,6 +178,20 @@ interface Props {
    *  ordered the items list according to this ; the prop is just
    *  for the FeedTabBar's active-pill state. */
   feedTab?: "pour-toi" | "recent" | "top-semaine";
+  /** Wave 37 — the per-visit shuffle seed the server rendered with.
+   *  Persisted into the `kc_feed_seed` session cookie so RSC refreshes
+   *  (router.refresh() every 10 min) re-render byte-identical while a
+   *  full document load mints a fresh order. */
+  feedSeed?: number;
+  /** Wave 37 — when true, the catalogue backfill walks
+   *  /api/scroll/catalog as the viewer nears the tail, so EVERY
+   *  published KC clip is reachable from the feed (not just the SSR
+   *  slice + recommendation neighbours). */
+  catalogEnabled?: boolean;
+  /** Wave 37 — total size of the KC-positive catalogue (count query,
+   *  server-side). Drives the rail/top-bar clip counter so it shows
+   *  the real catalogue size instead of the SSR slice length. */
+  catalogTotal?: number;
 }
 
 export function ScrollFeedV2({
@@ -186,6 +201,9 @@ export function ScrollFeedV2({
   chipFilters,
   rosterChips,
   feedTab = "pour-toi",
+  feedSeed,
+  catalogEnabled = false,
+  catalogTotal,
 }: Props) {
   const t = useT();
   const containerRef = useRef<HTMLDivElement>(null);
@@ -252,6 +270,18 @@ export function ScrollFeedV2({
   const [isRefreshing, setIsRefreshing] = useState(false);
   // Sync prop changes (e.g. URL filter changes triggering server re-render).
   useEffect(() => setItems(itemsProp), [itemsProp]);
+
+  // Wave 37 — persist the server's per-visit shuffle seed as a SESSION
+  // cookie (no Max-Age). RSC requests (router.refresh(), client nav)
+  // send it back and the server reuses it → refreshes re-render
+  // byte-identical, the playing clip never swaps mid-watch. Full
+  // document loads ignore the cookie server-side and mint a fresh seed
+  // → a reload or a new visit never starts on the same first clip.
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    if (typeof feedSeed !== "number" || !Number.isFinite(feedSeed)) return;
+    document.cookie = `kc_feed_seed=${Math.floor(feedSeed)}; path=/; SameSite=Lax`;
+  }, [feedSeed]);
 
   // ─── feed.view analytics — fired once on mount ────────────────────
   useEffect(() => {
@@ -868,6 +898,39 @@ export function ScrollFeedV2({
     });
   }, [recFeed.items, items.length]);
 
+  // ─── Catalogue backfill (Wave 37) ─────────────────────────────────
+  // Guarantees COVERAGE where the recommendation engine only offers
+  // affinity : as the viewer nears the tail, pages of the full
+  // KC-positive catalogue are appended (deduped against everything
+  // already in the feed) until /api/scroll/catalog reports exhaustion.
+  // Same fold pattern as the recommendation append above so gesture,
+  // pool and scroll-restore all see one items array.
+  const catalogFeed = useCatalogBackfill<FeedItem>({
+    enabled: catalogEnabled,
+    activeIndex,
+    itemCount: items.length,
+    toFeedItem: toFeedItemCb,
+  });
+  useEffect(() => {
+    if (catalogFeed.extra.length === 0) return;
+    setItems((prev) => {
+      const seen = new Set(prev.map((it) => it.id));
+      const additions = catalogFeed.extra.filter((it) => !seen.has(it.id));
+      return additions.length === 0 ? prev : [...prev, ...additions];
+    });
+    // items.length in the deps re-folds after the prop-sync effect
+    // resets `items` on an RSC refresh (same trick as the
+    // recommendation fold above) — without it the already-appended
+    // catalogue tail would vanish until the next page fetch.
+  }, [catalogFeed.extra, items.length]);
+
+  // Wave 37 — the clip counter shows the real catalogue size when the
+  // backfill can actually reach it ; the SSR slice length otherwise.
+  const displayClipCount =
+    catalogEnabled && typeof catalogTotal === "number" && catalogTotal > 0
+      ? Math.max(catalogTotal, videoCount)
+      : videoCount;
+
   // ─── Wide-stage context-panel data (Wave 36) ──────────────────────
   // The active VideoFeedItem drives the ScrollContextPanel (match header,
   // rate, full AI description, comments). Non-video active items (moments /
@@ -1147,7 +1210,7 @@ export function ScrollFeedV2({
       <>
         <ScrollDesktopShell
           activeKill={activeKill}
-          clipCount={videoCount}
+          clipCount={displayClipCount}
           onJumpTo={(i) => jumpTo(i)}
           related={relatedCandidates}
           cinema={cinema}
@@ -1237,7 +1300,7 @@ export function ScrollFeedV2({
           </span>
           <StreakBadge />
           <span className="font-data text-[9px] uppercase tracking-widest text-[var(--gold)]/50">
-            v2 · {videoCount} clips
+            v2 · {displayClipCount} clips
             {effectiveType ? ` · ${effectiveType}` : ""}
           </span>
         </div>
