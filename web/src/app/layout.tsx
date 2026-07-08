@@ -88,9 +88,16 @@ const imFellEnglish = IM_Fell_English({
 const UMAMI_SRC = process.env.NEXT_PUBLIC_UMAMI_SRC;
 const UMAMI_WEBSITE_ID = process.env.NEXT_PUBLIC_UMAMI_WEBSITE_ID;
 
+// Fallback aligned with robots.ts/sitemap.ts: if NEXT_PUBLIC_SITE_URL is
+// missing in prod we must NOT emit vercel.app or localhost canonicals —
+// Search Console would see split/duplicate indexation.
 const SITE_URL =
   process.env.NEXT_PUBLIC_SITE_URL ??
-  (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000");
+  (process.env.NODE_ENV === "production"
+    ? "https://kckills.com"
+    : process.env.VERCEL_URL
+      ? `https://${process.env.VERCEL_URL}`
+      : "http://localhost:3000");
 
 // Service-worker cache-bust token (Wave 36 #33). Changes on every deploy so
 // the SW re-installs and evicts the previous build's cached chunks. On
@@ -160,6 +167,12 @@ export const metadata: Metadata = {
       "max-image-preview": "large",
       "max-snippet": -1,
     },
+  },
+  // Google Search Console ownership proof. Set GOOGLE_SITE_VERIFICATION in
+  // Vercel env (value = content of the meta tag GSC hands out, NOT the full
+  // tag). Renders <meta name="google-site-verification"> only when defined.
+  verification: {
+    google: process.env.GOOGLE_SITE_VERIFICATION,
   },
   // Explicit icons block — Next.js will only auto-discover /favicon.ico,
   // but browsers also probe /icon.svg and the PNG sizes; declaring them

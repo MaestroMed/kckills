@@ -188,12 +188,15 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const data = loadRealData();
   const kills = buildLegacyKillIndex(data);
   const kill = kills.find((k) => k.id === id);
-  if (!kill) return { title: "Kill introuvable" };
+  // Unknown id \u2192 soft-404: keep it out of the index or GSC fills up with
+  // "Kill introuvable" duplicates crawled from dead share links.
+  if (!kill) return { title: "Kill introuvable", robots: { index: false, follow: false } };
 
   const title = `${kill.playerName} (${kill.champion}) vs ${kill.opponent} \u2014 KCKILLS`;
   return {
     title,
     description: `${kill.kills}/${kill.deaths}/${kill.assists} \u2014 ${kill.stage} \u2014 KC vs ${kill.opponent}`,
+    alternates: { canonical: `/kill/${kill.id}` },
     openGraph: { title, description: `Score: ${kill.score}` },
   };
 }

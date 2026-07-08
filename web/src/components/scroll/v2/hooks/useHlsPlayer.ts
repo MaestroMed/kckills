@@ -122,7 +122,9 @@ export interface UseHlsPlayerApi {
    *
    * Safari native path : `fallbackMp4` is ignored because Safari's
    * native HLS player surfaces the error event directly to the <video>
-   * element and the caller's standard `onerror` handler can react.
+   * element — FeedPlayerPool's `onError` handler detects the failing
+   * .m3u8 src and performs the MP4 swap itself (Wave 38). Don't remove
+   * that handler branch: without it a dead manifest kills the item.
    */
   attach: (
     video: HTMLVideoElement,

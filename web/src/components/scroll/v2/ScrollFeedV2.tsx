@@ -100,6 +100,10 @@ import { useFeedMediaSession } from "@/hooks/useFeedMediaSession";
 const RECOMMENDATIONS_ENABLED =
   process.env.NEXT_PUBLIC_RECOMMENDATIONS_ENABLED !== "false";
 
+/** Wave 38 — localStorage key remembering the wide-stage format choice
+ *  (cinema 16:9 vs bounded 9:16). Absent key = default ON (16:9). */
+const CINEMA_PREF_KEY = "kc:scroll:cinema";
+
 /**
  * Viewport-bounded virtualisation window. Items where
  * `|index - activeIndex| > VIRTUAL_WINDOW` don't render — they live in
@@ -259,7 +263,32 @@ export function ScrollFeedV2({
   // Wave 36 — cinema mode (F key) : the StageFrame expands 9:16 → 16:9 and
   // the pool swaps to the horizontal source. Only meaningful on the wide
   // stage (the mobile/legacy paths ignore it).
+  // Wave 38 — desktop DEFAULTS to cinema (pro matches are produced 16:9;
+  // the bounded 9:16 frame read as "mobile clips on my monitor"). The
+  // choice persists per device; F and the on-stage button both toggle it.
   const [cinema, setCinema] = useState(false);
+  useEffect(() => {
+    if (!isWideStage) return;
+    let pref: string | null = null;
+    try {
+      pref = window.localStorage.getItem(CINEMA_PREF_KEY);
+    } catch {
+      /* storage can be denied (private mode) — fall back to default-on */
+    }
+    setCinema(pref === null ? true : pref === "1");
+  }, [isWideStage]);
+  const toggleCinema = useCallback(() => {
+    if (!isWideStage) return;
+    setCinema((c) => {
+      const next = !c;
+      try {
+        window.localStorage.setItem(CINEMA_PREF_KEY, next ? "1" : "0");
+      } catch {
+        /* ignore */
+      }
+      return next;
+    });
+  }, [isWideStage]);
   const [reducedMotion, setReducedMotion] = useState(false);
   const [brokenIds, setBrokenIds] = useState<Set<string>>(() => new Set());
 
@@ -772,9 +801,7 @@ export function ScrollFeedV2({
       // store the FeedSidebarV2 onBookmark stub writes, then notify listeners.
       onBookmark: () => bookmarkActiveItem(),
       // F (cinema) → expand the StageFrame 9:16 → 16:9 (wide stage only).
-      onCinema: () => {
-        if (isWideStage) setCinema((c) => !c);
-      },
+      onCinema: toggleCinema,
       // 1–5 → rate the active kill.
       onRate: rateActiveItem,
       // ← / → (source switch) — dispatch the same events the source picker
@@ -877,26 +904,34 @@ export function ScrollFeedV2({
     (row: RecommendedKillRow) => recommendationToFeedItem(row),
     [],
   );
+  // `catalogEnabled` (SSR: default "pour-toi" tab, no chip/axis filter)
+  // gates the recommendations exactly like the catalogue backfill below:
+  // the engine fetches similarity neighbours with NO filter predicate, so
+  // letting it run on a filtered feed bleeds non-matching clips into the
+  // tail — the "filters don't work" bug. On sorted tabs (Récent/Top) it
+  // would likewise scramble the deterministic order.
   const recFeed = useRecommendationFeed<FeedItem>({
     seedItems: visibleItems,
     activeIndex,
-    enabled: RECOMMENDATIONS_ENABLED,
+    enabled: RECOMMENDATIONS_ENABLED && catalogEnabled,
     toFeedItem: toFeedItemCb,
   });
   // Whenever the recommendation hook produces a longer list than the
   // current `items`, append the new items into the source state so
   // every downstream consumer (gesture, pool, scroll-restore) sees
   // them. We diff by id to avoid a useless re-render when nothing new
-  // has landed.
+  // has landed. Gated like the fetch: after a filter change resets
+  // `items` to the SSR seed, the hook may still hold appends from the
+  // previous unfiltered feed — folding those back would undo the reset.
   useEffect(() => {
-    if (!RECOMMENDATIONS_ENABLED) return;
+    if (!RECOMMENDATIONS_ENABLED || !catalogEnabled) return;
     if (recFeed.items.length <= items.length) return;
     setItems((prev) => {
       const seen = new Set(prev.map((it) => it.id));
       const additions = recFeed.items.filter((it) => !seen.has(it.id));
       return additions.length === 0 ? prev : [...prev, ...additions];
     });
-  }, [recFeed.items, items.length]);
+  }, [recFeed.items, items.length, catalogEnabled]);
 
   // ─── Catalogue backfill (Wave 37) ─────────────────────────────────
   // Guarantees COVERAGE where the recommendation engine only offers
@@ -1214,6 +1249,7 @@ export function ScrollFeedV2({
           onJumpTo={(i) => jumpTo(i)}
           related={relatedCandidates}
           cinema={cinema}
+          onToggleCinema={toggleCinema}
         >
           {feedStage}
         </ScrollDesktopShell>

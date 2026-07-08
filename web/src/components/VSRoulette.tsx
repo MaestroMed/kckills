@@ -37,6 +37,7 @@ import { m, AnimatePresence, useReducedMotion } from "motion/react";
 import { createClient } from "@/lib/supabase/client";
 import { Description } from "@/components/i18n/Description";
 import { useT } from "@/lib/i18n/use-lang";
+import { PLAYER_PHOTOS } from "@/lib/kc-assets";
 import {
   cleanFiltersSide,
   formatEloDelta,
@@ -98,8 +99,10 @@ export function VSRoulette({
   const [leftFilters, setLeftFilters] = useState<VSFiltersSide>({});
   const [rightFilters, setRightFilters] = useState<VSFiltersSide>({});
 
-  // ─── Mobile filter accordion ────────────────────────────────────
-  const [filtersOpen, setFiltersOpen] = useState(true);
+  // ─── Advanced-filters accordion (Wave 38: collapsed by default —
+  // the character-select grid IS the primary picker now; champion/era/
+  // multikill remain available for power users behind this disclosure) ──
+  const [filtersOpen, setFiltersOpen] = useState(false);
 
   // ─── Roulette state ─────────────────────────────────────────────
   const [state, setState] = useState<SpinState>({ kind: "idle" });
@@ -335,32 +338,52 @@ export function VSRoulette({
   // ────────────────────────────────────────────────────────────────
   return (
     <div className="relative mx-auto max-w-6xl px-3 md:px-6 pt-6 md:pt-10 pb-16">
-      {/* ─── Filters ─────────────────────────────────────────────── */}
-      <FiltersAccordion
-        open={filtersOpen}
-        onToggle={() => setFiltersOpen((o) => !o)}
-      >
-        <div className="grid gap-5 md:grid-cols-2 md:gap-8">
-          <FilterColumn
-            sideLabel={t("p_vsgame.side_left")}
-            accent="var(--cyan)"
-            value={leftFilters}
-            onChange={setLeftFilters}
-            players={players}
-            champions={champions}
-            eras={eras}
-          />
-          <FilterColumn
-            sideLabel={t("p_vsgame.side_right")}
-            accent="var(--gold)"
-            value={rightFilters}
-            onChange={setRightFilters}
-            players={players}
-            champions={champions}
-            eras={eras}
-          />
-        </div>
-      </FiltersAccordion>
+      {/* ─── Character select (Wave 38) ──────────────────────────────
+          The fighting-game picker IS the interface now : tap a portrait
+          on each side (or leave "?" for random) and SPIN. It only writes
+          player_slug on the side's filters — same RPC contract, and the
+          advanced FilterColumn below stays perfectly in sync. */}
+      <CharacterSelectGrid
+        players={players}
+        leftIgn={leftFilters.player_slug ?? null}
+        rightIgn={rightFilters.player_slug ?? null}
+        onPickLeft={(ign) =>
+          setLeftFilters((f) => ({ ...f, player_slug: ign ?? undefined }))
+        }
+        onPickRight={(ign) =>
+          setRightFilters((f) => ({ ...f, player_slug: ign ?? undefined }))
+        }
+        disabled={state.kind === "spinning" || state.kind === "voting"}
+      />
+
+      {/* ─── Advanced filters (collapsed by default) ─────────────── */}
+      <div className="mt-4">
+        <FiltersAccordion
+          open={filtersOpen}
+          onToggle={() => setFiltersOpen((o) => !o)}
+        >
+          <div className="grid gap-5 md:grid-cols-2 md:gap-8">
+            <FilterColumn
+              sideLabel={t("p_vsgame.cs_side_red")}
+              accent={SIDE_RED_HEX}
+              value={leftFilters}
+              onChange={setLeftFilters}
+              players={players}
+              champions={champions}
+              eras={eras}
+            />
+            <FilterColumn
+              sideLabel={t("p_vsgame.cs_side_blue")}
+              accent={SIDE_BLUE_HEX}
+              value={rightFilters}
+              onChange={setRightFilters}
+              players={players}
+              champions={champions}
+              eras={eras}
+            />
+          </div>
+        </FiltersAccordion>
+      </div>
 
       {/* ─── SPIN button ─────────────────────────────────────────── */}
       <div className="mt-7 md:mt-9 flex items-center justify-center gap-3">
@@ -385,6 +408,234 @@ export function VSRoulette({
         />
       </div>
     </div>
+  );
+}
+
+// ════════════════════════════════════════════════════════════════════
+// Character-select grid (Wave 38) — fighting-game "champ select".
+// Red side left, blue side right, a "?" random tile leading each grid.
+// Hex literals (not var()) because the side accent is composed with
+// alpha suffixes (`${accent}55`) which CSS var() can't interpolate.
+// ════════════════════════════════════════════════════════════════════
+
+const SIDE_RED_HEX = "#E84057";
+const SIDE_BLUE_HEX = "#0057FF";
+
+function CharacterSelectGrid({
+  players,
+  leftIgn,
+  rightIgn,
+  onPickLeft,
+  onPickRight,
+  disabled = false,
+}: {
+  players: VSPlayerOption[];
+  leftIgn: string | null;
+  rightIgn: string | null;
+  onPickLeft: (ign: string | null) => void;
+  onPickRight: (ign: string | null) => void;
+  disabled?: boolean;
+}) {
+  const t = useT();
+  return (
+    <section aria-label={t("p_vsgame.cs_grid_aria")} className="relative">
+      <div className="grid grid-cols-2 gap-3 md:gap-16">
+        <SideGrid
+          label={t("p_vsgame.cs_side_red")}
+          accent={SIDE_RED_HEX}
+          players={players}
+          selected={leftIgn}
+          onPick={onPickLeft}
+          disabled={disabled}
+        />
+        <SideGrid
+          label={t("p_vsgame.cs_side_blue")}
+          accent={SIDE_BLUE_HEX}
+          players={players}
+          selected={rightIgn}
+          onPick={onPickRight}
+          disabled={disabled}
+        />
+      </div>
+
+      {/* Central VS diamond — decorative, floats between the two grids.
+          Hidden below md where the 12px gutter can't host it. */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute left-1/2 top-1/2 z-10 hidden -translate-x-1/2 -translate-y-1/2 md:flex items-center justify-center"
+      >
+        <div
+          className="flex h-14 w-14 rotate-45 items-center justify-center rounded-[10px] border-2 border-[var(--gold)]"
+          style={{
+            background:
+              "linear-gradient(135deg, rgba(232,64,87,0.28), var(--bg-primary) 45%, var(--bg-primary) 55%, rgba(0,87,255,0.30))",
+            boxShadow:
+              "0 0 22px rgba(232,64,87,0.35), 0 0 22px rgba(0,87,255,0.35), inset 0 0 12px rgba(200,170,110,0.25)",
+          }}
+        >
+          <span className="-rotate-45 font-display text-lg font-black tracking-wider text-[var(--gold-bright)] drop-shadow-[0_0_6px_rgba(200,170,110,0.8)]">
+            VS
+          </span>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function SideGrid({
+  label,
+  accent,
+  players,
+  selected,
+  onPick,
+  disabled,
+}: {
+  label: string;
+  accent: string;
+  players: VSPlayerOption[];
+  selected: string | null;
+  onPick: (ign: string | null) => void;
+  disabled: boolean;
+}) {
+  const t = useT();
+  return (
+    <div
+      className="rounded-2xl border p-2.5 md:p-4"
+      style={{
+        borderColor: `${accent}45`,
+        background: `linear-gradient(180deg, ${accent}10, rgba(10,20,40,0.55))`,
+        boxShadow: `inset 0 0 30px ${accent}0d, 0 14px 34px rgba(0,0,0,0.4)`,
+      }}
+    >
+      {/* Side header : label left, current pick right. */}
+      <div className="mb-2 flex items-baseline justify-between gap-2 px-0.5 md:mb-3">
+        <span
+          className="font-data text-[9px] md:text-[11px] uppercase tracking-[0.22em] md:tracking-[0.3em]"
+          style={{ color: accent === SIDE_BLUE_HEX ? "#5B8DFF" : accent }}
+        >
+          {label}
+        </span>
+        <span className="truncate font-display text-[11px] md:text-sm font-bold text-[var(--gold-bright)]">
+          {selected ?? t("p_vsgame.cs_random")}
+        </span>
+      </div>
+
+      <div
+        role="group"
+        aria-label={label}
+        className="grid grid-cols-3 gap-1.5 md:grid-cols-4 md:gap-2"
+      >
+        <PortraitTile
+          ign={null}
+          role={null}
+          accent={accent}
+          selected={selected === null}
+          disabled={disabled}
+          ariaLabel={t("p_vsgame.cs_random_aria", { side: label })}
+          onClick={() => onPick(null)}
+        />
+        {players.map((p) => (
+          <PortraitTile
+            key={p.ign}
+            ign={p.ign}
+            role={p.role}
+            accent={accent}
+            selected={selected === p.ign}
+            disabled={disabled}
+            ariaLabel={t("p_vsgame.cs_pick_aria", { name: p.ign, side: label })}
+            onClick={() => onPick(selected === p.ign ? null : p.ign)}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function PortraitTile({
+  ign,
+  role,
+  accent,
+  selected,
+  disabled,
+  ariaLabel,
+  onClick,
+}: {
+  /** null = the "?" random tile. */
+  ign: string | null;
+  role: string | null;
+  accent: string;
+  selected: boolean;
+  disabled: boolean;
+  ariaLabel: string;
+  onClick: () => void;
+}) {
+  const photo = ign ? (PLAYER_PHOTOS[ign] ?? null) : null;
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      aria-pressed={selected}
+      aria-label={ariaLabel}
+      className="group relative aspect-square overflow-hidden rounded-lg border bg-[var(--bg-elevated)] transition-[transform,box-shadow,border-color] duration-150 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--gold)] focus-visible:outline-offset-2 disabled:opacity-60"
+      style={{
+        borderColor: selected ? accent : "rgba(100,140,200,0.18)",
+        boxShadow: selected
+          ? `0 0 0 2px ${accent}, 0 0 20px ${accent}80`
+          : "none",
+        transform: selected ? "scale(1.05)" : undefined,
+        zIndex: selected ? 1 : undefined,
+      }}
+    >
+      {ign === null ? (
+        // "?" random tile — arcade-style unknown fighter.
+        <span className="flex h-full w-full flex-col items-center justify-center gap-0.5">
+          <span
+            className="font-display text-2xl md:text-3xl font-black"
+            style={{ color: accent, textShadow: `0 0 12px ${accent}90` }}
+          >
+            ?
+          </span>
+        </span>
+      ) : photo ? (
+        <Image
+          src={photo}
+          alt=""
+          fill
+          sizes="(min-width: 768px) 130px, 60px"
+          className={`object-cover object-top transition-[filter,transform] duration-150 ${
+            selected ? "" : "grayscale-[35%] group-hover:grayscale-0 group-hover:scale-[1.03]"
+          }`}
+        />
+      ) : (
+        // No photo asset → initials on a hextech gradient (same fallback
+        // language as FaceOff / players page).
+        <span className="flex h-full w-full items-center justify-center bg-gradient-to-br from-[var(--bg-elevated)] to-[var(--bg-primary)] font-display text-base md:text-xl font-black text-[var(--gold)]/85">
+          {ign.slice(0, 2).toUpperCase()}
+        </span>
+      )}
+
+      {/* Name plate (players only). */}
+      {ign !== null && (
+        <span className="pointer-events-none absolute inset-x-0 bottom-0 truncate bg-gradient-to-t from-black/90 via-black/55 to-transparent px-1 pb-0.5 pt-3 text-center font-data text-[8px] md:text-[10px] uppercase tracking-wide text-white">
+          {ign}
+          {role ? (
+            <span className="hidden md:inline text-white/50"> · {roleAbbr(role)}</span>
+          ) : null}
+        </span>
+      )}
+
+      {/* Selected wash in the side colour. */}
+      {selected && (
+        <span
+          aria-hidden
+          className="pointer-events-none absolute inset-0"
+          style={{
+            background: `linear-gradient(to top, ${accent}3d, transparent 62%)`,
+          }}
+        />
+      )}
+    </button>
   );
 }
 
@@ -414,7 +665,7 @@ function FiltersAccordion({
       <button
         type="button"
         onClick={onToggle}
-        className="w-full md:cursor-default flex items-center justify-between gap-3 px-5 py-4 md:py-5"
+        className="w-full flex items-center justify-between gap-3 px-5 py-4 md:py-5"
         aria-expanded={open}
         aria-controls="vs-filters-body"
       >
@@ -435,13 +686,13 @@ function FiltersAccordion({
             {t("p_vsgame.filters")}
           </span>
         </div>
-        <span className="text-[11px] uppercase tracking-widest text-white/40 md:hidden">
+        <span className="text-[11px] uppercase tracking-widest text-white/40">
           {open ? t("p_vsgame.collapse") : t("p_vsgame.expand")}
         </span>
       </button>
       <div
         id="vs-filters-body"
-        className={`${open ? "block" : "hidden"} md:block px-5 pb-5 md:pt-1`}
+        className={`${open ? "block" : "hidden"} px-5 pb-5 md:pt-1`}
       >
         {children}
       </div>

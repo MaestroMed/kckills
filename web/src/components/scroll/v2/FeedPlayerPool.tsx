@@ -704,6 +704,40 @@ export function FeedPlayerPool({
             // We translate to a stable string for analytics legibility.
             const mediaErr = (v as HTMLVideoElement).error;
             const code = mediaErr ? mediaErrorCodeName(mediaErr.code) : "unknown";
+            // Native-HLS → MP4 fallback. On Safari/iOS the manifest is fed
+            // straight to video.src (no hls.js), so a dead .m3u8 — the norm
+            // during the R2 HLS repackage catch-up — surfaces HERE, not in
+            // useHlsPlayer's fatal-error handler. Without this branch every
+            // such clip was declared broken and dropped, which is why the
+            // feed died in cascade on iOS. Swap to the MP4 and keep the
+            // item; if the MP4 then errors too, currentSrc is no longer a
+            // manifest and we fall through to the broken path below.
+            const failingSrc = v.currentSrc || v.src;
+            const mp4 = pickSrc(item, isDesktop, useLowQuality, isWideStage, cinema);
+            if (/\.m3u8(?:$|\?)/.test(failingSrc) && mp4) {
+              detachHls(v);
+              v.src = mp4;
+              slotDeliveryRef.current[slotIdx] = "mp4";
+              try {
+                track("clip.hls.error", {
+                  entityType: "clip",
+                  entityId: failingSrc,
+                  metadata: {
+                    fatal: true,
+                    type: "native",
+                    details: code,
+                    statusCode: null,
+                    hadFallback: true,
+                  },
+                });
+              } catch {
+                /* analytics is silent on failure by design */
+              }
+              if (priorities[slotIdx] === "live") {
+                void v.play().catch(() => {});
+              }
+              return;
+            }
             // Notify the parent (drops the item from the feed in v1+ flow).
             onError(item.id, v.currentSrc || v.src);
             // Wave 6 — broadcast a custom event so FeedItem can swap to

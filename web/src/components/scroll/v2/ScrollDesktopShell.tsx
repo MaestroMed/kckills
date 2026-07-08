@@ -61,6 +61,8 @@ interface ScrollDesktopShellProps {
   related?: RelatedFeedCandidate[];
   /** Cinema mode — threaded straight to StageFrame (9:16 → 16:9). */
   cinema?: boolean;
+  /** Wave 38 — on-stage format toggle (the discoverable twin of the F key). */
+  onToggleCinema?: () => void;
 }
 
 export function ScrollDesktopShell({
@@ -70,6 +72,7 @@ export function ScrollDesktopShell({
   onJumpTo,
   related = [],
   cinema = false,
+  onToggleCinema,
 }: ScrollDesktopShellProps) {
   const t = useT();
   const reduce = useReducedMotion();
@@ -148,6 +151,27 @@ export function ScrollDesktopShell({
           inside StageFrame, so its width:100% resolves to the FRAME. */}
       <div style={{ gridArea: "stage", minWidth: 0, position: "relative" }}>
         <StageFrame cinema={cinema}>{children}</StageFrame>
+        {/* Wave 38 — visible 16:9 ⇄ 9:16 toggle. The F shortcut existed
+            since Wave 36 but nothing on screen advertised it, so users
+            thought the site had no horizontal clips at all. */}
+        {onToggleCinema && (
+          <button
+            type="button"
+            onClick={onToggleCinema}
+            aria-label={cinema ? t("p_scroll.sh_cinema_to_916") : t("p_scroll.sh_cinema_to_169")}
+            title={`${cinema ? t("p_scroll.sh_cinema_to_916") : t("p_scroll.sh_cinema_to_169")} (F)`}
+            aria-keyshortcuts="F"
+            className="absolute left-4 top-4 z-[65] flex h-10 items-center gap-2 rounded-full border border-[var(--gold)]/40 bg-[var(--bg-surface)]/75 px-3.5 font-data text-[11px] uppercase tracking-[0.18em] text-[var(--gold)] backdrop-blur-md shadow-[0_6px_20px_rgba(0,0,0,0.45)] transition-colors hover:border-[var(--gold)] hover:bg-[var(--bg-elevated)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--gold)] focus-visible:outline-offset-2"
+          >
+            {/* Pictogram mirrors the TARGET format (what a click gives you). */}
+            <span
+              aria-hidden
+              className="block rounded-[2px] border-[1.5px] border-current"
+              style={cinema ? { width: 8, height: 13 } : { width: 15, height: 9 }}
+            />
+            {cinema ? "9:16" : "16:9"}
+          </button>
+        )}
       </div>
 
       {/* ── CTX ── permanent right column (wide band only). */}

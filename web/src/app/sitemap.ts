@@ -184,7 +184,9 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     },
   ];
 
-  const eraPages: MetadataRoute.Sitemap = ERAS.map((era) => ({
+  // "darkness" is disallowed in robots.ts (easter-egg era) — listing it in
+  // the sitemap would trigger GSC "indexed though blocked" warnings.
+  const eraPages: MetadataRoute.Sitemap = ERAS.filter((era) => era.id !== "darkness").map((era) => ({
     url: `${SITE_URL}/era/${era.id}`,
     lastModified: now,
     changeFrequency: "weekly",
