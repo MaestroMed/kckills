@@ -354,6 +354,8 @@ export function VSRoulette({
           setRightFilters((f) => ({ ...f, player_slug: ign ?? undefined }))
         }
         disabled={state.kind === "spinning" || state.kind === "voting"}
+        onSpin={() => void spin()}
+        spinning={state.kind === "spinning"}
       />
 
       {/* ─── Advanced filters (collapsed by default) ─────────────── */}
@@ -385,8 +387,11 @@ export function VSRoulette({
         </FiltersAccordion>
       </div>
 
-      {/* ─── SPIN button ─────────────────────────────────────────── */}
-      <div className="mt-7 md:mt-9 flex items-center justify-center gap-3">
+      {/* ─── SPIN button ── mobile only (Wave 38) : on md+ the champ-select
+          hosts the big central SPIN diamond between the two sides, so a
+          second full-width button would be redundant. Result screens keep
+          their own re-spin affordance and Space/Enter always works. */}
+      <div className="mt-7 flex items-center justify-center gap-3 md:hidden">
         <SpinButton
           onClick={() => void spin()}
           disabled={state.kind === "spinning" || state.kind === "voting"}
@@ -428,6 +433,8 @@ function CharacterSelectGrid({
   onPickLeft,
   onPickRight,
   disabled = false,
+  onSpin,
+  spinning = false,
 }: {
   players: VSPlayerOption[];
   leftIgn: string | null;
@@ -435,6 +442,9 @@ function CharacterSelectGrid({
   onPickLeft: (ign: string | null) => void;
   onPickRight: (ign: string | null) => void;
   disabled?: boolean;
+  /** Wave 38.1 — the central diamond IS the spin button on md+. */
+  onSpin: () => void;
+  spinning?: boolean;
 }) {
   const t = useT();
   return (
@@ -458,26 +468,76 @@ function CharacterSelectGrid({
         />
       </div>
 
-      {/* Central VS diamond — decorative, floats between the two grids.
-          Hidden below md where the 12px gutter can't host it. */}
-      <div
-        aria-hidden
-        className="pointer-events-none absolute left-1/2 top-1/2 z-10 hidden -translate-x-1/2 -translate-y-1/2 md:flex items-center justify-center"
-      >
-        <div
-          className="flex h-14 w-14 rotate-45 items-center justify-center rounded-[10px] border-2 border-[var(--gold)]"
+      {/* Central SPIN diamond (Wave 38.1) — a real button now, floating
+          between the two sides like the START slot of an arcade
+          character-select. Hidden below md where the 12px gutter can't
+          host it (mobile keeps the full-width SpinButton below). */}
+      <div className="absolute left-1/2 top-1/2 z-10 hidden -translate-x-1/2 -translate-y-1/2 md:block">
+        <button
+          type="button"
+          onClick={onSpin}
+          disabled={disabled}
+          aria-label={t("p_vsgame.spin_aria")}
+          aria-keyshortcuts="Space Enter"
+          className="group relative flex h-[5.5rem] w-[5.5rem] rotate-45 items-center justify-center rounded-[14px] border-2 border-[var(--gold)] transition-transform duration-200 motion-safe:hover:scale-[1.08] motion-safe:active:scale-95 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--gold)] focus-visible:outline-offset-4 disabled:cursor-wait"
           style={{
             background:
-              "linear-gradient(135deg, rgba(232,64,87,0.28), var(--bg-primary) 45%, var(--bg-primary) 55%, rgba(0,87,255,0.30))",
+              "linear-gradient(135deg, rgba(232,64,87,0.30), var(--bg-primary) 45%, var(--bg-primary) 55%, rgba(0,87,255,0.32))",
             boxShadow:
-              "0 0 22px rgba(232,64,87,0.35), 0 0 22px rgba(0,87,255,0.35), inset 0 0 12px rgba(200,170,110,0.25)",
+              "0 0 30px rgba(232,64,87,0.4), 0 0 30px rgba(0,87,255,0.4), inset 0 0 16px rgba(200,170,110,0.3)",
+            animation: spinning
+              ? "vs-diamond-whirl 1.1s linear infinite"
+              : undefined,
           }}
         >
-          <span className="-rotate-45 font-display text-lg font-black tracking-wider text-[var(--gold-bright)] drop-shadow-[0_0_6px_rgba(200,170,110,0.8)]">
-            VS
+          {/* Breathing gold aura — invitation to press. */}
+          <span
+            aria-hidden
+            className="pointer-events-none absolute -inset-2.5 rounded-[18px] motion-safe:animate-[vs-aura-pulse_2.2s_ease-in-out_infinite]"
+            style={{ boxShadow: "0 0 42px rgba(200,170,110,0.4)" }}
+          />
+          <span className="-rotate-45 select-none text-center leading-none">
+            <span className="block font-display text-[15px] font-black tracking-[0.14em] text-[var(--gold-bright)] drop-shadow-[0_0_8px_rgba(200,170,110,0.9)]">
+              {t("p_vsgame.spin")}
+            </span>
+            <span className="mt-1 block font-data text-[8px] uppercase tracking-[0.34em] text-[var(--gold)]/70">
+              VS
+            </span>
           </span>
-        </div>
+        </button>
       </div>
+
+      {/* Shared champ-select keyframes (pick pulse, aura, whirl). Global
+          because PortraitTile/SideGrid render in the same tree and styled-
+          jsx scoping would multiply identical @keyframes per tile. */}
+      <style jsx global>{`
+        @keyframes vs-diamond-whirl {
+          0% {
+            transform: rotate(45deg);
+          }
+          100% {
+            transform: rotate(405deg);
+          }
+        }
+        @keyframes vs-aura-pulse {
+          0%,
+          100% {
+            opacity: 0.35;
+          }
+          50% {
+            opacity: 0.85;
+          }
+        }
+        @keyframes vs-pick-breathe {
+          0%,
+          100% {
+            opacity: 0.55;
+          }
+          50% {
+            opacity: 1;
+          }
+        }
+      `}</style>
     </section>
   );
 }
@@ -500,20 +560,40 @@ function SideGrid({
   const t = useT();
   return (
     <div
-      className="rounded-2xl border p-2.5 md:p-4"
+      className="relative overflow-hidden rounded-2xl border p-2.5 md:p-4"
       style={{
         borderColor: `${accent}45`,
-        background: `linear-gradient(180deg, ${accent}10, rgba(10,20,40,0.55))`,
+        // Faint 135° hextech hatching over the side-colour wash — reads
+        // as "team panel" texture without competing with the portraits.
+        background: `repeating-linear-gradient(135deg, ${accent}08 0 2px, transparent 2px 16px), linear-gradient(180deg, ${accent}12, rgba(10,20,40,0.55))`,
         boxShadow: `inset 0 0 30px ${accent}0d, 0 14px 34px rgba(0,0,0,0.4)`,
       }}
     >
-      {/* Side header : label left, current pick right. */}
+      {/* Top accent hairline — mirrors the gold page-top ornament. */}
+      <span
+        aria-hidden
+        className="pointer-events-none absolute inset-x-0 top-0 h-px"
+        style={{
+          background: `linear-gradient(90deg, transparent, ${accent}90, transparent)`,
+        }}
+      />
+      {/* Side header : diamond + label left, current pick right. */}
       <div className="mb-2 flex items-baseline justify-between gap-2 px-0.5 md:mb-3">
-        <span
-          className="font-data text-[9px] md:text-[11px] uppercase tracking-[0.22em] md:tracking-[0.3em]"
-          style={{ color: accent === SIDE_BLUE_HEX ? "#5B8DFF" : accent }}
-        >
-          {label}
+        <span className="flex items-center gap-1.5">
+          <span
+            aria-hidden
+            className="inline-block h-[7px] w-[7px] rotate-45"
+            style={{
+              background: accent,
+              boxShadow: `0 0 8px ${accent}90`,
+            }}
+          />
+          <span
+            className="font-data text-[9px] md:text-[11px] uppercase tracking-[0.22em] md:tracking-[0.3em]"
+            style={{ color: accent === SIDE_BLUE_HEX ? "#5B8DFF" : accent }}
+          >
+            {label}
+          </span>
         </span>
         <span className="truncate font-display text-[11px] md:text-sm font-bold text-[var(--gold-bright)]">
           {selected ?? t("p_vsgame.cs_random")}
@@ -625,15 +705,42 @@ function PortraitTile({
         </span>
       )}
 
-      {/* Selected wash in the side colour. */}
+      {/* Diagonal shine that sweeps across on hover — arcade cabinet
+          glass feel. Pure transform, GPU-cheap, motion-safe gated. */}
+      <span
+        aria-hidden
+        className="pointer-events-none absolute -inset-y-2 -left-1/2 w-1/2 -translate-x-[220%] rotate-12 opacity-0 transition-[transform,opacity] duration-500 motion-safe:group-hover:translate-x-[340%] motion-safe:group-hover:opacity-100"
+        style={{
+          background:
+            "linear-gradient(105deg, transparent 0%, rgba(240,230,210,0.22) 50%, transparent 100%)",
+        }}
+      />
+
+      {/* Selected wash + breathing ring in the side colour. */}
       {selected && (
-        <span
-          aria-hidden
-          className="pointer-events-none absolute inset-0"
-          style={{
-            background: `linear-gradient(to top, ${accent}3d, transparent 62%)`,
-          }}
-        />
+        <>
+          <span
+            aria-hidden
+            className="pointer-events-none absolute inset-0"
+            style={{
+              background: `linear-gradient(to top, ${accent}3d, transparent 62%)`,
+            }}
+          />
+          <span
+            aria-hidden
+            className="pointer-events-none absolute inset-0 rounded-lg motion-safe:animate-[vs-pick-breathe_1.8s_ease-in-out_infinite]"
+            style={{ boxShadow: `inset 0 0 0 2px ${accent}, inset 0 0 18px ${accent}50` }}
+          />
+          {/* Pick marker — small gold diamond, top-right. */}
+          <span
+            aria-hidden
+            className="pointer-events-none absolute right-1 top-1 h-[7px] w-[7px] rotate-45"
+            style={{
+              background: "linear-gradient(135deg, var(--gold-bright), var(--gold-dark))",
+              boxShadow: "0 0 8px rgba(200,170,110,0.9)",
+            }}
+          />
+        </>
       )}
     </button>
   );

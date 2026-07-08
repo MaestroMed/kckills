@@ -31,6 +31,7 @@ import { Suspense } from "react";
 
 import { ERAS } from "@/lib/eras";
 import { getTrackedRoster } from "@/lib/supabase/players";
+import { getCanonicalPlayerName, rosterRecencyIndex } from "@/lib/kc-assets";
 import { getPublishedKills } from "@/lib/supabase/kills";
 import {
   buildEraOptions,
@@ -79,15 +80,32 @@ export const metadata: Metadata = {
  */
 async function buildPlayerOptions(): Promise<VSPlayerOption[]> {
   const roster = await getTrackedRoster();
-  // Slug = ign verbatim (case-insensitive match on the SQL side).
-  return roster
-    .filter((r) => r.ign && r.ign !== "?")
-    .map((r) => ({
-      ign: r.ign,
-      role: r.role,
-      slug: r.ign,
-    }))
-    .sort((a, b) => a.ign.localeCompare(b.ign));
+  // Wave 38 — the players table carries case-duplicates ("kyeahoo" from an
+  // early backfill vs "Kyeahoo" from the roster sync) which rendered as two
+  // tiles in the character-select. The RPC matches player_slug case-
+  // insensitively, so keep ONE option per human : dedupe on lowercased ign
+  // and display the canonical capitalisation.
+  const byKey = new Map<string, VSPlayerOption>();
+  for (const r of roster) {
+    if (!r.ign || r.ign === "?") continue;
+    const key = r.ign.toLowerCase();
+    const prev = byKey.get(key);
+    if (!prev) {
+      const canonical = getCanonicalPlayerName(r.ign);
+      byKey.set(key, { ign: canonical, role: r.role, slug: canonical });
+    } else if (!prev.role && r.role) {
+      // A duplicate row sometimes carries the role the first one lacked.
+      byKey.set(key, { ...prev, role: r.role });
+    }
+  }
+  // Roster order, newest era first (Mehdi: "par ordre de roster du plus
+  // récent au plus vieux") — unknown names alphabetise at the end.
+  return [...byKey.values()].sort((a, b) => {
+    const ra = rosterRecencyIndex(a.ign);
+    const rb = rosterRecencyIndex(b.ign);
+    if (ra !== rb) return ra - rb;
+    return a.ign.localeCompare(b.ign);
+  });
 }
 
 /**

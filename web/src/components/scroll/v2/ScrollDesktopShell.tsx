@@ -24,7 +24,10 @@
  *     hover-expand is a fixed overlay handled inside ScrollRail).
  *   - the ctx column becomes a CLOSED-BY-DEFAULT right DRAWER (focus-trap,
  *     Esc, role=dialog) toggled by a floating button + the `C` key.
- * From 1280 up, both columns are permanent tracks.
+ * From 1280 up the rail is permanent ; the ctx column is a COLLAPSIBLE
+ * track (Wave 38) — closed by default, persisted per device
+ * (kc-scroll-ctx-open), toggled by the floating button + the `C` key.
+ * The stage absorbs the freed width, so cinema 16:9 breathes.
  *
  * The `C`-key + comment toggle is bridged via the `kc:toggle-context`
  * window event (dispatched by ScrollFeedV2's keymap onComment) so the
@@ -101,18 +104,44 @@ export function ScrollDesktopShell({
   // ─── Drawer state (only meaningful in the narrow band) ──────────────
   const [drawerOpen, setDrawerOpen] = useState(false);
 
+  // ─── Wave 38 — collapsible ctx column (wide band ≥1280) ─────────────
+  // "Le panneau de droite doit pouvoir être rabattu et même fermé de
+  // base, pour laisser la place au clip." CLOSED by default ; the choice
+  // persists per device. The stage's minmax(0,1fr) track absorbs the
+  // freed 372px, which is exactly what cinema 16:9 wants.
+  const [ctxOpen, setCtxOpen] = useState(false);
+  useEffect(() => {
+    try {
+      if (window.localStorage.getItem("kc-scroll-ctx-open") === "1") {
+        setCtxOpen(true);
+      }
+    } catch {
+      /* private mode / storage blocked — stay closed */
+    }
+  }, []);
+  const toggleCtx = useCallback(() => {
+    setCtxOpen((v) => {
+      try {
+        window.localStorage.setItem("kc-scroll-ctx-open", v ? "0" : "1");
+      } catch {
+        /* private mode — non-persistent toggle still works */
+      }
+      return !v;
+    });
+  }, []);
+
   // The `C` key (ScrollFeedV2 keymap onComment) dispatches kc:toggle-context.
-  // In the narrow band that toggles the drawer ; in the wide band the panel
-  // is always visible so we no-op (the keystroke still reaches CommentSheetV2
-  // inside the panel for the in-place comment focus, which it owns).
+  // Narrow band → toggles the drawer ; wide band → toggles the ctx column
+  // (Wave 38 — it used to be a no-op there because the column was permanent).
   useEffect(() => {
     if (typeof window === "undefined") return;
     const onToggle = () => {
       if (mqNarrow()) setDrawerOpen((v) => !v);
+      else toggleCtx();
     };
     window.addEventListener("kc:toggle-context", onToggle);
     return () => window.removeEventListener("kc:toggle-context", onToggle);
-  }, []);
+  }, [toggleCtx]);
 
   // Close the drawer when we leave the narrow band (e.g. user widens the
   // window) so it doesn't linger as a stuck overlay over the permanent col.
@@ -131,13 +160,19 @@ export function ScrollDesktopShell({
         // the ctx track is dropped (it becomes the drawer). The 72px here
         // MUST match ScrollRail's internal collapsed width so the track and
         // the rail agree. Wide band (≥1280): full --rail + --ctx tracks.
+        // Wide band keeps a 3-track grid at all times and animates the ctx
+        // track 372px ⇄ 0px — transitioning BETWEEN 2 and 3 tracks can't
+        // animate, a same-shape width change can.
         gridTemplateColumns: isNarrowDesktop
           ? "72px minmax(0,1fr)"
-          : "var(--rail) minmax(0,1fr) var(--ctx)",
+          : `var(--rail) minmax(0,1fr) ${ctxOpen ? "var(--ctx)" : "0px"}`,
         gridTemplateAreas: isNarrowDesktop
           ? '"nav stage"'
           : '"nav stage ctx"',
         blockSize: "100dvh",
+        transition: reduce
+          ? undefined
+          : "grid-template-columns 0.35s cubic-bezier(0.16, 1, 0.3, 1)",
       }}
     >
       {/* ── NAV ── persistent left rail. Collapses to 72px icons in the
@@ -174,9 +209,15 @@ export function ScrollDesktopShell({
         )}
       </div>
 
-      {/* ── CTX ── permanent right column (wide band only). */}
+      {/* ── CTX ── collapsible right column (wide band only). The content
+          stays mounted while the track animates to 0px ; inert+aria-hidden
+          take it out of the tab order and the a11y tree when collapsed. */}
       {!isNarrowDesktop && (
-        <div style={{ gridArea: "ctx", minWidth: 0 }}>
+        <div
+          style={{ gridArea: "ctx", minWidth: 0, overflow: "hidden" }}
+          aria-hidden={!ctxOpen}
+          inert={!ctxOpen}
+        >
           {activeKill ? (
             <ScrollContextPanel
               kill={activeKill}
@@ -187,6 +228,41 @@ export function ScrollDesktopShell({
             <ContextPanelEmpty />
           )}
         </div>
+      )}
+
+      {/* ── WIDE-BAND CTX TOGGLE ── floating button that hugs the panel's
+          left edge when open and parks top-right when closed. Twin of the
+          C shortcut. */}
+      {!isNarrowDesktop && (
+        <button
+          type="button"
+          onClick={toggleCtx}
+          aria-label={
+            ctxOpen ? t("p_scroll.sh_close_context") : t("p_scroll.sh_open_context")
+          }
+          aria-expanded={ctxOpen}
+          aria-keyshortcuts="C"
+          title={`${ctxOpen ? t("p_scroll.sh_close_context") : t("p_scroll.sh_open_context")} (C)`}
+          className="group fixed top-5 z-[70] flex h-11 w-11 items-center justify-center rounded-full border border-[var(--gold)]/45 bg-[var(--bg-surface)]/80 text-[var(--gold)] backdrop-blur-md shadow-[0_8px_26px_rgba(0,0,0,0.5)] transition-colors hover:border-[var(--gold)] hover:bg-[var(--bg-elevated)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--gold)] focus-visible:outline-offset-2"
+          style={{
+            right: ctxOpen ? "calc(var(--ctx) + 14px)" : "20px",
+            transition: reduce
+              ? undefined
+              : "right 0.35s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.15s, background-color 0.15s",
+          }}
+        >
+          {ctxOpen ? (
+            // Double chevron pointing into the panel — "tuck it away".
+            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 5l7 7-7 7M13 5l7 7-7 7" />
+            </svg>
+          ) : (
+            // Same chat glyph as the narrow-band opener — one mental model.
+            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+            </svg>
+          )}
+        </button>
       )}
 
       {/* ── NARROW-BAND DRAWER ── closed-by-default right drawer that the

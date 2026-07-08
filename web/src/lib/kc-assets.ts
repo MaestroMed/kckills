@@ -77,6 +77,53 @@ export const PLAYER_PHOTOS: Record<string, string> = new Proxy(
   },
 );
 
+/**
+ * Wave 38 — KC roster lineage ordered NEWEST → OLDEST, used by the /vs
+ * character-select so the grid reads like the club's history : current
+ * five first (TOP→JGL→MID→ADC→SUP), then each earlier era's arrivals.
+ * A player who spans several eras appears at his most recent slot only.
+ */
+export const KC_ROSTER_RECENCY: string[] = [
+  // 2026 — Le Renouveau
+  "Canna", "Yike", "Kyeahoo", "Caliste", "Busio",
+  // 2025 — Le Sacre / First Stand / Le Drame
+  "Vladi", "Targamas",
+  // 2024 — LEC rookie year / Pari Coréen
+  "Closer", "Upset", "Cabochard",
+  // 2023 — LFL → LEC transition
+  "Saken", "113",
+  // 2022 — L'Ère Rekkles
+  "Rekkles", "Hantera",
+  // 2021 — La Genèse
+  "Adam", "Cinkrof", "xMatty",
+];
+
+const ROSTER_RECENCY_INDEX: Record<string, number> = Object.fromEntries(
+  KC_ROSTER_RECENCY.map((ign, i) => [ign.toLowerCase(), i]),
+);
+
+/** Position in the newest→oldest roster lineage. Unknown names sink to
+ *  the end (Infinity) — callers alphabetise those among themselves. */
+export function rosterRecencyIndex(ign: string): number {
+  return ROSTER_RECENCY_INDEX[ign.toLowerCase()] ?? Number.POSITIVE_INFINITY;
+}
+
+/** Canonical display capitalisation for a KC ign — the PLAYER_PHOTOS /
+ *  KC_ROSTER_RECENCY spelling when known ("kyeahoo" → "Kyeahoo"),
+ *  first-letter-uppercased otherwise. The players table carries mixed-
+ *  case duplicates from early backfills ; every UI list should render
+ *  ONE canonical spelling. */
+export function getCanonicalPlayerName(ign: string): string {
+  const lower = ign.toLowerCase();
+  for (const k of Object.keys(PLAYER_PHOTOS_INTERNAL)) {
+    if (k.toLowerCase() === lower) return k;
+  }
+  for (const k of KC_ROSTER_RECENCY) {
+    if (k.toLowerCase() === lower) return k;
+  }
+  return ign.length > 0 ? ign[0].toUpperCase() + ign.slice(1) : ign;
+}
+
 export const TEAM_LOGOS: Record<string, string> = {
   "KC": "https://static.lolesports.com/teams/1704714951336_KC.png",
   "G2": "https://static.lolesports.com/teams/G2-FullonDark.png",

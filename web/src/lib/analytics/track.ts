@@ -158,6 +158,16 @@ export type EventType =
   //     cold_start: bool }          // first item of the session
   // Surfaced on the perf dashboard alongside Web Vitals.
   | "clip.ttff"
+  // Wave 38 — mid-play stall watchdog (FeedPlayerPool). Fired each time
+  // the LIVE slot's currentTime sat still for ~3 s while claiming to
+  // play, just before the recovery escalation runs. metadata :
+  //   { level: number,              // 0 first strike, 1 after remedy…
+  //     delivery: 'hls'|'mp4',      // channel that starved
+  //     positionSec: number }       // where playback froze
+  // Correlate with clip.hls.error to find rows whose hls_master_url is
+  // alive but points at repackaged-away segments. Best-effort tracker :
+  // extend the DB CHECK constraint before relying on Postgres storage.
+  | "clip.stall"
   // V14 (Wave 21.2) — AI-tag chip click. Fired by FeedItem when a user
   // taps an `ai_tags` chip → filter applied. metadata: { tag: string }
   | "clip.tag_clicked"
