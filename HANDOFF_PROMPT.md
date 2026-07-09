@@ -1,163 +1,130 @@
-# Handoff prompt — kckills.com
+# Handoff — kckills.com — 9 juillet 2026
 
-> À coller dans une nouvelle session AI (Claude Sonnet/Opus, GPT-5, Gemini, peu importe). Tout ce qu'il faut savoir pour reprendre sans backstory.
+> Fichier de reprise pour la session Claude Code sur le PC worker.
+> Écrit par la session cloud du 8-9 juillet (branche `claude/site-feedback-sync-b53knf`, PR #3).
+> Remplace intégralement l'ancien handoff d'avril (périmé : Next 15, migrations 001-008, branche cranky-elion).
 
 ---
 
-## Qui je suis
+## Contexte immédiat
 
-Je m'appelle Mehdi (alias Numelite). Je dev solo **kckills.com** (alias LoLTok pilote) — site communautaire de clips de kills League of Legends centré sur la **Karmine Corp** (équipe esport française en LEC). Le pilote sert de showcase technique pour une plateforme plus large multi-streamer / multi-langue (LOLTOK).
+Mehdi a fait un tour complet du site et remonté ses remarques. Tout a été traité dans la
+**PR #3** : https://github.com/MaestroMed/kckills/pull/3 (draft, 2 commits, préview Vercel verte,
+`mergeable_state: clean`). **Elle n'est PAS mergée** — Mehdi voulait tester la préview d'abord :
+https://kckills-git-claude-site-feedback-sync-b53knf-sconnect1.vercel.app
 
-C'est moi qui décide les priorités. Pas d'investisseur, pas de deadline officielle, pas d'équipe. Le streamer **EtoStark** (joueur KC) montrera le site en live à un moment donné mais on n'a pas la date — donc on vise **working grade solide**, pas "MVP qui marche en démo".
+**Si Mehdi valide → merger la PR #3 → Vercel déploie en prod automatiquement.**
 
-## Stack et structure
+## Ce que contient la PR #3 (Waves 38 + 38.1)
 
-```
-C:\Users\Matter1\Karmine_Stats\          ← PARENT REPO (main branch)
-│
-├── web/                                  Next.js 15 App Router + RSC
-│   ├── src/app/                          Routes
-│   ├── src/components/                   UI components (incl. scroll/v2/)
-│   ├── src/lib/supabase/                 Data layer (server-only)
-│   └── package.json                      npm (lockfile = package-lock.json)
-│
-├── worker/                               Python 3.14 daemon
-│   ├── main.py                           Supervised asyncio orchestrator
-│   ├── modules/                          sentinel, harvester, clipper, analyzer, og_generator, watchdog
-│   ├── scripts/                          One-shot maintenance scripts (regen, backfill, etc.)
-│   ├── services/                         supabase_client, gemini_client, etc.
-│   └── .venv/                            Python venv (Windows: .venv\Scripts\python.exe)
-│
-├── supabase/migrations/                  001 → 008 SQL migrations (apply manually in Supabase Studio)
-│
-└── .claude/worktrees/cranky-elion-cebf12/  ← WORKTREE (branch claude/cranky-elion-cebf12)
-                                             Tu codes ici, tu commits ici.
-```
-
-**Branch / push convention** :
-- Worktree branche = `claude/cranky-elion-cebf12`, mirrors `main`
-- Toujours pusher les 2 :
-  ```
-  git push origin claude/cranky-elion-cebf12
-  git push origin HEAD:main
-  ```
-- Vercel auto-deploy depuis `main`
-
-**⚠️ Piège git worktree** : la dossier `worker/` du worktree est **désynchro** de `worker/` du parent repo. Le worker daemon tourne sur le parent (`C:\Users\Matter1\Karmine_Stats\worker`). Quand tu modifies un fichier worker, tu dois :
-1. Éditer dans `C:\Users\Matter1\Karmine_Stats\worker\...` (où le daemon le lit)
-2. **Copier le fichier vers le worktree** avant `git add` :
-   ```
-   cp parent/worker/<file> worktree/worker/<file>
-   ```
-3. Commit depuis le worktree
-
-## Stack technique
-
-| Composant | Tech | Notes |
+| Remarque de Mehdi | Fix | Fichier clé |
 |---|---|---|
-| Frontend | Next.js 15 + React 19 + Tailwind v4 | App Router, RSC partout |
-| State client | framer-motion + @use-gesture/react | Pour `/scroll-v2` |
-| HLS player | hls.js (lazy Android) + native (Safari) | Phase 4 |
-| DB | Supabase Postgres + RLS | Free tier, 5GB egress/mois |
-| Storage | Cloudflare R2 | Free 10GB, zéro egress |
-| Worker IA | Gemini 2.5 Flash-Lite | 1000 RPD, scheduler global |
-| Modération | Claude Haiku 4.5 | $1/M input |
-| Auth | Supabase + Discord OAuth | (existe, non testé end-to-end) |
-| Deploy | Vercel hobby | Push main → auto-deploy |
+| Menu header caché au hover | `overflow-hidden` retiré du `<nav>` (il clippait tous les dropdowns) | `web/src/components/navbar.tsx` |
+| Filtres du panneau scroll sans effet | Moteur de recos gaté par `catalogEnabled` — il réinjectait des voisins non filtrés dans les feeds filtrés/triés | `web/src/components/scroll/v2/ScrollFeedV2.tsx` |
+| Clips qui ne se lancent pas (iOS surtout) | Fallback natif HLS→MP4 dans `onError` (les `.m3u8` morts déclaraient l'item cassé → cascade d'auto-skips) | `web/src/components/scroll/v2/FeedPlayerPool.tsx` |
+| Clips qui freezent après quelques secondes | **Watchdog anti-stall** : 3 s sans progression → swap MP4 (reprise à la position) → reload → carte d'erreur skippable. Émet l'event analytics `clip.stall` | idem |
+| Pas de 16:9 desktop | Cinéma 16:9 **par défaut** sur le wide stage + bouton visible `16:9 ⇄ 9:16` (la touche F existait mais rien ne l'annonçait) | `web/src/components/scroll/v2/ScrollDesktopShell.tsx` |
+| Panneau droit du scroll envahissant | Colonne contextuelle **fermée par défaut**, rabattable (bouton flottant + touche C), persistée `kc-scroll-ctx-open` | idem |
+| VS Roulette à simplifier | Grille champ-select façon jeu de combat : rouge à gauche, bleu à droite, tuile « ? » aléatoire, **SPIN = losange central**, anciens dropdowns dans un accordéon | `web/src/components/VSRoulette.tsx` |
+| Kyeahoo en double dans le VS | Dédup case-insensitive (la table `players` a « kyeahoo » ET « Kyeahoo ») + ordre roster récent→ancien (`KC_ROSTER_RECENCY`) | `web/src/app/vs/page.tsx`, `web/src/lib/kc-assets.ts` |
+| Search Console | `metadata.verification.google` via env `GOOGLE_SITE_VERIFICATION` ; fallback prod `SITE_URL` → kckills.com ; sitemap nettoyé ; noindex soft-404 sur `/kill/[id]` | `web/src/app/layout.tsx`, `sitemap.ts` |
 
-## État du projet (19 avril 2026)
+## ⚡ Première action sur cette machine : relancer le worker
 
-### Ce qui marche en prod
+Le worker est down depuis un moment (le PC était éteint). `git pull` d'abord, puis relancer
+comme d'habitude (`start_daemon.bat` sous Windows / `python -m worker.orchestrator` en Docker).
+Vérifier ensuite : heartbeat dans la table `health_checks`, rapport Discord, profondeur de la DLQ
+après quelques minutes.
 
-- **`/scroll`** v1 — feed TikTok-shaped, MP4 progressif, scroll-snap CSS, autoplay pool 1-per-item, 340 kills. Stable.
-- **`/scroll-v2`** — TikTok-native (player pool 5, gesture+spring, buffer, HLS adapter, PTR, end-of-feed, chips, keyboard). Banner gold "Phase 6 — full feature parity" en haut. **À valider par Mehdi avant Phase 7 swap**.
-- **Toutes les autres pages** : `/`, `/best`, `/recent`, `/multikills`, `/first-bloods`, `/champions`, `/champion/[name]`, `/matchups`, `/matchup/[a]/vs/[b]`, `/players`, `/player/[slug]`, `/matches`, `/match/[slug]`, `/stats`, `/sphere` (3D experimental), `/alumni`, `/era/[id]`, `/hall-of-fame`, `/records`, `/api-docs`, etc. — toutes en prod, build green à 165+ pages.
-- **JSON-LD** (VideoObject, Person, SportsEvent, CollectionPage) sur toutes les pages détail.
-- **Cmd-K palette** avec full-text clip search via `/api/palette/clips`.
-- **`/api/live`** proxy LolEsports cached 60s + 30s SWR (LiveBanner).
+⚠️ Piège historique (à re-vérifier s'il s'applique encore) : le daemon tournait sur le repo
+PARENT (`C:\Users\Matter1\Karmine_Stats\worker`), pas sur le worktree. Si c'est toujours le
+setup, éditer côté parent ET copier vers le worktree avant commit.
 
-### Données
+## Chantiers prioritaires (validés avec Mehdi : « je veux le finir »)
 
-- **340 kills publiés** en Supabase, tous avec : 3 formats vidéo MP4 (h/v/v_low), thumbnail, OG image, ai_description (Gemini), ai_tags, fight_type ground truth, multi_kill, is_first_blood, kill_visible, etc.
-- **Migrations 001-008 appliquées en prod** (Mehdi confirmed 18 avril 2026)
-- **Worker daemon** tourne (ou tournait — à vérifier au démarrage de la session avec `tasklist | grep python`)
+### 1. Boucle de santé HLS — LE chantier n°1
+Les clips qui ne se lançaient pas / freezaient viennent de lignes `kills.hls_master_url`
+pointant vers des segments R2 supprimés (séquelle de l'incident r2_cleanup de mai : 61 GB de
+`hls/` effacés, restauration manuelle incomplète). Le front est maintenant résilient (fallback +
+watchdog) mais la base reste pourrie.
 
-### Audit Opus 4.7 sur les 340 descriptions IA
+- `worker/modules/hls_packager.py` ne fait que **remplir les NULL** — rien ne détecte un
+  manifest renseigné mais mort (404), rien ne le re-NULLe. `scripts/check_coverage.py` compte
+  la *présence*, pas la santé.
+- **À construire** : un module (ou script one-shot puis module périodique) qui HEAD/GET chaque
+  `hls_master_url` non-NULL des kills publiés → 404 = `hls_master_url = NULL` (+ log) → le
+  packager les refait naturellement au cycle suivant. Vérifier aussi les `clip_url_*`.
+- Croiser avec les events `clip.stall` / `clip.hls.error` émis par le site pour prioriser.
+  ⚠️ La contrainte CHECK de la table events n'inclut pas encore ces deux types — migration à
+  écrire si on veut les persister côté Postgres (voir commentaires dans
+  `web/src/lib/analytics/track.ts`).
 
-Mehdi a fait passer un rapport Opus 4.7. Verdict : **6.5/10 base, 45 descriptions à régénérer**. Tout l'audit a été implémenté côté code (commit `962292f`) :
-- `worker/modules/analyzer.py` prompt v4 avec ground truth + anti-hallucination + variété
-- Post-validation (rejet + retry 3x → manual_review)
-- `kill_visible=true` forcé partout sauf `/kill/[id]` deep-link
-- Frontend banlist `isDescriptionClean()` dans 5 composants
-- Script `worker/scripts/regen_audit_targets.py` prêt
+### 2. Chasse aux mauvais clips (desk / replays / mauvais timing)
+Mehdi : « encore beaucoup de mauvais clips, mauvais timing, des moments inter-match de Desk,
+OTP ou de replay ». Cause : offsets VOD faux. L'analyzer Gemini stocke déjà
+`kill_visible_on_screen` (bool) par clip.
 
-**⚠️ Le regen N'A PAS encore été lancé.** Mehdi doit exécuter manuellement :
-```powershell
-cd C:\Users\Matter1\Karmine_Stats\worker
-.venv\Scripts\python.exe -m scripts.regen_audit_targets --dry-run
-.venv\Scripts\python.exe -m scripts.regen_audit_targets
-# tape "yes"
-```
+- Passe rétroactive : tous les kills publiés avec `kill_visible = false` → dépublier
+  (`status = 'manual_review'` ou re-clip direct avec `needs_reclip`) et relancer
+  `vod_offset_finder_v2` sur leurs games.
+- Le QC (`qc_sampler`) n'échantillonne que ~2 % — passer à une passe complète sur le stock
+  publié, au moins une fois.
+- Durcir la porte de publication : un clip `kill_visible = false` ne devrait JAMAIS atteindre
+  `published`.
 
-Le daemon analyzer pickup au prochain cycle (~10min) et regénère les 45 avec prompt v4.
+### 3. Allumer les push notifications (feature complète mais éteinte)
+Toute la stack existe (SW v6, endpoints, `push_notifier.py`, toggle /settings) mais AUCUNE clé
+VAPID n'est posée → échec silencieux. `worker/scripts/generate_vapid.py` existe : générer,
+poser `NEXT_PUBLIC_VAPID_PUBLIC_KEY` (Vercel) + clés privées côté worker, tester une push.
 
-## Travail en cours / pending
+### 4. Traducteur worker
+`KCKILLS_TRANSLATOR_ENABLED` est à False par défaut → les descriptions EN/KO/ES ne se génèrent
+pas alors que l'i18n du site est complète. L'activer si le budget Gemini le permet.
 
-| Priorité | Item | Statut | Bloquant |
-|---|---|---|---|
-| 🟡 | Mehdi valide UX `/scroll-v2` sur iPhone | À faire | — |
-| 🟡 | Mehdi lance regen 45 descriptions | À faire | — |
-| 🟢 | Phase 7 — rename `/scroll-v2` → `/scroll`, supprimer v1 | Bloqué | Validation Mehdi |
-| 🟢 | Worker `hls_packager.py` — ffmpeg multi-bitrate + upload R2 | Pas commencé | — |
-| 🔴 | **Pivot Kameto VOD-only** | Pas commencé | Re-archi sourcing complète |
+### 5. Quick wins UX (issus de l'audit du 8 juillet)
+- `CommandPalette.tsx` (~l.69) : commentaire périmé qui EXCLUT `/community` de la recherche
+  alors que la page a maintenant un vrai formulaire. Réintégrer + ajouter `/week`, `/saved`.
+- Sous-titres mensongers de la palette : « Sphère 3D 360 », « Best = curation IA »… ce sont des
+  redirects vers /scroll ou des tris. Corriger les libellés ou retirer les entrées.
+- Home : garantir un fallback éditorial quand le pipeline n'a rien publié (sections `null`).
+- Unifier `/api/live/subscribe` vs `/api/push/subscribe` (même table, désabonnement fantôme).
 
-### Pivot Kameto (le gros chantier que Mehdi a teasé)
+## Actions côté Mehdi (à lui rappeler)
 
-Quand on s'y mettra : abandonner les VODs LEC officiels (qui donnent `vod.offset` direct via API lolesports) au profit de la **chaîne YouTube Kameto** uniquement, pour pouvoir backfill toutes les games KC depuis sa création (2021). Implications :
-- Pas d'`vod.offset` officiel → faut détecter par OCR le timer in-game à frame 0 du VOD
-- Plusieurs games par VOD Kameto (rebroadcasts) → besoin d'un VOD splitter
-- Match-up reconciliation avec Oracle's Elixir / Leaguepedia
-- ~1200 games à processer pour le full backfill
+1. **Merger la PR #3** après test de la préview.
+2. **Vercel env** : `NEXT_PUBLIC_SITE_URL=https://kckills.com` (canonicals !) et, après
+   inscription GSC, `GOOGLE_SITE_VERIFICATION=<token>`.
+3. **Search Console** : propriété « Domaine » via TXT Cloudflare (recommandé), puis soumettre
+   `https://kckills.com/sitemap.xml`.
+4. **Pilotage cloud** (pour que les futures sessions cloud voient la DB) : dans l'environnement
+   claude.ai/code → env vars secrètes `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` + network
+   policy autorisant `*.supabase.co`. Les sessions cloud pourront alors lire l'état du pipeline
+   et poster des `admin_jobs` que le worker exécute (cockpit à distance).
 
-Doc complet : `PLAN_TIKTOK_NATIVE.md` à la racine du repo (les décisions D1-D6 sont verrouillées).
+## État git / GitHub
 
-## Conventions à respecter
+- `main` = `4b55174` (Wave 37) ; la PR #3 (`claude/site-feedback-sync-b53knf`, 2 commits
+  `adc7f47` + `d43378e`) est au-dessus. Tout le travail antérieur du portable est déjà dans
+  main (squash `ca150e9`).
+- Branches remote obsolètes à supprimer quand Mehdi confirme : `claude/cranky-elion-cebf12`,
+  `claude/fix-mobile-scroll-Q0RfB` (PR #1 à fermer — fix déjà re-livré depuis),
+  `claude/review-deployment-updates-1CM9S`, `main-xk4YG`, `claude/fix-deployment-error-ETzEU`
+  (mergée via squash), `wave36-atrium-audit-fixes` (mergée).
 
-1. **Pas de flatterie**. Mehdi déteste le commercial. Sois direct, dis ce qui marche, dis ce qui foire.
-2. **Honnêteté > démo**. Si tu ne sais pas, vérifie. Si t'as cassé un truc, dis-le tout de suite.
-3. **Banlist défense-in-depth** : toute rendering de `ai_description` doit passer par `isDescriptionClean()` de `lib/scroll/sanitize-description.ts`. Worker valide aussi avant write.
-4. **kill_visible=true filter** : appliqué automatiquement par la RPC `fn_get_clips_filtered` (migration 008) et par `getPublishedKills`. Seul `getKillById` reste sans filtre (deep-link).
-5. **JSX text** : ne JAMAIS écrire `\u00e9` directement dans du JSX text — JSX n'interprète pas les escapes. Utilise le caractère literal (é) ou wrap dans `{...}`.
-6. **Build avant commit** : `cd web && npx tsc --noEmit && npx next build`. Si build vert et < 200kB First Load sur `/scroll-v2`, OK.
-7. **Disk** : on était à 99% plein le 18 avril. `du -sh worker/clips` pour check, on peut purger les MP4 locaux (déjà sur R2).
+## Pièges connus du worker (audit du 8 juillet)
 
-## Ce qui peut nécessiter une intervention immédiate
+- **Troncature silencieuse PostgREST à 1000 lignes** — bug récurrent (transitioner, harvester,
+  vod_hunter, data_fallback). Toujours paginer ou `limit` explicite.
+- **`scripts/r2_cleanup.py` est DANGEREUX** (a effacé 61 GB de HLS en mai). Mode purge HLS
+  désactivé en dur — ne pas le réactiver sans dry-run + allowlist.
+- **Deux entrypoints** à garder synchro : `main.py` (daemon mono-process Windows) et
+  `orchestrator.py` (rôles multi-process Docker). `test_orchestrator_roles.py` verrouille les
+  listes de modules — le faire tourner après toute modif.
+- Pas de tests sur clipper / sentinel / hls_packager (le cœur) — en ajouter avec les fixtures
+  existantes quand on touche ces modules.
 
-- **Worker daemon** : si `tasklist | grep python` ne retourne rien, le relancer :
-  ```
-  cd C:\Users\Matter1\Karmine_Stats\worker
-  .venv\Scripts\python.exe main.py
-  ```
-- **Si `/scroll` est vide** : check les migrations Supabase appliquées. Erreurs SELECT silencieuses dans `lib/supabase/kills.ts` retournent `[]` → splash mode visible. Le bug le plus récent était une colonne dans le SELECT pas encore migrée. Migrations 007 + 008 normalement appliquées.
-- **Quota Gemini** : 1000 RPD, reset 07:00 UTC. Si épuisé, le regen 45 descriptions doit attendre demain.
+## Ce qui marche bien (ne pas casser)
 
-## Comment me parler
-
-Je préfère :
-- Réponses courtes, structurées, en français
-- Diagnostics avant solutions
-- Du markdown avec code blocks, tableaux, emojis (sobres : 🔴 🟡 🟢 ⚠️ ✅)
-- Quand t'as fini une grosse tâche, récap par commit avec hash + 1 ligne par commit
-- Si tu shippes plusieurs commits dans une session, push branch + main à la fin
-- "À toi" / "standing by" quand tu as fini et attends ma direction
-
-J'ai pas peur des refactos massifs si c'est justifié. J'ai pas peur de roll-back si quelque chose foire. Mode **autonomous-but-honest** — tu décides, tu m'expliques pourquoi, je peux te corriger.
-
-## Pour démarrer ta session
-
-1. `cd C:\Users\Matter1\Karmine_Stats\.claude\worktrees\cranky-elion-cebf12 && git log --oneline -10` — pour voir l'historique récent
-2. `git status` + `git fetch origin && git log origin/main..HEAD --oneline` — pour vérifier qu'on est sync
-3. `tasklist 2>&1 | grep python` (ou équivalent) — vérifier si le worker daemon tourne
-4. Demande à Mehdi ce qu'il veut faire — pas de proactivité aveugle. Mais propose 2-3 options actionnables si tu vois un truc qui traîne (ex: regen pas lancé, Phase 7 pas swappée).
-
-Bon courage. 🎯
+Le scroll avec musique, le feed, les pages détail, l'admin, l'auth Discord, la DLQ/watchdog du
+worker. Mehdi : « quelques clips font TRÈS TRÈS PLAISIR, on a fait de belles choses ». Le cœur
+du produit est bon — le boulot restant, c'est la **qualité du stock de clips** (chantiers 1-2).
