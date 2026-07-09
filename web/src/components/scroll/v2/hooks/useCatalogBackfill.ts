@@ -116,14 +116,21 @@ export function useCatalogBackfill<T extends { id: string }>(
           [fresh[i], fresh[j]] = [fresh[j], fresh[i]];
         }
         if (fresh.length > 0) setExtra((prev) => [...prev, ...fresh]);
+        // Wave 38.2 — re-arm ONLY after a successful page. This bump
+        // exists for the all-duplicates case (itemCount unchanged →
+        // deps alone would stall the walk) ; putting it in finally()
+        // also re-armed FAILED fetches, which — cursor untouched, all
+        // trigger conditions still true — spun a tight retry loop
+        // whenever the API errored at the feed tail (offline/429/5xx).
+        setFetchTick((t) => t + 1);
       })
       .catch((err) => {
-        // Cursor untouched — the next trigger retries the same page.
+        // Cursor untouched, no tick — the next swipe (activeIndex /
+        // itemCount change) retries the same page, as documented above.
         console.warn("[useCatalogBackfill] fetch failed:", err);
       })
       .finally(() => {
         inFlightRef.current = false;
-        setFetchTick((t) => t + 1);
       });
   }, [toFeedItem]);
 

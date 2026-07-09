@@ -24,10 +24,8 @@ import { searchKills, type SearchFilters } from "@/lib/supabase/search";
 import { SearchBar } from "@/components/search/SearchBar";
 import { FilterChips } from "@/components/search/FilterChips";
 import { SearchResults } from "./results";
-
-const SITE_URL =
-  process.env.NEXT_PUBLIC_SITE_URL ??
-  (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "https://kckills.com");
+// Wave 38.2 — shared SITE_URL (local VERCEL_URL-first copy removed).
+import { SITE_URL } from "@/lib/site-url";
 
 // Dynamic by default — search params drive the render entirely.
 // Cache headers on /api/search handle the heavy lifting.

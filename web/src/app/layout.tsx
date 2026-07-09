@@ -13,6 +13,7 @@ import { SpeedInsights } from "@vercel/speed-insights/next";
 import "./globals.css";
 import { Providers } from "@/components/Providers";
 import { LayoutChrome } from "@/components/LayoutChrome";
+import { SITE_URL } from "@/lib/site-url";
 
 // Wave 13i (2026-05-07) — self-hosted Google Fonts via next/font/google.
 // Replaces the previous raw <link rel=preload> + async-CSS pattern with:
@@ -88,16 +89,8 @@ const imFellEnglish = IM_Fell_English({
 const UMAMI_SRC = process.env.NEXT_PUBLIC_UMAMI_SRC;
 const UMAMI_WEBSITE_ID = process.env.NEXT_PUBLIC_UMAMI_WEBSITE_ID;
 
-// Fallback aligned with robots.ts/sitemap.ts: if NEXT_PUBLIC_SITE_URL is
-// missing in prod we must NOT emit vercel.app or localhost canonicals —
-// Search Console would see split/duplicate indexation.
-const SITE_URL =
-  process.env.NEXT_PUBLIC_SITE_URL ??
-  (process.env.NODE_ENV === "production"
-    ? "https://kckills.com"
-    : process.env.VERCEL_URL
-      ? `https://${process.env.VERCEL_URL}`
-      : "http://localhost:3000");
+// Wave 38.2 — SITE_URL moved to lib/site-url.ts so sitemap.ts, robots.ts,
+// jsonld.tsx and the share-URL pages all use the exact same derivation.
 
 // Service-worker cache-bust token (Wave 36 #33). Changes on every deploy so
 // the SW re-installs and evicts the previous build's cached chunks. On

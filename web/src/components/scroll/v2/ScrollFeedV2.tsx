@@ -947,6 +947,13 @@ export function ScrollFeedV2({
     toFeedItem: toFeedItemCb,
   });
   useEffect(() => {
+    // Wave 38.2 — gate the fold like the recommendation fold above. The
+    // hook keeps its accumulated `extra` across soft navigations (chip
+    // filter / tab switch don't remount this component), so without the
+    // gate a filter change reset `items` to the filtered SSR seed and
+    // this effect immediately re-appended every previously-fetched
+    // UNFILTERED catalogue clip to the filtered/sorted feed.
+    if (!catalogEnabled) return;
     if (catalogFeed.extra.length === 0) return;
     setItems((prev) => {
       const seen = new Set(prev.map((it) => it.id));
@@ -957,7 +964,7 @@ export function ScrollFeedV2({
     // resets `items` on an RSC refresh (same trick as the
     // recommendation fold above) — without it the already-appended
     // catalogue tail would vanish until the next page fetch.
-  }, [catalogFeed.extra, items.length]);
+  }, [catalogFeed.extra, items.length, catalogEnabled]);
 
   // Wave 37 — the clip counter shows the real catalogue size when the
   // backfill can actually reach it ; the SSR slice length otherwise.
@@ -1250,6 +1257,8 @@ export function ScrollFeedV2({
           related={relatedCandidates}
           cinema={cinema}
           onToggleCinema={toggleCinema}
+          muted={muted}
+          onToggleMute={toggleMute}
         >
           {feedStage}
         </ScrollDesktopShell>
@@ -1275,20 +1284,11 @@ export function ScrollFeedV2({
             {shareToast}
           </div>
         )}
-        {/* Mute toggle — kept reachable on the wide stage (the rail doesn't
-            own audio). Top-right, clear of the context column. */}
-        <button
-          onClick={toggleMute}
-          className="fixed right-5 top-5 z-[65] hidden lg:flex h-11 w-11 items-center justify-center rounded-full border border-white/10 bg-black/60 backdrop-blur-sm text-white/70 transition-colors hover:text-[var(--gold)] hover:border-[var(--gold)]/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--gold)] focus-visible:outline-offset-2"
-          aria-label={muted ? t("p_scroll.sh_unmute") : t("p_scroll.sh_mute")}
-          style={{ right: "max(1.25rem, calc(var(--ctx) + 1.25rem))" }}
-        >
-          {muted ? (
-            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2" /></svg>
-          ) : (
-            <svg className="h-5 w-5 text-[var(--gold)]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.536 8.464a5 5 0 010 7.072M18.364 5.636a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" /></svg>
-          )}
-        </button>
+        {/* Mute toggle moved into ScrollDesktopShell (Wave 38.2) — it owns
+            ctxOpen, so the button can track the collapsible panel edge
+            instead of assuming the ctx column is always open (it used to
+            strand mid-stage when closed and collide with the ctx toggle
+            when open). */}
       </>
     );
   }

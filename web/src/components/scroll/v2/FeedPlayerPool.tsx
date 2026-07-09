@@ -464,11 +464,19 @@ export function FeedPlayerPool({
   /** V19 (Wave 21.7) — sync `playbackRate` across every slot whenever
    *  the user picks a new speed in the settings drawer. Defensive
    *  clamp : reject anything outside [0.25, 4] to dodge spec-non-
-   *  compliant browsers that throw on extreme values. */
+   *  compliant browsers that throw on extreme values.
+   *  Wave 38.2 — ALSO set defaultPlaybackRate : the HTML media load
+   *  algorithm resets playbackRate to defaultPlaybackRate on every new
+   *  src/load(), so a slot rebind (each clip change) silently snapped
+   *  the user's chosen speed back to 1×. defaultPlaybackRate survives
+   *  the reset and makes every future load inherit the setting. */
   useEffect(() => {
     const safeSpeed = Math.max(0.25, Math.min(4, speed || 1));
     for (const v of videoRefs.current) {
-      if (v) v.playbackRate = safeSpeed;
+      if (v) {
+        v.defaultPlaybackRate = safeSpeed;
+        v.playbackRate = safeSpeed;
+      }
     }
   }, [speed]);
 

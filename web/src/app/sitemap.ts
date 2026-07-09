@@ -3,10 +3,9 @@ import { ERAS } from "@/lib/eras";
 import { ALUMNI } from "@/lib/alumni";
 import { loadRealData, getKCRoster } from "@/lib/real-data";
 import { getPublishedKills } from "@/lib/supabase/kills";
-
-const SITE_URL =
-  process.env.NEXT_PUBLIC_SITE_URL ??
-  (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "https://kckills.com");
+// Wave 38.2 — shared SITE_URL (was a local VERCEL_URL-first copy that
+// could emit vercel.app URLs in prod, contradicting layout.tsx canonicals).
+import { SITE_URL } from "@/lib/site-url";
 
 // Cap how many clip URLs we expose in the sitemap so it stays under
 // Google's 50K-entry / 50MB hard limit even at scale, and so the
@@ -176,12 +175,9 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       changeFrequency: "yearly",
       priority: 0.2,
     },
-    {
-      url: `${SITE_URL}/login`,
-      lastModified: now,
-      changeFrequency: "yearly",
-      priority: 0.3,
-    },
+    // Wave 38.2 — /login dropped: client-only OAuth page that can't carry
+    // metadata (default title, no canonical, redirects when authed). It's
+    // now noindex'd via login/layout.tsx instead of invited into the index.
   ];
 
   // "darkness" is disallowed in robots.ts (easter-egg era) — listing it in

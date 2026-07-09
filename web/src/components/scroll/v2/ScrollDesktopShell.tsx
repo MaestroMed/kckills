@@ -66,6 +66,11 @@ interface ScrollDesktopShellProps {
   cinema?: boolean;
   /** Wave 38 — on-stage format toggle (the discoverable twin of the F key). */
   onToggleCinema?: () => void;
+  /** Wave 38.2 — mute toggle lives here now: the shell owns ctxOpen, so
+   *  the button tracks the collapsible panel edge (it used to assume the
+   *  ctx column was always open). */
+  muted?: boolean;
+  onToggleMute?: () => void;
 }
 
 export function ScrollDesktopShell({
@@ -76,6 +81,8 @@ export function ScrollDesktopShell({
   related = [],
   cinema = false,
   onToggleCinema,
+  muted = true,
+  onToggleMute,
 }: ScrollDesktopShellProps) {
   const t = useT();
   const reduce = useReducedMotion();
@@ -261,6 +268,33 @@ export function ScrollDesktopShell({
             <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
             </svg>
+          )}
+        </button>
+      )}
+
+      {/* ── MUTE TOGGLE ── docked right below the ctx toggle, same edge-
+          tracking. In the narrow band it sits below the drawer opener
+          (fixed right-5). The rail doesn't own audio, so this is the only
+          on-screen audio control on desktop. */}
+      {onToggleMute && (
+        <button
+          type="button"
+          onClick={onToggleMute}
+          aria-label={muted ? t("p_scroll.sh_unmute") : t("p_scroll.sh_mute")}
+          aria-keyshortcuts="M"
+          title={`${muted ? t("p_scroll.sh_unmute") : t("p_scroll.sh_mute")} (M)`}
+          className="fixed top-[4.75rem] z-[70] flex h-11 w-11 items-center justify-center rounded-full border border-white/10 bg-black/60 text-white/70 backdrop-blur-sm transition-colors hover:border-[var(--gold)]/40 hover:text-[var(--gold)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--gold)] focus-visible:outline-offset-2"
+          style={{
+            right: !isNarrowDesktop && ctxOpen ? "calc(var(--ctx) + 14px)" : "20px",
+            transition: reduce
+              ? undefined
+              : "right 0.35s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.15s, color 0.15s",
+          }}
+        >
+          {muted ? (
+            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2" /></svg>
+          ) : (
+            <svg className="h-5 w-5 text-[var(--gold)]" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.536 8.464a5 5 0 010 7.072M18.364 5.636a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" /></svg>
           )}
         </button>
       )}

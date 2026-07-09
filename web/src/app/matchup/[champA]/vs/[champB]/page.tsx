@@ -35,7 +35,12 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const b = safeDecode(champB);
   const title = `${a} vs ${b} — Match-up KC`;
   const description = `Tous les clips de la confrontation ${a} contre ${b} c\u00f4t\u00e9 Karmine Corp : qui domine, qui se fait piquer.`;
-  const canonicalPath = `/matchup/${encodeURIComponent(a)}/vs/${encodeURIComponent(b)}`;
+  // Wave 38.2 — canonical built from the alpha-sorted pair (same .sort()
+  // as sitemap.ts) so /matchup/A/vs/B and /matchup/B/vs/A both emit the
+  // single canonical the sitemap advertises, instead of self-canonicalizing
+  // into duplicate pages.
+  const [canonA, canonB] = [a, b].sort();
+  const canonicalPath = `/matchup/${encodeURIComponent(canonA)}/vs/${encodeURIComponent(canonB)}`;
   return {
     title,
     description,

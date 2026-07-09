@@ -176,7 +176,11 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
           videos: ogVideo ? [ogVideo] : undefined,
         },
         twitter: {
-          card: "player",
+          // Wave 38.2 — "player" without the players descriptor is an
+          // invalid card X refuses to render (no twitter:player tags, no
+          // domain approval). summary_large_image matches the rest of the
+          // app and actually shows the OG image.
+          card: "summary_large_image",
           title,
           description,
           images: [ogImage],

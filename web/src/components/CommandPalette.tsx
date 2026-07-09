@@ -77,7 +77,9 @@ const PAGES: Entry[] = [
   { id: "page-week",    group: "page", label: "La Semaine",     subtitle: "Le récap 7 jours", href: "/week",        searchText: "semaine week recap hebdo resume 7 jours weekly" },
   { id: "page-saved",   group: "page", label: "Sauvegardés",    subtitle: "Vos clips gardés", href: "/saved",       searchText: "sauvegardes saved bookmarks favoris marque-page garde collection" },
   { id: "page-api",     group: "page", label: "API Docs",       subtitle: "Documentation",    href: "/api-docs",    searchText: "api documentation endpoints rest developers" },
-  { id: "page-review",  group: "page", label: "Review QA",      subtitle: "Clip quality",     href: "/review",      searchText: "review qa quality test noter clips" },
+  // "Review QA" entry removed (Wave 38.2): /review now redirects to the
+  // admin backoffice (/admin/clips) behind requireAdmin — the palette was
+  // walking anonymous visitors straight into the admin login wall.
   // Audit 2026-07-02 — community features shipped without palette
   // entries (several were unreachable from any public surface).
   { id: "page-vs",      group: "page", label: "VS — Duels",     subtitle: "Vote 1v1 de clips", href: "/vs",         searchText: "vs versus duel vote roulette elo battle" },
