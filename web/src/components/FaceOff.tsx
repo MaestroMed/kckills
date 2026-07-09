@@ -69,7 +69,8 @@ export interface FaceOffPresetDuel {
   aSlug: string;
   bSlug: string;
   label: string;
-  subtitle?: string;
+  /** Wave 38.2 — i18n key under p_vsgame (the label keeps proper nouns literal). */
+  subtitleKey?: string;
 }
 
 export interface FaceOffBundle {
@@ -477,9 +478,9 @@ function PresetCard({
       <p className="font-display text-sm font-black text-[var(--text-primary)] leading-tight">
         {preset.label}
       </p>
-      {preset.subtitle && (
+      {preset.subtitleKey && (
         <p className="mt-1 font-data text-[10px] uppercase tracking-widest text-white/45">
-          {preset.subtitle}
+          {t(`p_vsgame.${preset.subtitleKey}`)}
         </p>
       )}
       <span

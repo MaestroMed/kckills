@@ -20,6 +20,7 @@ import {
 } from "@/lib/supabase/on-this-day";
 import { getServerT } from "@/lib/i18n/server-lang";
 import type { ServerTranslateFn } from "@/lib/i18n/getServerLang";
+import { formatDate, LANG_META, type Lang } from "@/lib/i18n/lang";
 
 const MULTI_KILL_LABEL: Record<string, string> = {
   penta:  "PENTAKILL",
@@ -28,28 +29,25 @@ const MULTI_KILL_LABEL: Record<string, string> = {
   double: "DOUBLE",
 };
 
-const DATE_FMT_FR = new Intl.DateTimeFormat("fr-FR", {
-  day: "numeric",
-  month: "long",
-  year: "numeric",
-  timeZone: "UTC",
-});
-
-function frenchOrdinalDay(): string {
+// Wave 38.2 — locale-aware "today" label (was a hand-rolled French month
+// array leaking "9 juillet" into every locale's header). FR keeps the
+// "1er" ordinal on the first of the month.
+function todayLabel(lang: Lang): string {
   const { day, month } = getTodayMonthDay();
-  const monthNames = [
-    "janvier", "février", "mars", "avril", "mai", "juin",
-    "juillet", "août", "septembre", "octobre", "novembre", "décembre",
-  ];
-  const dayLabel = day === 1 ? "1er" : String(day);
-  return `${dayLabel} ${monthNames[month - 1]}`;
+  const label = new Intl.DateTimeFormat(LANG_META[lang].htmlLang, {
+    day: "numeric",
+    month: "long",
+    timeZone: "UTC",
+  }).format(new Date(Date.UTC(new Date().getUTCFullYear(), month - 1, day)));
+  return lang === "fr" && day === 1 ? label.replace(/^1\b/, "1er") : label;
 }
 
 function MatchupCard({
   kill,
   hero = false,
   t,
-}: { kill: OnThisDayKill; hero?: boolean; t: ServerTranslateFn }) {
+  lang,
+}: { kill: OnThisDayKill; hero?: boolean; t: ServerTranslateFn; lang: Lang }) {
   const matchup = `${kill.killer_ign || kill.killer_champion || "?"} → ${kill.victim_ign || kill.victim_champion || "?"}`;
   const championLine = `${kill.killer_champion || "?"} vs ${kill.victim_champion || "?"}`;
   // The RPC projects the legacy `thumbnail_url` column directly. We
@@ -59,8 +57,15 @@ function MatchupCard({
   const score = kill.highlight_score ?? 0;
   const multi = kill.multi_kill ? MULTI_KILL_LABEL[kill.multi_kill] : null;
   const years = kill.years_ago > 0 ? kill.years_ago : null;
-  const isoDate = kill.match_date ? new Date(kill.match_date) : null;
-  const dateLabel = isoDate ? DATE_FMT_FR.format(isoDate) : null;
+  // Wave 38.2 — match date rendered in the visitor's locale, not fr-FR.
+  const dateLabel = kill.match_date
+    ? formatDate(lang, kill.match_date, {
+        day: "numeric",
+        month: "long",
+        year: "numeric",
+        timeZone: "UTC",
+      })
+    : null;
 
   if (hero) {
     return (
@@ -213,9 +218,10 @@ function MatchupCard({
 }
 
 export async function OnThisDay() {
-  const { t } = await getServerT();
+  const { t, lang } = await getServerT();
   const { month, day } = getTodayMonthDay();
   const kills = await getOnThisDayKills(month, day, 12);
+  const dayLabel = todayLabel(lang);
 
   // No historical match on this date — render nothing rather than an
   // empty placeholder. The homepage already has dense content above
@@ -233,15 +239,15 @@ export async function OnThisDay() {
       <div className="mb-5 flex items-end justify-between gap-4">
         <div>
           <p className="font-data text-[10px] uppercase tracking-[0.4em] text-[var(--gold)] mb-1.5">
-            {t("p_homex.today_eyebrow", { day: frenchOrdinalDay() })}
+            {t("p_homex.today_eyebrow", { day: dayLabel })}
           </p>
           <h2 className="font-display text-3xl md:text-4xl text-[var(--gold-bright)] tracking-tight">
             {t("p_homex.on_this_day_title")}
           </h2>
           <p className="mt-1 max-w-2xl text-sm text-[var(--text-secondary)]">
             {kills.length === 1
-              ? t("p_homex.on_this_day_subtitle_one", { day: frenchOrdinalDay() })
-              : t("p_homex.on_this_day_subtitle_many", { n: kills.length, day: frenchOrdinalDay() })}
+              ? t("p_homex.on_this_day_subtitle_one", { day: dayLabel })
+              : t("p_homex.on_this_day_subtitle_many", { n: kills.length, day: dayLabel })}
           </p>
         </div>
         {/* Decorative gold rule */}
@@ -249,7 +255,7 @@ export async function OnThisDay() {
       </div>
 
       {/* Hero card */}
-      <MatchupCard kill={hero} hero t={t} />
+      <MatchupCard kill={hero} hero t={t} lang={lang} />
 
       {/* Strip of additional matches */}
       {rest.length > 0 && (
@@ -267,7 +273,7 @@ export async function OnThisDay() {
             role="list"
           >
             {rest.map((k) => (
-              <MatchupCard key={k.id} kill={k} t={t} />
+              <MatchupCard key={k.id} kill={k} t={t} lang={lang} />
             ))}
           </div>
         </>

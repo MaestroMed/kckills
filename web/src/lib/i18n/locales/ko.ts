@@ -40,6 +40,9 @@ export const ko: FrDict = {
     hours_ago: "{n}시간 전",
     days_ago: "{n}일 전",
     just_now: "방금 전",
+    // Wave 38.2 — StarRating a11y (localized star labels + SR value read-out)
+    rate_n_stars: "별 {n}개로 평가",
+    rating_value: "평점: 5점 만점에 {n}점",
   },
 
   footer: {
@@ -935,7 +938,7 @@ export const ko: FrDict = {
     "tip_after": "를 눌러 포커스하세요.",
     "loading": "로딩 중...",
     "load_more": "더 보기",
-    "results_end": "결과 끝 - 킬 {n}개{s}",
+    "results_end": "결과 끝 - 킬 {n}개",
     "no_preview": "미리보기 없음",
     "error_search": "검색 오류입니다. 잠시 후 다시 시도하세요.",
     "error_network": "네트워크 오류입니다. 잠시 후 다시 시도하세요.",
@@ -1342,6 +1345,11 @@ export const ko: FrDict = {
     "fo_launch_aria": "대결 시작",
     "fo_launch": "대결 시작",
     "fo_suggested_duels": "추천 대결",
+    // Wave 38.2 — preset duel subtitles (labels stay literal: proper nouns)
+    "fo_preset_caliste_rekkles": "전설적인 원딜들의 대결",
+    "fo_preset_canna_adam": "T1 출신 vs LFL의 쇼맨",
+    "fo_preset_yike_cabochard": "2025 우승자 vs 베테랑",
+    "fo_preset_bo_closer": "2024 정글 — 암흑기",
     "fo_player_side": "선수 {side}",
     "fo_search_placeholder": "이름이나 역할 입력…",
     "fo_search_player_aria": "선수 검색 {side}",
@@ -1384,7 +1392,7 @@ export const ko: FrDict = {
     "fo_who_is_best": "누가 최고일까요?",
     "fo_vote_for": "{name}에게 투표",
     "fo_vote_tie_aria": "무승부 투표",
-    "fo_total_votes": "총 {n}표{s}",
+    "fo_total_votes": "총 {n}표",
     "fo_thanks_vote": "· 투표해 주셔서 감사합니다",
     "fo_section_popular": "인기 대결",
     "fo_popular_empty": "아직 다른 대결에 투표한 사람이 없습니다. 도전해 보세요!",

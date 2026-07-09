@@ -37,6 +37,9 @@ export const es: FrDict = {
     hours_ago: "hace {n} h",
     days_ago: "hace {n} d",
     just_now: "ahora mismo",
+    // Wave 38.2 — StarRating a11y (localized star labels + SR value read-out)
+    rate_n_stars: "Valorar con {n} estrella{s}",
+    rating_value: "Nota: {n} de 5",
   },
 
   footer: {
@@ -1335,6 +1338,11 @@ export const es: FrDict = {
     "fo_launch_aria": "Lanzar el duelo",
     "fo_launch": "Lanzar el duelo",
     "fo_suggested_duels": "Duelos sugeridos",
+    // Wave 38.2 — preset duel subtitles (labels stay literal: proper nouns)
+    "fo_preset_caliste_rekkles": "El duelo de los ADC legendarios",
+    "fo_preset_canna_adam": "Fichaje de T1 vs showman de la LFL",
+    "fo_preset_yike_cabochard": "Campeón 2025 vs veterano",
+    "fo_preset_bo_closer": "Jungla 2024 — la era oscura",
     "fo_player_side": "Jugador {side}",
     "fo_search_placeholder": "Escribe un nombre o un rol…",
     "fo_search_player_aria": "Buscar jugador {side}",

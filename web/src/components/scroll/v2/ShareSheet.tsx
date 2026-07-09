@@ -23,9 +23,10 @@
  * Animation : fade in + slide up. Closes on backdrop click / Esc.
  */
 
-import { useEffect } from "react";
+import { useRef } from "react";
 import { track } from "@/lib/analytics/track";
 import { useT } from "@/lib/i18n/use-lang";
+import { useFocusTrap } from "@/components/ui/FocusTrapModal";
 
 interface Props {
   open: boolean;
@@ -111,14 +112,10 @@ export function ShareSheet({
   shareUrl,
 }: Props) {
   const t = useT();
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [open, onClose]);
+  // Wave 38.2 — focus trap (moves focus in, cycles Tab, handles Escape,
+  // inerts the feed behind, restores focus to the share button on close).
+  const panelRef = useRef<HTMLDivElement>(null);
+  useFocusTrap(panelRef, { active: open, onEscape: onClose });
 
   if (!open) return null;
 
@@ -157,7 +154,9 @@ export function ShareSheet({
         onClick={onClose}
       />
       <div
-        className="relative w-full sm:max-w-md sm:m-4 rounded-t-2xl sm:rounded-2xl bg-[var(--bg-surface)]/97 border-t sm:border border-[var(--border-gold)] backdrop-blur-md p-4 space-y-3"
+        ref={panelRef}
+        tabIndex={-1}
+        className="relative w-full sm:max-w-md sm:m-4 rounded-t-2xl sm:rounded-2xl bg-[var(--bg-surface)]/97 border-t sm:border border-[var(--border-gold)] backdrop-blur-md p-4 space-y-3 outline-none"
         style={{ paddingBottom: "max(1rem, env(safe-area-inset-bottom, 1rem))" }}
       >
         <div className="mx-auto sm:hidden mt-1 h-1 w-10 rounded-full bg-white/30" />

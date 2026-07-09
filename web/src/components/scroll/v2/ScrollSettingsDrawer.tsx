@@ -15,12 +15,13 @@
  * Storage : `localStorage.kc_scroll_settings_v1`. Versioned so future
  * schema additions don't trip on stale shapes.
  *
- * The drawer is anchored top-right ; clicking outside closes it ;
- * Escape closes it. ARIA-labelled, tab-accessible.
+ * The drawer is anchored top-right ; Escape closes it. Focus-trapped
+ * via useFocusTrap (Wave 38.2). ARIA-labelled, tab-accessible.
  */
 
 import { useEffect, useRef, useState } from "react";
 import { useT } from "@/lib/i18n/use-lang";
+import { useFocusTrap } from "@/components/ui/FocusTrapModal";
 
 const STORAGE_KEY = "kc_scroll_settings_v1";
 
@@ -110,30 +111,11 @@ export function ScrollSettingsDrawer({ open, onClose }: DrawerProps) {
     if (open) setSettings(readSettings());
   }, [open]);
 
-  // Close on Escape + click outside.
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    const onClick = (e: MouseEvent) => {
-      if (drawerRef.current && !drawerRef.current.contains(e.target as Node)) {
-        onClose();
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    // Defer the click handler so the open-trigger click doesn't
-    // immediately close it.
-    const t = window.setTimeout(
-      () => window.addEventListener("mousedown", onClick),
-      0,
-    );
-    return () => {
-      window.removeEventListener("keydown", onKey);
-      window.removeEventListener("mousedown", onClick);
-      window.clearTimeout(t);
-    };
-  }, [open, onClose]);
+  // Wave 38.2 — focus trap (moves focus in, cycles Tab, handles Escape,
+  // inerts the feed behind so J/K/Space shortcuts can't fire, restores
+  // focus to the ⚙ trigger on close). Replaces the hand-rolled
+  // Escape/click-outside listeners.
+  useFocusTrap(drawerRef, { active: open, onEscape: onClose });
 
   if (!open) return null;
 
@@ -157,8 +139,10 @@ export function ScrollSettingsDrawer({ open, onClose }: DrawerProps) {
     <div
       ref={drawerRef}
       role="dialog"
+      aria-modal="true"
       aria-label={t("p_scroll.ov_settings_aria")}
-      className="fixed top-16 right-3 z-[210] w-72 rounded-xl border border-[var(--border-gold)] bg-[var(--bg-surface)]/95 backdrop-blur-md shadow-2xl shadow-black/50 p-4 space-y-3 text-sm"
+      tabIndex={-1}
+      className="fixed top-16 right-3 z-[210] w-72 rounded-xl border border-[var(--border-gold)] bg-[var(--bg-surface)]/95 backdrop-blur-md shadow-2xl shadow-black/50 p-4 space-y-3 text-sm outline-none"
     >
       <header className="flex items-center justify-between">
         <h2 className="font-display text-xs font-bold uppercase tracking-widest text-[var(--gold)]">

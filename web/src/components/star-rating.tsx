@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useT } from "@/lib/i18n/use-lang";
 
 interface StarRatingProps {
   rating: number;
@@ -15,37 +16,65 @@ const SIZES = {
   lg: "h-7 w-7",
 };
 
+function Star({ active, size }: { active: boolean; size: "sm" | "md" | "lg" }) {
+  return (
+    <svg
+      className={`star ${active ? "active" : "inactive"} ${SIZES[size]}`}
+      fill="currentColor"
+      viewBox="0 0 20 20"
+      aria-hidden
+    >
+      <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+    </svg>
+  );
+}
+
 export function StarRating({
   rating,
   size = "md",
   readonly = false,
   onRate,
 }: StarRatingProps) {
+  const t = useT();
   const [hovered, setHovered] = useState(0);
   const displayRating = hovered || rating;
+
+  // Wave 38.2 — readonly = display-only: a single role="img" node announcing
+  // the value, instead of five disabled state-less buttons (WCAG 4.1.2).
+  if (readonly) {
+    return (
+      <div
+        className="star-rating flex gap-0.5"
+        role="img"
+        aria-label={t("common.rating_value", { n: rating })}
+      >
+        {[1, 2, 3, 4, 5].map((star) => (
+          <span key={star} className="flex items-center justify-center">
+            <Star active={rating >= star} size={size} />
+          </span>
+        ))}
+      </div>
+    );
+  }
 
   return (
     <div
       className="star-rating flex gap-0.5"
-      onMouseLeave={() => !readonly && setHovered(0)}
+      onMouseLeave={() => setHovered(0)}
     >
       {[1, 2, 3, 4, 5].map((star) => (
         <button
           key={star}
           type="button"
-          disabled={readonly}
-          className={`flex items-center justify-center ${readonly ? "cursor-default" : "min-h-[44px] min-w-[44px] -m-2 p-2"}`}
-          onMouseEnter={() => !readonly && setHovered(star)}
-          onClick={() => !readonly && onRate?.(star)}
-          aria-label={`${star} étoile${star > 1 ? "s" : ""}`}
+          className="flex items-center justify-center min-h-[44px] min-w-[44px] -m-2 p-2"
+          onMouseEnter={() => setHovered(star)}
+          onClick={() => onRate?.(star)}
+          // Wave 38.2 — localized label + selected state exposed to AT
+          // (was a hardcoded French string with color-only state).
+          aria-label={t("common.rate_n_stars", { n: star, s: star > 1 ? "s" : "" })}
+          aria-pressed={rating >= star}
         >
-          <svg
-            className={`star ${displayRating >= star ? "active" : "inactive"} ${SIZES[size]}`}
-            fill="currentColor"
-            viewBox="0 0 20 20"
-          >
-            <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-          </svg>
+          <Star active={displayRating >= star} size={size} />
         </button>
       ))}
     </div>

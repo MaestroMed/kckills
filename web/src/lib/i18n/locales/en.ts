@@ -34,6 +34,9 @@ export const en: FrDict = {
     hours_ago: "{n} h ago",
     days_ago: "{n} d ago",
     just_now: "just now",
+    // Wave 38.2 — StarRating a11y (localized star labels + SR value read-out)
+    rate_n_stars: "Rate {n} star{s}",
+    rating_value: "Rating: {n} out of 5",
   },
 
   footer: {
@@ -1331,6 +1334,11 @@ export const en: FrDict = {
     "fo_launch_aria": "Launch the duel",
     "fo_launch": "Launch the duel",
     "fo_suggested_duels": "Suggested duels",
+    // Wave 38.2 — preset duel subtitles (labels stay literal: proper nouns)
+    "fo_preset_caliste_rekkles": "The duel of legendary ADCs",
+    "fo_preset_canna_adam": "T1 import vs LFL showman",
+    "fo_preset_yike_cabochard": "2025 champion vs veteran",
+    "fo_preset_bo_closer": "2024 jungle — the dark era",
     "fo_player_side": "Player {side}",
     "fo_search_placeholder": "Type a name or a role…",
     "fo_search_player_aria": "Search player {side}",

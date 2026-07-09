@@ -53,6 +53,9 @@ const _fr = {
     hours_ago: "il y a {n} h",
     days_ago: "il y a {n} j",
     just_now: "à l'instant",
+    // Wave 38.2 — StarRating a11y (localized star labels + SR value read-out)
+    rate_n_stars: "Noter {n} étoile{s}",
+    rating_value: "Note : {n} sur 5",
   },
 
   footer: {
@@ -1350,6 +1353,11 @@ const _fr = {
     "fo_launch_aria": "Lancer le duel",
     "fo_launch": "Lancer le duel",
     "fo_suggested_duels": "Duels suggérés",
+    // Wave 38.2 — preset duel subtitles (labels stay literal: proper nouns)
+    "fo_preset_caliste_rekkles": "Le duel des ADC légendaires",
+    "fo_preset_canna_adam": "T1 import vs showman LFL",
+    "fo_preset_yike_cabochard": "Sacre 2025 vs vétéran",
+    "fo_preset_bo_closer": "Jungle 2024 — l'ère sombre",
     "fo_player_side": "Joueur {side}",
     "fo_search_placeholder": "Tape un nom ou un rôle…",
     "fo_search_player_aria": "Rechercher joueur {side}",

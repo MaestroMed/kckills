@@ -293,7 +293,11 @@ export function VSRoulette({
   // ← / → vote left / right, ↓ or "=" for a tie, Space / Enter to
   // (re)spin. Ignored while a form field is focused so the filter
   // selects keep their native keyboard behaviour (WCAG 2.1 — full
-  // keyboard operability of the core game).
+  // keyboard operability of the core game). Wave 38.2 — also ignored
+  // when focus sits on a button/link/role=button so Space/Enter runs
+  // the control's native activation (champ-select grid, filters,
+  // links); the global spin shortcut only applies on body/
+  // non-interactive targets.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const el = e.target as HTMLElement | null;
@@ -302,7 +306,8 @@ export function VSRoulette({
         (el.tagName === "INPUT" ||
           el.tagName === "SELECT" ||
           el.tagName === "TEXTAREA" ||
-          el.isContentEditable)
+          el.isContentEditable ||
+          el.closest('button, a, [role="button"]'))
       ) {
         return;
       }
