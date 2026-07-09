@@ -66,3 +66,17 @@ worker/deep_qc/qc_global_in_progress.json
 worker/deep_qc/qc_global_run.log
 worker/deep_qc/qc_global_results_*.json
 worker/state/
+
+# Wave 36 cleanup — worker runtime debris that dirtied the tree
+# (the daemon-* pattern above only covered worker/logs/; these live at worker/ root)
+worker/daemon-*.log
+worker/daemon-*.err
+worker/daemon-*.pid
+worker/restart_*.log
+worker/restart_*.err.log
+worker/deep_qc/qc_resume_run*.log
+worker/.auto_remediate_state.json
+
+# Retro-clip chantier runtime artifacts
+worker/.lp_cache.json
+worker/gc_r2_orphans_report.json
