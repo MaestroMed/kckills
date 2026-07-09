@@ -80,3 +80,4 @@ worker/.auto_remediate_state.json
 # Retro-clip chantier runtime artifacts
 worker/.lp_cache.json
 worker/gc_r2_orphans_report.json
+worker/hls_temp/
