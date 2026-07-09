@@ -135,6 +135,11 @@ KC_TOURNAMENTS: list[tuple[str, int, int, str]] = [
     ("LEC 2026 Versus Season",         2899, 2026, "versus"),
     ("LEC 2026 Versus Playoffs",       2899, 2026, "versus_po"),
     ("LEC 2026 Spring Season",         2899, 2026, "spring"),
+    # Added 2026-07 (Mehdi priority: Spring complet + MSI + EWC). Exact
+    # gol.gg labels discovered from KC's team-2899 tournament-ALL matchlist.
+    ("LEC 2026 Spring Playoffs",       2899, 2026, "spring_po"),
+    ("MSI 2026",                       2899, 2026, "msi"),
+    ("EWC 2026 Online Qualifier - EMEA", 2899, 2026, "ewc_qual"),
 ]
 
 
