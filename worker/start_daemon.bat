@@ -24,6 +24,15 @@ if not exist "%PYTHON%" (
 )
 
 :loop
+REM Rotate daemon.log above ~1 GB. NOTE: cmd's IF GTR compares as SIGNED
+REM 32-BIT — a 4.5 GB size overflows and the test silently fails. So we
+REM test the DIGIT COUNT of the size instead (10+ digits = >= 1 GB).
+set "DLOGSZ=0"
+for %%F in (logs\daemon.log) do set "DLOGSZ=%%~zF"
+if not "%DLOGSZ:~9,1%"=="" (
+    del /f /q logs\daemon-1.log 2>nul
+    move /y logs\daemon.log logs\daemon-1.log >nul
+)
 echo [%date% %time%] starting daemon... >> logs\daemon.log
 "%PYTHON%" main.py >> logs\daemon.log 2>&1
 echo [%date% %time%] daemon exited with code %ERRORLEVEL%, restart in 10s >> logs\daemon.log

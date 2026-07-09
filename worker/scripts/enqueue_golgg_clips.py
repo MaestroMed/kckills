@@ -84,7 +84,10 @@ def _vod_ready_game_ids(db) -> list[str]:
     return ids
 
 
-def _fetch_raw_kills(db, game_ids: list[str], offset: int) -> list[dict]:
+def _fetch_raw_kills(db, game_ids: list[str]) -> list[dict]:
+    """Always fetch from offset 0: processed kills leave status='raw', so the
+    filtered window shrinks as we go — advancing an offset over a shrinking
+    set skips every other page (that's how a first run stopped at 1000/2000)."""
     r = httpx.get(
         f"{db.base}/kills", headers=db.headers,
         params={
@@ -94,7 +97,7 @@ def _fetch_raw_kills(db, game_ids: list[str], offset: int) -> list[dict]:
             "status": "eq.raw",
             "game_id": f"in.({','.join(game_ids)})",
             "order": "id.asc",
-            "limit": str(PAGE_SIZE), "offset": str(offset),
+            "limit": str(PAGE_SIZE),
         },
         timeout=40.0,
     )
@@ -135,18 +138,22 @@ async def _amain(*, dry_run: bool, limit: int | None) -> dict:
 
     scanned = enqueued = skipped = errors = 0
     by_tier: dict[str, int] = {}
-    offset = 0
+    seen: set[str] = set()
     while True:
         if limit is not None and scanned >= limit:
             break
         try:
-            page = await asyncio.to_thread(_fetch_raw_kills, db, game_ids, offset)
+            page = await asyncio.to_thread(_fetch_raw_kills, db, game_ids)
         except Exception as e:
-            print(f"  [error] fetch @ offset={offset}: {e}")
+            print(f"  [error] fetch: {e}")
             errors += 1
             break
+        # anti-infinite-loop guard: a page of only already-seen ids means
+        # those kills failed their status reset — stop instead of spinning
+        page = [k for k in page if k.get("id") not in seen]
         if not page:
             break
+        seen.update(k["id"] for k in page)
 
         # priority order within the page (best first)
         page.sort(key=_priority, reverse=True)
@@ -181,12 +188,8 @@ async def _amain(*, dry_run: bool, limit: int | None) -> dict:
                 print(f"  [warn] enqueued but state reset failed {kid[:8]}")
                 errors += 1
 
-        if scanned % 500 == 0:
-            print(f"  [progress] scanned={scanned} enqueued={enqueued} "
-                  f"skipped={skipped} errors={errors}")
-        offset += len(page)
-        if len(page) < PAGE_SIZE:
-            break
+        print(f"  [progress] scanned={scanned} enqueued={enqueued} "
+              f"skipped={skipped} errors={errors}")
 
     print("-" * 60)
     print(f"  scanned  : {scanned}")
