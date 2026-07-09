@@ -89,6 +89,36 @@ pas alors que l'i18n du site est complète. L'activer si le budget Gemini le per
 - Home : garantir un fallback éditorial quand le pipeline n'a rien publié (sections `null`).
 - Unifier `/api/live/subscribe` vs `/api/push/subscribe` (même table, désabonnement fantôme).
 
+## Backlog issu de l'audit exhaustif du 9 juillet (Wave 38.2)
+
+Un audit adversarial complet du front (35 findings bruts, 29 confirmés) a été mené le 9 juillet.
+21 fixes ont été appliqués et poussés (commits « Wave 38.2 — audit fixes lot 1/2 »). Les 8
+restants sont des refactors plus lourds, vérifiés mais à faire avec soin :
+
+1. **Egress/perf Supabase** (le budget n°1 du projet) :
+   - `getKillsByMatchExternalId` (`web/src/lib/supabase/kills.ts:~1291`) : filtre sur un embed
+     LEFT-JOIN sans `.limit()` → jusqu'à 3×1000 lignes pleines par page /match et /kill, et des
+     kills d'AUTRES matchs peuvent passer. Restaurer le `games!inner(...)` + limit explicite.
+   - `/clips` (`web/src/app/clips/page.tsx:59`) : `getKillsForGrid(2000)` → troncature
+     silencieuse PostgREST à 1000 + tout le catalogue sérialisé dans le payload RSC de chaque
+     visiteur. Variante CARD_SELECT slim + cap ≤1000 + assert de troncature.
+   - `getHeroTopScorer` (`web/src/lib/supabase/hero-stats.ts:300`) : `.limit(20000)` cappé à
+     1000 SANS order by → le « top scorer » de la home est calculé sur un sous-ensemble
+     arbitraire. Remplacer par 5 HEAD counts par joueur du roster.
+   - `/player/[slug]` (`page.tsx:109`) : fan-out de ~15 requêtes pleines non cachées par render
+     via le fallback champion-proxy. Ajouter `getKillsByKillerPlayerId(playerId, limit)`.
+2. **i18n large** :
+   - ~45 call sites hardcodent `fr-FR` dans `toLocaleDateString`/`Intl` (ex.
+     `MatchHero.tsx:68`) alors que `formatDate/formatNumber(lang, …)` existent. Passe mécanique.
+   - Les cartes de la home rendent `ai_description` (FR brut) au lieu de
+     `pickDescription(kill, lang)` / `<Description>` — les colonnes traduites sont DÉJÀ
+     fetchées (KillOfTheWeek.tsx:126, HomeWeekendBestClips, FullKillsGrid, FaceOff).
+   - CommandPalette : labels/sous-titres des pages en français dans les 4 langues → basculer
+     sur des clés i18n (labelKey/subtitleKey).
+3. **A11y** : générer une piste captions WebVTT one-cue depuis la description localisée sur les
+   `<video>` (KillCinematicView.tsx:404 d'abord, FeedPlayerPool ensuite) — exigence WCAG du
+   CLAUDE.md, et le contenu existe déjà en base.
+
 ## Actions côté Mehdi (à lui rappeler)
 
 1. **Merger la PR #3** après test de la préview.
