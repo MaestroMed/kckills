@@ -1245,6 +1245,13 @@ export const ko: FrDict = {
     "sh_empty_panel_l1": "킬로 스크롤하세요",
     "sh_empty_panel_l2": "컨텍스트를 보려면",
   },
+  p_pushoptin: {
+    "title": "🔔 펜타·멀티킬 알림",
+    "body": "KC가 펜타킬이나 쿼드라킬을 하면 알림을 받아보세요.",
+    "enable": "켜기",
+    "later": "나중에",
+    "error": "활성화하지 못했어요 — 설정에서 다시 시도해 주세요.",
+  },
   p_vsgame: {
     "error_network": "네트워크 오류",
     "spin_error": "쌍을 뽑을 수 없습니다: {error}",

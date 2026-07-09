@@ -1253,6 +1253,13 @@ const _fr = {
     "sh_empty_panel_l1": "Scrolle vers un kill",
     "sh_empty_panel_l2": "pour voir le contexte",
   },
+  p_pushoptin: {
+    "title": "🔔 Notifs penta + multi-kills",
+    "body": "Reçois une notif quand KC fait un pentakill ou un quadra.",
+    "enable": "Activer",
+    "later": "Plus tard",
+    "error": "Activation impossible — réessaie depuis les Réglages.",
+  },
   p_vsgame: {
     "error_network": "Erreur réseau",
     "spin_error": "Impossible de tirer une paire : {error}",

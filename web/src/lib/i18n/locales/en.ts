@@ -1234,6 +1234,13 @@ export const en: FrDict = {
     "sh_empty_panel_l1": "Scroll to a kill",
     "sh_empty_panel_l2": "to see the context",
   },
+  p_pushoptin: {
+    "title": "🔔 Penta + multi-kill alerts",
+    "body": "Get a push when KC lands a pentakill or a quadra.",
+    "enable": "Enable",
+    "later": "Later",
+    "error": "Couldn't enable — try again from Settings.",
+  },
   p_vsgame: {
     "error_network": "Network error",
     "spin_error": "Couldn't draw a pair: {error}",

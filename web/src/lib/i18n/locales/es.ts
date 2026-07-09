@@ -1238,6 +1238,13 @@ export const es: FrDict = {
     "sh_empty_panel_l1": "Desplázate hasta un kill",
     "sh_empty_panel_l2": "para ver el contexto",
   },
+  p_pushoptin: {
+    "title": "🔔 Avisos de pentas y multi-kills",
+    "body": "Recibe una notificación cuando KC haga un pentakill o una quadra.",
+    "enable": "Activar",
+    "later": "Más tarde",
+    "error": "No se pudo activar — inténtalo desde Ajustes.",
+  },
   p_vsgame: {
     "error_network": "Error de red",
     "spin_error": "No se pudo sortear un par: {error}",
