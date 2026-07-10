@@ -84,23 +84,24 @@ def _vod_ready_game_ids(db) -> list[str]:
     return ids
 
 
-def _fetch_raw_kills(db, game_ids: list[str]) -> list[dict]:
+def _fetch_raw_kills(db, game_ids: list[str], highlights_only: bool) -> list[dict]:
     """Always fetch from offset 0: processed kills leave status='raw', so the
     filtered window shrinks as we go — advancing an offset over a shrinking
     set skips every other page (that's how a first run stopped at 1000/2000)."""
-    r = httpx.get(
-        f"{db.base}/kills", headers=db.headers,
-        params={
-            "select": ("id,game_id,killer_champion,multi_kill,"
-                       "is_first_blood,tracked_team_involvement"),
-            "data_source": "eq.gol_gg",
-            "status": "eq.raw",
-            "game_id": f"in.({','.join(game_ids)})",
-            "order": "id.asc",
-            "limit": str(PAGE_SIZE),
-        },
-        timeout=40.0,
-    )
+    params = {
+        "select": ("id,game_id,killer_champion,multi_kill,"
+                   "is_first_blood,tracked_team_involvement"),
+        "data_source": "eq.gol_gg",
+        "status": "eq.raw",
+        "game_id": f"in.({','.join(game_ids)})",
+        "order": "id.asc",
+        "limit": str(PAGE_SIZE),
+    }
+    if highlights_only:
+        # curated scope: multi-kills, first bloods, Vi (Yike showcase)
+        params["or"] = "(multi_kill.not.is.null,is_first_blood.eq.true,killer_champion.eq.Vi)"
+    r = httpx.get(f"{db.base}/kills", headers=db.headers, params=params,
+                  timeout=40.0)
     r.raise_for_status()
     return r.json() or []
 
@@ -119,7 +120,7 @@ def _set_enriched(db, kill_id: str) -> bool:
 
 
 @run_logged(module_name="enqueue_golgg_clips")
-async def _amain(*, dry_run: bool, limit: int | None) -> dict:
+async def _amain(*, dry_run: bool, limit: int | None, highlights_only: bool = False) -> dict:
     db = get_db()
     if db is None:
         print("FATAL: Supabase env vars missing.")
@@ -143,7 +144,7 @@ async def _amain(*, dry_run: bool, limit: int | None) -> dict:
         if limit is not None and scanned >= limit:
             break
         try:
-            page = await asyncio.to_thread(_fetch_raw_kills, db, game_ids)
+            page = await asyncio.to_thread(_fetch_raw_kills, db, game_ids, highlights_only)
         except Exception as e:
             print(f"  [error] fetch: {e}")
             errors += 1
@@ -208,8 +209,11 @@ def main() -> int:
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--limit", type=int, default=None)
+    ap.add_argument("--highlights-only", action="store_true",
+                    help="multi-kills + first bloods + Vi uniquement")
     args = ap.parse_args()
-    asyncio.run(_amain(dry_run=args.dry_run, limit=args.limit))
+    asyncio.run(_amain(dry_run=args.dry_run, limit=args.limit,
+                       highlights_only=args.highlights_only))
     return 0
 
 

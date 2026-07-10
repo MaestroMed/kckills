@@ -71,6 +71,40 @@ TARGETS = [
     ("LEC 2026 Spring Playoffs",         "LEC/2026 Season/Spring Playoffs",               19),
     ("MSI 2026",                         "2026 Mid-Season Invitational",                   9),
     ("EWC 2026 Online Qualifier - EMEA", "Esports World Cup 2026/Online Qualifiers/EMEA",  11),
+    # ── Full-history extension (2026-07-10) — pages confirmed by a KC
+    # OverviewPage discovery scan where possible; LFL pages follow the
+    # "LFL/{year} Season/{Split} {Phase}" pattern verified on 2023 Summer.
+    # A page that 404s just skips its tournament (cheap).
+    ("LFL Spring 2021",                  "LFL/2021 Season/Spring Season",                  0),
+    ("LFL Spring Playoffs 2021",         "LFL/2021 Season/Spring Playoffs",                0),
+    ("LFL Summer 2021",                  "LFL/2021 Season/Summer Season",                  0),
+    ("LFL Summer Playoffs 2021",         "LFL/2021 Season/Summer Playoffs",                0),
+    ("LFL Finals 2021",                  "LFL/2021 Season/Finals",                         0),
+    ("EU Masters Spring 2021",           "European Masters/2021 Season/Spring Main Event", 0),
+    ("EU Masters Summer 2021",           "European Masters/2021 Season/Summer Main Event", 0),
+    ("LFL Spring 2022",                  "LFL/2022 Season/Spring Season",                  0),
+    ("LFL Spring Playoffs 2022",         "LFL/2022 Season/Spring Playoffs",                0),
+    ("LFL Summer 2022",                  "LFL/2022 Season/Summer Season",                  0),
+    ("LFL Summer Playoffs 2022",         "LFL/2022 Season/Summer Playoffs",                0),
+    ("EU Masters Spring 2022",           "European Masters/2022 Season/Spring Main Event", 0),
+    ("EU Masters Spring Play-In 2022",   "European Masters/2022 Season/Spring Play-In",    0),
+    ("LFL Spring 2023",                  "LFL/2023 Season/Spring Season",                  0),
+    ("LFL Summer Playoffs 2023",         "LFL/2023 Season/Summer Playoffs",                0),
+    ("EMEA Masters Summer 2023",         "EMEA Masters/2023 Season/Summer Main Event",     0),
+    ("LEC Winter Season 2024",           "LEC/2024 Season/Winter Season",                  0),
+    ("LEC Spring Season 2024",           "LEC/2024 Season/Spring Season",                  0),
+    ("LEC Summer Season 2024",           "LEC/2024 Season/Summer Season",                  0),
+    ("LEC Summer Playoffs 2024",         "LEC/2024 Season/Summer Playoffs",                0),
+    ("LEC Season Finals 2024",           "LEC/2024 Season/Season Finals",                  0),
+    ("LEC Winter 2025",                  "LEC/2025 Season/Winter Season",                  0),
+    ("LEC 2025 Winter Playoffs",         "LEC/2025 Season/Winter Playoffs",                0),
+    ("LEC 2025 Spring Season",           "LEC/2025 Season/Spring Season",                  0),
+    ("LEC 2025 Spring Playoffs",         "LEC/2025 Season/Spring Playoffs",                0),
+    ("LEC 2025 Summer Season",           "LEC/2025 Season/Summer Season",                  0),
+    ("LEC 2025 Summer Playoffs",         "LEC/2025 Season/Summer Playoffs",                0),
+    ("First Stand 2025",                 "2025 First Stand",                               0),
+    ("LEC 2026 Versus Season",           "LEC/2026 Season/Versus Season",                  0),
+    ("LEC 2026 Versus Playoffs",         "LEC/2026 Season/Versus Playoffs",                0),
 ]
 
 
