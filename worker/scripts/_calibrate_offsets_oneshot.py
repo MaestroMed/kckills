@@ -20,7 +20,7 @@ except Exception:
 
 from modules import vod_offset_finder_v2 as m  # noqa: E402
 
-m.GAMES_PER_RUN = 10
+m.GAMES_PER_RUN = 80
 
 
 async def main() -> None:

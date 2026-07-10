@@ -196,9 +196,16 @@ async def _read_timer_at(youtube_id: str, vod_seconds: int) -> Optional[int]:
             client.models.generate_content,
             model=config.GEMINI_MODEL_OFFSET,
             contents=[
-                "Read the in-game League of Legends timer at the top center "
-                "of the screen. Reply ONLY with MM:SS. If no LoL game is "
-                "visible (interview, draft, panel, replay menu, ad), reply NONE.",
+                # Broadcast overlays move the clock around: LEC shows it top
+                # center, but LFL/OTPLOL layouts pin it top-LEFT next to the
+                # team scores (fixed 2026-07-11 — the old 'top center' wording
+                # made Gemini answer NONE on every LFL frame).
+                "Read the in-game League of Legends match timer on screen. "
+                "It is usually at the top (center or left, near the team "
+                "kill scores) and counts match time as MM:SS. Reply ONLY "
+                "with MM:SS. Ignore real-world clocks. If no LoL gameplay "
+                "is visible (interview, draft, panel, replay menu, ad), "
+                "reply NONE.",
                 img,
             ],
         )
@@ -262,10 +269,31 @@ async def _process_game(game: dict) -> bool:
     game_epoch = await _game_start_epoch(ext)
     if not game_epoch:
         log.info("vof2_no_livestats", game_id=short)
-        # Even without livestats we can still scan from offset 0
-        # (this catches old games where the live feed expired but the
-        # VOD is still up). Use a broad scan window.
-        offset = await _scan_for_gameplay(yt, 0, 90 * 60)  # scan up to 90 min
+        # Even without livestats we can still find the offset. For per-game
+        # VODs (the whole video IS one game) a single probe at the video's
+        # midpoint is near-guaranteed gameplay: offset = probe - timer in
+        # ONE Gemini call instead of a 60-probe walk. Fall back to the
+        # forward scan (bounded by the video duration) if the midpoint is
+        # unreadable.
+        meta = await _vod_metadata(yt)
+        if meta is None:
+            # yt-dlp can't even dump-json this video (bot-block with stale
+            # cookies, region lock, or gone). Probing frames would fail the
+            # same way 60 times — skip now, retry after a cookie refresh.
+            log.warn("vof2_video_inaccessible", game_id=short, yt=yt)
+            return False
+        vid_dur = int(meta.get("duration") or 0)
+        offset = None
+        if vid_dur > 120:
+            mid = vid_dur // 2
+            timer = await _read_timer_at(yt, mid)
+            if timer is not None and 0 <= timer <= mid:
+                offset = mid - timer
+                log.info("vof2_midpoint_hit", game_id=short, yt=yt,
+                         probe_vod_s=mid, timer_s=timer, derived_offset=offset)
+        if offset is None:
+            scan_cap = min(90 * 60, vid_dur or 90 * 60)
+            offset = await _scan_for_gameplay(yt, 0, scan_cap)
         if offset is None:
             log.warn("vof2_scan_failed_no_livestats", game_id=short)
             return False
