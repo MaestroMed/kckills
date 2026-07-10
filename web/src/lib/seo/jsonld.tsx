@@ -21,10 +21,10 @@
  * the component before emitting.
  */
 
+// Wave 38.2 — shared SITE_URL so JSON-LD urls always match the canonicals.
+import { SITE_URL } from "@/lib/site-url";
+
 const SITE_NAME = "KCKILLS";
-const SITE_URL =
-  process.env.NEXT_PUBLIC_SITE_URL ??
-  (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "https://kckills.com");
 
 const SITE_NODE = {
   "@type": "WebSite",

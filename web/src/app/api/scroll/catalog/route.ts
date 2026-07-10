@@ -85,6 +85,21 @@ export async function GET(
     getPublishedKcKillCount(),
   ]);
 
+  // Wave 38.2 — an empty page while the count says rows remain means the
+  // paged SELECT failed (the loader swallows Supabase errors into []),
+  // not that the catalogue ended. Without this check we replied
+  // nextCursor: null AND the CDN cached that "exhausted" verdict for 5
+  // minutes — every scroller hitting the tail during a Supabase blip got
+  // a feed that permanently claimed "you've seen everything". Return a
+  // retryable, uncacheable error instead ; the client's !res.ok path
+  // keeps the cursor and retries on the next swipe.
+  if (page.length === 0 && cursor < total) {
+    return NextResponse.json(
+      { error: "upstream" },
+      { status: 503, headers: { "Cache-Control": "no-store" } },
+    );
+  }
+
   // A short page means we ran off the end of the catalogue. A full page
   // MAY still be the last one — the client eats one extra empty fetch
   // and then sees nextCursor: null, which is cheaper than a count-based

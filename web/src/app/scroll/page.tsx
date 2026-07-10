@@ -30,10 +30,8 @@ import type { GridAxisId } from "@/lib/grid/axis-config";
 import { JsonLd, breadcrumbLD } from "@/lib/seo/jsonld";
 import { pickAssetUrl } from "@/lib/kill-assets";
 import { getServerT } from "@/lib/i18n/server-lang";
-
-const SITE_URL =
-  process.env.NEXT_PUBLIC_SITE_URL ??
-  (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "https://kckills.com");
+// Wave 38.2 — shared SITE_URL (local VERCEL_URL-first copy removed).
+import { SITE_URL } from "@/lib/site-url";
 
 const FILTERABLE_AXES: ReadonlySet<string> = new Set<GridAxisId>([
   "game_minute_bucket",
@@ -231,7 +229,13 @@ export default async function ScrollV2Page({ searchParams }: ScrollPageProps) {
 
   const [data, allKills, roster, catalogTotal] = await Promise.all([
     Promise.resolve(loadRealData()),
-    getPublishedKills(KILLS_LIMIT),
+    // Wave 38.2 — push the involvement filter into the query : the JS
+    // filter below discarded roughly half the fetched rows (team_victim
+    // when browsing KC kills, team_killer under the « VS KC » chip).
+    // Halving KILL_SELECT egress on the hottest surface of the site.
+    getPublishedKills(KILLS_LIMIT, {
+      involvement: chipFilters.side === "vs" ? "team_victim" : "team_killer",
+    }),
     getTrackedRoster(),
     // Wave 37 — real catalogue size for the clip counter (HEAD count,
     // ~150 bytes). 0 on error → the counter falls back to slice length.

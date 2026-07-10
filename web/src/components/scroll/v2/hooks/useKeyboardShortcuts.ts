@@ -100,6 +100,19 @@ export function useKeyboardShortcuts(
         return;
       }
 
+      // Wave 38.2 — let Space/Enter perform their NATIVE activation when
+      // a button/link has keyboard focus (like/comment/share rail, mute,
+      // chip bar). preventDefault()-ing Space on a focused button turned
+      // it into play/pause and made the rail unusable by keyboard —
+      // WCAG 2.1.1. Single-letter shortcuts stay live (buttons don't
+      // consume plain letters).
+      if (
+        (e.key === " " || e.key === "Spacebar" || e.key === "Enter") &&
+        target?.closest('button, a, [role="button"]')
+      ) {
+        return;
+      }
+
       // Skip if a modifier is held — reserve those for browser shortcuts.
       if (e.metaKey || e.ctrlKey || e.altKey) return;
 

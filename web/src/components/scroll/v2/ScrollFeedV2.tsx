@@ -100,6 +100,10 @@ import { useFeedMediaSession } from "@/hooks/useFeedMediaSession";
 const RECOMMENDATIONS_ENABLED =
   process.env.NEXT_PUBLIC_RECOMMENDATIONS_ENABLED !== "false";
 
+/** Wave 38 — localStorage key remembering the wide-stage format choice
+ *  (cinema 16:9 vs bounded 9:16). Absent key = default ON (16:9). */
+const CINEMA_PREF_KEY = "kc:scroll:cinema";
+
 /**
  * Viewport-bounded virtualisation window. Items where
  * `|index - activeIndex| > VIRTUAL_WINDOW` don't render — they live in
@@ -259,7 +263,32 @@ export function ScrollFeedV2({
   // Wave 36 — cinema mode (F key) : the StageFrame expands 9:16 → 16:9 and
   // the pool swaps to the horizontal source. Only meaningful on the wide
   // stage (the mobile/legacy paths ignore it).
+  // Wave 38 — desktop DEFAULTS to cinema (pro matches are produced 16:9;
+  // the bounded 9:16 frame read as "mobile clips on my monitor"). The
+  // choice persists per device; F and the on-stage button both toggle it.
   const [cinema, setCinema] = useState(false);
+  useEffect(() => {
+    if (!isWideStage) return;
+    let pref: string | null = null;
+    try {
+      pref = window.localStorage.getItem(CINEMA_PREF_KEY);
+    } catch {
+      /* storage can be denied (private mode) — fall back to default-on */
+    }
+    setCinema(pref === null ? true : pref === "1");
+  }, [isWideStage]);
+  const toggleCinema = useCallback(() => {
+    if (!isWideStage) return;
+    setCinema((c) => {
+      const next = !c;
+      try {
+        window.localStorage.setItem(CINEMA_PREF_KEY, next ? "1" : "0");
+      } catch {
+        /* ignore */
+      }
+      return next;
+    });
+  }, [isWideStage]);
   const [reducedMotion, setReducedMotion] = useState(false);
   const [brokenIds, setBrokenIds] = useState<Set<string>>(() => new Set());
 
@@ -772,9 +801,7 @@ export function ScrollFeedV2({
       // store the FeedSidebarV2 onBookmark stub writes, then notify listeners.
       onBookmark: () => bookmarkActiveItem(),
       // F (cinema) → expand the StageFrame 9:16 → 16:9 (wide stage only).
-      onCinema: () => {
-        if (isWideStage) setCinema((c) => !c);
-      },
+      onCinema: toggleCinema,
       // 1–5 → rate the active kill.
       onRate: rateActiveItem,
       // ← / → (source switch) — dispatch the same events the source picker
@@ -877,26 +904,34 @@ export function ScrollFeedV2({
     (row: RecommendedKillRow) => recommendationToFeedItem(row),
     [],
   );
+  // `catalogEnabled` (SSR: default "pour-toi" tab, no chip/axis filter)
+  // gates the recommendations exactly like the catalogue backfill below:
+  // the engine fetches similarity neighbours with NO filter predicate, so
+  // letting it run on a filtered feed bleeds non-matching clips into the
+  // tail — the "filters don't work" bug. On sorted tabs (Récent/Top) it
+  // would likewise scramble the deterministic order.
   const recFeed = useRecommendationFeed<FeedItem>({
     seedItems: visibleItems,
     activeIndex,
-    enabled: RECOMMENDATIONS_ENABLED,
+    enabled: RECOMMENDATIONS_ENABLED && catalogEnabled,
     toFeedItem: toFeedItemCb,
   });
   // Whenever the recommendation hook produces a longer list than the
   // current `items`, append the new items into the source state so
   // every downstream consumer (gesture, pool, scroll-restore) sees
   // them. We diff by id to avoid a useless re-render when nothing new
-  // has landed.
+  // has landed. Gated like the fetch: after a filter change resets
+  // `items` to the SSR seed, the hook may still hold appends from the
+  // previous unfiltered feed — folding those back would undo the reset.
   useEffect(() => {
-    if (!RECOMMENDATIONS_ENABLED) return;
+    if (!RECOMMENDATIONS_ENABLED || !catalogEnabled) return;
     if (recFeed.items.length <= items.length) return;
     setItems((prev) => {
       const seen = new Set(prev.map((it) => it.id));
       const additions = recFeed.items.filter((it) => !seen.has(it.id));
       return additions.length === 0 ? prev : [...prev, ...additions];
     });
-  }, [recFeed.items, items.length]);
+  }, [recFeed.items, items.length, catalogEnabled]);
 
   // ─── Catalogue backfill (Wave 37) ─────────────────────────────────
   // Guarantees COVERAGE where the recommendation engine only offers
@@ -912,6 +947,13 @@ export function ScrollFeedV2({
     toFeedItem: toFeedItemCb,
   });
   useEffect(() => {
+    // Wave 38.2 — gate the fold like the recommendation fold above. The
+    // hook keeps its accumulated `extra` across soft navigations (chip
+    // filter / tab switch don't remount this component), so without the
+    // gate a filter change reset `items` to the filtered SSR seed and
+    // this effect immediately re-appended every previously-fetched
+    // UNFILTERED catalogue clip to the filtered/sorted feed.
+    if (!catalogEnabled) return;
     if (catalogFeed.extra.length === 0) return;
     setItems((prev) => {
       const seen = new Set(prev.map((it) => it.id));
@@ -922,7 +964,7 @@ export function ScrollFeedV2({
     // resets `items` on an RSC refresh (same trick as the
     // recommendation fold above) — without it the already-appended
     // catalogue tail would vanish until the next page fetch.
-  }, [catalogFeed.extra, items.length]);
+  }, [catalogFeed.extra, items.length, catalogEnabled]);
 
   // Wave 37 — the clip counter shows the real catalogue size when the
   // backfill can actually reach it ; the SSR slice length otherwise.
@@ -1214,6 +1256,9 @@ export function ScrollFeedV2({
           onJumpTo={(i) => jumpTo(i)}
           related={relatedCandidates}
           cinema={cinema}
+          onToggleCinema={toggleCinema}
+          muted={muted}
+          onToggleMute={toggleMute}
         >
           {feedStage}
         </ScrollDesktopShell>
@@ -1239,20 +1284,11 @@ export function ScrollFeedV2({
             {shareToast}
           </div>
         )}
-        {/* Mute toggle — kept reachable on the wide stage (the rail doesn't
-            own audio). Top-right, clear of the context column. */}
-        <button
-          onClick={toggleMute}
-          className="fixed right-5 top-5 z-[65] hidden lg:flex h-11 w-11 items-center justify-center rounded-full border border-white/10 bg-black/60 backdrop-blur-sm text-white/70 transition-colors hover:text-[var(--gold)] hover:border-[var(--gold)]/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--gold)] focus-visible:outline-offset-2"
-          aria-label={muted ? t("p_scroll.sh_unmute") : t("p_scroll.sh_mute")}
-          style={{ right: "max(1.25rem, calc(var(--ctx) + 1.25rem))" }}
-        >
-          {muted ? (
-            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2" /></svg>
-          ) : (
-            <svg className="h-5 w-5 text-[var(--gold)]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.536 8.464a5 5 0 010 7.072M18.364 5.636a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" /></svg>
-          )}
-        </button>
+        {/* Mute toggle moved into ScrollDesktopShell (Wave 38.2) — it owns
+            ctxOpen, so the button can track the collapsible panel edge
+            instead of assuming the ctx column is always open (it used to
+            strand mid-stage when closed and collide with the ctx toggle
+            when open). */}
       </>
     );
   }

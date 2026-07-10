@@ -51,9 +51,13 @@ interface Entry {
 const PAGES: Entry[] = [
   { id: "page-home",    group: "page", label: "Accueil",       subtitle: "Landing KCKILLS", href: "/",            searchText: "accueil home landing" },
   { id: "page-scroll",  group: "page", label: "Scroll kills",  subtitle: "Mode TikTok",      href: "/scroll",      searchText: "scroll tiktok feed clips kills" },
-  { id: "page-best",    group: "page", label: "Meilleurs",     subtitle: "Curation IA + comm.", href: "/best",     searchText: "meilleurs best top curation legendaires" },
+  // Wave 38.2 — honest subtitles: /best and /top are sort shortcuts into
+  // /clips, not distinct curation surfaces. Say what a click gives you.
+  { id: "page-best",    group: "page", label: "Meilleurs",     subtitle: "Clips triés par score", href: "/best",     searchText: "meilleurs best top score legendaires" },
   { id: "page-recent",  group: "page", label: "Derniers clips", subtitle: "Chronologique",   href: "/recent",     searchText: "recent derniers chronologique latest nouveau frais" },
-  { id: "page-sphere",  group: "page", label: "Sphere immersif", subtitle: "Mode 3D 360",   href: "/sphere",     searchText: "sphere 3d 360 immersif experimental orbit" },
+  // "Sphere" entry removed (Wave 38.2): /sphere is a bare redirect to
+  // /scroll — advertising a "3D 360 mode" that doesn't exist erodes
+  // trust in every other entry. Re-add if the sphere ever ships.
   { id: "page-players", group: "page", label: "Joueurs",       subtitle: "Roster KC",        href: "/players",     searchText: "joueurs players roster" },
   { id: "page-champions", group: "page", label: "Champions",   subtitle: "Browse par champ", href: "/champions",   searchText: "champions champion picks pool meta" },
   { id: "page-matchups",  group: "page", label: "Match-ups",     subtitle: "Confrontations",   href: "/matchups",    searchText: "matchups match-ups vs versus confrontations rivalites duels champions" },
@@ -61,16 +65,21 @@ const PAGES: Entry[] = [
   { id: "page-fbs",       group: "page", label: "First Bloods",  subtitle: "Le tempo des games", href: "/first-bloods", searchText: "first blood firstblood premier sang fb tempo opening" },
   { id: "page-alumni",  group: "page", label: "Alumni",        subtitle: "Legendes passees", href: "/alumni",      searchText: "alumni ancien past legendes rekkles xmatty cabochard" },
   { id: "page-matches", group: "page", label: "Matchs",        subtitle: "Historique",       href: "/matches",     searchText: "matchs matches historique" },
-  { id: "page-top",     group: "page", label: "Top kills",     subtitle: "Leaderboard",      href: "/top",         searchText: "top leaderboard best meilleurs" },
+  { id: "page-top",     group: "page", label: "Top kills",     subtitle: "Les plus vus",     href: "/top",         searchText: "top vus impressions populaires meilleurs" },
   { id: "page-hof",     group: "page", label: "Hall of Fame",  subtitle: "Legendes KC",      href: "/hall-of-fame", searchText: "hall fame legendes legends" },
   { id: "page-records", group: "page", label: "Records",       subtitle: "Les chiffres",     href: "/records",     searchText: "records chiffres stats" },
   { id: "page-stats",   group: "page", label: "Stats",          subtitle: "Dashboard KC",     href: "/stats",       searchText: "stats statistiques dashboard kda winrate chiffres" },
   { id: "page-compare", group: "page", label: "Comparateur",   subtitle: "Joueur vs joueur", href: "/compare",     searchText: "compare comparateur versus vs joueur duel" },
-  // "Community" entry removed: /community is an 8-line redirect to the
-  // read-only /clips catalog (no submission surface yet). Re-add when
-  // the real community_clips submit page ships.
+  // Wave 38.2 — /community is a REAL page now (submit form + moderation,
+  // Vague 2 du 5 juillet). The stale "redirect stub" comment that kept it
+  // out of the palette outlived the redirect by two months.
+  { id: "page-community", group: "page", label: "Communauté",   subtitle: "Soumettre vos edits", href: "/community", searchText: "communaute community edits soumettre submit youtube tiktok fans montages" },
+  { id: "page-week",    group: "page", label: "La Semaine",     subtitle: "Le récap 7 jours", href: "/week",        searchText: "semaine week recap hebdo resume 7 jours weekly" },
+  { id: "page-saved",   group: "page", label: "Sauvegardés",    subtitle: "Vos clips gardés", href: "/saved",       searchText: "sauvegardes saved bookmarks favoris marque-page garde collection" },
   { id: "page-api",     group: "page", label: "API Docs",       subtitle: "Documentation",    href: "/api-docs",    searchText: "api documentation endpoints rest developers" },
-  { id: "page-review",  group: "page", label: "Review QA",      subtitle: "Clip quality",     href: "/review",      searchText: "review qa quality test noter clips" },
+  // "Review QA" entry removed (Wave 38.2): /review now redirects to the
+  // admin backoffice (/admin/clips) behind requireAdmin — the palette was
+  // walking anonymous visitors straight into the admin login wall.
   // Audit 2026-07-02 — community features shipped without palette
   // entries (several were unreachable from any public surface).
   { id: "page-vs",      group: "page", label: "VS — Duels",     subtitle: "Vote 1v1 de clips", href: "/vs",         searchText: "vs versus duel vote roulette elo battle" },

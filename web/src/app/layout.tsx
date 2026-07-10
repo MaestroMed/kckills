@@ -13,6 +13,7 @@ import { SpeedInsights } from "@vercel/speed-insights/next";
 import "./globals.css";
 import { Providers } from "@/components/Providers";
 import { LayoutChrome } from "@/components/LayoutChrome";
+import { SITE_URL } from "@/lib/site-url";
 
 // Wave 13i (2026-05-07) — self-hosted Google Fonts via next/font/google.
 // Replaces the previous raw <link rel=preload> + async-CSS pattern with:
@@ -88,9 +89,8 @@ const imFellEnglish = IM_Fell_English({
 const UMAMI_SRC = process.env.NEXT_PUBLIC_UMAMI_SRC;
 const UMAMI_WEBSITE_ID = process.env.NEXT_PUBLIC_UMAMI_WEBSITE_ID;
 
-const SITE_URL =
-  process.env.NEXT_PUBLIC_SITE_URL ??
-  (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000");
+// Wave 38.2 — SITE_URL moved to lib/site-url.ts so sitemap.ts, robots.ts,
+// jsonld.tsx and the share-URL pages all use the exact same derivation.
 
 // Service-worker cache-bust token (Wave 36 #33). Changes on every deploy so
 // the SW re-installs and evicts the previous build's cached chunks. On
@@ -160,6 +160,12 @@ export const metadata: Metadata = {
       "max-image-preview": "large",
       "max-snippet": -1,
     },
+  },
+  // Google Search Console ownership proof. Set GOOGLE_SITE_VERIFICATION in
+  // Vercel env (value = content of the meta tag GSC hands out, NOT the full
+  // tag). Renders <meta name="google-site-verification"> only when defined.
+  verification: {
+    google: process.env.GOOGLE_SITE_VERIFICATION,
   },
   // Explicit icons block — Next.js will only auto-discover /favicon.ico,
   // but browsers also probe /icon.svg and the PNG sizes; declaring them

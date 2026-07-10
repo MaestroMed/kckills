@@ -295,6 +295,122 @@ export function FeedPlayerPool({
       document.removeEventListener("visibilitychange", onVisibilityChange);
   }, [priorities]);
 
+  /** Wave 38 — mid-play stall watchdog. Some published clips freeze a
+   *  few seconds in : the manifest/first chunk is alive but playback
+   *  starves on segments the R2 HLS repackage catch-up deleted. No
+   *  `error` event fires for that (the element just sits in `waiting`
+   *  forever), so the load-time fallbacks never trigger. Watch the
+   *  LIVE slot's currentTime once per second while it claims to be
+   *  playing ; ~3 s without progress escalates :
+   *    hls → swap to the MP4 rendition (resume at the stall position),
+   *    mp4 → one load() retry,
+   *    then surface the standard kc:clip-error path so the item shows
+   *    an error card (skippable) instead of an eternal freeze.
+   *  Progress clears the item's escalation level, so a legitimate
+   *  slow-network hiccup that recovers doesn't burn its strikes. */
+  const stallEscalationRef = useRef<Map<string, number>>(new Map());
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    let lastTime = -1;
+    let stuckTicks = 0;
+    const iv = window.setInterval(() => {
+      if (document.hidden) return;
+      const slotIdx = priorities.indexOf("live");
+      const v = slotIdx >= 0 ? videoRefs.current[slotIdx] : null;
+      const itemIdx = slotIdx >= 0 ? slotItemIndex[slotIdx] : -1;
+      const item = itemIdx >= 0 ? items[itemIdx] : undefined;
+      // Only police a video that CLAIMS to be playing. Paused, ended,
+      // seeking or not-yet-loaded states are all legitimate non-progress.
+      if (!v || !item || v.paused || v.ended || v.seeking || v.readyState === 0) {
+        lastTime = v ? v.currentTime : -1;
+        stuckTicks = 0;
+        return;
+      }
+      if (Math.abs(v.currentTime - lastTime) > 0.05) {
+        lastTime = v.currentTime;
+        stuckTicks = 0;
+        stallEscalationRef.current.delete(item.id);
+        return;
+      }
+      stuckTicks += 1;
+      if (stuckTicks < 3) return;
+      stuckTicks = 0;
+
+      const level = stallEscalationRef.current.get(item.id) ?? 0;
+      stallEscalationRef.current.set(item.id, level + 1);
+      const failingSrc = v.currentSrc || v.src;
+      const delivery = slotDeliveryRef.current[slotIdx] ?? "mp4";
+      try {
+        track("clip.stall", {
+          entityType: "kill",
+          entityId: item.id,
+          metadata: {
+            level,
+            delivery,
+            positionSec: Math.round(v.currentTime * 10) / 10,
+          },
+        });
+      } catch {
+        /* analytics is silent on failure by design */
+      }
+
+      const resumeAt = v.currentTime;
+      const resumeThenPlay = () => {
+        const onMeta = () => {
+          try {
+            v.currentTime = resumeAt;
+          } catch {
+            /* seek can throw pre-metadata on some engines — poster restart is fine */
+          }
+        };
+        v.addEventListener("loadedmetadata", onMeta, { once: true });
+        void v.play().catch(() => {});
+      };
+
+      if (delivery === "hls") {
+        const mp4 = pickSrc(item, isDesktop, useLowQuality, isWideStage, cinema);
+        if (mp4) {
+          // Starving HLS stream → same MP4 swap as the load-time
+          // fallback, resumed where it froze so the viewer barely
+          // notices. NEVER load() an MSE-attached element — detach first.
+          detachHls(v);
+          v.src = mp4;
+          slotDeliveryRef.current[slotIdx] = "mp4";
+          resumeThenPlay();
+          return;
+        }
+      } else if (level === 0) {
+        // Plain MP4 stall → one full reload (drops the poisoned buffer).
+        v.load();
+        resumeThenPlay();
+        return;
+      }
+      // Out of remedies — stop pretending. Standard error path : the
+      // item swaps to <FeedItemError /> in place and stays skippable.
+      onError(item.id, failingSrc);
+      try {
+        window.dispatchEvent(
+          new CustomEvent("kc:clip-error", {
+            detail: { itemId: item.id, errorCode: "stall", src: failingSrc },
+          }),
+        );
+      } catch {
+        /* CustomEvent unsupported in some sandboxes */
+      }
+    }, 1000);
+    return () => window.clearInterval(iv);
+  }, [
+    priorities,
+    slotItemIndex,
+    items,
+    isDesktop,
+    useLowQuality,
+    isWideStage,
+    cinema,
+    detachHls,
+    onError,
+  ]);
+
   /** V6 — Battery + saveData awareness. Anything below 20 % battery
    *  AND not plugged in downgrades EVERY slot's preload to "metadata"
    *  (= no big chunk fetches) until the conditions reverse. The
@@ -348,11 +464,19 @@ export function FeedPlayerPool({
   /** V19 (Wave 21.7) — sync `playbackRate` across every slot whenever
    *  the user picks a new speed in the settings drawer. Defensive
    *  clamp : reject anything outside [0.25, 4] to dodge spec-non-
-   *  compliant browsers that throw on extreme values. */
+   *  compliant browsers that throw on extreme values.
+   *  Wave 38.2 — ALSO set defaultPlaybackRate : the HTML media load
+   *  algorithm resets playbackRate to defaultPlaybackRate on every new
+   *  src/load(), so a slot rebind (each clip change) silently snapped
+   *  the user's chosen speed back to 1×. defaultPlaybackRate survives
+   *  the reset and makes every future load inherit the setting. */
   useEffect(() => {
     const safeSpeed = Math.max(0.25, Math.min(4, speed || 1));
     for (const v of videoRefs.current) {
-      if (v) v.playbackRate = safeSpeed;
+      if (v) {
+        v.defaultPlaybackRate = safeSpeed;
+        v.playbackRate = safeSpeed;
+      }
     }
   }, [speed]);
 
@@ -704,6 +828,40 @@ export function FeedPlayerPool({
             // We translate to a stable string for analytics legibility.
             const mediaErr = (v as HTMLVideoElement).error;
             const code = mediaErr ? mediaErrorCodeName(mediaErr.code) : "unknown";
+            // Native-HLS → MP4 fallback. On Safari/iOS the manifest is fed
+            // straight to video.src (no hls.js), so a dead .m3u8 — the norm
+            // during the R2 HLS repackage catch-up — surfaces HERE, not in
+            // useHlsPlayer's fatal-error handler. Without this branch every
+            // such clip was declared broken and dropped, which is why the
+            // feed died in cascade on iOS. Swap to the MP4 and keep the
+            // item; if the MP4 then errors too, currentSrc is no longer a
+            // manifest and we fall through to the broken path below.
+            const failingSrc = v.currentSrc || v.src;
+            const mp4 = pickSrc(item, isDesktop, useLowQuality, isWideStage, cinema);
+            if (/\.m3u8(?:$|\?)/.test(failingSrc) && mp4) {
+              detachHls(v);
+              v.src = mp4;
+              slotDeliveryRef.current[slotIdx] = "mp4";
+              try {
+                track("clip.hls.error", {
+                  entityType: "clip",
+                  entityId: failingSrc,
+                  metadata: {
+                    fatal: true,
+                    type: "native",
+                    details: code,
+                    statusCode: null,
+                    hadFallback: true,
+                  },
+                });
+              } catch {
+                /* analytics is silent on failure by design */
+              }
+              if (priorities[slotIdx] === "live") {
+                void v.play().catch(() => {});
+              }
+              return;
+            }
             // Notify the parent (drops the item from the feed in v1+ flow).
             onError(item.id, v.currentSrc || v.src);
             // Wave 6 — broadcast a custom event so FeedItem can swap to

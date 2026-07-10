@@ -1,15 +1,17 @@
 import type { MetadataRoute } from "next";
-
-const SITE_URL =
-  process.env.NEXT_PUBLIC_SITE_URL ??
-  (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "https://kckills.com");
+// Wave 38.2 — shared SITE_URL (was a local VERCEL_URL-first copy that
+// could point robots/sitemap at vercel.app in prod).
+import { SITE_URL } from "@/lib/site-url";
 
 export default function robots(): MetadataRoute.Robots {
   return {
     rules: [
       {
         userAgent: "*",
-        allow: "/",
+        // Wave 38.2 — "/api/og/" allow: longest-match beats the "/api/"
+        // disallow, so Twitterbot/Googlebot-Image can fetch the og:image
+        // every kill page points at (blocked cards render with no image).
+        allow: ["/", "/api/og/"],
         // /admin/ added per Phase 4 SEO spec — never want the
         // editorial / pipeline / moderation surface in the index.
         disallow: [
@@ -24,8 +26,18 @@ export default function robots(): MetadataRoute.Robots {
       },
       {
         userAgent: "Googlebot",
-        allow: "/",
-        disallow: ["/api/", "/admin/", "/auth/", "/review", "/era/darkness"],
+        allow: ["/", "/api/og/"],
+        // Wave 38.2 — "/settings" added here too: Googlebot obeys ONLY its
+        // own group and ignores "*", so the wildcard disallow was dead for
+        // Google and the settings page was crawlable.
+        disallow: [
+          "/api/",
+          "/admin/",
+          "/auth/",
+          "/settings",
+          "/review",
+          "/era/darkness",
+        ],
       },
     ],
     sitemap: `${SITE_URL}/sitemap.xml`,

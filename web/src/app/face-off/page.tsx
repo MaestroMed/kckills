@@ -172,30 +172,32 @@ function roleOrder(role: string | null): number {
 // Preset duels — the four debates the page is built to settle
 // ════════════════════════════════════════════════════════════════════
 
+// Wave 38.2 — subtitles resolve through p_vsgame i18n keys (they were
+// hardcoded French on an otherwise fully translated page).
 const PRESET_DUELS: FaceOffPresetDuel[] = [
   {
     aSlug: "caliste",
     bSlug: "rekkles",
     label: "Caliste vs Rekkles",
-    subtitle: "Le duel des ADC légendaires",
+    subtitleKey: "fo_preset_caliste_rekkles",
   },
   {
     aSlug: "canna",
     bSlug: "adam",
     label: "Canna vs Adam",
-    subtitle: "T1 import vs showman LFL",
+    subtitleKey: "fo_preset_canna_adam",
   },
   {
     aSlug: "yike",
     bSlug: "cabochard",
     label: "Yike vs Cabochard",
-    subtitle: "Sacre 2025 vs vétéran",
+    subtitleKey: "fo_preset_yike_cabochard",
   },
   {
     aSlug: "bo",
     bSlug: "closer",
     label: "Bo vs Closer",
-    subtitle: "Jungle 2024 — l'ère sombre",
+    subtitleKey: "fo_preset_bo_closer",
   },
 ];
 

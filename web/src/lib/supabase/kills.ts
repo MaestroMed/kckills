@@ -698,11 +698,19 @@ export async function getPublishedKcKillsPage(
 
 export const getPublishedKills = cache(async function getPublishedKills(
   limit = 50,
-  opts: { buildTime?: boolean } = {},
+  opts: {
+    buildTime?: boolean;
+    /** Wave 38.2 — optional push-down of the involvement filter. /scroll
+     *  always discarded the non-matching half of the rows in JS (page.tsx
+     *  keeps team_killer, or team_victim for the « VS KC » chip) — on the
+     *  hottest surface that meant fetching ~2× the KILL_SELECT egress it
+     *  used. Opt-in so every other caller keeps the unfiltered set. */
+    involvement?: "team_killer" | "team_victim";
+  } = {},
 ): Promise<PublishedKillRow[]> {
   try {
     const supabase = createCachedAnonSupabase();
-    const { data, error } = await supabase
+    let query = supabase
       .from("kills")
       .select(KILL_SELECT)
       // PR23 split-status : prefer publication_status when present.
@@ -716,7 +724,11 @@ export const getPublishedKills = cache(async function getPublishedKills(
       )
       .eq("kill_visible", true)            // Gemini QC must have confirmed the kill is in-frame
       .not("clip_url_vertical", "is", null) // real MP4 on R2
-      .not("thumbnail_url", "is", null)     // poster frame so the player isn't black on load
+      .not("thumbnail_url", "is", null);    // poster frame so the player isn't black on load
+    if (opts.involvement) {
+      query = query.eq("tracked_team_involvement", opts.involvement);
+    }
+    const { data, error } = await query
       .order("highlight_score", { ascending: false, nullsFirst: false })
       .order("created_at", { ascending: false })
       .limit(limit);

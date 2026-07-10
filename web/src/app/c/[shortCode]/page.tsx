@@ -37,10 +37,8 @@ import { championIconUrl } from "@/lib/constants";
 import { visitorNameFromHash } from "@/components/bcc/visitor-names";
 import { getServerT } from "@/lib/i18n/server-lang";
 import { CompilationPlayer } from "./CompilationPlayer";
-
-const SITE_URL =
-  process.env.NEXT_PUBLIC_SITE_URL ??
-  (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "https://kckills.com");
+// Wave 38.2 — shared SITE_URL (local VERCEL_URL-first copy removed).
+import { SITE_URL } from "@/lib/site-url";
 
 // Short URLs are user-generated — we can't pre-render at build time.
 // Server-render on first hit, then cache for 60 s. Done compilations

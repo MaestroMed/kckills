@@ -342,7 +342,9 @@ function CaveDashboard({
 // ════════════════════════════════════════════════════════════════════
 
 const PUNCH_FLUSH_DELAY_MS = 500;
-const PUNCH_POLL_MS = 3000;
+// Wave 38.2 — relaxed from 3s: the global counter is cosmetic and flush()
+// already returns the authoritative count after each user action.
+const PUNCH_POLL_MS = 12_000;
 const PUNCH_BATCH_MAX = 100;
 
 const PUNCHER_LEADERBOARD = [
@@ -366,12 +368,15 @@ function CoupDePoingRoom({ sessionHashRef, supabaseRef }: RpcRefs) {
   const lastTickRef = useRef<{ key: number; value: number } | null>(null);
   const [tick, setTick] = useState<{ key: number; value: number } | null>(null);
 
-  // Poll the global counter every 3s
+  // Poll the global counter. Wave 38.2 — skipped while the tab is hidden
+  // (direct Supabase reads count against the egress budget) + refreshed
+  // immediately on return to the tab.
   useEffect(() => {
     const sb = supabaseRef.current ?? createClient();
     supabaseRef.current = sb;
     let cancelled = false;
     async function poll() {
+      if (document.visibilityState === "hidden") return;
       try {
         const { data } = await sb.from("bcc_punches").select("count").eq("id", "global").single();
         if (!cancelled && data && typeof data.count === "number") setGlobalCount(data.count);
@@ -382,7 +387,15 @@ function CoupDePoingRoom({ sessionHashRef, supabaseRef }: RpcRefs) {
     }
     poll();
     const interval = window.setInterval(poll, PUNCH_POLL_MS);
-    return () => { cancelled = true; window.clearInterval(interval); };
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") void poll();
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
   }, [supabaseRef]);
 
   const flush = useCallback(async () => {
@@ -1119,11 +1132,14 @@ function LanceTomatesRoom({ sessionHashRef, supabaseRef }: RpcRefs) {
   const stickerRef = useRef<HTMLDivElement>(null);
   const tomatoIdRef = useRef(0);
 
+  // Wave 38.2 — same egress guard as CoupDePoingRoom: relaxed cadence
+  // (was 4s), no fetch while hidden, immediate refresh on tab return.
   useEffect(() => {
     const sb = supabaseRef.current ?? createClient();
     supabaseRef.current = sb;
     let cancelled = false;
     async function poll() {
+      if (document.visibilityState === "hidden") return;
       try {
         const { data } = await sb.from("bcc_tomatoes").select("count").eq("id", "global").single();
         if (!cancelled && data) {
@@ -1133,8 +1149,16 @@ function LanceTomatesRoom({ sessionHashRef, supabaseRef }: RpcRefs) {
       } catch { /* ignore */ }
     }
     poll();
-    const t = window.setInterval(poll, 4000);
-    return () => { cancelled = true; window.clearInterval(t); };
+    const iv = window.setInterval(poll, 12_000);
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") void poll();
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      cancelled = true;
+      window.clearInterval(iv);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
   }, [supabaseRef]);
 
   useEffect(() => {

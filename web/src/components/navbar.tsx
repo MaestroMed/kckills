@@ -143,7 +143,7 @@ export function Navbar() {
   return (
     <nav
       data-scrolled={scrolled}
-      className={`sticky top-0 z-50 overflow-hidden glass transition-[border-color,box-shadow] duration-500 ${
+      className={`sticky top-0 z-50 glass transition-[border-color,box-shadow] duration-500 ${
         scrolled
           ? "border-b border-[var(--gold)]/25 shadow-[0_8px_30px_-12px_rgba(0,0,0,0.7)]"
           : "border-b border-[var(--border-gold)]"
