@@ -72,6 +72,11 @@ def _vod_ready_game_ids(db) -> list[str]:
             f"{db.base}/games", headers=db.headers,
             params={"select": "id", "data_source": "eq.gol_gg",
                     "vod_youtube_id": "not.is.null",
+                    # vod-only games carry offset NULL until the daemon's
+                    # vod_offset_finder calibrates them — clipping before
+                    # that would cut at the wrong spot. Only enqueue when
+                    # the offset is known.
+                    "vod_offset_seconds": "not.is.null",
                     "limit": str(PAGE_SIZE), "offset": str(offset)},
             timeout=30.0,
         )
