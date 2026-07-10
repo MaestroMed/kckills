@@ -8,12 +8,18 @@ Pipeline position
 The user's vision : "On doit vraiment publier rétroactivement du très bon.
 Que du bon." The canonical map (game_events) tracks the QC checklist via
 the GENERATED column is_publishable. This module reads "rows where
-is_publishable=TRUE AND published_at IS NULL", and :
+is_publishable=TRUE AND the linked kill is still status='analyzed'"
+(PostgREST inner-join embed on kills), and :
   1. flips kills.status to 'published' (so the existing /scroll RPC and
      legacy admin queries pick it up)
-  2. relies on the BEFORE UPDATE trigger on game_events to auto-stamp
-     published_at via the helper logic in migration 014's
-     fn_touch_game_event() function
+  2. stamps game_events.published_at if not already set. NOTE : discovery
+     deliberately does NOT filter on published_at IS NULL anymore — the
+     fn_touch_game_event BEFORE UPDATE trigger (migration 014) auto-stamps
+     published_at in the SAME transaction as the update that turns the
+     last QC gate green, which made such rows permanently invisible to a
+     published_at-based discovery while their kill stayed 'analyzed'
+     (3x recurring incident, 312 kills force-published 2026-07-09).
+     The kill's own status is the source of truth for "work remaining".
 
 Conversely, if is_publishable goes back to FALSE (admin marks
 qc_human_approved=FALSE, or clip_qc finds drift > 30s), this module
@@ -79,12 +85,19 @@ async def _fetch_publishable(db) -> list[dict]:
     flipped to status='published' yet.
 
     is_publishable=TRUE means all hard gates green + no permissive gate
-    explicitly FALSE (see migration 014). published_at IS NULL means the
-    BEFORE UPDATE trigger hasn't fired yet — i.e., no module has bumped
-    any column on this row since it became publishable.
+    explicitly FALSE (see migration 014). Discovery is keyed off the
+    KILL's state (kills.status='analyzed' via a PostgREST inner-join
+    embed), NOT off game_events.published_at : the fn_touch_game_event
+    trigger can pre-stamp published_at in the same transaction that made
+    the row publishable, which used to hide those rows forever from a
+    published_at IS NULL scan while the kill stayed 'analyzed'.
 
-    We additionally filter on kill_id IS NOT NULL to avoid trying to
-    publish moment-only events (no kills row to flip yet).
+    The kills!inner(status) embed also implies kill_id IS NOT NULL
+    (moment-only events have no kills row to join), but we keep the
+    explicit filter for clarity + planner help.
+
+    Each returned row carries an extra "kills": {"status": ...} key from
+    the embed — callers only read id/kill_id so this is inert.
 
     Tries the post-migration-045 column name first, falls back to the
     legacy name on PostgREST 42703 so this code is forward+backward
@@ -99,9 +112,9 @@ async def _fetch_publishable(db) -> list[dict]:
                 f"{db.base}/game_events",
                 headers=db.headers,
                 params={
-                    "select": f"id,kill_id,event_type,{col}",
+                    "select": f"id,kill_id,event_type,{col},kills!inner(status)",
                     "is_publishable": "eq.true",
-                    "published_at": "is.null",
+                    "kills.status": "eq.analyzed",
                     "kill_id": "not.is.null",
                     "limit": PUBLISH_BATCH,
                 },
@@ -287,20 +300,25 @@ def _process_publish_check(job: dict) -> bool:
     if ev is None:
         return False
 
-    # No-op cases — return True so the job marks succeeded.
+    # No-op case — return True so the job marks succeeded.
     if not ev.get("is_publishable"):
         log.info("publish_check_no_longer_publishable",
                  event_id=event_id[:8])
-        return True
-    if ev.get("published_at"):
         return True
 
     kill_id = ev.get("kill_id")
     if not kill_id:
         return True
 
+    # Retro-compat with the fn_touch_game_event pre-stamp bug : the
+    # BEFORE UPDATE trigger may have already set published_at in the
+    # same transaction that turned the last QC gate green — BEFORE this
+    # module ever saw the row. A pre-stamped published_at must NOT skip
+    # the kill flip (that skip is exactly what stranded 312 kills at
+    # status='analyzed'). Flip the kill unconditionally; only skip the
+    # now-redundant stamp.
     ok_kill = _flip_kill_published(kill_id)
-    ok_event = _stamp_event_published(event_id)
+    ok_event = True if ev.get("published_at") else _stamp_event_published(event_id)
     if ok_kill and ok_event:
         # Migration 045 renamed kc_involvement → tracked_team_involvement
         # to match kills.tracked_team_involvement. _involvement_value()

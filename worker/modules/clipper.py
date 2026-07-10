@@ -283,11 +283,9 @@ async def clip_kill(
 
     try:
         # ─── 1. Download segment ────────────────────────────────────
-        can_dl = await scheduler.wait_for("ytdlp")
-        if not can_dl:
-            log.warn("ytdlp_quota_exceeded", kill_id=kill_id)
-            return None
-
+        # The ytdlp scheduler wait lives in the slow branch ONLY : the
+        # local-VOD fast path makes zero YouTube calls and must not pay
+        # the inter-download delay.
         if local_vod_path and os.path.exists(local_vod_path):
             # ─── Fast path: extract segment from local VOD via ffmpeg ──
             # ZERO YouTube calls. No throttle risk. Instant.
@@ -1133,6 +1131,70 @@ BATCH_SIZE = get_batch_size("clipper")
 CONCURRENCY = get_parallelism("clipper")
 CLIP_LEASE_SECONDS = get_lease_seconds("clipper")
 
+# Disk budget for the shared VOD cache (worker/vods). The daemon fast
+# path deliberately KEEPS downloaded VODs so later passes get cache
+# hits, but this machine has no D: — everything lands on C: (~130 GB
+# free). Bound the cache so it can never fill the system disk.
+VOD_CACHE_MAX_BYTES = 60 * 1024**3       # hard cap on vods/ total size
+VOD_CACHE_MIN_FREE_BYTES = 40 * 1024**3  # below this, evict after use
+
+
+def _vod_cache_hygiene(just_used_path: str | None) -> None:
+    """Sync helper (runs via asyncio.to_thread) — post-group cache upkeep.
+
+    1. If free space on the VODs volume is < 40 GB, remove the VOD we
+       just finished with (cache reuse is worth less than a full disk).
+    2. Purge oldest VODs (mtime) until the directory is <= 60 GB. The
+       just-used file is exempt — it's the most likely cache hit on the
+       next pass. Windows refuses to delete files another process
+       (pipeline.py's ffmpeg) holds open and _safe_remove swallows that,
+       so in-use VODs survive the purge naturally.
+    """
+    import shutil
+    try:
+        free = shutil.disk_usage(VODS_DIR).free
+    except OSError:
+        return
+    if just_used_path and free < VOD_CACHE_MIN_FREE_BYTES:
+        log.info(
+            "vod_cache_evict_low_disk",
+            path=os.path.basename(just_used_path),
+            free_gb=round(free / 1024**3, 1),
+        )
+        _safe_remove(just_used_path)
+
+    try:
+        entries: list[tuple[float, int, str]] = []
+        total = 0
+        for name in os.listdir(VODS_DIR):
+            p = os.path.join(VODS_DIR, name)
+            if not os.path.isfile(p):
+                continue
+            try:
+                st = os.stat(p)
+            except OSError:
+                continue
+            entries.append((st.st_mtime, st.st_size, p))
+            total += st.st_size
+        if total <= VOD_CACHE_MAX_BYTES:
+            return
+        entries.sort()  # oldest first
+        for _mtime, size, p in entries:
+            if total <= VOD_CACHE_MAX_BYTES:
+                break
+            if just_used_path and os.path.normcase(p) == os.path.normcase(just_used_path):
+                continue
+            _safe_remove(p)
+            if not os.path.exists(p):
+                total -= size
+                log.info(
+                    "vod_cache_purged",
+                    path=os.path.basename(p),
+                    size_mb=round(size / (1024 * 1024)),
+                )
+    except OSError:
+        return
+
 
 @run_logged()
 async def run() -> int:
@@ -1273,11 +1335,49 @@ async def run() -> int:
             claimed=len(claimed), processing=len(work),
         )
 
-    # ─── 3. Parallel clip workers ─────────────────────────────────
+    # ─── 3. Group work by shared VOD (fast path) ──────────────────
+    # Jobs in a batch share VODs heavily (~5-6 clips/VOD). Mirror
+    # modules/pipeline.py : download the full VOD ONCE per group and
+    # extract every kill locally with ffmpeg, instead of paying a
+    # ~283 s yt-dlp segment download (HLS locate included) per kill.
+    # Parent games are prefetched once per distinct game here — the
+    # grouping needs vod_youtube_id before dispatch, and this replaces
+    # the per-kill select that used to live inside _process_one.
+    games_by_id: dict[str, dict] = {}
+    for gid in {k.get("game_id") for (k, _j) in work if k.get("game_id")}:
+        rows = safe_select("games", "vod_youtube_id, vod_offset_seconds", id=gid)
+        if rows:
+            games_by_id[gid] = rows[0]
+
+    vod_groups: dict[str, list[tuple[dict, dict | None]]] = {}
+    singles: list[tuple[dict, dict | None]] = []
+    for k, j in work:
+        game_row = games_by_id.get(k.get("game_id") or "")
+        vid = (game_row or {}).get("vod_youtube_id")
+        if vid:
+            vod_groups.setdefault(vid, []).append((k, j))
+        else:
+            # game missing / VOD not found yet — _process_one keeps
+            # handling the job-failure bookkeeping on the normal path.
+            singles.append((k, j))
+    # 1-clip groups keep the segment-download path : a full ~2.5 GB VOD
+    # download for one 40 s clip would be counter-productive.
+    for vid in [v for v, items in vod_groups.items() if len(items) < 2]:
+        singles.extend(vod_groups.pop(vid))
+
+    if vod_groups:
+        log.info(
+            "clipper_vod_groups",
+            groups=len(vod_groups),
+            grouped=sum(len(v) for v in vod_groups.values()),
+            singles=len(singles),
+        )
+
+    # ─── 4. Parallel clip workers ─────────────────────────────────
     sem = asyncio.Semaphore(CONCURRENCY)
     counters = {"ok": 0, "fail": 0, "yt_blocked": 0}
 
-    async def _process_one(kill: dict, job: dict | None):
+    async def _process_one(kill: dict, job: dict | None, local_vod_path: str | None = None):
         # Wave 34 T3.2 — bind kill_id + game_id to the contextvars so every
         # log line emitted from inside this clip pass (including the deep
         # clip_kill() / ffmpeg / r2_client.upload_clip helpers) carries the
@@ -1290,20 +1390,16 @@ async def run() -> int:
             game_id=kill.get("game_id"),
         ):
             async with sem:
-                # Fetch parent game to find the VOD info
-                games = safe_select(
-                    "games",
-                    "vod_youtube_id, vod_offset_seconds",
-                    id=kill.get("game_id", ""),
-                )
-                if not games:
+                # Parent game (VOD info) prefetched once per pass in
+                # games_by_id — the VOD grouping needed it before dispatch.
+                game = games_by_id.get(kill.get("game_id") or "")
+                if not game:
                     if job is not None:
                         await asyncio.to_thread(
                             job_queue.fail, job["id"],
                             "parent game missing", 3600, "game_missing",
                         )
                     return
-                game = games[0]
                 yt_id = game.get("vod_youtube_id")
                 offset = int(game.get("vod_offset_seconds") or 0)
                 if not yt_id:
@@ -1327,6 +1423,7 @@ async def run() -> int:
                         youtube_id=yt_id,
                         vod_offset_seconds=offset,
                         game_time_seconds=int(kill.get("game_time_seconds") or 0),
+                        local_vod_path=local_vod_path,
                         game_id=kill.get("game_id") or None,
                     )
                 except YouTubeBotBlockedError:
@@ -1399,10 +1496,28 @@ async def run() -> int:
     # post-gather loop that counts YouTubeBotBlockedError for the batch
     # summary log. TaskGroup's "cancel all siblings on first error" semantic
     # would lose work and break that audit log. Keep gather().
-    results = await asyncio.gather(
-        *(_process_one(k, j) for (k, j) in work),
-        return_exceptions=True,
-    )
+    results: list = []
+    # Multi-clip groups first : ONE full-VOD download per group (cache-
+    # aware + ytdlp-scheduled inside download_full_vod), then the group's
+    # kills fan out to the encode workers and extract locally — zero
+    # YouTube calls. Groups run sequentially : the ytdlp scheduler would
+    # serialise the downloads anyway, and it keeps at most one freshly
+    # downloaded VOD pending hygiene at a time.
+    for group_vid, group_items in vod_groups.items():
+        local_vod = await download_full_vod(group_vid)
+        # None → download failed / quota : the group's kills fall back
+        # to the per-kill segment path inside clip_kill.
+        results.extend(await asyncio.gather(
+            *(_process_one(k, j, local_vod) for (k, j) in group_items),
+            return_exceptions=True,
+        ))
+        if local_vod:
+            await asyncio.to_thread(_vod_cache_hygiene, local_vod)
+    if singles:
+        results.extend(await asyncio.gather(
+            *(_process_one(k, j) for (k, j) in singles),
+            return_exceptions=True,
+        ))
     # Drain the tail of the buffer so the next module sees a consistent
     # DB state immediately.
     await get_writer().flush_now()

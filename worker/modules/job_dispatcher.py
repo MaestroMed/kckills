@@ -120,6 +120,13 @@ async def _bridge_publishable_to_job() -> tuple[int, int]:
     a higher cadence (60s vs 300s) so a freshly-publishable event lands
     in the queue within a minute. event_publisher.run() also discovers,
     but the unique index dedupes so doing it twice is harmless.
+
+    Discovery is keyed off the KILL's state (kills.status='analyzed'
+    via a PostgREST inner-join embed), NOT off published_at IS NULL :
+    the fn_touch_game_event trigger can pre-stamp published_at in the
+    same transaction that made the row publishable, which used to hide
+    those rows forever while their kill stayed 'analyzed'. Rows carry
+    an extra "kills" key from the embed — we only read "id", so inert.
     """
     db = get_db()
     if db is None:
@@ -129,9 +136,9 @@ async def _bridge_publishable_to_job() -> tuple[int, int]:
             f"{db.base}/game_events",
             headers=db.headers,
             params={
-                "select": "id,kill_id",
+                "select": "id,kill_id,kills!inner(status)",
                 "is_publishable": "eq.true",
-                "published_at": "is.null",
+                "kills.status": "eq.analyzed",
                 "kill_id": "not.is.null",
                 "limit": str(DISPATCH_BATCH),
             },
