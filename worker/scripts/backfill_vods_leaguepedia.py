@@ -96,7 +96,8 @@ TARGETS = [
     ("LEC Summer Season 2024",           "LEC/2024 Season/Summer Season",                  0),
     ("LEC Summer Playoffs 2024",         "LEC/2024 Season/Summer Playoffs",                0),
     ("LEC Season Finals 2024",           "LEC/2024 Season/Season Finals",                  0),
-    ("LEC Winter 2025",                  "LEC/2025 Season/Winter Season",                  0),
+    # DB row is uppercase "LEC WINTER 2025" (unlike its KC_TOURNAMENTS label)
+    ("LEC WINTER 2025",                  "LEC/2025 Season/Winter Season",                  0),
     ("LEC 2025 Winter Playoffs",         "LEC/2025 Season/Winter Playoffs",                0),
     ("LEC 2025 Spring Season",           "LEC/2025 Season/Spring Season",                  0),
     ("LEC 2025 Spring Playoffs",         "LEC/2025 Season/Spring Playoffs",                0),
@@ -252,6 +253,9 @@ def main() -> None:
     ap.add_argument("--delay", type=float, default=12.0, help="délai entre tournois (s)")
     ap.add_argument("--force", action="store_true",
                     help="réécrit le VOD même si déjà posé (pour re-mapper)")
+    ap.add_argument("--allow-vod-only", action="store_true",
+                    help="accepte le champ Vod sans VodGameStart (offset "
+                         "calibré ensuite par vod_offset_finder)")
     args = ap.parse_args()
 
     targets = [t for t in TARGETS if not args.tournament or t[0] == args.tournament]
@@ -309,7 +313,7 @@ def main() -> None:
             # it on MatchScheduleGame is what threw MWException before).
             rows = lp_query(
                 "MatchScheduleGame=MSG,MatchSchedule=MS",
-                "MSG.Blue,MSG.Red,MSG.VodGameStart,MSG.MatchId,MS.DateTime_UTC",
+                "MSG.Blue,MSG.Red,MSG.VodGameStart,MSG.Vod,MSG.MatchId,MS.DateTime_UTC",
                 f'MSG.OverviewPage="{overview}" AND (MSG.Blue LIKE "Karmine%" OR MSG.Red LIKE "Karmine%")',
                 join_on="MSG.MatchId=MS.MatchId",
             )
@@ -322,6 +326,15 @@ def main() -> None:
             blue, red = _lpg(row, "Blue"), _lpg(row, "Red")
             opp = red if is_kc(norm_team(blue)) else blue
             parsed = parse_vod_gamestart(_lpg(row, "VodGameStart"))
+            if not parsed and args.allow_vod_only:
+                # Fallback: general per-game Vod without a game-start offset.
+                # We store vod_youtube_id with offset NULL; the daemon's
+                # vod_offset_finder (games WHERE offset IS NULL) calibrates
+                # it by reading the in-game timer, and the QC gates keep any
+                # miscalibrated clip from publishing.
+                v = parse_vod_gamestart(_lpg(row, "Vod"))
+                if v:
+                    parsed = (v[0], None)
             if not parsed:
                 # Keep as a positional HOLE: dropping it shifts every later
                 # game of that opponent onto the wrong VOD (LFL bo1 pairs).
@@ -379,10 +392,13 @@ def main() -> None:
             if g.get("vod_youtube_id") and not args.force:
                 grand["already"] += 1
                 continue
-            print(f"    ✓ {g['external_id']} g{g['game_number']} opp={g['_opp']!r} → {yid} @ {off}s{tag}")
+            offtxt = f"@ {off}s" if off is not None else "@ offset:auto"
+            print(f"    ✓ {g['external_id']} g{g['game_number']} opp={g['_opp']!r} → {yid} {offtxt}{tag}")
             if not args.dry_run:
-                sb_patch(f"games?id=eq.{g['id']}",
-                         {"vod_youtube_id": yid, "vod_offset_seconds": off})
+                body = {"vod_youtube_id": yid}
+                if off is not None:
+                    body["vod_offset_seconds"] = off
+                sb_patch(f"games?id=eq.{g['id']}", body)
                 grand["set"] += 1
         print()
 
