@@ -382,7 +382,16 @@ export default async function RootLayout({
             same value to scope CACHE_NAME — so the activate sweep evicts
             the previous build's hashed chunks. Constrained to [A-Za-z0-9]
             so the inline string stays injection-safe. */}
-        <script dangerouslySetInnerHTML={{ __html: `if('serviceWorker' in navigator){navigator.serviceWorker.register('/sw.js?v=${SW_BUILD_ID}')}` }} />
+        {/* updateViaCache:'none' forces the browser to revalidate /sw.js on
+            every update check (never serve it from the HTTP cache), so a new
+            deploy's SW is picked up promptly. The controllerchange listener —
+            armed ONLY when a controller already exists (a returning visitor,
+            not a first install) — reloads the page once when a freshly
+            activated SW claims it, so the user runs the new bundle without a
+            manual hard-refresh. Together with the SW's skipWaiting + activate
+            cache-sweep, this makes a stale-bundle freeze self-heal in one
+            visit instead of persisting across reloads. */}
+        <script dangerouslySetInnerHTML={{ __html: `if('serviceWorker' in navigator){navigator.serviceWorker.register('/sw.js?v=${SW_BUILD_ID}',{updateViaCache:'none'});if(navigator.serviceWorker.controller){var _kcReloaded=false;navigator.serviceWorker.addEventListener('controllerchange',function(){if(_kcReloaded)return;_kcReloaded=true;location.reload()})}}` }} />
       </body>
     </html>
   );

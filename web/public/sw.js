@@ -68,9 +68,14 @@ function readBuildId() {
 }
 const BUILD_ID = readBuildId();
 const CACHE_PREFIX = "loltok";
-// Bump the `v6` token when the SW logic itself changes; BUILD_ID busts on
-// every deploy. Either changing produces a fresh cache + activate sweep.
-const CACHE_NAME = `${CACHE_PREFIX}-v6-${BUILD_ID}`;
+// Bump this token (v6→v7→…) when the SW logic itself changes; BUILD_ID busts
+// on every deploy. Either changing produces a fresh cache + activate sweep.
+// A token bump also forces returning visitors still on an OLD service worker
+// to reinstall: their browser revalidates /sw.js (max-age=0,must-revalidate),
+// sees the changed bytes, installs the new SW → skipWaiting → activate purges
+// every prior loltok-* cache → clients.claim → they run the current build.
+// v7 (2026-07-13): navigations now fetch with {cache:'no-store'} — see below.
+const CACHE_NAME = `${CACHE_PREFIX}-v7-${BUILD_ID}`;
 const PRECACHE = ["/scroll", "/live", "/", "/manifest.json", "/offline.html"];
 
 // Static, slow-moving assets that are safe to cache-first (not content
@@ -150,7 +155,14 @@ self.addEventListener("fetch", (event) => {
   // hashes is exactly the regression #33 is about.
   if (event.request.mode === "navigate") {
     event.respondWith(
-      fetch(event.request).catch(async () => {
+      // {cache:"no-store"} — bypass the HTTP cache entirely so a returning
+      // visitor ALWAYS gets the freshest HTML (current chunk hashes + current
+      // SW registration URL), never a browser-cached document that would pin
+      // them to an old build + stale in-app data (e.g. the dead-track music
+      // playlist). Network-first alone wasn't enough: a plain fetch() can be
+      // satisfied from the HTTP cache and re-serve stale HTML. Falls back to
+      // the precached shell only when genuinely offline.
+      fetch(event.request, { cache: "no-store" }).catch(async () => {
         const cache = await caches.open(CACHE_NAME);
         return (
           (await cache.match(event.request)) ||
