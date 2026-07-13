@@ -320,7 +320,9 @@ export function FloatingPlayerProvider({ children }: { children: ReactNode }) {
   // After the user has opted-in once, we auto-resume on the next visit
   // as soon as ANY click / tap happens (browser autoplay policy).
   useEffect(() => {
-    if (!isOptedIn || isPlaying) return;
+    // /chambre owns the audio (its dread player) — never let the scroll
+    // playlist start under it, not even on the "Descendre" gesture.
+    if (!isOptedIn || isPlaying || pathname === "/chambre") return;
     let armed = true;
 
     const onFirstGesture = () => {
@@ -350,7 +352,38 @@ export function FloatingPlayerProvider({ children }: { children: ReactNode }) {
       window.removeEventListener("pointerdown", onFirstGesture);
       window.removeEventListener("keydown", onFirstGesture);
     };
-  }, [isOptedIn, isPlaying]);
+  }, [isOptedIn, isPlaying, pathname]);
+
+  // ─── La Chambre des Souffrances mutes the scroll music ───────────
+  // /chambre runs its own escalating dread player, so the wolf player must
+  // go quiet while we're down there. Pause on entry (remembering whether it
+  // had been playing), resume on exit if it had. Depends on pathname only —
+  // it captures the live isPlaying at the moment of the route change and
+  // must NOT re-run when isPlaying flips (that would clobber the memory).
+  const wasPlayingBeforeChamberRef = useRef(false);
+  useEffect(() => {
+    if (pathname === "/chambre") {
+      wasPlayingBeforeChamberRef.current = isPlaying;
+      if (isPlaying) {
+        try {
+          playerRef.current?.pauseVideo();
+        } catch {
+          /* swallow */
+        }
+        setIsPlaying(false);
+      }
+    } else if (wasPlayingBeforeChamberRef.current) {
+      wasPlayingBeforeChamberRef.current = false;
+      setTimeout(() => {
+        try {
+          playerRef.current?.playVideo();
+        } catch {
+          /* swallow */
+        }
+      }, 200);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pathname]);
 
   // ─── Position polling (1Hz when playing) ─────────────────────────
   useEffect(() => {
