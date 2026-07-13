@@ -586,6 +586,8 @@ function ChamberAudio({ depth, active }: { depth: number; active: boolean }) {
   const trackRef = useRef<string>("");
   const [ready, setReady] = useState(false);
   const [soundOn, setSoundOn] = useState(true);
+  const [track, setTrack] = useState("");
+  const [playing, setPlaying] = useState(false);
   const soundOnRef = useRef(true);
   soundOnRef.current = soundOn;
 
@@ -603,6 +605,7 @@ function ChamberAudio({ depth, active }: { depth: number; active: boolean }) {
       if (!w.YT) return;
       const first = trackForDepth(depth);
       trackRef.current = first;
+      setTrack(first);
       playerRef.current = new w.YT.Player(hostRef.current, {
         videoId: first,
         height: "120",
@@ -628,6 +631,7 @@ function ChamberAudio({ depth, active }: { depth: number; active: boolean }) {
             setReady(true);
           },
           onStateChange: (e) => {
+            setPlaying(e.data === 1); // 1 = PLAYING
             if (e.data === 0) {
               try {
                 e.target.playVideo();
@@ -651,6 +655,7 @@ function ChamberAudio({ depth, active }: { depth: number; active: boolean }) {
     const want = trackForDepth(depth);
     if (want !== trackRef.current) {
       trackRef.current = want;
+      setTrack(want);
       try {
         playerRef.current.loadVideoById(want);
         playerRef.current.setVolume(volume);
@@ -716,6 +721,8 @@ function ChamberAudio({ depth, active }: { depth: number; active: boolean }) {
         onClick={toggleSound}
         aria-label={soundOn ? "Couper le son" : "Activer le son"}
         aria-pressed={soundOn}
+        data-dread-track={track}
+        data-dread-playing={playing ? "1" : "0"}
         className="fixed bottom-4 left-4 z-[95] flex h-11 w-11 items-center justify-center rounded-full border border-white/15 bg-black/55 text-white/75 backdrop-blur-sm transition-colors hover:border-[var(--red)] hover:text-[var(--red)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--red)] focus-visible:outline-offset-2"
       >
         {soundOn ? (

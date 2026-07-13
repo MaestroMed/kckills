@@ -363,8 +363,13 @@ export function FloatingPlayerProvider({ children }: { children: ReactNode }) {
   const wasPlayingBeforeChamberRef = useRef(false);
   useEffect(() => {
     if (pathname === "/chambre") {
-      wasPlayingBeforeChamberRef.current = isPlaying;
+      // Keep the wolf silent the WHOLE time we're in the Chambre, not just on
+      // entry. It can (re)start after this effect first ran — a route prefetch,
+      // a stray gesture, the resume path — so `isPlaying` is a dependency and
+      // we re-pause on every flip to true. Re-pausing sets isPlaying false,
+      // which re-runs this with the condition now false → no loop.
       if (isPlaying) {
+        wasPlayingBeforeChamberRef.current = true;
         try {
           playerRef.current?.pauseVideo();
         } catch {
@@ -382,8 +387,7 @@ export function FloatingPlayerProvider({ children }: { children: ReactNode }) {
         }
       }, 200);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pathname]);
+  }, [pathname, isPlaying]);
 
   // ─── Position polling (1Hz when playing) ─────────────────────────
   useEffect(() => {
