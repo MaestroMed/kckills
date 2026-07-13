@@ -223,7 +223,7 @@ function CircleSection({
       {/* Deaths grid */}
       <div className="mx-auto grid max-w-6xl grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
         {circle.clips.map((clip) => (
-          <ClipCard key={clip.id} clip={clip} intense={circle.depth >= 8} reduce={reduce} />
+          <ClipCard key={clip.id} clip={clip} depth={circle.depth} reduce={reduce} />
         ))}
       </div>
     </section>
@@ -236,15 +236,22 @@ function CircleSection({
 
 function ClipCard({
   clip,
-  intense,
+  depth,
   reduce,
 }: {
   clip: ChamberClip;
-  intense: boolean;
+  /** The circle's depth (1-10) — grades the video (deeper = drained + red). */
+  depth: number;
   reduce: boolean;
 }) {
   const ref = useRef<HTMLVideoElement>(null);
   const [play, setPlay] = useState(false);
+  const g = depth / 10; // 0.1 → 1.0
+  const intense = depth >= 8;
+  // Filter the VIDEO directly — the only thing that grades a hardware-
+  // composited <video> layer (overlays / mix-blend / backdrop-filter don't
+  // reach it). Constant per circle, so no re-render on scroll.
+  const videoFilter = `grayscale(${(g * 0.82).toFixed(2)}) sepia(${(g * 0.38).toFixed(2)}) hue-rotate(${Math.round(-g * 22)}deg) contrast(${(1 + g * 0.16).toFixed(2)}) brightness(${(1 - g * 0.14).toFixed(2)})`;
 
   useEffect(() => {
     const el = ref.current;
@@ -283,7 +290,7 @@ function ClipCard({
         playsInline
         preload="none"
         className="h-full w-full object-cover"
-        style={{ opacity: play ? 1 : 0.85 }}
+        style={{ opacity: play ? 1 : 0.85, filter: videoFilter }}
       />
       {/* bottom scrim + caption */}
       <figcaption className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 via-black/40 to-transparent p-2.5">
@@ -312,29 +319,16 @@ function GradeOverlay({ stress, reduce }: { stress: number; reduce: boolean }) {
   // keep the static darkening but drop the heartbeat pulse.
   return (
     <>
-      {/* Desaturation — a grey layer in `saturation` blend mode drains the
-          colour out of everything behind it. Reliable across engines, unlike
-          backdrop-filter which several ignore on a transparent box (that was
-          why the v1 grade looked too soft at 100%). */}
+      {/* Blood haze — a faint red fills the gaps and washes over the clips as
+          we sink. Normal alpha compositing (NOT mix-blend), so it actually
+          reaches the hardware-composited <video> layers ; the desaturation
+          itself is done per-card via a CSS filter on each video. */}
       <div
         aria-hidden
         className="pointer-events-none fixed inset-0 z-[86]"
         style={{
-          background: "#808080",
-          mixBlendMode: "saturation",
-          opacity: stress * 0.92,
-          transition: reduce ? "none" : "opacity 0.6s ease-out",
-        }}
-      />
-      {/* Blood wash — multiplies a deep red over the drained scene. */}
-      <div
-        aria-hidden
-        className="pointer-events-none fixed inset-0 z-[87]"
-        style={{
-          background: "#4a0008",
-          mixBlendMode: "multiply",
-          opacity: stress * 0.55,
-          transition: reduce ? "none" : "opacity 0.6s ease-out",
+          background: `rgba(46,0,8,${stress * 0.3})`,
+          transition: reduce ? "none" : "background 0.6s ease-out",
         }}
       />
       {/* Vignette — closes in on the frame as the walls press in. */}
