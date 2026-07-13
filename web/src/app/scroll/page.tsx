@@ -20,6 +20,8 @@ import {
   getPublishedKcKillCount,
   getPublishedKills,
   getScrollFeedKills,
+  getScrollFeedPoolCount,
+  getTopScrollKills,
 } from "@/lib/supabase/kills";
 import { getTrackedRoster } from "@/lib/supabase/players";
 import {
@@ -244,24 +246,44 @@ export default async function ScrollV2Page({ searchParams }: ScrollPageProps) {
     500,
   );
 
-  // Wave 41 — MAX RANDOMNESS. Fetch the real catalogue size first (fast HEAD
-  // count) so the default "Pour Toi" feed can window a RANDOM slice of the
-  // WHOLE catalogue per session (offset rotated by the feed seed) instead of
-  // always the top-250 by highlight_score. This is what kills the "same ~10
-  // clips on loop / revient au même clip" feeling — every clip surfaces over
-  // successive visits, and each visit is a different random slice.
-  const catalogTotal = await getPublishedKcKillCount();
+  // Wave 41 — curated opener + quality-floored random pool.
+  //   • Opener : the top-30 clips by highlight_score — a "belle séquence" of
+  //     the very best clips, always first, in order.
+  //   • Rest   : a RANDOM window of the floored pool (score >= QUALITY_FLOOR),
+  //     rotated per session by the feed seed, so it's varied across visits but
+  //     skips the low-score junk (drafts / plateau / OTP-screen false positives
+  //     Gemini QC mis-passed) pending a full QC re-pass. Kills both the "same
+  //     ~10 clips on loop" feeling AND the "trop de mauvais clips" one.
+  // Aggressive floor (Mehdi "régime maximum") — keeps ~820 clips scored >= 7,
+  // dropping the ~580 lower tier where the draft/plateau/OTP junk concentrates.
+  // env-tunable so the floor can move without a deploy once the QC re-pass runs.
+  const QUALITY_FLOOR = Math.min(
+    10,
+    Math.max(0, parseInt(process.env.SCROLL_QUALITY_FLOOR ?? "7", 10) || 7),
+  );
+  const OPENERS = 30;
+  const [poolCount, catalogTotal] = await Promise.all([
+    catalogEnabled ? getScrollFeedPoolCount(QUALITY_FLOOR) : Promise.resolve(0),
+    getPublishedKcKillCount(),
+  ]);
   const windowOffset =
-    catalogEnabled && catalogTotal > KILLS_LIMIT
-      ? feedSeed % (catalogTotal - KILLS_LIMIT)
+    catalogEnabled && poolCount > KILLS_LIMIT
+      ? feedSeed % (poolCount - KILLS_LIMIT)
       : 0;
-  const [data, allKills, roster] = await Promise.all([
+  const [data, topKills, windowKills, roster] = await Promise.all([
     Promise.resolve(loadRealData()),
+    catalogEnabled ? getTopScrollKills(OPENERS) : Promise.resolve([]),
     catalogEnabled
-      ? getScrollFeedKills(KILLS_LIMIT, windowOffset)
+      ? getScrollFeedKills(KILLS_LIMIT, windowOffset, QUALITY_FLOOR)
       : getPublishedKills(KILLS_LIMIT),
     getTrackedRoster(),
   ]);
+  // Merge : openers first (score order), then the window minus any opener
+  // already present (dedupe by id).
+  const openerIds = new Set(topKills.map((k) => k.id));
+  const allKills = catalogEnabled
+    ? [...topKills, ...windowKills.filter((k) => !openerIds.has(k.id))]
+    : windowKills;
 
   const ROLE_FOR_IGN: Record<string, "TOP" | "JGL" | "MID" | "ADC" | "SUP"> = {
     Canna: "TOP",
@@ -463,7 +485,18 @@ export default async function ScrollV2Page({ searchParams }: ScrollPageProps) {
     // V25 multi-axis anti-repeat caps. When the recommendation
     // engine kicks in (post-V21 dwell signals), it folds personalised
     // suggestions into the tail of this list.
-    items = weightedShuffle(recencyBoosted, feedSeed);
+    // Wave 41 — keep the curated top-30 opener sequence in order (the "belle
+    // séquence" of the best clips), shuffle ONLY the rest for variety. Openers
+    // are the first `OPENERS` items (getTopScrollKills, front-loaded pre-filter).
+    if (catalogEnabled) {
+      const oc = Math.min(OPENERS, recencyBoosted.length);
+      items = [
+        ...recencyBoosted.slice(0, oc),
+        ...weightedShuffle(recencyBoosted.slice(oc), feedSeed),
+      ];
+    } else {
+      items = weightedShuffle(recencyBoosted, feedSeed);
+    }
   }
   const clipCount = items.length;
 

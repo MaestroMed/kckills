@@ -752,11 +752,12 @@ export const getPublishedKills = cache(async function getPublishedKills(
 export const getScrollFeedKills = cache(async function getScrollFeedKills(
   limit = 250,
   offset = 0,
+  minScore = 0,
 ): Promise<PublishedKillRow[]> {
   try {
     const supabase = createCachedAnonSupabase();
     const from = Math.max(0, offset);
-    const { data, error } = await supabase
+    let q = supabase
       .from("kills")
       .select(KILL_SELECT)
       .or(
@@ -766,7 +767,12 @@ export const getScrollFeedKills = cache(async function getScrollFeedKills(
       .eq("kill_visible", true)
       .eq("tracked_team_involvement", "team_killer")
       .not("clip_url_vertical", "is", null)
-      .not("thumbnail_url", "is", null)
+      .not("thumbnail_url", "is", null);
+    // Quality floor — drops the low-score tier (drafts / plateau / OTP-screen
+    // false positives Gemini QC mis-passed) from the random pool so the feed
+    // stays watchable pending a full QC re-pass.
+    if (minScore > 0) q = q.gte("highlight_score", minScore);
+    const { data, error } = await q
       .order("id", { ascending: true })
       .range(from, from + limit - 1);
     if (error) {
@@ -778,6 +784,75 @@ export const getScrollFeedKills = cache(async function getScrollFeedKills(
     rethrowIfDynamic(err);
     console.warn("[supabase/kills] getScrollFeedKills threw:", err);
     return [];
+  }
+});
+
+/**
+ * getTopScrollKills — the CURATED opener: the N highest-highlight_score
+ * KC-killer clips, in descending order. Front-loaded before the random pool so
+ * /scroll always opens on a "belle séquence" of the very best clips (Mehdi).
+ */
+export const getTopScrollKills = cache(async function getTopScrollKills(
+  limit = 30,
+): Promise<PublishedKillRow[]> {
+  try {
+    const supabase = createCachedAnonSupabase();
+    const { data, error } = await supabase
+      .from("kills")
+      .select(KILL_SELECT)
+      .or(
+        "publication_status.eq.published," +
+          "and(publication_status.is.null,status.eq.published)",
+      )
+      .eq("kill_visible", true)
+      .eq("tracked_team_involvement", "team_killer")
+      .not("clip_url_vertical", "is", null)
+      .not("thumbnail_url", "is", null)
+      .not("highlight_score", "is", null)
+      .order("highlight_score", { ascending: false, nullsFirst: false })
+      .order("created_at", { ascending: false })
+      .limit(limit);
+    if (error) {
+      console.warn("[supabase/kills] getTopScrollKills error:", error.message);
+      return [];
+    }
+    return (data ?? []).map((row) => normalize(row as unknown as RawKillSelect));
+  } catch (err) {
+    rethrowIfDynamic(err);
+    console.warn("[supabase/kills] getTopScrollKills threw:", err);
+    return [];
+  }
+});
+
+/** Count of the floored scroll pool (team_killer, published, score >= minScore)
+ *  — used to bound the random-window offset so it never overshoots. */
+export const getScrollFeedPoolCount = cache(async function getScrollFeedPoolCount(
+  minScore = 0,
+): Promise<number> {
+  try {
+    const supabase = createCachedAnonSupabase();
+    let q = supabase
+      .from("kills")
+      .select("id", { count: "exact", head: true })
+      .or(
+        "publication_status.eq.published," +
+          "and(publication_status.is.null,status.eq.published)",
+      )
+      .eq("kill_visible", true)
+      .eq("tracked_team_involvement", "team_killer")
+      .not("clip_url_vertical", "is", null)
+      .not("thumbnail_url", "is", null);
+    if (minScore > 0) q = q.gte("highlight_score", minScore);
+    const { count, error } = await q;
+    if (error) {
+      console.warn("[supabase/kills] getScrollFeedPoolCount error:", error.message);
+      return 0;
+    }
+    return count ?? 0;
+  } catch (err) {
+    rethrowIfDynamic(err);
+    console.warn("[supabase/kills] getScrollFeedPoolCount threw:", err);
+    return 0;
   }
 });
 
