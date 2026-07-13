@@ -19,6 +19,7 @@ import {
   getKillById,
   getPublishedKcKillCount,
   getPublishedKills,
+  getScrollFeedKills,
 } from "@/lib/supabase/kills";
 import { getTrackedRoster } from "@/lib/supabase/players";
 import {
@@ -243,13 +244,23 @@ export default async function ScrollV2Page({ searchParams }: ScrollPageProps) {
     500,
   );
 
-  const [data, allKills, roster, catalogTotal] = await Promise.all([
+  // Wave 41 — MAX RANDOMNESS. Fetch the real catalogue size first (fast HEAD
+  // count) so the default "Pour Toi" feed can window a RANDOM slice of the
+  // WHOLE catalogue per session (offset rotated by the feed seed) instead of
+  // always the top-250 by highlight_score. This is what kills the "same ~10
+  // clips on loop / revient au même clip" feeling — every clip surfaces over
+  // successive visits, and each visit is a different random slice.
+  const catalogTotal = await getPublishedKcKillCount();
+  const windowOffset =
+    catalogEnabled && catalogTotal > KILLS_LIMIT
+      ? feedSeed % (catalogTotal - KILLS_LIMIT)
+      : 0;
+  const [data, allKills, roster] = await Promise.all([
     Promise.resolve(loadRealData()),
-    getPublishedKills(KILLS_LIMIT),
+    catalogEnabled
+      ? getScrollFeedKills(KILLS_LIMIT, windowOffset)
+      : getPublishedKills(KILLS_LIMIT),
     getTrackedRoster(),
-    // Wave 37 — real catalogue size for the clip counter (HEAD count,
-    // ~150 bytes). 0 on error → the counter falls back to slice length.
-    getPublishedKcKillCount(),
   ]);
 
   const ROLE_FOR_IGN: Record<string, "TOP" | "JGL" | "MID" | "ADC" | "SUP"> = {
@@ -259,9 +270,20 @@ export default async function ScrollV2Page({ searchParams }: ScrollPageProps) {
     Caliste: "ADC",
     Busio: "SUP",
   };
+  // Order the player filters top→bot lane order: Canna(TOP) → Yike(JGL) →
+  // Kyeahoo(MID) → Caliste(ADC) → Busio(SUP). getTrackedRoster has no ORDER BY
+  // so this is the single source of truth (rail + mobile chips + onboarding).
+  const ROLE_ORDER: Record<"TOP" | "JGL" | "MID" | "ADC" | "SUP", number> = {
+    TOP: 0,
+    JGL: 1,
+    MID: 2,
+    ADC: 3,
+    SUP: 4,
+  };
   const rosterChips = roster
     .filter((p) => ROLE_FOR_IGN[p.ign])
-    .map((p) => ({ id: p.id, ign: p.ign, role: ROLE_FOR_IGN[p.ign] }));
+    .map((p) => ({ id: p.id, ign: p.ign, role: ROLE_FOR_IGN[p.ign] }))
+    .sort((a, b) => ROLE_ORDER[a.role] - ROLE_ORDER[b.role]);
 
   // Audit 2026-07-02 : the « VS KC » chip (?side=vs) filtered for
   // team_victim AFTER this pre-filter kept only team_killer — the
@@ -620,7 +642,12 @@ function weightedShuffle(items: FeedItem[], seed?: number): FeedItem[] {
   const jittered = items
     .map((item) => ({
       item,
-      sortKey: item.score + rand() * maxScore * 1.5,
+      // Wave 41 — near-uniform shuffle: random dominates (rand()*maxScore ≈
+      // 0..max) with only a light quality nudge (score*0.15), so genuinely
+      // great clips aren't buried but the SAME high-score clips no longer
+      // always lead the feed. Combined with the per-session random window
+      // (getScrollFeedKills) this maximises variety across the ~2000 catalogue.
+      sortKey: item.score * 0.15 + rand() * maxScore,
     }))
     .sort((a, b) => b.sortKey - a.sortKey)
     .map((j) => j.item);

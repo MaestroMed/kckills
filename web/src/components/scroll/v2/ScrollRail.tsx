@@ -55,6 +55,8 @@ import {
   Zap,
   Flame,
   Droplet,
+  PanelLeftOpen,
+  PanelLeftClose,
   type LucideIcon,
 } from "lucide-react";
 
@@ -74,6 +76,9 @@ interface ScrollRailProps {
   collapsed?: boolean;
   /** KC roster for the PLAYERS filter group. Empty → the group is hidden. */
   rosterChips?: RailRosterChip[];
+  /** When provided, renders an unfold/fold toggle at the top of the rail that
+   *  flips `collapsed` in the parent shell. */
+  onToggleCollapsed?: () => void;
 }
 
 /** Newest-first KC seasons for the ANNÉE filter group. Kept in sync with
@@ -93,7 +98,7 @@ const ROLE_ACCENT: Record<RailRosterChip["role"], string> = {
 // Root
 // ════════════════════════════════════════════════════════════════════
 
-export function ScrollRail({ clipCount, collapsed = false, rosterChips = [] }: ScrollRailProps) {
+export function ScrollRail({ clipCount, collapsed = false, rosterChips = [], onToggleCollapsed }: ScrollRailProps) {
   const t = useT();
   const router = useRouter();
   const pathname = usePathname();
@@ -201,6 +206,27 @@ export function ScrollRail({ clipCount, collapsed = false, rosterChips = [] }: S
           </span>
         )}
       </Link>
+
+      {/* ── (1b) Unfold / fold toggle (Wave 41 — Mehdi) ─────────────── */}
+      {onToggleCollapsed && (
+        <div className="px-2 pt-1">
+          <button
+            type="button"
+            onClick={onToggleCollapsed}
+            aria-expanded={!collapsed}
+            aria-label={collapsed ? "Déplier le menu" : "Réduire le menu"}
+            title={collapsed ? "Déplier le menu" : undefined}
+            className={rowClass(false, collapsed)}
+          >
+            <RowInner
+              Icon={collapsed ? PanelLeftOpen : PanelLeftClose}
+              label={collapsed ? "Déplier" : "Réduire"}
+              active={false}
+              collapsed={collapsed}
+            />
+          </button>
+        </div>
+      )}
 
       {/* ── (2) divider ─────────────────────────────────────────── */}
       <Divider />

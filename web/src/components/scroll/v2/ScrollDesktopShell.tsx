@@ -88,6 +88,9 @@ export function ScrollDesktopShell({
   //     TikTok action rail, so nothing is lost by dropping the column.
   const [drawerOpen, setDrawerOpen] = useState(false);
   const closeDrawer = useCallback(() => setDrawerOpen(false), []);
+  // Wave 41 (Mehdi) — the left rail is collapsed (72px icons) by default but
+  // can be UNFOLDED to reveal labels; the icons alone weren't clear enough.
+  const [railExpanded, setRailExpanded] = useState(false);
 
   // The `C` key (ScrollFeedV2 keymap onComment) dispatches kc:toggle-context —
   // now toggles the overlay drawer at ALL widths.
@@ -111,7 +114,12 @@ export function ScrollDesktopShell({
           hover-expand reveals the full rail; collapsed it's a slim icon strip
           in the left hall, off the video. */}
       <div className="absolute inset-y-0 left-0 z-[65]">
-        <ScrollRail clipCount={clipCount} collapsed rosterChips={rosterChips} />
+        <ScrollRail
+          clipCount={clipCount}
+          collapsed={!railExpanded}
+          onToggleCollapsed={() => setRailExpanded((v) => !v)}
+          rosterChips={rosterChips}
+        />
       </div>
 
       {/* ── RIGHT ── no panel. A floating button (+ the C key) opens the

@@ -733,6 +733,55 @@ export const getPublishedKills = cache(async function getPublishedKills(
 });
 
 /**
+ * getScrollFeedKills — the /scroll "Pour Toi" pool, built for MAXIMUM
+ * randomness across the whole catalogue instead of always the top-N by
+ * highlight_score.
+ *
+ * Why: getPublishedKills orders by highlight_score DESC, so a LIMIT 250 always
+ * returned the SAME 250 highest-scored clips — of ~2000+ published KC-killer
+ * clips the other ~1750 never appeared, and the feed felt like "the same ~10
+ * clips on loop". This loader instead orders by `id` (UUID → a stable but
+ * pseudo-random ordering of the FULL catalogue) and takes a `range(offset,
+ * offset+limit-1)` WINDOW. The caller rotates `offset` per session (from the
+ * feed seed), so every clip surfaces over successive visits and every session
+ * shows a different random slice. weightedShuffle then randomises order within
+ * the window. Same visibility gates as getPublishedKills, scoped to
+ * team_killer (what the default feed shows) so the window population matches
+ * getPublishedKcKillCount() and the offset math stays correct.
+ */
+export const getScrollFeedKills = cache(async function getScrollFeedKills(
+  limit = 250,
+  offset = 0,
+): Promise<PublishedKillRow[]> {
+  try {
+    const supabase = createCachedAnonSupabase();
+    const from = Math.max(0, offset);
+    const { data, error } = await supabase
+      .from("kills")
+      .select(KILL_SELECT)
+      .or(
+        "publication_status.eq.published," +
+          "and(publication_status.is.null,status.eq.published)",
+      )
+      .eq("kill_visible", true)
+      .eq("tracked_team_involvement", "team_killer")
+      .not("clip_url_vertical", "is", null)
+      .not("thumbnail_url", "is", null)
+      .order("id", { ascending: true })
+      .range(from, from + limit - 1);
+    if (error) {
+      console.warn("[supabase/kills] getScrollFeedKills error:", error.message);
+      return [];
+    }
+    return (data ?? []).map((row) => normalize(row as unknown as RawKillSelect));
+  } catch (err) {
+    rethrowIfDynamic(err);
+    console.warn("[supabase/kills] getScrollFeedKills threw:", err);
+    return [];
+  }
+});
+
+/**
  * getCardKills — slim sibling of getPublishedKills for pure-card browse
  * surfaces (/records, /week). Identical filters + ordering + buildTime
  * escape hatch + React cache(), but selects CARD_SELECT instead of the
