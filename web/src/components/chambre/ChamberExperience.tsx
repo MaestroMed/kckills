@@ -76,6 +76,9 @@ export function ChamberExperience({ circles }: { circles: ChamberCircle[] }) {
         ↑ Remonter
       </Link>
 
+      {/* One-shot glitch each time the descent crosses into a new circle. */}
+      <GlitchFlash depth={depth} reduce={reduce} />
+
       {!entered ? (
         <EntryGate totalClips={totalClips} onEnter={() => setEntered(true)} />
       ) : (
@@ -206,6 +209,10 @@ function CircleSection({
               circle.depth >= 8 && !reduce
                 ? `0 0 ${circle.depth * 3}px rgba(232,64,87,0.5)`
                 : "none",
+            animation:
+              circle.depth >= 9 && !reduce
+                ? "chamberShake 0.5s ease-in-out infinite"
+                : undefined,
           }}
         >
           {circle.name}
@@ -305,21 +312,37 @@ function GradeOverlay({ stress, reduce }: { stress: number; reduce: boolean }) {
   // keep the static darkening but drop the heartbeat pulse.
   return (
     <>
-      {/* Desaturation via backdrop-filter — grades the content behind it. */}
+      {/* Desaturation — a grey layer in `saturation` blend mode drains the
+          colour out of everything behind it. Reliable across engines, unlike
+          backdrop-filter which several ignore on a transparent box (that was
+          why the v1 grade looked too soft at 100%). */}
       <div
         aria-hidden
-        className="pointer-events-none fixed inset-0 z-[88]"
+        className="pointer-events-none fixed inset-0 z-[86]"
         style={{
-          backdropFilter: `saturate(${1 - stress * 0.7}) contrast(${1 + stress * 0.12}) brightness(${1 - stress * 0.18})`,
-          WebkitBackdropFilter: `saturate(${1 - stress * 0.7}) contrast(${1 + stress * 0.12}) brightness(${1 - stress * 0.18})`,
+          background: "#808080",
+          mixBlendMode: "saturation",
+          opacity: stress * 0.92,
+          transition: reduce ? "none" : "opacity 0.6s ease-out",
         }}
       />
-      {/* Red wash + vignette. */}
+      {/* Blood wash — multiplies a deep red over the drained scene. */}
+      <div
+        aria-hidden
+        className="pointer-events-none fixed inset-0 z-[87]"
+        style={{
+          background: "#4a0008",
+          mixBlendMode: "multiply",
+          opacity: stress * 0.55,
+          transition: reduce ? "none" : "opacity 0.6s ease-out",
+        }}
+      />
+      {/* Vignette — closes in on the frame as the walls press in. */}
       <div
         aria-hidden
         className="pointer-events-none fixed inset-0 z-[90]"
         style={{
-          background: `radial-gradient(ellipse at 50% 45%, transparent ${55 - stress * 30}%, rgba(120,0,10,${stress * 0.32}) 88%, rgba(0,0,0,${0.35 + stress * 0.5}) 100%)`,
+          background: `radial-gradient(ellipse at 50% 45%, transparent ${52 - stress * 34}%, rgba(50,0,6,${stress * 0.42}) 80%, rgba(0,0,0,${0.4 + stress * 0.52}) 100%)`,
           transition: reduce ? "none" : "background 0.6s ease-out",
         }}
       />
@@ -336,8 +359,64 @@ function GradeOverlay({ stress, reduce }: { stress: number; reduce: boolean }) {
           }}
         />
       )}
-      <style>{`@keyframes chamberPulse{0%,100%{opacity:${stress * 0.4}}50%{opacity:${stress}}}`}</style>
+      <style>{`
+        @keyframes chamberPulse{0%,100%{opacity:${stress * 0.4}}50%{opacity:${stress}}}
+        @keyframes chamberGlitch{0%{opacity:1;transform:translateX(0)}18%{opacity:.9;transform:translateX(-5px)}36%{opacity:.65;transform:translateX(6px)}54%{opacity:.85;transform:translateX(-3px)}72%{opacity:.4;transform:translateX(2px)}100%{opacity:0;transform:translateX(0)}}
+        @keyframes chamberShake{0%,100%{transform:translate(0,0)}20%{transform:translate(-1.5px,1px)}40%{transform:translate(1.5px,-1px)}60%{transform:translate(-1px,-1.5px)}80%{transform:translate(1px,1.5px)}}
+      `}</style>
     </>
+  );
+}
+
+// ════════════════════════════════════════════════════════════════════
+// GlitchFlash — a one-shot RGB-split flash fired each time the descent
+// crosses into a new circle. Orochimaru's-lab jolt. Reduced-motion → nothing.
+// ════════════════════════════════════════════════════════════════════
+
+function GlitchFlash({ depth, reduce }: { depth: number; reduce: boolean }) {
+  const [burst, setBurst] = useState(0);
+  const prev = useRef(depth);
+  useEffect(() => {
+    if (depth !== prev.current) {
+      prev.current = depth;
+      setBurst((b) => b + 1);
+    }
+  }, [depth]);
+  if (reduce || burst === 0) return null;
+  const intensity = Math.min(1, depth / 10);
+  return (
+    <div key={burst} aria-hidden className="pointer-events-none fixed inset-0 z-[92]">
+      {/* white overload flash */}
+      <div
+        className="absolute inset-0"
+        style={{
+          background: "#fff",
+          mixBlendMode: "overlay",
+          animation: "chamberGlitch 0.26s steps(3,end) forwards",
+        }}
+      />
+      {/* red tear band */}
+      <div
+        className="absolute inset-x-0"
+        style={{
+          top: `${18 + ((depth * 7) % 52)}%`,
+          height: `${6 + intensity * 12}px`,
+          background: "var(--red)",
+          boxShadow: "0 0 22px var(--red)",
+          animation: "chamberGlitch 0.4s steps(2,end) forwards",
+        }}
+      />
+      {/* cyan tear band — the RGB split */}
+      <div
+        className="absolute inset-x-0"
+        style={{
+          top: `${44 + ((depth * 11) % 40)}%`,
+          height: `${3 + intensity * 7}px`,
+          background: "var(--cyan)",
+          animation: "chamberGlitch 0.32s steps(2,end) forwards",
+        }}
+      />
+    </div>
   );
 }
 
