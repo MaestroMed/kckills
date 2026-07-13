@@ -933,7 +933,18 @@ function applyPriority(
     // fallback is still wired in the parent FeedItem layer.
     void v.play().catch(() => {});
   } else if (priority === "warm") {
-    v.preload = "auto";
+    // HOTFIX (2026-07-13): warm neighbours load METADATA only, not the full
+    // clip. With HLS disabled sitewide (see the main effect's HLS hotfix),
+    // preload="auto" made every warm slot progressively download its ENTIRE
+    // ~20 MB MP4 concurrently with the LIVE clip — starving the active clip's
+    // throughput so it drained its ~3 s buffer and stalled. THAT is the
+    // intermittent "clips freeze after ~2 s" bug, worst right after landing
+    // when all pool slots fetch at once (measured: warm slots buffering 14–35 s
+    // of video while the live clip froze at 3 s). "metadata" keeps the poster +
+    // first frames ready for a snappy swipe without competing for the LIVE
+    // clip's bandwidth; the slot upgrades to "auto" the instant it becomes
+    // LIVE. Restore "auto" once HLS (adaptive, cheap to prefetch) is repaired.
+    v.preload = "metadata";
     v.pause();
   } else {
     // cold

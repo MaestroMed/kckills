@@ -176,6 +176,14 @@ export const DEFAULT_SCROLL_PLAYLIST: BgmTrack[] = [
     genre: "anthemic",
   },
   {
+    id: "awaken",
+    title: "Awaken",
+    artist: "Valerie Broussard & Ray Chen",
+    youtubeId: "zF5Ddo9JdpY",
+    durationSeconds: 152,
+    genre: "anthemic",
+  },
+  {
     id: "ignite",
     title: "Ignite",
     artist: "Zedd",
@@ -431,4 +439,37 @@ export function shufflePlaylist<T>(tracks: T[]): T[] {
     [arr[i], arr[j]] = [arr[j], arr[i]];
   }
   return arr;
+}
+
+/** The scroll feed's fixed opening sequence — always the first 5 tracks
+ *  played, in THIS order, when arriving on /scroll, then the rest shuffled.
+ *  Mehdi's signature intro. IDs must exist in DEFAULT_SCROLL_PLAYLIST. */
+export const SCROLL_OPENER_IDS: readonly string[] = [
+  "fB8TyLTD7EE", // RISE
+  "fmI_Ndrxy14", // Warriors
+  "zF5Ddo9JdpY", // Awaken (Season 2019 Cinematic)
+  "i1IKnWDecwA", // Phoenix
+  "r6zIGXun57U", // Legends Never Die
+];
+
+/** Shuffle that PINS a fixed opener sequence to the front (in the given
+ *  order), then Fisher-Yates shuffles everything after it. Openers absent
+ *  from `tracks` are skipped. Used for the scroll feed so the intro is always
+ *  the same five anthems. */
+export function shuffleWithOpeners<T extends { youtubeId: string }>(
+  tracks: T[],
+  openerIds: readonly string[],
+): T[] {
+  const byId = new Map(tracks.map((t) => [t.youtubeId, t] as const));
+  const used = new Set<string>();
+  const openers: T[] = [];
+  for (const id of openerIds) {
+    const t = byId.get(id);
+    if (t && !used.has(id)) {
+      openers.push(t);
+      used.add(id);
+    }
+  }
+  const rest = tracks.filter((t) => !used.has(t.youtubeId));
+  return [...openers, ...shufflePlaylist(rest)];
 }

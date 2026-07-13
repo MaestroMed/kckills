@@ -56,9 +56,20 @@ import {
   DEFAULT_PLAYLISTS,
   playlistForRoute,
   shufflePlaylist,
+  shuffleWithOpeners,
+  SCROLL_OPENER_IDS,
   type BgmTrack,
   type PlaylistId,
 } from "./playlists";
+
+/** Queue ordering per surface : the scroll feed always opens with its fixed
+ *  5-anthem intro (RISE → Warriors → Awaken → Phoenix → Legends Never Die),
+ *  then shuffles the rest ; every other surface is fully shuffled. */
+function shuffleForPlaylist(id: PlaylistId, tracks: BgmTrack[]): BgmTrack[] {
+  return id === "scroll"
+    ? shuffleWithOpeners(tracks, SCROLL_OPENER_IDS)
+    : shufflePlaylist(tracks);
+}
 
 /**
  * Local-only YouTube IFrame Player surface — purposely a structural type,
@@ -181,7 +192,7 @@ export function FloatingPlayerProvider({ children }: { children: ReactNode }) {
   );
   const [queue, setQueue] = useState<BgmTrack[]>(() => {
     const base = DEFAULT_PLAYLISTS[initialPlaylistId];
-    return base.length > 0 ? shufflePlaylist(base) : [];
+    return base.length > 0 ? shuffleForPlaylist(initialPlaylistId, base) : [];
   });
 
   // Hydrate operator-curated playlists from the public API. Falls back
@@ -228,9 +239,10 @@ export function FloatingPlayerProvider({ children }: { children: ReactNode }) {
         });
         setAllPlaylists(merged);
         // Re-shuffle the active playlist now that we have curated tracks
+        // (scroll keeps its fixed opener sequence via shuffleForPlaylist).
         const active = merged[playlistId] ?? merged.homepage;
         if (active.length > 0) {
-          setQueue(shufflePlaylist<BgmTrack>(active));
+          setQueue(shuffleForPlaylist(playlistId, active));
         }
       })
       .catch((err) => {
@@ -283,7 +295,10 @@ export function FloatingPlayerProvider({ children }: { children: ReactNode }) {
     setIsOptedIn(optedIn);
     setVolumeState(Number.isFinite(lastVolume) ? lastVolume : 0.4);
 
-    if (lastTrackId) {
+    // The scroll feed always opens on its fixed intro (RISE → Warriors →
+    // Awaken → Phoenix → Legends Never Die), so DON'T resume a mid-playlist
+    // track there — that would skip the openers. Other surfaces still resume.
+    if (lastTrackId && initialPlaylistId !== "scroll") {
       const found = queue.findIndex((t) => t.id === lastTrackId);
       if (found >= 0) {
         setIndex(found);
@@ -310,7 +325,7 @@ export function FloatingPlayerProvider({ children }: { children: ReactNode }) {
       wlog("route-driven playlist swap", { from: playlistId, to: next });
       setPlaylistId(next);
       const target = allPlaylists[next];
-      setQueue(target && target.length > 0 ? shufflePlaylist(target) : []);
+      setQueue(target && target.length > 0 ? shuffleForPlaylist(next, target) : []);
       setIndex(0);
       setPosition(0);
     }
@@ -531,7 +546,7 @@ export function FloatingPlayerProvider({ children }: { children: ReactNode }) {
       wlog("loadPlaylist", { id, autoplay: opts.autoplay });
       setPlaylistId(id);
       const target = allPlaylists[id];
-      setQueue(target && target.length > 0 ? shufflePlaylist(target) : []);
+      setQueue(target && target.length > 0 ? shuffleForPlaylist(id, target) : []);
       setIndex(0);
       setPosition(0);
       if (opts.autoplay) {
@@ -557,7 +572,7 @@ export function FloatingPlayerProvider({ children }: { children: ReactNode }) {
         const routeId = playlistForRoute(pathname || "/");
         setPlaylistId(routeId);
         const target = allPlaylists[routeId];
-        setQueue(target && target.length > 0 ? shufflePlaylist(target) : []);
+        setQueue(target && target.length > 0 ? shuffleForPlaylist(routeId, target) : []);
         setIndex(0);
         setPosition(0);
         // Stop the cave track from continuing under the hood — without
@@ -573,7 +588,7 @@ export function FloatingPlayerProvider({ children }: { children: ReactNode }) {
       // Activate override : swap to the target playlist immediately.
       setPlaylistId(id);
       const target = allPlaylists[id];
-      setQueue(target && target.length > 0 ? shufflePlaylist(target) : []);
+      setQueue(target && target.length > 0 ? shuffleForPlaylist(id, target) : []);
       setIndex(0);
       setPosition(0);
       if (autoplay) setTimeout(() => play(), 200);
