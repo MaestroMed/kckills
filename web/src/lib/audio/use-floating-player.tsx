@@ -185,11 +185,20 @@ export function FloatingPlayerProvider({ children }: { children: ReactNode }) {
   });
 
   // Hydrate operator-curated playlists from the public API. Falls back
-  // to DEFAULT_PLAYLISTS if the fetch fails. Caches via the route's
-  // s-maxage=900 — ~1 request per visitor per 15 min.
+  // to DEFAULT_PLAYLISTS if the fetch fails.
+  //
+  // MUST revalidate (`no-cache`), NOT `force-cache`. force-cache tells the
+  // browser "use ANY cached copy, never revalidate" — so a visitor whose
+  // browser once cached an OLD playlist response (with since-removed dead
+  // YouTube IDs) stayed pinned to it across every deploy, Etag change and
+  // playlist edit. That was the real "y'en a que 3-4 qui marchent" bug:
+  // the deployed code + DB were correct, but the client never re-fetched.
+  // `no-cache` forces an Etag revalidation each mount → a ~0-byte 304 when
+  // unchanged (the CDN's s-maxage=900 + stale-while-revalidate absorbs the
+  // load), and the fresh 200 the instant the playlist changes.
   useEffect(() => {
     let cancelled = false;
-    fetch("/api/playlists", { cache: "force-cache" })
+    fetch("/api/playlists", { cache: "no-cache" })
       .then((r) => (r.ok ? r.json() : null))
       .then((data) => {
         if (cancelled || !data?.playlists) return;
