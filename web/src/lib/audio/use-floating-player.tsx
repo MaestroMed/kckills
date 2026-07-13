@@ -248,6 +248,12 @@ export function FloatingPlayerProvider({ children }: { children: ReactNode }) {
    *  "click immediately on first mount" UX — without it, the first click
    *  is dropped because playerRef is still null. */
   const pendingPlayRef = useRef<boolean>(false);
+  /** youtubeIds that errored in the IFrame this session (YT 100/101/150 —
+   *  embed disabled or region-blocked, common on label/VEVO music uploads
+   *  even when the Data API says embeddable). advanceTrack skips them so the
+   *  queue converges to the actually-playable tracks instead of churning on
+   *  dead ones every rotation — the "y en a que 3-4 qui marchent" bug. */
+  const deadIdsRef = useRef<Set<string>>(new Set());
 
   const currentTrack = queue[index] ?? null;
 
@@ -428,7 +434,17 @@ export function FloatingPlayerProvider({ children }: { children: ReactNode }) {
       const len = queue.length;
       if (len === 0) return;
       wlog("advanceTrack", { direction, queueLen: len });
-      setIndex((i) => (i + direction + len) % len);
+      setIndex((i) => {
+        // Skip session-dead tracks so we never stall on / churn through the
+        // ones YouTube refuses to play. Walk up to `len` steps; if literally
+        // everything is dead, just move by one (nothing playable anyway).
+        let n = i;
+        for (let step = 0; step < len; step++) {
+          n = (n + direction + len) % len;
+          if (!deadIdsRef.current.has(queue[n].youtubeId)) return n;
+        }
+        return (i + direction + len) % len;
+      });
       setPosition(0);
       // Single-track playlist (e.g. bcc) : the modulo-1 advance leaves
       // index at 0 → the (Re)create-player effect won't fire (deps
@@ -546,6 +562,15 @@ export function FloatingPlayerProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  /** WolfFloatingPlayer's onError reports the failing youtubeId here so
+   *  advanceTrack skips it for the rest of the session (see deadIdsRef). */
+  const _reportDeadTrack = useCallback((youtubeId: string | null | undefined) => {
+    if (youtubeId) {
+      deadIdsRef.current.add(youtubeId);
+      wlog("track marked dead (IFrame refused it)", { youtubeId });
+    }
+  }, []);
+
   const _onPlayerStateChange = useCallback((state: number) => {
     // YT.PlayerState.PLAYING = 1, PAUSED = 2, ENDED = 0
     wlog("YT state change", { state });
@@ -560,7 +585,7 @@ export function FloatingPlayerProvider({ children }: { children: ReactNode }) {
     }
   }, [next]);
 
-  const value = useMemo<FloatingPlayerCtx & { _attachPlayer: typeof _attachPlayer; _onPlayerStateChange: typeof _onPlayerStateChange }>(
+  const value = useMemo<FloatingPlayerCtx & { _attachPlayer: typeof _attachPlayer; _onPlayerStateChange: typeof _onPlayerStateChange; _reportDeadTrack: typeof _reportDeadTrack }>(
     () => ({
       playlistId,
       playlistOverride,
@@ -585,6 +610,7 @@ export function FloatingPlayerProvider({ children }: { children: ReactNode }) {
       setPlaylistOverride,
       _attachPlayer,
       _onPlayerStateChange,
+      _reportDeadTrack,
     }),
     [
       playlistId,
@@ -609,6 +635,7 @@ export function FloatingPlayerProvider({ children }: { children: ReactNode }) {
       setPlaylistOverride,
       _attachPlayer,
       _onPlayerStateChange,
+      _reportDeadTrack,
     ],
   );
 
@@ -632,6 +659,7 @@ export function useFloatingPlayerInternal() {
     | (FloatingPlayerCtx & {
         _attachPlayer: (p: YTPlayerLike | null) => void;
         _onPlayerStateChange: (state: number) => void;
+        _reportDeadTrack: (youtubeId: string | null | undefined) => void;
       })
     | null;
   if (!ctx) {

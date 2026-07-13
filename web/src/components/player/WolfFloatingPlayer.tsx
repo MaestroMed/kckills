@@ -345,6 +345,7 @@ function HiddenAudioIframe() {
     volume,
     _attachPlayer,
     _onPlayerStateChange,
+    _reportDeadTrack,
     next,
   } = useFloatingPlayerInternal();
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -362,7 +363,12 @@ function HiddenAudioIframe() {
   // tracks we stop auto-advancing and leave a single breadcrumb. The streak
   // resets as soon as any track actually starts PLAYING.
   const consecutiveErrorsRef = useRef(0);
-  const MAX_CONSECUTIVE_SKIPS = 6;
+  // Must exceed the playlist length: on a fresh shuffle a run of dead tracks
+  // (label/VEVO uploads that block embed playback) can be longer than a
+  // handful, and stopping at 6 left the queue stuck on the few playable ones
+  // ("y en a que 3-4 qui marchent"). Dead tracks are also permanently skipped
+  // via _reportDeadTrack, so this only bites when EVERYTHING is unplayable.
+  const MAX_CONSECUTIVE_SKIPS = 60;
 
   // (Re)create / update the player when the track changes. Uses the
   // module-level whenYTReady() helper so /scroll's BgmPlayer and the
@@ -505,6 +511,10 @@ function HiddenAudioIframe() {
                 consecutive: consecutiveErrorsRef.current,
               });
               if (!isDead) return;
+              // Mark this track dead so advanceTrack skips it for good — the
+              // queue converges to the playable tracks instead of re-hitting
+              // the blocked ones on every rotation.
+              _reportDeadTrack(currentTrack?.youtubeId);
               if (consecutiveErrorsRef.current >= MAX_CONSECUTIVE_SKIPS) {
                 // Circuit breaker : the whole playlist looks unplayable.
                 // Stop auto-advancing so we don't spin. Manual next/prev

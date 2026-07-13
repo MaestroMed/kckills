@@ -74,146 +74,73 @@ export function ScrollDesktopShell({
   const t = useT();
   const reduce = useReducedMotion();
 
-  // ─── In-between band detection (1024–1279) ──────────────────────────
-  // At <1280 the rail collapses to icons and the ctx column becomes a
-  // drawer. At ≥1280 both are permanent tracks. SSR-safe default = false
-  // (the parent only mounts us ≥1024, so the worst first-paint case is a
-  // brief full-width rail that snaps to collapsed — no layout break).
-  const [isNarrowDesktop, setIsNarrowDesktop] = useState(false);
-  useEffect(() => {
-    const mq = window.matchMedia("(min-width: 1024px) and (max-width: 1279px)");
-    const apply = () => setIsNarrowDesktop(mq.matches);
-    apply();
-    mq.addEventListener("change", apply);
-    // Re-read on raw resize too — the MQ `change` event alone is unreliable
-    // across the boundary in some environments ; this keeps the rail-collapse
-    // + ctx-drawer switch from getting stuck.
-    window.addEventListener("resize", apply);
-    return () => {
-      mq.removeEventListener("change", apply);
-      window.removeEventListener("resize", apply);
-    };
-  }, []);
-
-  // ─── Drawer state (only meaningful in the narrow band) ──────────────
+  // Wave 40 — immersion redesign (Mehdi): the desktop scroll now runs the
+  // stage FULL-BLEED, like the mobile feed. No permanent side columns.
+  //   • left nav  → a collapsed rail OVERLAY (repliable, hover-expands),
+  //     sitting in the left hall so it never eats the stage width;
+  //   • right ctx → an OVERLAY drawer at every width (match info + "à suivre"
+  //     + comments). The rate/like/share actions already live on the video's
+  //     TikTok action rail, so nothing is lost by dropping the column.
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const closeDrawer = useCallback(() => setDrawerOpen(false), []);
 
-  // The `C` key (ScrollFeedV2 keymap onComment) dispatches kc:toggle-context.
-  // In the narrow band that toggles the drawer ; in the wide band the panel
-  // is always visible so we no-op (the keystroke still reaches CommentSheetV2
-  // inside the panel for the in-place comment focus, which it owns).
+  // The `C` key (ScrollFeedV2 keymap onComment) dispatches kc:toggle-context —
+  // now toggles the overlay drawer at ALL widths.
   useEffect(() => {
     if (typeof window === "undefined") return;
-    const onToggle = () => {
-      if (mqNarrow()) setDrawerOpen((v) => !v);
-    };
+    const onToggle = () => setDrawerOpen((v) => !v);
     window.addEventListener("kc:toggle-context", onToggle);
     return () => window.removeEventListener("kc:toggle-context", onToggle);
   }, []);
 
-  // Close the drawer when we leave the narrow band (e.g. user widens the
-  // window) so it doesn't linger as a stuck overlay over the permanent col.
-  useEffect(() => {
-    if (!isNarrowDesktop) setDrawerOpen(false);
-  }, [isNarrowDesktop]);
-
-  const closeDrawer = useCallback(() => setDrawerOpen(false), []);
-
   return (
-    <div
-      className="scroll-hall fixed inset-0 z-[60] overflow-hidden"
-      style={{
-        display: "grid",
-        // Narrow band (1024–1279): rail collapses to a 72px icon column AND
-        // the ctx track is dropped (it becomes the drawer). The 72px here
-        // MUST match ScrollRail's internal collapsed width so the track and
-        // the rail agree. Wide band (≥1280): full --rail + --ctx tracks.
-        gridTemplateColumns: isNarrowDesktop
-          ? "72px minmax(0,1fr)"
-          : "var(--rail) minmax(0,1fr) var(--ctx)",
-        gridTemplateAreas: isNarrowDesktop
-          ? '"nav stage"'
-          : '"nav stage ctx"',
-        blockSize: "100dvh",
-      }}
-    >
-      {/* ── NAV ── persistent left rail. Collapses to 72px icons in the
-          narrow band (its hover-expand is a fixed overlay handled inside
-          ScrollRail). --rail is overridden to 72px below via a data attr. */}
-      <div style={{ gridArea: "nav", minWidth: 0 }}>
-        <ScrollRail clipCount={clipCount} collapsed={isNarrowDesktop} />
-      </div>
-
-      {/* ── STAGE ── the bounded 9:16 cinema box. The pool subtree lives
-          inside StageFrame, so its width:100% resolves to the FRAME. */}
-      <div style={{ gridArea: "stage", minWidth: 0, position: "relative" }}>
+    <div className="scroll-hall fixed inset-0 z-[60] overflow-hidden">
+      {/* ── STAGE ── full-bleed. StageFrame still bounds the 9:16 box, but
+          with no side columns it centres in the whole viewport = far bigger,
+          more immersive than the old framed 3-column cinema. */}
+      <div className="absolute inset-0">
         <StageFrame cinema={cinema}>{children}</StageFrame>
       </div>
 
-      {/* ── CTX ── permanent right column (wide band only). */}
-      {!isNarrowDesktop && (
-        <div style={{ gridArea: "ctx", minWidth: 0 }}>
-          {activeKill ? (
-            <ScrollContextPanel
-              kill={activeKill}
-              onJumpTo={onJumpTo}
-              related={related}
-            />
-          ) : (
-            <ContextPanelEmpty />
-          )}
-        </div>
+      {/* ── LEFT NAV ── collapsed rail as an overlay (repliable). Its own
+          hover-expand reveals the full rail; collapsed it's a slim icon strip
+          in the left hall, off the video. */}
+      <div className="absolute inset-y-0 left-0 z-[65]">
+        <ScrollRail clipCount={clipCount} collapsed />
+      </div>
+
+      {/* ── RIGHT ── no panel. A floating button (+ the C key) opens the
+          context as an overlay drawer. */}
+      {activeKill && !drawerOpen && (
+        <button
+          type="button"
+          onClick={() => setDrawerOpen(true)}
+          aria-label={t("p_scroll.sh_open_context")}
+          aria-keyshortcuts="C"
+          className="group fixed right-5 top-5 z-[70] flex h-12 w-12 items-center justify-center rounded-full border border-[var(--gold)]/45 bg-[var(--bg-surface)]/80 backdrop-blur-md text-[var(--gold)] shadow-[0_8px_26px_rgba(0,0,0,0.5)] transition-colors hover:border-[var(--gold)] hover:bg-[var(--bg-elevated)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--gold)] focus-visible:outline-offset-2"
+        >
+          <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+          </svg>
+        </button>
       )}
 
-      {/* ── NARROW-BAND DRAWER ── closed-by-default right drawer that the
-          floating button + the C key open. Focus-trap + Esc + role=dialog. */}
-      {isNarrowDesktop && (
-        <>
-          {/* Floating open button — only when the drawer is closed. Lives
-              top-right so it never collides with the stage's action rail. */}
-          {!drawerOpen && (
-            <button
-              type="button"
-              onClick={() => setDrawerOpen(true)}
-              aria-label={t("p_scroll.sh_open_context")}
-              aria-keyshortcuts="C"
-              className="group fixed right-5 top-5 z-[70] flex h-12 w-12 items-center justify-center rounded-full border border-[var(--gold)]/45 bg-[var(--bg-surface)]/80 backdrop-blur-md text-[var(--gold)] shadow-[0_8px_26px_rgba(0,0,0,0.5)] transition-colors hover:border-[var(--gold)] hover:bg-[var(--bg-elevated)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--gold)] focus-visible:outline-offset-2"
-            >
-              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-              </svg>
-            </button>
-          )}
-
-          <ContextDrawer
-            open={drawerOpen}
-            onClose={closeDrawer}
-            reduce={reduce ?? false}
-          >
-            {activeKill ? (
-              <ScrollContextPanel
-                kill={activeKill}
-                onJumpTo={(i) => {
-                  onJumpTo?.(i);
-                  closeDrawer();
-                }}
-                related={related}
-              />
-            ) : (
-              <ContextPanelEmpty />
-            )}
-          </ContextDrawer>
-        </>
-      )}
+      <ContextDrawer open={drawerOpen} onClose={closeDrawer} reduce={reduce ?? false}>
+        {activeKill ? (
+          <ScrollContextPanel
+            kill={activeKill}
+            onJumpTo={(i) => {
+              onJumpTo?.(i);
+              closeDrawer();
+            }}
+            related={related}
+          />
+        ) : (
+          <ContextPanelEmpty />
+        )}
+      </ContextDrawer>
     </div>
   );
-}
-
-// matchMedia helper read at event time (avoids a stale-closure capture of
-// isNarrowDesktop inside the kc:toggle-context listener).
-function mqNarrow(): boolean {
-  if (typeof window === "undefined") return false;
-  return window.matchMedia("(min-width: 1024px) and (max-width: 1279px)").matches;
 }
 
 // ════════════════════════════════════════════════════════════════════
