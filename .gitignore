@@ -81,3 +81,6 @@ worker/.auto_remediate_state.json
 worker/.lp_cache.json
 worker/gc_r2_orphans_report.json
 worker/hls_temp/
+worker/vods_to_download.csv
+worker/fonts.conf
+worker/.fontcache/

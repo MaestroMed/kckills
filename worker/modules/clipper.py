@@ -97,14 +97,21 @@ def _build_overlay_filter(
     y_hook = "h*0.06" if is_vertical else "h*0.08"
     y_ctx = "h*0.94" if is_vertical else "h*0.92"
 
+    # ffmpeg drawtext needs an explicit fontfile: Windows ffmpeg ships without
+    # a default fontconfig, so an unspecified font makes drawtext segfault
+    # (rc 0xC0000005, "Fontconfig error: Cannot load default config file").
+    # The drive letter is DROPPED on purpose — drawtext treats ':' as its
+    # option separator, so 'C:/...' breaks the filter parse; '/Windows/...'
+    # resolves against the current (C:) drive.
+    font = os.getenv("KCKILLS_DRAWTEXT_FONT", "/Windows/Fonts/arial.ttf")
     parts = [
-        f"drawtext=text={hook}:fontsize={hook_size}:fontcolor=#C8AA6E"
+        f"drawtext=text={hook}:fontfile={font}:fontsize={hook_size}:fontcolor=#C8AA6E"
         f":borderw=3:bordercolor=black:x=(w-tw)/2:y={y_hook}"
         f":enable=between(t\\,0\\,3)"
     ]
     if ctx:
         parts.append(
-            f"drawtext=text={ctx}:fontsize={ctx_size}:fontcolor=white"
+            f"drawtext=text={ctx}:fontfile={font}:fontsize={ctx_size}:fontcolor=white"
             f":borderw=2:bordercolor=black:x=(w-tw)/2:y={y_ctx}"
         )
 
@@ -800,6 +807,9 @@ def _build_moment_overlay(badge_text: str, context: str = "") -> str:
         """Escape a string for ffmpeg drawtext text= value."""
         return s.replace("\\", "\\\\").replace(":", "\\:").replace(",", "\\,").replace("'", "").replace('"', "")
 
+    # Explicit fontfile — Windows ffmpeg has no default fontconfig (see
+    # _build_drawtext). Drive letter dropped so drawtext's ':' parser is happy.
+    font = os.getenv("KCKILLS_DRAWTEXT_FONT", "/Windows/Fonts/arial.ttf")
     parts = []
 
     # Badge text: top center, gold, first 4 seconds
@@ -807,7 +817,7 @@ def _build_moment_overlay(badge_text: str, context: str = "") -> str:
         safe_badge = _esc(badge_text)
         parts.append(
             f"drawtext=text={safe_badge}"
-            f"\\:fontcolor=#C8AA6E\\:fontsize=36\\:borderw=3\\:bordercolor=black"
+            f"\\:fontfile={font}\\:fontcolor=#C8AA6E\\:fontsize=36\\:borderw=3\\:bordercolor=black"
             f"\\:x=(w-text_w)/2\\:y=60"
             f"\\:enable='between(t,0,4)'"
         )
@@ -817,7 +827,7 @@ def _build_moment_overlay(badge_text: str, context: str = "") -> str:
         safe_ctx = _esc(context)
         parts.append(
             f"drawtext=text={safe_ctx}"
-            f"\\:fontcolor=#A09B8C\\:fontsize=18\\:borderw=2\\:bordercolor=black"
+            f"\\:fontfile={font}\\:fontcolor=#A09B8C\\:fontsize=18\\:borderw=2\\:bordercolor=black"
             f"\\:x=20\\:y=h-40"
         )
 
