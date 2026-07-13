@@ -67,6 +67,23 @@ def _pending_kills(db, game_id: str) -> list[dict]:
     return r.json() or []
 
 
+def _set_clipped(db, kill_id: str) -> bool:
+    """clip_kill() produces the clip + assets but leaves kills.status alone —
+    the daemon's clipper LOOP is what flips it to 'clipped'. We bypass that
+    loop, so set it here; the job_dispatcher then bridges clipped ->
+    clip.analyze -> published, all off the R2 clip (no YouTube)."""
+    try:
+        r = httpx.patch(
+            f"{db.base}/kills",
+            headers={**db.headers, "Prefer": "return=minimal"},
+            params={"id": f"eq.{kill_id}"},
+            json={"status": "clipped", "retry_count": 0}, timeout=15.0,
+        )
+        return r.status_code in (200, 204)
+    except Exception:
+        return False
+
+
 async def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--dry-run", action="store_true")
@@ -116,6 +133,7 @@ async def main() -> None:
                     victim_champion=k.get("victim_champion"),
                     local_vod_path=path, game_id=gid)
                 if res:
+                    await asyncio.to_thread(_set_clipped, db, k["id"])
                     done["ok"] += 1
                 else:
                     done["fail"] += 1
