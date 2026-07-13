@@ -100,7 +100,10 @@ export function useFeedBuffer({
     for (let i = activeIndex + 1; i <= Math.min(items.length - 1, activeIndex + win.videoHeads); i++) {
       const item = items[i];
       if (!item) continue;
-      const url = item.hlsMasterUrl || item.videoUrl;
+      // HLS disabled sitewide (broken hls_packager — see FeedPlayerPool
+      // hotfix) : warm the MP4 the pool will actually attach, not the dead
+      // master.m3u8.
+      const url = item.videoUrl || item.hlsMasterUrl;
       if (!url) continue;
       if (videoWarmedRef.current.has(item.id)) continue;
       videoWarmedRef.current.add(item.id);

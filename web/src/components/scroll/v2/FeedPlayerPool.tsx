@@ -435,8 +435,17 @@ export function FeedPlayerPool({
         // chosen source and the HLS decision can never disagree (even during
         // the transient cinema-without-wide-stage frame the self-exit effect
         // is about to correct).
-        const useMp4Direct = wantsHorizontalSource(isDesktop, isWideStage, cinema) && !!item.clipHorizontal;
-        const hlsUrl = useMp4Direct ? null : (item.hlsMasterUrl ?? null);
+        // HOTFIX (2026-07-13): HLS is disabled sitewide. The worker's
+        // hls_packager is broken (hls_packager_done packaged=0) and the clips'
+        // asset_status is 'missing', so every master.m3u8 points at MISSING
+        // segments — the player buffers the first ~3s then STALLS on the gap.
+        // A stall is NOT a fatal hls.js error, so the Wave 30q MP4 auto-revert
+        // never fires and the clip freezes. THIS was the "clips freeze after
+        // 2 seconds" bug. Force the healthy MP4-direct path (clip_url_vertical
+        // / _low, fine on R2). Re-enable once hls_packager is repaired:
+        //   const useMp4Direct = wantsHorizontalSource(isDesktop, isWideStage, cinema) && !!item.clipHorizontal;
+        //   const hlsUrl = useMp4Direct ? null : (item.hlsMasterUrl ?? null);
+        const hlsUrl: string | null = null;
 
         // Wave 11 (Agent DE) — explicit attach/detach order matters for
         // pool reuse :
