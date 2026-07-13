@@ -275,14 +275,33 @@ export function FeedPlayerPool({
    *  /scroll tab kept downloading subsequent clips. */
   useEffect(() => {
     if (typeof document === "undefined") return;
+    // Wave 40 — debounce the hidden→pause. Dragging the Chrome window
+    // between monitors (esp. a 4K / mixed-DPI setup) makes Chrome's
+    // occlusion tracker fire a TRANSIENT `visibilitychange` to hidden that
+    // resolves almost immediately. Pausing on that flicker — then racing an
+    // unreliable resume — is what froze playback on window-move ("quand je
+    // bouge chrome ça lit plus"). We only pause if the doc STAYS hidden past
+    // a short grace window; a real background still pauses (data saving).
+    let pauseTimer: ReturnType<typeof setTimeout> | null = null;
+    const clearPause = () => {
+      if (pauseTimer) {
+        clearTimeout(pauseTimer);
+        pauseTimer = null;
+      }
+    };
     const onVisibilityChange = () => {
       if (document.hidden) {
-        for (const v of videoRefs.current) {
-          if (v && !v.paused) v.pause();
-        }
+        clearPause();
+        pauseTimer = setTimeout(() => {
+          if (!document.hidden) return; // resolved before the grace elapsed
+          for (const v of videoRefs.current) {
+            if (v && !v.paused) v.pause();
+          }
+        }, 600);
         return;
       }
-      // Tab visible again — re-resume only the LIVE slot.
+      // Visible again — cancel any pending pause and resume the LIVE slot.
+      clearPause();
       for (let s = 0; s < POOL_SIZE; s++) {
         if (priorities[s] === "live") {
           const v = videoRefs.current[s];
@@ -291,8 +310,10 @@ export function FeedPlayerPool({
       }
     };
     document.addEventListener("visibilitychange", onVisibilityChange);
-    return () =>
+    return () => {
+      clearPause();
       document.removeEventListener("visibilitychange", onVisibilityChange);
+    };
   }, [priorities]);
 
   /** V6 — Battery + saveData awareness. Anything below 20 % battery
