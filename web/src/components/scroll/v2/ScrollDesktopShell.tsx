@@ -61,6 +61,10 @@ interface ScrollDesktopShellProps {
   related?: RelatedFeedCandidate[];
   /** Cinema mode — threaded straight to StageFrame (9:16 → 16:9). */
   cinema?: boolean;
+  /** KC roster (id/ign/role) for the rail's PLAYERS filter group. Threaded
+   *  from ScrollFeedV2 → here → ScrollRail. Empty/undefined → the rail hides
+   *  the player group. */
+  rosterChips?: { id: string; ign: string; role: "TOP" | "JGL" | "MID" | "ADC" | "SUP" }[];
 }
 
 export function ScrollDesktopShell({
@@ -70,6 +74,7 @@ export function ScrollDesktopShell({
   onJumpTo,
   related = [],
   cinema = false,
+  rosterChips = [],
 }: ScrollDesktopShellProps) {
   const t = useT();
   const reduce = useReducedMotion();
@@ -106,7 +111,7 @@ export function ScrollDesktopShell({
           hover-expand reveals the full rail; collapsed it's a slim icon strip
           in the left hall, off the video. */}
       <div className="absolute inset-y-0 left-0 z-[65]">
-        <ScrollRail clipCount={clipCount} collapsed />
+        <ScrollRail clipCount={clipCount} collapsed rosterChips={rosterChips} />
       </div>
 
       {/* ── RIGHT ── no panel. A floating button (+ the C key) opens the

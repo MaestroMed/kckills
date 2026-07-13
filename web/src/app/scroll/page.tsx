@@ -92,6 +92,8 @@ interface ScrollPageProps {
     multi?: string | string[];
     fb?: string | string[];
     player?: string | string[];
+    /** Wave 41 — `?year=YYYY` season filter (2021-2026). */
+    year?: string | string[];
     fight?: string | string[];
     side?: string | string[];
     /** V14 (Wave 21.2) — `?tag=outplay` filter, deep-linked from
@@ -130,6 +132,10 @@ export interface ScrollChipFilters {
    *  are kept. Comparison is exact (no fuzzy matching) and lowercase
    *  to match how the analyser writes tags. */
   tag: string | null;
+  /** Wave 41 (Mehdi) — `?year=YYYY` season filter. Filters the feed to
+   *  kills whose match (`matchDate`) fell in that calendar year. null =
+   *  all years. Written by the desktop ScrollRail's ANNÉE group. */
+  year: number | null;
 }
 
 export default async function ScrollV2Page({ searchParams }: ScrollPageProps) {
@@ -145,6 +151,12 @@ export default async function ScrollV2Page({ searchParams }: ScrollPageProps) {
   const isTrue = (v: string | undefined) => v === "1" || v === "true";
   const sideRaw = firstString(sp.side);
   const tagRaw = firstString(sp.tag);
+  // Wave 41 — `?year=YYYY` season filter. Only accept a plausible KC era
+  // (2021 through the current data horizon 2026) ; anything else = no filter.
+  const yearRaw = firstString(sp.year);
+  const yearNum = yearRaw ? Number.parseInt(yearRaw, 10) : NaN;
+  const filterYear =
+    Number.isInteger(yearNum) && yearNum >= 2021 && yearNum <= 2026 ? yearNum : null;
   // V26 — active feed tab.
   const feedTab: FeedTab = parseFeedTab(firstString(sp.feed));
   const chipFilters: ScrollChipFilters = {
@@ -154,6 +166,7 @@ export default async function ScrollV2Page({ searchParams }: ScrollPageProps) {
     fight: firstString(sp.fight) ?? null,
     side: sideRaw === "kc" || sideRaw === "vs" ? sideRaw : null,
     tag: tagRaw && tagRaw.length > 0 && tagRaw.length < 64 ? tagRaw.toLowerCase() : null,
+    year: filterYear,
   };
   const hasChipFilter =
     chipFilters.multiKillsOnly ||
@@ -161,6 +174,7 @@ export default async function ScrollV2Page({ searchParams }: ScrollPageProps) {
     chipFilters.player !== null ||
     chipFilters.fight !== null ||
     chipFilters.tag !== null ||
+    chipFilters.year !== null ||
     chipFilters.side !== null;
 
   // Wave 37 — per-visit shuffle seed.
@@ -538,6 +552,12 @@ function videoMatchesChips(v: VideoFeedItem, c: ScrollChipFilters): boolean {
   if (c.side === "kc" && v.kcInvolvement !== "team_killer") return false;
   if (c.side === "vs" && v.kcInvolvement !== "team_victim") return false;
   if (c.player && v.killerPlayerId !== c.player) return false;
+  // Wave 41 — season filter : the kill's match year must equal ?year.
+  // matchDate is an ISO string (match scheduled_at, or created_at fallback).
+  if (c.year !== null) {
+    const ts = Date.parse(v.matchDate);
+    if (Number.isNaN(ts) || new Date(ts).getFullYear() !== c.year) return false;
+  }
   // V14 — exact-match tag filter against the analyser's lowercase
   // `ai_tags` array. Items with no tags fail closed.
   if (c.tag) {

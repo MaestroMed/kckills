@@ -295,6 +295,7 @@ export function ScrollFeedV2({
       if (chipFilters.side) meta.side = chipFilters.side;
       if (chipFilters.multiKillsOnly) meta.multi = true;
       if (chipFilters.firstBloodsOnly) meta.fb = true;
+      if (chipFilters.year) meta.year = chipFilters.year;
     }
     track("feed.view", { metadata: meta });
     // Run once per mount — re-runs on URL filter changes via remount.
@@ -1214,6 +1215,7 @@ export function ScrollFeedV2({
           onJumpTo={(i) => jumpTo(i)}
           related={relatedCandidates}
           cinema={cinema}
+          rosterChips={rosterChips}
         >
           {feedStage}
         </ScrollDesktopShell>

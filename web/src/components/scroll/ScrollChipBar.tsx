@@ -37,6 +37,10 @@ export interface ChipFilters {
    *  surfaces a "clear tag" pill when one is active so the user can
    *  unfilter without leaving /scroll. */
   tag: string | null;
+  /** Wave 41 — `?year=YYYY` season filter (2021-2026). null = all years.
+   *  The desktop ScrollRail exposes the year buttons ; the mobile bar just
+   *  carries the value so the type stays shared. */
+  year: number | null;
 }
 
 interface PlayerChipDef {

@@ -58,19 +58,42 @@ import {
   type LucideIcon,
 } from "lucide-react";
 
+/** KC roster entry for the PLAYERS filter group (threaded from
+ *  ScrollFeedV2 → ScrollDesktopShell → here). */
+export interface RailRosterChip {
+  id: string;
+  ign: string;
+  role: "TOP" | "JGL" | "MID" | "ADC" | "SUP";
+}
+
 interface ScrollRailProps {
   /** Visible clip count, surfaced in the version pill. Optional — the
    *  pill renders "v2" alone when omitted. */
   clipCount?: number;
   /** Icon-only 72px mode with title tooltips. Defaults to expanded. */
   collapsed?: boolean;
+  /** KC roster for the PLAYERS filter group. Empty → the group is hidden. */
+  rosterChips?: RailRosterChip[];
 }
+
+/** Newest-first KC seasons for the ANNÉE filter group. Kept in sync with
+ *  the `?year=` validator in scroll/page.tsx (2021 → 2026). */
+const RAIL_YEARS = [2026, 2025, 2024, 2023, 2022, 2021] as const;
+
+/** Role → accent colour for the collapsed player avatars. */
+const ROLE_ACCENT: Record<RailRosterChip["role"], string> = {
+  TOP: "var(--red)",
+  JGL: "var(--green)",
+  MID: "var(--cyan)",
+  ADC: "var(--orange)",
+  SUP: "var(--blue-kc)",
+};
 
 // ════════════════════════════════════════════════════════════════════
 // Root
 // ════════════════════════════════════════════════════════════════════
 
-export function ScrollRail({ clipCount, collapsed = false }: ScrollRailProps) {
+export function ScrollRail({ clipCount, collapsed = false, rosterChips = [] }: ScrollRailProps) {
   const t = useT();
   const router = useRouter();
   const pathname = usePathname();
@@ -115,6 +138,21 @@ export function ScrollRail({ clipCount, collapsed = false }: ScrollRailProps) {
   // Boolean chip rows : toggle ?multi=1 / ?fb=1.
   const toggleBool = (key: "multi" | "fb", currently: boolean) => {
     navigate({ [key]: currently ? null : "1" });
+  };
+
+  // ─── PLAYERS + ANNÉE filters (Wave 41 — Mehdi) ───────────────────
+  // Both mirror the mobile chip contract : ?player=<uuid>, ?year=<YYYY>.
+  // Clicking the active one again clears it (toggle). The feed re-orders
+  // server-side on URL change (scroll/page.tsx videoMatchesChips).
+  const activePlayer = sp.get("player");
+  const yearParam = sp.get("year");
+  const yearNum = yearParam ? Number.parseInt(yearParam, 10) : NaN;
+  const activeYear = Number.isInteger(yearNum) ? yearNum : null;
+  const togglePlayer = (id: string) => {
+    navigate({ player: activePlayer === id ? null : id });
+  };
+  const toggleYear = (y: number) => {
+    navigate({ year: activeYear === y ? null : String(y) });
   };
 
   // ─── NAVIGUER active state — navbar recipe (exact or sub-route) ──
@@ -209,6 +247,41 @@ export function ScrollRail({ clipCount, collapsed = false }: ScrollRailProps) {
       </Group>
 
       {/* ── (4) divider ─────────────────────────────────────────── */}
+      <Divider />
+
+      {/* ── (4b) JOUEURS filter group (Wave 41 — Mehdi) — tap a player
+             to filter the feed to their kills ; tap again to clear. Hidden
+             when the roster hasn't loaded. ──────────────────────────── */}
+      {rosterChips.length > 0 && (
+        <Group eyebrow="Joueurs" collapsed={collapsed}>
+          {rosterChips.map((p) => (
+            <RailPlayerButton
+              key={p.id}
+              player={p}
+              collapsed={collapsed}
+              active={onScroll && activePlayer === p.id}
+              onClick={() => togglePlayer(p.id)}
+            />
+          ))}
+        </Group>
+      )}
+
+      {/* ── (4c) ANNÉE filter group — season selector 2021→2026. ──── */}
+      <Group eyebrow="Année" collapsed={collapsed}>
+        <div className={collapsed ? "grid grid-cols-2 gap-1" : "grid grid-cols-3 gap-1"}>
+          {RAIL_YEARS.map((y) => (
+            <RailYearButton
+              key={y}
+              year={y}
+              collapsed={collapsed}
+              active={onScroll && activeYear === y}
+              onClick={() => toggleYear(y)}
+            />
+          ))}
+        </div>
+      </Group>
+
+      {/* ── (4d) divider ────────────────────────────────────────── */}
       <Divider />
 
       {/* ── (5) NAVIGUER group ──────────────────────────────────── */}
@@ -357,6 +430,94 @@ function RailButton({
         collapsed={collapsed}
         dot={dot}
       />
+    </button>
+  );
+}
+
+// ════════════════════════════════════════════════════════════════════
+// RailPlayerButton — a PLAYERS-group row (writes ?player=<uuid>). Shows a
+// role-tinted initial avatar ; the ign + role label appear when expanded.
+// ════════════════════════════════════════════════════════════════════
+
+function RailPlayerButton({
+  player,
+  active,
+  collapsed,
+  onClick,
+}: {
+  player: RailRosterChip;
+  active: boolean;
+  collapsed: boolean;
+  onClick: () => void;
+}) {
+  const accent = ROLE_ACCENT[player.role];
+  const initial = player.ign.charAt(0).toUpperCase();
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      aria-label={`${player.ign} (${player.role})`}
+      title={collapsed ? `${player.ign} · ${player.role}` : undefined}
+      className={rowClass(active, collapsed)}
+    >
+      <span
+        className="relative grid h-7 w-7 shrink-0 place-items-center rounded-full font-data text-[12px] font-bold leading-none"
+        style={{
+          border: `2px solid ${active ? "var(--gold)" : accent}`,
+          color: active ? "var(--gold-bright)" : accent,
+          background: "rgba(0,0,0,0.35)",
+        }}
+      >
+        {initial}
+      </span>
+      {!collapsed && (
+        <span className="flex min-w-0 flex-1 items-center justify-between gap-2">
+          <span className="truncate text-[15px] leading-none">{player.ign}</span>
+          <span
+            className="font-data text-[10px] uppercase tracking-[0.15em]"
+            style={{ color: accent }}
+          >
+            {player.role}
+          </span>
+        </span>
+      )}
+    </button>
+  );
+}
+
+// ════════════════════════════════════════════════════════════════════
+// RailYearButton — an ANNÉE-group cell (writes ?year=<YYYY>). Compact so 6
+// seasons tile into the narrow rail ; "'26" collapsed, "2026" expanded.
+// ════════════════════════════════════════════════════════════════════
+
+function RailYearButton({
+  year,
+  active,
+  collapsed,
+  onClick,
+}: {
+  year: number;
+  active: boolean;
+  collapsed: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      aria-label={String(year)}
+      title={collapsed ? String(year) : undefined}
+      className={[
+        "flex h-9 items-center justify-center rounded-md border font-data text-[12px] tracking-[0.06em] transition-colors",
+        "focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--gold)] focus-visible:outline-offset-2",
+        active
+          ? "border-[var(--gold)] bg-[var(--bg-elevated)] text-[var(--gold-bright)]"
+          : "border-[var(--border-gold)] text-[var(--text-secondary)] hover:border-[var(--gold)]/60 hover:text-[var(--gold)]",
+      ].join(" ")}
+    >
+      {collapsed ? `'${String(year).slice(2)}` : year}
     </button>
   );
 }
