@@ -121,9 +121,16 @@ class ResolveResult:
 # ─── 1. Fit du modèle ──────────────────────────────────────────────────
 
 def reject_outliers(samples: list[DriftSample]) -> tuple[list[DriftSample], list[DriftSample]]:
-    """MAD filter sur les offsets. Une lecture de timer fausse (replay à
-    l'écran, OCR qui confond un 3 et un 8) donne un offset aberrant de
-    plusieurs minutes — on la retire avant le fit."""
+    """Rejet des lectures aberrantes AVANT le fit.
+
+    Une lecture fausse (replay plein écran, OCR qui confond 3 et 8) est
+    presque toujours SEULE : son offset ne colle avec aucun autre sample.
+    Un segment de pause légitime, lui, est corroboré : plusieurs samples
+    partagent le même offset décalé. Règle : on garde un sample s'il a le
+    SOUTIEN d'au moins un autre (offset à ±OFFSET_JUMP_THRESHOLD) OU s'il
+    reste proche de la médiane (MAD). Un pur filtre médiane rejetterait
+    les segments de pause minoritaires — un vrai piecewise a par nature
+    des clusters loin de la médiane."""
     if len(samples) < 3:
         return list(samples), []
     offsets = [s.offset for s in samples]
@@ -131,8 +138,15 @@ def reject_outliers(samples: list[DriftSample]) -> tuple[list[DriftSample], list
     mad = statistics.median(abs(o - med) for o in offsets)
     threshold = max(15.0, OUTLIER_MAD_FACTOR * mad)
     kept, rejected = [], []
-    for s in samples:
-        (kept if abs(s.offset - med) <= threshold else rejected).append(s)
+    for i, s in enumerate(samples):
+        support = any(
+            j != i and abs(samples[j].offset - s.offset) <= OFFSET_JUMP_THRESHOLD
+            for j in range(len(samples))
+        )
+        if support or abs(s.offset - med) <= threshold:
+            kept.append(s)
+        else:
+            rejected.append(s)
     if rejected:
         log.info("decryptage_outliers_rejected",
                  n=len(rejected), kept=len(kept),
@@ -367,6 +381,266 @@ async def read_timer_at(
     return None
 
 
+async def _read_timers_gemini_batch(frame_paths: list[str]) -> list[Optional[int]]:
+    """UN appel Gemini pour N frames (le quota RPD compte par appel).
+    Retourne la liste des timers en secondes, alignée sur frame_paths."""
+    if not frame_paths:
+        return []
+    if not await scheduler.wait_for("gemini"):
+        return [None] * len(frame_paths)
+    from services.gemini_client import (
+        get_client, _wait_for_file_active, handle_gemini_exception,
+    )
+    try:
+        from google.genai import types  # type: ignore
+        client = get_client()
+        if client is None:
+            return [None] * len(frame_paths)
+        imgs = []
+        for p in frame_paths:
+            img = await asyncio.to_thread(
+                client.files.upload, file=p,
+                config=types.UploadFileConfig(mime_type="image/jpeg"),
+            )
+            if not await _wait_for_file_active(client, img, timeout=30):
+                img = None
+            imgs.append(img)
+        prompt = (
+            f"You receive {len(frame_paths)} frames from a League of Legends "
+            "esports VOD, in order. For EACH frame, read the in-game match "
+            "timer (top center, or top left near the team kill scores, "
+            "format MM:SS). Reply ONLY a JSON array of exactly "
+            f"{len(frame_paths)} entries, index-aligned: the timer string "
+            "\"MM:SS\", or null if that frame shows no LoL gameplay "
+            "(interview, draft, panel, replay menu, ad)."
+        )
+        contents = [prompt] + [i for i in imgs if i is not None]
+        resp = await asyncio.to_thread(
+            client.models.generate_content,
+            model=config.GEMINI_MODEL_OFFSET,
+            contents=contents,
+            config=types.GenerateContentConfig(
+                response_mime_type="application/json"),
+        )
+        parsed = json.loads((resp.text or "[]").strip())
+        out: list[Optional[int]] = []
+        pi = 0  # index dans parsed, qui ne couvre que les frames uploadées
+        for img in imgs:
+            if img is None:
+                out.append(None)
+                continue
+            val = parsed[pi] if pi < len(parsed) else None
+            pi += 1
+            m = re.match(r"(\d+):(\d{2})", str(val or ""))
+            out.append(int(m.group(1)) * 60 + int(m.group(2)) if m else None)
+        return out
+    except Exception as e:
+        handle_gemini_exception(e, where="decryptage_batch_read")
+        return [None] * len(frame_paths)
+
+
+async def _sample_many(
+    source: str,
+    gts: list[int],
+    hint: float,
+    budget: ProbeBudget,
+    tmp_dir: Optional[str] = None,
+) -> list[DriftSample]:
+    """Échantillonne plusieurs game_times : extraction de toutes les
+    frames, OCR local sur chacune (gratuit), puis les échecs OCR
+    regroupés en appels Gemini multi-images (4 frames / appel / unité de
+    budget). Chaque succès Gemini entraîne l'OCR."""
+    tmp_dir = tmp_dir or getattr(config, "CLIPS_DIR", None) or os.path.join(
+        os.path.dirname(__file__), "..", "clips")
+    os.makedirs(tmp_dir, exist_ok=True)
+    samples: list[DriftSample] = []
+    misses: list[tuple[int, str]] = []  # (vod_pos, frame_path)
+
+    for gt in gts:
+        pos = max(0, int(gt + hint))
+        frame = os.path.join(
+            tmp_dir, f"decrypt_b_{abs(hash(source)) % 99999}_{pos}.jpg")
+        if not await _extract_frame(source, pos, frame):
+            continue
+        seconds, conf, _prof = timer_ocr.read(frame)
+        if seconds is not None:
+            samples.append(DriftSample(
+                game_time=seconds, vod_time=pos,
+                timer_read=f"{seconds // 60}:{seconds % 60:02d}",
+                method="ocr", confidence=conf,
+            ))
+            try:
+                os.remove(frame)
+            except OSError:
+                pass
+        else:
+            misses.append((pos, frame))
+
+    try:
+        for i in range(0, len(misses), 4):
+            chunk = misses[i:i + 4]
+            if not budget.take_gemini():
+                break
+            timers = await _read_timers_gemini_batch([f for _, f in chunk])
+            for (pos, frame), seconds in zip(chunk, timers):
+                if seconds is None:
+                    continue
+                try:
+                    timer_ocr.learn(frame, seconds)
+                except Exception:
+                    pass
+                samples.append(DriftSample(
+                    game_time=seconds, vod_time=pos,
+                    timer_read=f"{seconds // 60}:{seconds % 60:02d}",
+                    method="gemini", confidence=0.95,
+                ))
+    finally:
+        for _, frame in misses:
+            if os.path.exists(frame):
+                try:
+                    os.remove(frame)
+                except OSError:
+                    pass
+    return samples
+
+
+# ─── 2bis. Ancre epoch par VOD (propagation multi-games) ─────────────
+#
+# Vague 2 — 42 % des games partagent leur VOD avec d'autres (94 VODs,
+# 278 games au 2026-07-14). La VOD et les event_epoch des kills vivent
+# tous deux en temps mur : une fois UNE game de la VOD décryptée par
+# vision, anchor = epoch_kill - vod_time(kill) donne le début du stream.
+# Toute autre game de la même VOD se place alors par arithmétique :
+# vod_time = epoch - anchor. Zéro vision, pause-proof par construction.
+
+def _epoch_s(e) -> Optional[float]:
+    if not e or e <= 0:
+        return None
+    return e / 1000.0 if e > 10_000_000_000 else float(e)
+
+
+def derive_stream_anchor(
+    model: dict | DriftModel,
+    kills: list[dict],
+) -> tuple[Optional[float], float]:
+    """→ (stream_start_epoch en secondes, confiance 0-1).
+
+    Utilise les kills (event_epoch > 0) de la game déjà décryptée :
+    anchor_i = epoch_i - vod_time(game_time_i). Médiane sur les kills
+    hors zones d'incertitude ; confiance = dispersion + volume."""
+    pairs = []
+    for k in kills:
+        e = _epoch_s(k.get("event_epoch"))
+        gt = k.get("game_time_seconds")
+        if e is None or gt is None:
+            continue
+        r = resolve_vod_time(model, gt)
+        if r is None or r.in_uncertainty_zone:
+            continue
+        pairs.append(e - r.vod_time)
+    if not pairs:
+        return None, 0.0
+    anchor = statistics.median(pairs)
+    spread = statistics.pstdev(pairs) if len(pairs) > 1 else 0.0
+    confidence = round(
+        max(0.0, 1.0 - spread / 20.0) * min(1.0, len(pairs) / 5.0), 3)
+    return round(anchor, 2), confidence
+
+
+def samples_from_epoch_anchor(
+    stream_start_epoch: float,
+    kills: list[dict],
+    confidence: float,
+) -> list[DriftSample]:
+    """Échantillons synthétiques pour une game SŒUR (même VOD) : chaque
+    kill à epoch connu devient un point (game_time, epoch - anchor).
+    fit_drift_model dessus reconstruit le modèle par segments — les
+    pauses in-game apparaissent d'elles-mêmes (l'epoch avance pendant la
+    pause, pas le game_time)."""
+    out = []
+    for k in kills:
+        e = _epoch_s(k.get("event_epoch"))
+        gt = k.get("game_time_seconds")
+        if e is None or gt is None:
+            continue
+        vt = e - stream_start_epoch
+        if vt < 0:
+            continue
+        out.append(DriftSample(
+            game_time=int(gt), vod_time=int(vt),
+            timer_read=f"{int(gt) // 60}:{int(gt) % 60:02d}",
+            method="epoch", confidence=confidence,
+        ))
+    return out
+
+
+# ─── 2ter. Feedback QC → modèle (flywheel) ────────────────────────────
+
+def append_drift_samples(source_row_id: str, new_samples: list[DriftSample]) -> bool:
+    """Réinjecte des lectures de timer (typiquement issues du QC d'un
+    clip) dans drift_samples de la source, et re-fitte le modèle. Chaque
+    clip vérifié améliore le placement de tous les suivants."""
+    if not new_samples:
+        return False
+    rows = safe_select("game_vod_sources", "id,drift_samples", id=source_row_id)
+    if not rows:
+        return False
+    existing = rows[0].get("drift_samples") or []
+    known = {(s.get("game_time"), s.get("vod_time")) for s in existing}
+    merged = list(existing)
+    for s in new_samples:
+        if (s.game_time, s.vod_time) not in known:
+            merged.append(asdict(s))
+    all_samples = [
+        DriftSample(
+            game_time=s["game_time"], vod_time=s["vod_time"],
+            timer_read=s.get("timer_read", ""),
+            method=s.get("method", "unknown"),
+            confidence=s.get("confidence", 0.5),
+            sampled_at=s.get("sampled_at", ""),
+        ) for s in merged
+    ]
+    model, conf = fit_drift_model(all_samples)
+    if model is None:
+        return False
+    return bool(safe_update("game_vod_sources", {
+        "drift_samples": merged,
+        "drift_model": model.to_json(),
+        "offset_confidence": conf,
+        "synced_at": datetime.now(timezone.utc).isoformat(),
+    }, "id", source_row_id))
+
+
+# ─── 2quater. Scan dense OCR des zones d'incertitude ──────────────────
+
+async def dense_scan_zone(
+    source: str,
+    zone: tuple[float, float],
+    offset_before: float,
+    step: int = 20,
+    max_probes: int = 40,
+) -> list[DriftSample]:
+    """Balaye une zone d'incertitude au pas de `step` secondes en OCR
+    PUR (0 token). Ne fait rien si l'OCR n'est pas calibré — dans ce
+    cas, refine_breakpoint (bissection, 2-3 lectures) reste la voie.
+    Avec l'OCR calibré, le saut d'offset est localisé à ±step près pour
+    un coût nul."""
+    if not timer_ocr.is_calibrated():
+        return []
+    lo, hi = zone
+    samples: list[DriftSample] = []
+    budget = ProbeBudget(0)  # OCR only — read_timer_at n'ira jamais à Gemini
+    gt = lo + step
+    probes = 0
+    while gt < hi and probes < max_probes:
+        s = await read_timer_at(source, int(gt + offset_before), budget)
+        probes += 1
+        if s is not None:
+            samples.append(s)
+        gt += step
+    return samples
+
+
 # ─── 3. Décryptage d'une source ───────────────────────────────────────
 
 def _plan_probe_times(duration_seconds: int) -> list[int]:
@@ -434,13 +708,18 @@ async def decrypt_source(
 
     hint = offset_hint if offset_hint is not None else 0.0
     samples: list[DriftSample] = []
-    for gt in probe_gts:
-        s = await read_timer_at(source_video, int(gt + hint), budget)
+    # Vague 2 — 1re probe SEULE (elle affine le hint : si l'offset réel
+    # diffère, toutes les probes suivantes visent mieux), puis le reste
+    # en mode batch : OCR local d'abord, les échecs regroupés en UN SEUL
+    # appel Gemini multi-images (le quota RPD compte par APPEL, pas par
+    # frame → ~4× plus de probes par jour à budget constant).
+    if probe_gts:
+        s = await read_timer_at(source_video, int(probe_gts[0] + hint), budget)
         if s is not None:
             samples.append(s)
-            # affiner le hint au fil de l'eau : les probes suivantes visent
-            # mieux si l'offset réel diffère du hint initial
             hint = s.offset
+        samples.extend(
+            await _sample_many(source_video, probe_gts[1:], hint, budget))
 
     if len(samples) >= MIN_SAMPLES_MODEL:
         model, conf = fit_drift_model(samples)

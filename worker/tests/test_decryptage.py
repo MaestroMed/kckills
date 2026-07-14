@@ -171,7 +171,16 @@ async def test_partial_samples_low_confidence(monkeypatch):
                 return sample
         return None
 
+    async def _many(source, gts, hint, budget, tmp_dir=None):
+        out = []
+        for gt in gts:
+            s = await _one_read(source, int(gt + hint), budget)
+            if s is not None:
+                out.append(s)
+        return out
+
     monkeypatch.setattr(decryptage, "read_timer_at", _one_read)
+    monkeypatch.setattr(decryptage, "_sample_many", _many)
 
     model, conf, samples, method = await decrypt_source(
         game={"id": "g1", "duration_seconds": 1800},
@@ -192,3 +201,64 @@ def test_probe_budget_exhausts():
     b = ProbeBudget(2)
     assert b.take_gemini() and b.take_gemini()
     assert not b.take_gemini()
+
+
+# ─── vague 2 : ancre epoch par VOD ────────────────────────────────────
+
+from modules.decryptage import derive_stream_anchor, samples_from_epoch_anchor
+
+
+def _kill(epoch_ms, gt):
+    return {"event_epoch": epoch_ms, "game_time_seconds": gt}
+
+
+def test_derive_stream_anchor_from_fitted_game():
+    """Game A décryptée (offset 3500) : anchor = epoch - vod_time.
+    stream démarré à epoch 1_700_000_000 ; game start dans le VOD à
+    3500 s → game_start_epoch = 1_700_003_500... non : les kills à
+    game_time gt tombent à vod_time gt+3500 et à epoch
+    (stream_start + gt + 3500)."""
+    stream_start = 1_700_000_000
+    samples = [_s(gt, gt + 3500) for gt in (300, 900, 1500)]
+    model, _ = fit_drift_model(samples)
+    kills = [_kill((stream_start + gt + 3500) * 1000, gt)
+             for gt in (200, 700, 1200, 1600)]
+    anchor, conf = derive_stream_anchor(model, kills)
+    assert anchor == pytest.approx(stream_start, abs=1)
+    assert conf > 0.6
+
+
+def test_epoch_anchor_propagates_to_sibling_game():
+    """Game B (même VOD, jamais décryptée) : ses kills à epoch connu se
+    placent via l'ancre — y compris les sauts de pause qui réapparaissent
+    d'eux-mêmes dans le fit."""
+    stream_start = 1_700_000_000
+    # game B commence à 5000 s dans le VOD ; pause de 40 s à gt=600
+    def epoch_of(gt):
+        wall = gt + (40 if gt > 600 else 0)      # la pause décale le mur
+        return (stream_start + 5000 + wall) * 1000
+    kills_b = [_kill(epoch_of(gt), gt) for gt in (120, 400, 800, 1300, 1700)]
+    synth = samples_from_epoch_anchor(stream_start, kills_b, confidence=0.9)
+    assert len(synth) == 5
+    assert all(s.method == "epoch" for s in synth)
+    model, conf = fit_drift_model(synth)
+    assert model.type == "piecewise"
+    offsets = [seg["offset"] for seg in model.segments]
+    assert offsets == pytest.approx([5000, 5040], abs=1)
+    r = resolve_vod_time(model, 1500)
+    assert r.vod_time == pytest.approx(1500 + 5040, abs=2)
+
+
+def test_derive_anchor_ignores_uncertainty_zones():
+    samples = [_s(173, 3682), _s(457, 3982), _s(773, 4298),
+               _s(1320, 4882), _s(1620, 5182)]
+    model, _ = fit_drift_model(samples)
+    # kill dans la zone 773-1320 : ne doit pas polluer l'ancre
+    stream_start = 1_699_000_000
+    kills = [
+        _kill((stream_start + 500 + 3525) * 1000, 500),
+        _kill((stream_start + 1000 + 3540) * 1000, 1000),   # zone incertaine
+        _kill((stream_start + 1500 + 3562) * 1000, 1500),
+    ]
+    anchor, conf = derive_stream_anchor(model, kills)
+    assert anchor == pytest.approx(stream_start, abs=1)

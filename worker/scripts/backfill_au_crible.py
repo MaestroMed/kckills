@@ -57,7 +57,10 @@ log = structlog.get_logger()
 from services.supabase_client import get_db, safe_update  # noqa: E402
 from modules.dedup import build_dedup_plan, DedupPlan  # noqa: E402
 from modules import decryptage  # noqa: E402
-from modules.decryptage import resolve_vod_time, DRIFT_TOLERANCE  # noqa: E402
+from modules.decryptage import (  # noqa: E402
+    resolve_vod_time, DRIFT_TOLERANCE,
+    derive_stream_anchor, samples_from_epoch_anchor, fit_drift_model,
+)
 
 STATE_FILE = Path(__file__).resolve().parent.parent / "backfill_au_crible_state.json"
 
@@ -303,7 +306,16 @@ def build_ledger_rows(
 
 # ─── boucle principale ────────────────────────────────────────────────
 
-async def process_game(db, game: dict, kills: list[dict], args) -> dict:
+async def process_game(
+    db, game: dict, kills: list[dict], args,
+    vod_anchor: tuple[float, float] | None = None,
+) -> tuple[dict, tuple[float, float] | None]:
+    """→ (stats, ancre_epoch_du_VOD ou None).
+
+    `vod_anchor` = (stream_start_epoch_s, confiance) dérivée d'une game
+    SŒUR déjà décryptée sur la même VOD : cette game se place alors par
+    arithmétique d'epoch, ZÉRO vision (vague 2 — 42 % des games
+    partagent leur VOD)."""
     gid = game["id"]
     kills_by_id = {k["id"]: k for k in kills}
     stats: dict = {"game_id": gid[:8], "kills": len(kills)}
@@ -311,6 +323,10 @@ async def process_game(db, game: dict, kills: list[dict], args) -> dict:
     # 1. dédup
     plan = build_dedup_plan(kills)
     stats.update(apply_dedup(db, plan, kills_by_id, apply=args.apply))
+    # complétude cross-source : les gol.gg sans jumeau livestats sont des
+    # morts que livestats a ratées (ou l'inverse : game jamais moissonnée)
+    stats["cross_source_merged"] = plan.cross_source_merged
+    stats["golgg_only"] = len(plan.golgg_only_kill_ids)
 
     # 2. décryptage
     drift_model, source_row_id, sync_method, confidence = None, None, "none", 0.0
@@ -345,6 +361,36 @@ async def process_game(db, game: dict, kills: list[dict], args) -> dict:
             source_row_id = srows[0]["id"]
             sync_method = srows[0].get("sync_method") or "unknown"
             confidence = srows[0].get("offset_confidence") or 0.0
+
+    # 2bis. Vague 2 — propagation d'ancre : pas de modèle propre mais une
+    # game sœur de la MÊME VOD est décryptée → cette game se place par
+    # epoch (vod_time = epoch - anchor), zéro vision.
+    if drift_model is None and vod_anchor is not None:
+        anchor_epoch, anchor_conf = vod_anchor
+        synth = samples_from_epoch_anchor(anchor_epoch, kills, anchor_conf)
+        if len(synth) >= 2:
+            model_obj, fit_conf = fit_drift_model(synth)
+            if model_obj is not None:
+                drift_model = model_obj.to_json()
+                confidence = round(min(anchor_conf, fit_conf), 3)
+                sync_method = "epoch_anchor"
+                if args.apply:
+                    src = decryptage._ensure_official_source_row(game)
+                    if src:
+                        source_row_id = src["id"]
+                        decryptage.persist_decryptage(
+                            game=game, source_row=src, model=model_obj,
+                            confidence=confidence, samples=synth,
+                            sync_method="epoch_anchor",
+                        )
+
+    # 2ter. dérive l'ancre de CE modèle pour les games suivantes du VOD
+    anchor_out: tuple[float, float] | None = None
+    if drift_model is not None:
+        a, ac = derive_stream_anchor(drift_model, kills)
+        if a is not None and ac >= 0.4:
+            anchor_out = (a, ac)
+
     stats["sync_method"] = sync_method
     stats["offset_confidence"] = confidence
 
@@ -383,7 +429,7 @@ async def process_game(db, game: dict, kills: list[dict], args) -> dict:
     stats["ledger_rows"] = len(rows)
     if args.apply:
         upsert_ledger(db, rows)
-    return stats
+    return stats, anchor_out
 
 
 async def main():
@@ -436,23 +482,59 @@ async def main():
         if not args.all:
             targets = targets[:args.games]
 
+    # Vague 2 — groupement par VOD : la 1re game d'un VOD décryptée par
+    # vision donne l'ancre epoch du stream ; ses sœurs se placent par
+    # arithmétique, zéro vision. On ordonne chaque groupe pour décrypter
+    # d'abord la game au plus de kills à epoch fiable (meilleure ancre).
+    def _epoch_kill_count(gid):
+        return sum(1 for k in by_game[gid] if (k.get("event_epoch") or 0) > 0)
+
+    vod_of = {gid: (games_map.get(gid) or {}).get("vod_youtube_id")
+              for gid in targets}
+    ordered: list[str] = []
+    seen: set[str] = set()
+    for gid in targets:
+        if gid in seen:
+            continue
+        vod = vod_of.get(gid)
+        if not vod:
+            ordered.append(gid)
+            seen.add(gid)
+            continue
+        siblings = [g for g in targets if vod_of.get(g) == vod and g not in seen]
+        siblings.sort(key=_epoch_kill_count, reverse=True)
+        ordered.extend(siblings)
+        seen.update(siblings)
+    targets = ordered
+
     print(f"{len(targets)} game(s) à passer au crible "
           f"({'APPLY' if args.apply else 'DRY-RUN'})\n")
 
     totals: Counter = Counter()
+    vod_anchors: dict[str, tuple[float, float]] = {}
     for i, gid in enumerate(targets):
         game = games_map.get(gid)
         if game is None:
             continue
+        vod = game.get("vod_youtube_id")
         try:
-            stats = await process_game(db, game, by_game[gid], args)
+            stats, anchor = await process_game(
+                db, game, by_game[gid], args,
+                vod_anchor=vod_anchors.get(vod) if vod else None,
+            )
         except Exception as e:
             log.error("game_failed", game_id=gid[:8], error=str(e)[:200])
             continue
-        for key in ("kills", "duplicates", "label_fixes", "ledger_rows", "reclips"):
+        if vod and anchor and (vod not in vod_anchors
+                               or anchor[1] > vod_anchors[vod][1]):
+            vod_anchors[vod] = anchor
+        for key in ("kills", "duplicates", "label_fixes", "ledger_rows",
+                    "reclips", "cross_source_merged", "golgg_only"):
             totals[key] += stats.get(key, 0)
         print(f"[{i + 1}/{len(targets)}] {gid[:8]} kills={stats['kills']} "
               f"dup={stats.get('duplicates', 0)} labels={stats.get('label_fixes', 0)} "
+              f"xsrc={stats.get('cross_source_merged', 0)} "
+              f"gaps={stats.get('golgg_only', 0)} "
               f"ledger={stats.get('ledger_rows', 0)} reclips={stats.get('reclips', 0)} "
               f"sync={stats.get('sync_method')} conf={stats.get('offset_confidence')}")
         if args.apply:
