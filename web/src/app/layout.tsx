@@ -390,8 +390,21 @@ export default async function RootLayout({
             activated SW claims it, so the user runs the new bundle without a
             manual hard-refresh. Together with the SW's skipWaiting + activate
             cache-sweep, this makes a stale-bundle freeze self-heal in one
-            visit instead of persisting across reloads. */}
-        <script dangerouslySetInnerHTML={{ __html: `if('serviceWorker' in navigator){navigator.serviceWorker.register('/sw.js?v=${SW_BUILD_ID}',{updateViaCache:'none'});if(navigator.serviceWorker.controller){var _kcReloaded=false;navigator.serviceWorker.addEventListener('controllerchange',function(){if(_kcReloaded)return;_kcReloaded=true;location.reload()})}}` }} />
+            visit instead of persisting across reloads.
+
+            Wave 41 — INFINITE-RELOAD FIX. The old guard was a page-scoped
+            `var _kcReloaded`, which resets to false on every reload — so it
+            only prevented a *double* reload within one load, NOT a reload
+            *loop* across loads. If controllerchange fires on every load (a
+            dueling-SW state, e.g. a stale worker from a previous deploy still
+            controlling force-dynamic /admin pages), the page reloaded forever
+            → black screen. The guard is now persisted in sessionStorage and
+            KEYED BY BUILD ID: we reload at most once per (tab-session, deploy),
+            which still self-heals a stale bundle exactly once per deploy but
+            can never loop. If sessionStorage is unavailable (private mode,
+            storage disabled) we do NOT reload — a missed auto-update beats an
+            infinite loop. */}
+        <script dangerouslySetInnerHTML={{ __html: `if('serviceWorker' in navigator){navigator.serviceWorker.register('/sw.js?v=${SW_BUILD_ID}',{updateViaCache:'none'});if(navigator.serviceWorker.controller){navigator.serviceWorker.addEventListener('controllerchange',function(){var k='kc_sw_reloaded_build',b='${SW_BUILD_ID}';try{if(sessionStorage.getItem(k)===b)return;sessionStorage.setItem(k,b)}catch(e){return}location.reload()})}}` }} />
       </body>
     </html>
   );
