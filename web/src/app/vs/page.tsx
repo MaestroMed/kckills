@@ -32,8 +32,10 @@ import { Suspense } from "react";
 import { ERAS } from "@/lib/eras";
 import { getTrackedRoster } from "@/lib/supabase/players";
 import { getPublishedKills } from "@/lib/supabase/kills";
+import { createCachedAnonSupabase, rethrowIfDynamic } from "@/lib/supabase/server";
 import {
   buildEraOptions,
+  type VSEraOption,
   type VSPlayerOption,
 } from "@/lib/vs-roulette";
 
@@ -80,14 +82,72 @@ export const metadata: Metadata = {
 async function buildPlayerOptions(): Promise<VSPlayerOption[]> {
   const roster = await getTrackedRoster();
   // Slug = ign verbatim (case-insensitive match on the SQL side).
-  return roster
-    .filter((r) => r.ign && r.ign !== "?")
-    .map((r) => ({
-      ign: r.ign,
-      role: r.role,
-      slug: r.ign,
-    }))
+  //
+  // Wave 36 — case-insensitive dedupe : the players table carries
+  // historical duplicates ("kyeahoo"/"Kyeahoo", "Saken"/"SAKEN") that
+  // doubled entries in the dropdown. The SQL side matches LOWER(ign)
+  // anyway, so one entry per lowercased ign is lossless ; keep the row
+  // with a role, then the prettier casing (not ALL-CAPS).
+  const score = (ign: string, role: unknown) =>
+    (role ? 2 : 0) + (ign !== ign.toUpperCase() ? 1 : 0);
+  const byIgn = new Map<string, (typeof roster)[number]>();
+  for (const r of roster) {
+    if (!r.ign || r.ign === "?") continue;
+    const key = r.ign.toLowerCase();
+    const prev = byIgn.get(key);
+    if (!prev || score(r.ign, r.role) > score(prev.ign, prev.role)) {
+      byIgn.set(key, r);
+    }
+  }
+  return [...byIgn.values()]
+    .map((r) => ({ ign: r.ign, role: r.role, slug: r.ign }))
     .sort((a, b) => a.ign.localeCompare(b.ign));
+}
+
+/**
+ * Wave 36 — honest era list. fn_pick_vs_pair filters eras through
+ * matches.scheduled_at ; an era whose date range holds fewer than TWO
+ * eligible clips can never produce a pair, so offering it in the
+ * dropdown guarantees a dead spin ("Aucune paire ne correspond…").
+ * Count per era server-side (ISR 30 min) and drop the impossible ones.
+ *
+ * Known debt (WARN) : gol.gg-imported matches have scheduled_at NULL, so
+ * their clips are invisible to era filters — both here and in the RPC.
+ * The eras filtered out today (2021-2023 legacy) come back automatically
+ * once the worker backfills those dates.
+ */
+async function buildAvailableEras(): Promise<VSEraOption[]> {
+  const all = buildEraOptions(ERAS);
+  try {
+    const sb = createCachedAnonSupabase(1800);
+    const counts = await Promise.all(
+      all.map(async (era) => {
+        try {
+          const { count, error } = await sb
+            .from("kills")
+            .select("id,games!inner(matches!inner(scheduled_at))", {
+              count: "exact",
+              head: true,
+            })
+            .or(
+              "publication_status.eq.published,and(publication_status.is.null,status.eq.published)",
+            )
+            .not("clip_url_vertical", "is", null)
+            .gte("games.matches.scheduled_at", era.dateStart)
+            .lte("games.matches.scheduled_at", era.dateEnd);
+          if (error) return Number.POSITIVE_INFINITY; // fail-open : keep era
+          return count ?? 0;
+        } catch (err) {
+          rethrowIfDynamic(err);
+          return Number.POSITIVE_INFINITY;
+        }
+      }),
+    );
+    return all.filter((_, i) => counts[i] >= 2);
+  } catch (err) {
+    rethrowIfDynamic(err);
+    return all; // fail-open : the dropdown shows everything
+  }
 }
 
 /**
@@ -124,11 +184,12 @@ async function buildChampionsAndThumbnails(): Promise<{
 
 export default async function VSPage() {
   const { t } = await getServerT();
-  const [players, { champions, rouletteThumbnails }] = await Promise.all([
-    buildPlayerOptions(),
-    buildChampionsAndThumbnails(),
-  ]);
-  const eraOptions = buildEraOptions(ERAS);
+  const [players, { champions, rouletteThumbnails }, eraOptions] =
+    await Promise.all([
+      buildPlayerOptions(),
+      buildChampionsAndThumbnails(),
+      buildAvailableEras(),
+    ]);
 
   const breadcrumbJsonLd = breadcrumbLD([
     { name: "Accueil", url: "/" },
@@ -239,6 +300,14 @@ export default async function VSPage() {
               className="rounded-xl border border-white/20 bg-black/25 backdrop-blur-sm px-5 py-2.5 font-display text-xs font-bold uppercase tracking-[0.25em] text-white/75 transition-all hover:border-white/45 hover:text-white"
             >
               {t("p_vsgame.vs_scroll_mode")}
+            </Link>
+            {/* Wave 36 — le Mode Stream (plein écran OBS, arbitrage clavier,
+                auto-relance) taillé pour les soirées EtoStark. */}
+            <Link
+              href="/vs/stream"
+              className="rounded-xl border border-[var(--cyan)]/40 bg-black/25 backdrop-blur-sm px-5 py-2.5 font-display text-xs font-bold uppercase tracking-[0.25em] text-[var(--cyan)] transition-all hover:border-[var(--cyan)]/80 hover:bg-[var(--cyan)]/10"
+            >
+              {t("nav.vs_stream")} 📺
             </Link>
           </div>
         </div>

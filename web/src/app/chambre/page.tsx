@@ -14,9 +14,12 @@ import { ChamberExperience } from "@/components/chambre/ChamberExperience";
 export const revalidate = 600;
 
 export const metadata: Metadata = {
-  title: "La Chambre des Souffrances — KCKILLS",
+  // Wave 36 — the root layout template already appends "— KCKILLS" ;
+  // the hardcoded suffix produced "… — KCKILLS — KCKILLS" in the tab.
+  title: "La Chambre des Souffrances",
   description:
     "Dix cercles. Les pires morts de la Karmine Corp, du simple faux-pas au pentakill encaissé. Descends si tu l'oses.",
+  alternates: { canonical: "/chambre" },
   openGraph: {
     title: "La Chambre des Souffrances — KCKILLS",
     description:

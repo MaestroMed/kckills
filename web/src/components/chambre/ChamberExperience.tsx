@@ -25,6 +25,99 @@ const MULTI_LABEL: Record<string, string> = {
   double: "DOUBLE SUBI",
 };
 
+// ════════════════════════════════════════════════════════════════════
+// Le rituel du F — "press F to pay respects", per death. Wave 36.
+//
+// Each tap fires a 💀 reaction through the existing /api/kills/[id]/react
+// route (rate-limited server-side, batched here per card), floats an "F"
+// glyph up from the button, and keeps a session tally that the ExitCard
+// reads to salute the mourner. No new table, no new RPC.
+// ════════════════════════════════════════════════════════════════════
+
+let sessionRespects = 0;
+const respectListeners = new Set<(n: number) => void>();
+
+function bumpSessionRespects() {
+  sessionRespects += 1;
+  respectListeners.forEach((fn) => fn(sessionRespects));
+}
+
+function RespectButton({ killId, reduce }: { killId: string; reduce: boolean }) {
+  const [mine, setMine] = useState(0);
+  const [floats, setFloats] = useState<number[]>([]);
+  const pendingRef = useRef(0);
+  const flushTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const flush = useCallback(() => {
+    const delta = pendingRef.current;
+    pendingRef.current = 0;
+    if (delta <= 0) return;
+    // Fire-and-forget — the Chambre never blocks on the network.
+    fetch(`/api/kills/${killId}/react`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ emoji: "💀", delta }),
+    }).catch(() => {});
+  }, [killId]);
+
+  useEffect(() => {
+    return () => {
+      if (flushTimer.current) clearTimeout(flushTimer.current);
+      flush();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const pay = useCallback(
+    (e: React.MouseEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setMine((n) => n + 1);
+      bumpSessionRespects();
+      pendingRef.current += 1;
+      if (flushTimer.current) clearTimeout(flushTimer.current);
+      flushTimer.current = setTimeout(flush, 800);
+      if (!reduce) {
+        const id = Date.now() + Math.random();
+        setFloats((f) => [...f.slice(-4), id]);
+        setTimeout(() => setFloats((f) => f.filter((x) => x !== id)), 900);
+      }
+      try {
+        navigator.vibrate?.(12);
+      } catch {
+        /* no haptics */
+      }
+    },
+    [flush, reduce],
+  );
+
+  return (
+    <button
+      type="button"
+      onClick={pay}
+      aria-label="Rendre hommage (F)"
+      className="absolute right-1.5 top-1.5 z-10 flex h-8 min-w-8 items-center justify-center gap-1 rounded-md border border-white/15 bg-black/60 px-1.5 font-data text-[12px] font-black text-white/75 backdrop-blur-sm transition-all hover:border-[var(--red)] hover:text-[var(--red)] active:scale-90"
+    >
+      F
+      {mine > 0 && (
+        <span className="text-[9px] font-bold tabular-nums text-[var(--red)]">
+          ×{mine}
+        </span>
+      )}
+      {floats.map((id) => (
+        <span
+          key={id}
+          aria-hidden
+          className="pointer-events-none absolute left-1/2 top-0 -translate-x-1/2 font-data text-[14px] font-black text-[var(--red)]"
+          style={{ animation: "chamberRespect 0.9s ease-out forwards" }}
+        >
+          F
+        </span>
+      ))}
+    </button>
+  );
+}
+
 export function ChamberExperience({ circles }: { circles: ChamberCircle[] }) {
   const reduce = useReducedMotion() ?? false;
   const [entered, setEntered] = useState(false);
@@ -286,6 +379,7 @@ function ClipCard({
         boxShadow: intense && !reduce ? "0 0 24px rgba(232,64,87,0.18)" : "none",
       }}
     >
+      <RespectButton killId={clip.id} reduce={reduce} />
       <video
         ref={ref}
         src={src}
@@ -362,6 +456,7 @@ function GradeOverlay({ stress, reduce }: { stress: number; reduce: boolean }) {
         @keyframes chamberPulse{0%,100%{opacity:${stress * 0.4}}50%{opacity:${stress}}}
         @keyframes chamberGlitch{0%{opacity:1;transform:translateX(0)}18%{opacity:.9;transform:translateX(-5px)}36%{opacity:.65;transform:translateX(6px)}54%{opacity:.85;transform:translateX(-3px)}72%{opacity:.4;transform:translateX(2px)}100%{opacity:0;transform:translateX(0)}}
         @keyframes chamberShake{0%,100%{transform:translate(0,0)}20%{transform:translate(-1.5px,1px)}40%{transform:translate(1.5px,-1px)}60%{transform:translate(-1px,-1.5px)}80%{transform:translate(1px,1.5px)}}
+        @keyframes chamberRespect{0%{opacity:1;transform:translate(-50%,0) scale(1)}100%{opacity:0;transform:translate(-50%,-34px) scale(1.6)}}
       `}</style>
     </>
   );
@@ -470,12 +565,27 @@ function StressGauge({
 // ════════════════════════════════════════════════════════════════════
 
 function ExitCard() {
+  // Wave 36 — the mourner's tally. Subscribes to the session respect
+  // counter (fed by every F tapped during the descent).
+  const [respects, setRespects] = useState(sessionRespects);
+  useEffect(() => {
+    respectListeners.add(setRespects);
+    return () => {
+      respectListeners.delete(setRespects);
+    };
+  }, []);
   return (
     <section className="relative grid min-h-[70dvh] place-items-center px-6 text-center">
       <div className="max-w-md">
         <p className="font-data text-[11px] uppercase tracking-[0.4em] text-[var(--red)]">
           Tu as tout vu
         </p>
+        {respects > 0 && (
+          <p className="mt-2 font-data text-[11px] uppercase tracking-[0.2em] text-white/45">
+            Tu as rendu <span className="font-black text-[var(--red)]">{respects}</span>{" "}
+            hommage{respects > 1 ? "s" : ""}. Les morts s&apos;en souviendront.
+          </p>
+        )}
         <h2 className="mt-3 font-display text-3xl font-black text-[var(--gold-bright)]">
           On remonte ?
         </h2>

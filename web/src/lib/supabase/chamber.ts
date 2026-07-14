@@ -99,8 +99,12 @@ const SELECT = `
 const PUBLISHED =
   "publication_status.eq.published,and(publication_status.is.null,status.eq.published)";
 
-/** How many of the worst deaths make it into the descent (10 circles). */
-const TOTAL = 150;
+/** How many of the worst deaths make it into the descent (10 circles).
+ *  Wave 36 — raised 150 → 240 : the catalogue now holds 1 400+ clipped KC
+ *  deaths (517 multi-kills suffered), the descent can afford richer
+ *  circles. Thumbnails are lazy + videos preload="none", so the page
+ *  weight stays flat ; only the JSON payload grows (~40 KB). */
+const TOTAL = 240;
 const CIRCLES = 10;
 
 interface RawChamberRow {
@@ -161,14 +165,15 @@ export const getChamberCircles = cache(async function getChamberCircles(): Promi
         .not("thumbnail_url", "is", null);
 
     const [multisRes, topRes] = await Promise.all([
-      // Every multi-kill suffered — the core of the suffering.
+      // Every multi-kill suffered — the core of the suffering. 600 covers
+      // the full 517 known multi-deaths with headroom (Wave 36).
       victimBase()
         .or("multi_kill.eq.penta,multi_kill.eq.quadra,multi_kill.eq.triple,multi_kill.eq.double")
-        .limit(200),
+        .limit(600),
       // The most spectacular single deaths to fill the shallow circles.
       victimBase()
         .order("highlight_score", { ascending: false, nullsFirst: false })
-        .limit(200),
+        .limit(400),
     ]);
 
     if (multisRes.error) {
