@@ -296,14 +296,6 @@ export const DEFAULT_SCROLL_PLAYLIST: BgmTrack[] = [
     genre: "anthemic",
   },
   {
-    id: "guns-for-hire",
-    title: "Guns for Hire",
-    artist: "Woodkid",
-    youtubeId: "pKNEx-9OqRM",
-    durationSeconds: 227,
-    genre: "anthemic",
-  },
-  {
     id: "playground",
     title: "Playground",
     artist: "Bea Miller",
@@ -318,22 +310,6 @@ export const DEFAULT_SCROLL_PLAYLIST: BgmTrack[] = [
     youtubeId: "j-RpvIuazmc",
     durationSeconds: 169,
     genre: "anthemic",
-  },
-  {
-    id: "paint-the-town-blue",
-    title: "Paint the Town Blue",
-    artist: "Ashnikko",
-    youtubeId: "pl2K9rvsS74",
-    durationSeconds: 169,
-    genre: "hype",
-  },
-  {
-    id: "come-play",
-    title: "Come Play",
-    artist: "Stray Kids, Young Miko, Tom Morello",
-    youtubeId: "3jf6xOg6e7Y",
-    durationSeconds: 162,
-    genre: "hype",
   },
   {
     id: "royalty",
@@ -382,6 +358,50 @@ export const DEFAULT_SCROLL_PLAYLIST: BgmTrack[] = [
     youtubeId: "pEZIYGN5HIo",
     durationSeconds: 205,
     genre: "anthemic",
+  },
+  // Wave 41 (2026-07-14) — Riot anthem expansion. Mehdi : "rajouter Warriors
+  // (2020), The Call, Still Here, les dernières aussi… tous les bons sons de
+  // LoL". All official Riot Games Music / cinematic uploads (embeddable, stable
+  // IDs verified via oEmbed) so they don't go dead like the old fan re-uploads.
+  {
+    id: "warriors-2020",
+    title: "Warriors (Season 2020)",
+    artist: "2WEI & Edda Hayes",
+    youtubeId: "aR-KAldshAE",
+    durationSeconds: 210,
+    genre: "anthemic",
+  },
+  {
+    id: "the-call",
+    title: "The Call",
+    artist: "2WEI, Louis Leibfried, Edda Hayes",
+    youtubeId: "HtHrjFJGDys",
+    durationSeconds: 191,
+    genre: "anthemic",
+  },
+  {
+    id: "still-here",
+    title: "Still Here",
+    artist: "Forts, Tiffany Aris & 2WEI",
+    youtubeId: "EcwLGLBS2cE",
+    durationSeconds: 233,
+    genre: "anthemic",
+  },
+  {
+    id: "sacrifice",
+    title: "Sacrifice",
+    artist: "G.E.M. (Worlds 2025)",
+    youtubeId: "pzt6SmvGpXk",
+    durationSeconds: 233,
+    genre: "anthemic",
+  },
+  {
+    id: "what-could-have-been",
+    title: "What Could Have Been",
+    artist: "Sting & Ray Chen (Arcane)",
+    youtubeId: "liPu1_aPH5k",
+    durationSeconds: 213,
+    genre: "chill",
   },
 ];
 
