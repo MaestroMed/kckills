@@ -205,7 +205,12 @@ COMMENT ON TABLE clip_ledger IS
 -- D. Vue "un coup d'œil" pour l'admin
 -- ═══════════════════════════════════════════════════════════════════
 
-CREATE OR REPLACE VIEW v_clip_ledger_full AS
+-- security_invoker : la vue respecte les RLS de l'appelant. clip_ledger
+-- n'a aucune policy anon → invisible du public, lisible par le service
+-- role (worker + admin server-side). Évite le flag CRITICAL de
+-- l'Advisor Supabase (Security Definer View).
+CREATE OR REPLACE VIEW v_clip_ledger_full
+WITH (security_invoker = on) AS
 SELECT
     cl.id AS ledger_id,
     cl.kill_id,

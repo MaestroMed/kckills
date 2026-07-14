@@ -793,11 +793,60 @@ async def run() -> int:
         # but we shouldn't claim "extracted" on a partial confirm — a
         # crash before flush would silently drop the cached rows AND
         # mask the game from the next harvester scan.
+        #
+        # Décryptage 2026-07-14 — pré-filtre anti-doublons AVANT insert.
+        # Une game jamais flippée kills_extracted était re-moissonnée à
+        # CHAQUE cycle : les rows avec player_id NULL passaient sous
+        # idx_kills_unique_event et se ré-inséraient à l'infini (une mort
+        # observée en ~340 copies, 2 684 rows sur une seule game), les
+        # autres levaient un 23505 par tentative (≈50k erreurs Postgres
+        # sur 7 jours au dashboard Supabase). On charge les clés
+        # sémantiques (event_epoch, victim_champion) déjà en base pour la
+        # game — pagination manuelle, PostgREST plafonne à 1000 rows — et
+        # un kill déjà présent compte comme CONFIRMÉ sans requête, ce qui
+        # laisse enfin kills_extracted passer à TRUE et stoppe la boucle.
+        existing_keys: set[tuple] = set()
+        try:
+            from services.supabase_client import get_db
+            _db = get_db()
+            if _db is not None:
+                _client = _db._get_client()
+                _offset = 0
+                while True:
+                    _r = _client.get(f"{_db.base}/kills", params={
+                        "select": "event_epoch,victim_champion",
+                        "game_id": f"eq.{game['id']}",
+                        "limit": "1000",
+                        "offset": str(_offset),
+                    })
+                    _r.raise_for_status()
+                    _page = _r.json() or []
+                    existing_keys.update(
+                        (r.get("event_epoch"), r.get("victim_champion"))
+                        for r in _page
+                    )
+                    if len(_page) < 1000:
+                        break
+                    _offset += 1000
+        except Exception as e:
+            log.warn("harvester_existing_keys_failed",
+                     game_id=game["id"][:8], error=str(e)[:120])
+            existing_keys = set()
+
         confirmed = 0
+        already = 0
         for k in kc_kills:
-            if safe_insert("kills", k.to_db_dict()) is not None:
+            d = k.to_db_dict()
+            if (d.get("event_epoch"), d.get("victim_champion")) in existing_keys:
+                confirmed += 1
+                already += 1
+                continue
+            if safe_insert("kills", d) is not None:
                 confirmed += 1
             total_kills += 1
+        if already:
+            log.info("harvester_skipped_existing",
+                     game_id=game["id"][:8], already_in_db=already)
 
         # CRITICAL : only mark as extracted when we got kills AND every
         # row was confirmed in Supabase. Confirmed < kc_kills means at
