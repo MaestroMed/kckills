@@ -37,6 +37,10 @@ TIER_LABEL = {1: None, 2: "double", 3: "triple", 4: "quadra", 5: "penta"}
 
 SEQUENCE_GAP_SECONDS = 12       # écart max entre 2 morts d'une séquence
 FUZZY_GT_TOLERANCE = 10         # clé floue epoch=0 : bucket de game_time
+CROSS_SOURCE_GT_TOLERANCE = 45  # gol.gg (epoch=0) vs livestats : ±45 s
+                                # (les game_time gol.gg sont dérivés
+                                # différemment, la tolérance est large ;
+                                # le couple killer+victim désambiguïse)
 
 STATUS_RANK = {
     "published": 0, "analyzed": 1, "clipped": 2, "clipping": 3,
@@ -68,6 +72,11 @@ class SequenceInfo:
 class DedupPlan:
     actions: list[DedupAction] = field(default_factory=list)
     sequences: list[SequenceInfo] = field(default_factory=list)
+    # Vague 2 — complétude : kills gol.gg SANS jumeau livestats = trous
+    # de détection (livestats a raté ces morts, ou la game entière).
+    cross_source_merged: int = 0
+    golgg_only_kill_ids: list[str] = field(default_factory=list)
+    livestats_kill_count: int = 0
 
     @property
     def duplicates(self) -> list[DedupAction]:
@@ -85,6 +94,8 @@ def _keeper_sort_key(k: dict):
         STATUS_RANK.get(k.get("status"), 50),
         -MULTIKILL_TIER.get(k.get("multi_kill"), 1),  # garder le label le + haut
         k.get("clip_url_vertical") is None,
+        (k.get("event_epoch") or 0) <= 0,   # préférer la row livestats
+                                            # (epoch fiable → décryptage)
         k.get("killer_player_id") is None,
         k.get("highlight_score") is None,
         k.get("created_at") or "",
@@ -159,6 +170,52 @@ def find_exact_duplicates(kills: list[dict]) -> list[list[dict]]:
     return groups
 
 
+# ─── 1bis. Fusion cross-source gol.gg ↔ livestats ─────────────────────
+
+def find_cross_source_pairs(kills: list[dict]) -> tuple[list[tuple[dict, dict]], list[dict]]:
+    """Matche les rows gol.gg (epoch=0) avec les rows livestats
+    (epoch>0) de la même game : même (killer_champion, victim_champion)
+    et game_time à ±CROSS_SOURCE_GT_TOLERANCE. Appariement 1-1 glouton
+    par distance de game_time croissante.
+
+    → (paires [(golgg_row, livestats_row)], golgg_orphelins)
+    Les orphelins gol.gg = morts que livestats n'a PAS détectées : c'est
+    le signal de complétude du backfill historique."""
+    golgg = [k for k in kills
+             if not (k.get("event_epoch") or 0) > 0
+             and k.get("status") != "duplicate"
+             and k.get("game_time_seconds") is not None]
+    livestats = [k for k in kills
+                 if (k.get("event_epoch") or 0) > 0
+                 and k.get("status") != "duplicate"
+                 and k.get("game_time_seconds") is not None]
+    if not golgg or not livestats:
+        return [], golgg
+
+    candidates: list[tuple[float, dict, dict]] = []
+    for g in golgg:
+        for l in livestats:
+            if (g.get("killer_champion") != l.get("killer_champion")
+                    or g.get("victim_champion") != l.get("victim_champion")):
+                continue
+            dist = abs(g["game_time_seconds"] - l["game_time_seconds"])
+            if dist <= CROSS_SOURCE_GT_TOLERANCE:
+                candidates.append((dist, g, l))
+    candidates.sort(key=lambda c: c[0])
+
+    used_g: set[str] = set()
+    used_l: set[str] = set()
+    pairs: list[tuple[dict, dict]] = []
+    for _, g, l in candidates:
+        if g["id"] in used_g or l["id"] in used_l:
+            continue
+        pairs.append((g, l))
+        used_g.add(g["id"])
+        used_l.add(l["id"])
+    orphans = [g for g in golgg if g["id"] not in used_g]
+    return pairs, orphans
+
+
 # ─── 2. Séquences multi-kill ──────────────────────────────────────────
 
 def find_multikill_sequences(kills: list[dict]) -> list[list[dict]]:
@@ -231,9 +288,10 @@ def collapse_sequence(seq: list[dict]) -> SequenceInfo:
 # ─── 3. Plan complet pour une game ────────────────────────────────────
 
 def build_dedup_plan(kills: list[dict]) -> DedupPlan:
-    """Plan de dédup d'une game : doublons exacts PUIS collapse multi-kill
-    sur les survivants. Idempotent : les kills déjà status='duplicate'
-    sont ignorés, les actions re-calculées donnent le même keeper
+    """Plan de dédup d'une game : doublons exacts PUIS fusion
+    cross-source (gol.gg ↔ livestats) PUIS collapse multi-kill sur les
+    survivants. Idempotent : les kills déjà status='duplicate' sont
+    ignorés, les actions re-calculées donnent le même keeper
     (tri déterministe)."""
     plan = DedupPlan()
     neutralized: set[str] = set()
@@ -249,9 +307,26 @@ def build_dedup_plan(kills: list[dict]) -> DedupPlan:
                 k["id"], "duplicate", duplicate_of=keeper["id"], reason=reason))
             neutralized.add(k["id"])
 
-    # Phase 2 — séquences multi-kill sur les survivants
+    # Phase 1bis — fusion cross-source : la MÊME mort vue par gol.gg
+    # (epoch=0) et livestats (epoch>0) devient UNE ligne (le keeper
+    # préfère livestats via _keeper_sort_key : epoch fiable → décryptage).
     survivors = [k for k in kills
                  if k["id"] not in neutralized and k.get("status") != "duplicate"]
+    pairs, orphans = find_cross_source_pairs(survivors)
+    for g, l in pairs:
+        pair_sorted = sorted([g, l], key=_keeper_sort_key)
+        keeper, absorbed = pair_sorted[0], pair_sorted[1]
+        plan.actions.append(DedupAction(
+            absorbed["id"], "duplicate", duplicate_of=keeper["id"],
+            reason="cross_source"))
+        neutralized.add(absorbed["id"])
+    plan.cross_source_merged = len(pairs)
+    plan.golgg_only_kill_ids = [g["id"] for g in orphans]
+    plan.livestats_kill_count = sum(
+        1 for k in survivors if (k.get("event_epoch") or 0) > 0)
+
+    # Phase 2 — séquences multi-kill sur les survivants
+    survivors = [k for k in survivors if k["id"] not in neutralized]
     for seq in find_multikill_sequences(survivors):
         info = collapse_sequence(seq)
         plan.sequences.append(info)

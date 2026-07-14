@@ -180,3 +180,71 @@ def test_different_killers_never_sequence():
         _k(2, epoch=base + 4_000, killer="p2", kc="Jinx", vc="Ahri"),
     ]
     assert find_multikill_sequences(kills) == []
+
+
+# ─── vague 2 : fusion cross-source gol.gg ↔ livestats ─────────────────
+
+from modules.dedup import find_cross_source_pairs
+
+
+def test_cross_source_merge_prefers_livestats_row():
+    """La même mort vue par gol.gg (epoch=0) et livestats (epoch>0)
+    devient UNE ligne ; le keeper est la row livestats (epoch fiable)."""
+    kills = [
+        _k("golgg", epoch=0, gt=910, kc="Ahri", vc="Zed", status="raw"),
+        _k("live", epoch=1_700_000_000_000, gt=900, kc="Ahri", vc="Zed",
+           status="raw"),
+    ]
+    plan = build_dedup_plan(kills)
+    assert plan.cross_source_merged == 1
+    dup = plan.duplicates[0]
+    assert dup.kill_id == "kill-golgg"
+    assert dup.duplicate_of == "kill-live"
+    assert dup.reason == "cross_source"
+
+
+def test_cross_source_published_golgg_stays_keeper():
+    """Un gol.gg déjà publié ne se fait pas détrôner par un livestats raw."""
+    kills = [
+        _k("golgg", epoch=0, gt=910, kc="Ahri", vc="Zed",
+           status="published", urls=True),
+        _k("live", epoch=1_700_000_000_000, gt=900, kc="Ahri", vc="Zed",
+           status="raw"),
+    ]
+    plan = build_dedup_plan(kills)
+    assert plan.duplicates[0].kill_id == "kill-live"
+    assert plan.duplicates[0].duplicate_of == "kill-golgg"
+
+
+def test_cross_source_orphans_reported_as_gaps():
+    """Un gol.gg sans jumeau livestats = trou de détection (complétude)."""
+    kills = [
+        _k("golgg1", epoch=0, gt=910, kc="Ahri", vc="Zed"),
+        _k("golgg2", epoch=0, gt=1500, kc="Jinx", vc="Nami"),
+        _k("live1", epoch=1_700_000_000_000, gt=905, kc="Ahri", vc="Zed"),
+    ]
+    plan = build_dedup_plan(kills)
+    assert plan.cross_source_merged == 1
+    assert plan.golgg_only_kill_ids == ["kill-golgg2"]
+
+
+def test_cross_source_no_match_beyond_tolerance():
+    pairs, orphans = find_cross_source_pairs([
+        _k("g", epoch=0, gt=1000, kc="Ahri", vc="Zed"),
+        _k("l", epoch=1_700_000_000_000, gt=1100, kc="Ahri", vc="Zed"),
+    ])
+    assert pairs == []
+    assert len(orphans) == 1
+
+
+def test_cross_source_one_to_one_greedy():
+    """2 gol.gg proches d'1 livestats : un seul apparie (le plus proche)."""
+    kills = [
+        _k("g1", epoch=0, gt=902, kc="Ahri", vc="Zed"),
+        _k("g2", epoch=0, gt=930, kc="Ahri", vc="Zed"),
+        _k("l1", epoch=1_700_000_000_000, gt=900, kc="Ahri", vc="Zed"),
+    ]
+    pairs, orphans = find_cross_source_pairs(kills)
+    assert len(pairs) == 1
+    assert pairs[0][0]["id"] == "kill-g1"
+    assert [o["id"] for o in orphans] == ["kill-g2"]
