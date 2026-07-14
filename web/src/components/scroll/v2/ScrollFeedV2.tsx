@@ -192,6 +192,9 @@ interface Props {
    *  server-side). Drives the rail/top-bar clip counter so it shows
    *  the real catalogue size instead of the SSR slice length. */
   catalogTotal?: number;
+  /** Wave 41 — admin (kc_admin cookie verified server-side) → show the
+   *  flag/hide control so Mehdi can cull bad clips straight from the scroll. */
+  isAdmin?: boolean;
 }
 
 export function ScrollFeedV2({
@@ -204,6 +207,7 @@ export function ScrollFeedV2({
   feedSeed,
   catalogEnabled = false,
   catalogTotal,
+  isAdmin = false,
 }: Props) {
   const t = useT();
   const containerRef = useRef<HTMLDivElement>(null);
@@ -739,6 +743,32 @@ export function ScrollFeedV2({
     [visibleItems, activeIndex],
   );
 
+  // Wave 41 — admin flag/hide. Cull a bad clip (offset drift, draft, plateau,
+  // OTP screen) straight from the scroll via the existing requireAdmin-gated
+  // /api/admin/clips/bulk hide action (sets kill_visible=false), then
+  // optimistically drop it from the feed so it vanishes immediately.
+  const [hidingId, setHidingId] = useState<string | null>(null);
+  const hideActiveClip = useCallback(async () => {
+    const active = visibleItems[activeIndex];
+    if (!active || active.kind !== "video" || hidingId) return;
+    const id = active.id;
+    setHidingId(id);
+    try {
+      const r = await fetch("/api/admin/clips/bulk", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids: [id], action: "hide" }),
+      });
+      if (r.ok) {
+        setItems((prev) => prev.filter((x) => x.id !== id));
+      }
+    } catch {
+      /* swallow — admin action, best-effort */
+    } finally {
+      setHidingId(null);
+    }
+  }, [visibleItems, activeIndex, hidingId]);
+
   // Dispatch a kc: custom event for the active kill (mirrors the mobile
   // gesture bridges so the same per-item listeners fire).
   const dispatchForActive = useCallback(
@@ -1203,6 +1233,21 @@ export function ScrollFeedV2({
   // The framed 3-zone shell. The feedStage subtree becomes the StageFrame
   // child (so the pool + overlays resolve to the bounded 9:16 frame). The
   // global chrome (live banner, settings drawer, onboarding, keyboard help,
+  // Wave 41 — admin flag/hide control (only for a verified admin session).
+  // Sits top-left under the "Remonter" escape ; acts on the active clip.
+  const adminFlagBtn =
+    isAdmin && msActive && msActive.kind === "video" ? (
+      <button
+        type="button"
+        onClick={hideActiveClip}
+        disabled={hidingId === msActive.id}
+        aria-label="Masquer ce clip (admin)"
+        className="fixed left-4 top-16 z-[76] flex items-center gap-1.5 rounded-full border border-[var(--red)]/55 bg-black/70 px-3.5 py-2 font-data text-[11px] font-bold uppercase tracking-[0.15em] text-[var(--red)] backdrop-blur-md transition-colors hover:border-[var(--red)] hover:bg-[var(--red)]/15 disabled:opacity-50"
+      >
+        🚩 {hidingId === msActive.id ? "…" : "Masquer"}
+      </button>
+    ) : null;
+
   // share toast) still renders so keyboard + live still work ; the mobile
   // floating bars (top bar, FeedTabBar, ChipBar) are suppressed because the
   // ScrollRail replaces them on the wide stage.
@@ -1219,6 +1264,8 @@ export function ScrollFeedV2({
         >
           {feedStage}
         </ScrollDesktopShell>
+
+        {adminFlagBtn}
 
         {/* Global chrome that must escape the shell / stay route-level. */}
         <LiveBanner
@@ -1270,6 +1317,7 @@ export function ScrollFeedV2({
       // Touch-action: pan-y so the browser doesn't fight the drag.
       style={{ touchAction: "pan-y", overscrollBehavior: "contain" }}
     >
+      {adminFlagBtn}
       {/* BgmPlayer removed (Wave 30c) — the wolf player now handles
           /scroll audio via lib/audio/playlists.ts. */}
       {/* Live mode banner — portaled to <body> so it escapes overflow:hidden.

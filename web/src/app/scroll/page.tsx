@@ -24,6 +24,7 @@ import {
   getTopScrollKills,
 } from "@/lib/supabase/kills";
 import { getTrackedRoster } from "@/lib/supabase/players";
+import { requireAdmin } from "@/lib/admin/audit";
 import {
   type FeedItem,
   type VideoFeedItem,
@@ -550,6 +551,13 @@ export default async function ScrollV2Page({ searchParams }: ScrollPageProps) {
     { name: "Scroll", url: "/scroll" },
   ]);
 
+  // Wave 41 — admin gate (kc_admin JWT cookie). Only a verified admin sees the
+  // flag/hide control on the scroll (Mehdi's manual "au crible" curation).
+  // Defensive .catch so a public /scroll load can never break on the admin check.
+  const isAdmin = await requireAdmin()
+    .then((r) => r.ok)
+    .catch(() => false);
+
   return (
     <>
       {/* Document outline root + skip target. The visible headliner lives
@@ -580,6 +588,7 @@ export default async function ScrollV2Page({ searchParams }: ScrollPageProps) {
         feedSeed={feedSeed}
         catalogEnabled={catalogEnabled}
         catalogTotal={catalogTotal}
+        isAdmin={isAdmin}
       />
     </>
   );
