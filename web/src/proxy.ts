@@ -56,8 +56,19 @@ export async function proxy(request: NextRequest) {
   // /admin/login slips through the matcher but doesn't need auth — let it
   // render its login form free. Same for any future public path that
   // accidentally matches.
+  //
+  // CRITICAL (Wave 41) : we MUST still forward the x-pathname header here.
+  // admin/layout.tsx detects the login page via `x-pathname === "/admin/login"`
+  // to skip the auth gate + chrome. Returning a bare NextResponse.next()
+  // (no header) meant the layout saw pathname="" → isLoginPage=false →
+  // requireAdmin() failed (unauth) → redirect("/admin/login") → Next emitted
+  // a 1s <meta http-equiv="refresh" url="/admin/login"> → INFINITE self-
+  // redirect loop → the page never painted (black screen). Forwarding the
+  // header lets the layout recognise the login page and render the form.
   if (!needsAuth) {
-    return NextResponse.next();
+    const loginHeaders = new Headers(request.headers);
+    loginHeaders.set("x-pathname", pathname);
+    return NextResponse.next({ request: { headers: loginHeaders } });
   }
 
   // Admin paths NEED the x-pathname header so layout.tsx can detect
