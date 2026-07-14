@@ -261,6 +261,7 @@ async def clip_kill(
     match_context: str | None = None,
     local_vod_path: str | None = None,
     game_id: str | None = None,
+    window_override: dict | None = None,
 ) -> dict | None:
     """Encode and upload a single kill clip. Returns dict of R2 URLs or None.
 
@@ -274,6 +275,13 @@ async def clip_kill(
     versioned uploads are skipped and only the legacy flat keys are
     written — this preserves the path used by older callers (admin
     re-clip CLIs) that don't carry the parent game.
+
+    `window_override` — Décryptage vague 2 : {"before": s, "after": s}
+    calculé par l'appelant depuis la SÉQUENCE multi-kill du clip_ledger
+    (sequence_start → sequence_end). Un penta étalé sur 25 s clippé
+    -30/+10 autour du DERNIER kill amputait la première mort ; le
+    reclip_from_ledger passe désormais une fenêtre qui couvre toute la
+    séquence. None → CLIP_TIMING par tier, comportement historique.
     """
     os.makedirs(config.CLIPS_DIR, exist_ok=True)
     os.makedirs(config.THUMBNAILS_DIR, exist_ok=True)
@@ -282,6 +290,9 @@ async def clip_kill(
     timing = config.CLIP_TIMING.get(multi_kill or "", config.CLIP_TIMING["default"])
     before = timing["before"]
     after = timing["after"]
+    if window_override:
+        before = int(window_override.get("before", before))
+        after = int(window_override.get("after", after))
 
     vod_time = int(vod_offset_seconds or 0) + int(game_time_seconds or 0)
     clip_start = max(0, vod_time - before)
@@ -334,6 +345,10 @@ async def clip_kill(
             "-i", raw_path,
             "-vf", "scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2",
             *video_codec_args("hq"),
+            # Vague 2 — loudness normalisée EBU R128 : les casts LEC /
+            # Kameto / KC Replay ont des niveaux très différents, le
+            # scroll ne doit pas exploser les oreilles d'un clip à l'autre
+            "-af", "loudnorm=I=-16:TP=-1.5:LRA=11",
             "-c:a", "aac", "-b:a", "128k",
             "-movflags", "+faststart",
             "-y", h_path,
@@ -362,6 +377,7 @@ async def clip_kill(
             "-i", raw_path,
             "-vf", v_filter,
             *video_codec_args("hq"),
+            "-af", "loudnorm=I=-16:TP=-1.5:LRA=11",
             "-c:a", "aac", "-b:a", "128k",
             "-movflags", "+faststart",
             "-y", v_path,
@@ -375,6 +391,7 @@ async def clip_kill(
             "-i", raw_path,
             "-vf", "crop=ih*9/16:ih:iw/2-ih*9/32:0,scale=540:960",
             *video_codec_args("low"),
+            "-af", "loudnorm=I=-16:TP=-1.5:LRA=11",
             "-c:a", "aac", "-b:a", "80k",
             "-movflags", "+faststart",
             "-y", vl_path,
@@ -709,6 +726,10 @@ async def clip_moment(
             "-i", raw_path,
             "-vf", "scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2",
             *video_codec_args("hq"),
+            # Vague 2 — loudness normalisée EBU R128 : les casts LEC /
+            # Kameto / KC Replay ont des niveaux très différents, le
+            # scroll ne doit pas exploser les oreilles d'un clip à l'autre
+            "-af", "loudnorm=I=-16:TP=-1.5:LRA=11",
             "-c:a", "aac", "-b:a", "128k",
             "-movflags", "+faststart",
             "-y", h_path,
@@ -725,6 +746,7 @@ async def clip_moment(
             "-i", raw_path,
             "-vf", v_filter,
             *video_codec_args("hq"),
+            "-af", "loudnorm=I=-16:TP=-1.5:LRA=11",
             "-c:a", "aac", "-b:a", "128k",
             "-movflags", "+faststart",
             "-y", v_path,
@@ -738,6 +760,7 @@ async def clip_moment(
             "-i", raw_path,
             "-vf", "crop=ih*9/16:ih:iw/2-ih*9/32:0,scale=540:960",
             *video_codec_args("low"),
+            "-af", "loudnorm=I=-16:TP=-1.5:LRA=11",
             "-c:a", "aac", "-b:a", "80k",
             "-movflags", "+faststart",
             "-y", vl_path,

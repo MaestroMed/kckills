@@ -87,6 +87,11 @@ class QCResult:
     checks: list[QCCheck]
     verdict: str            # 'pass' | 'needs_review' | 'reject'
     drift_seconds: Optional[int] = None
+    # Vague 2 (flywheel) — lectures brutes (pos_dans_clip, timer_lu,
+    # méthode) : l'appelant les convertit en DriftSamples et les
+    # réinjecte dans le modèle de la source (append_drift_samples).
+    # Chaque clip vérifié améliore le placement de tous les suivants.
+    timer_reads: list = field(default_factory=list)
 
     @property
     def pass_count(self) -> int:
@@ -151,6 +156,50 @@ async def check_media_sanity(clip_path: str) -> tuple[QCCheck, QCCheck]:
                          if s.get("codec_type") == "audio") or "no audio stream",
     )
     return dur, aud
+
+
+async def check_start_frames(clip_path: str) -> QCCheck:
+    """Frame noire / image gelée sur les 4 premières secondes (spec §7
+    duration_sane : « pas de gel/frame noire »). ffmpeg blackdetect +
+    freezedetect, local, gratuit."""
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            "ffmpeg", "-hide_banner", "-t", "4", "-i", clip_path,
+            "-vf", "blackdetect=d=1.5:pic_th=0.98,freezedetect=n=-60dB:d=2.5",
+            "-an", "-f", "null", "-",
+            stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.PIPE,
+        )
+        _, err = await asyncio.wait_for(proc.communicate(), timeout=60)
+        text = err.decode(errors="replace")
+        black = "blackdetect" in text and "black_start" in text
+        frozen = "freezedetect" in text and "freeze_start" in text
+        ok = not (black or frozen)
+        detail = ("black_start" if black else "") + (
+            (" " if black and frozen else "") + ("freeze_start" if frozen else ""))
+        return QCCheck("start_not_frozen", "pass" if ok else "fail",
+                       blocking=True, score=1.0 if ok else 0.0,
+                       method="ffmpeg", detail=detail or "clean")
+    except Exception as e:
+        try:
+            proc.kill()
+        except Exception:
+            pass
+        return QCCheck("start_not_frozen", "skipped", blocking=True,
+                       method="ffmpeg", detail=str(e)[:80])
+
+
+async def quick_media_gate(path_or_url: str) -> tuple[bool, str]:
+    """Gate minimal GRATUIT (ffprobe, marche aussi sur une URL R2) :
+    flux vidéo + piste audio + durée dans les bornes. À appeler partout
+    où un clip s'apprête à franchir qc_clip_validated — notamment le
+    chemin dégradé de l'analyzer qui validait en aveugle quand Gemini
+    était down (les 212 clips muets publiés sont passés par là)."""
+    dur, aud = await check_media_sanity(path_or_url)
+    if dur.verdict == "fail":
+        return False, f"duration_sane: {dur.detail}"
+    if aud.verdict == "fail":
+        return False, f"audio_present: {aud.detail}"
+    return True, "ok"
 
 
 # ─── Check vision groupé (1 frame, 1 appel) ───────────────────────────
@@ -228,6 +277,10 @@ async def run_qc(
     # 1) sanité média (gratuit)
     dur, aud = await check_media_sanity(clip_path)
     checks.extend([dur, aud])
+
+    # 1bis) frame noire / gel au départ (gratuit)
+    if dur.verdict == "pass":
+        checks.append(await check_start_frames(clip_path))
 
     tmp = clip_path + ".qcframe.jpg"
     vision_result: Optional[dict] = None
@@ -345,7 +398,8 @@ async def run_qc(
         verdict = "pass"
 
     result = QCResult(checks=checks, verdict=verdict,
-                      drift_seconds=drift_measured)
+                      drift_seconds=drift_measured,
+                      timer_reads=timer_reads)
     log.info("clip_qc_v2_done", clip=os.path.basename(clip_path),
              verdict=verdict, drift=drift_measured,
              passed=result.pass_count, total=len(checks))

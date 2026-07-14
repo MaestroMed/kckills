@@ -77,6 +77,24 @@ async def reclip_one(db, entry: dict, kill: dict, game: dict,
     else:
         synthetic_offset = game.get("vod_offset_seconds") or 0
 
+    # Vague 2 — fenêtre couvrant TOUTE la séquence multi-kill : un penta
+    # étalé sur 25 s clippé -30/+10 autour du dernier kill amputait la
+    # première mort. Le ledger porte sequence_start/end_epoch ; on
+    # élargit le pad `before` pour englober la séquence (+3 s de marge,
+    # borné à +45 s pour ne pas produire des clips fleuve).
+    timing = config.CLIP_TIMING.get(kill.get("multi_kill") or "default",
+                                    config.CLIP_TIMING["default"])
+    before, after = timing["before"], timing["after"]
+    window_override = None
+    seq_start = entry.get("sequence_start_epoch")
+    kill_epoch = kill.get("event_epoch")
+    if seq_start and kill_epoch and kill_epoch > seq_start:
+        span_s = (kill_epoch - seq_start) / 1000.0
+        extra = min(45, int(span_s + 3))
+        if extra > 0:
+            window_override = {"before": before + extra, "after": after}
+            before += extra
+
     result = await clipper.clip_kill(
         kill_id=kill["id"],
         youtube_id=game["vod_youtube_id"],
@@ -87,14 +105,13 @@ async def reclip_one(db, entry: dict, kill: dict, game: dict,
         victim_champion=kill.get("victim_champion"),
         local_vod_path=local_vod,
         game_id=game["id"],
+        window_override=window_override,
     )
     if not result or not result.get("_local_h_path"):
         return "clip_fail"
 
-    # QC v2 — la frame à t=15 d'un clip paddé -30 s montre gt-15 ;
-    # une 2e lecture à t=32 (gt+2) vote avec la première.
-    before = config.CLIP_TIMING.get(kill.get("multi_kill") or "default",
-                                    {"before": 30})["before"]
+    # QC v2 — la frame à t=15 d'un clip paddé -before montre
+    # gt - before + 15 ; une 2e lecture vote avec la première.
     qc = await run_qc(
         result["_local_h_path"],
         expected_timer_at={15: gt - before + 15, 32: gt - before + 32},
@@ -103,6 +120,22 @@ async def reclip_one(db, entry: dict, kill: dict, game: dict,
         budget=ProbeBudget(args.gemini_per_clip),
         allow_degraded=(entry.get("offset_confidence") or 0) >= 0.75,
     )
+
+    # Vague 2 (flywheel) — les lectures de timer du QC deviennent des
+    # échantillons de drift : le modèle de la source s'améliore à chaque
+    # clip vérifié, gratuitement.
+    if qc.timer_reads and entry.get("vod_source_id"):
+        try:
+            from modules.decryptage import DriftSample, append_drift_samples
+            clip_start_vod = synthetic_offset + gt - before
+            fb = [DriftSample(
+                game_time=read, vod_time=int(clip_start_vod + pos),
+                timer_read=f"{read // 60}:{read % 60:02d}",
+                method=f"qc_{method}", confidence=0.85,
+            ) for pos, read, method in qc.timer_reads]
+            append_drift_samples(entry["vod_source_id"], fb)
+        except Exception as _fb_e:
+            log.warn("qc_feedback_failed", error=str(_fb_e)[:100])
 
     asset_check = dict(entry.get("asset_check") or {})
     if qc.verdict == "pass":
@@ -149,7 +182,8 @@ async def main():
 
     entries = fetch_all(db, "clip_ledger", {
         "select": "kill_id,game_id,game_time_seconds,resolved_vod_time,"
-                  "offset_confidence,asset_check",
+                  "offset_confidence,asset_check,sequence_start_epoch,"
+                  "vod_source_id",
         "asset_check->>needs_reclip": "eq.true",
     })
     if args.reasons:
@@ -169,7 +203,7 @@ async def main():
     for i in range(0, len(kill_ids), 60):
         for k in fetch_all(db, "kills", {
             "select": "id,game_id,game_time_seconds,multi_kill,"
-                      "killer_champion,victim_champion,status",
+                      "killer_champion,victim_champion,status,event_epoch",
             "id": f"in.({','.join(kill_ids[i:i + 60])})",
         }):
             kills[k["id"]] = k

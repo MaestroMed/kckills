@@ -947,13 +947,30 @@ async def _process_one(kill: dict, clip_path: str | None,
                 f"{killer} elimine {victim} — analyse IA en attente, "
                 f"clip disponible."
             )
+            # Décryptage vague 2 (2026-07-14) — ce chemin validait le QC
+            # EN AVEUGLE (kill_visible=True, qc_status=passed, gate
+            # tickée) dès que Gemini était à sec : les 212 clips muets
+            # publiés sont passés par ici pendant la panne de quota du
+            # 13/07. On garde le degrade-publish (description honnête,
+            # pas de scoring) mais le clip doit au moins passer le gate
+            # média LOCAL gratuit (vidéo + audio + durée, ffprobe sur
+            # l'URL R2) avant de franchir qc_clip_validated.
+            media_ok, media_why = True, "no_url"
+            clip_ref = kill.get("clip_url_vertical") or kill.get("clip_url_horizontal")
+            if clip_ref:
+                try:
+                    from modules.clip_qc_v2 import quick_media_gate
+                    media_ok, media_why = await quick_media_gate(clip_ref)
+                except Exception as _e:
+                    media_ok, media_why = True, f"gate_error:{str(_e)[:60]}"
+
             safe_update("kills", {
-                "status": "analyzed",
+                "status": "analyzed" if media_ok else "needs_review",
                 "ai_description": degraded_desc,
                 "ai_description_fr": degraded_desc,
                 "ai_tags": [],
-                "kill_visible": True,
-                "qc_status": "passed",
+                "kill_visible": True if media_ok else None,
+                "qc_status": "passed" if media_ok else "failed",
                 "ai_pipeline_version": "degraded-no-gemini",
             }, "id", kill["id"])
             # Tick the game_events QC gates so the publisher can surface it
@@ -961,11 +978,18 @@ async def _process_one(kill: dict, clip_path: str | None,
             # will set qc_clip_validated from status='analyzed' + clip).
             try:
                 from services.event_qc import (
-                    tick_qc_described, tick_qc_visible, tick_qc_clip_validated,
+                    tick_qc_described, tick_qc_visible,
+                    tick_qc_clip_validated, fail_qc_clip_validated,
                 )
                 tick_qc_described(kill["id"])
-                tick_qc_visible(kill["id"], True)
-                tick_qc_clip_validated(kill["id"])
+                if media_ok:
+                    tick_qc_visible(kill["id"], True)
+                    tick_qc_clip_validated(kill["id"])
+                else:
+                    fail_qc_clip_validated(
+                        kill["id"], reason=f"media_gate: {media_why[:80]}")
+                    log.warn("analyzer_degraded_media_gate_failed",
+                             kill_id=kill["id"][:8], reason=media_why[:120])
             except Exception:
                 pass
             if job is not None:
@@ -1068,7 +1092,27 @@ async def _process_one(kill: dict, clip_path: str | None,
                 if needs_reclip_due_to_drift:
                     fail_qc_clip_validated(kill["id"], reason=f"drift={qc_drift_sec}s")
                 else:
-                    tick_qc_clip_validated(kill["id"])
+                    # Décryptage vague 2 — le timer Gemini valide le TIMING
+                    # mais ne dit rien de l'AUDIO (Gemini lit la vidéo même
+                    # muette sans broncher). Gate média local gratuit avant
+                    # de ticker : plus jamais un clip muet en published.
+                    _clip_ref = (kill.get("clip_url_vertical")
+                                 or kill.get("clip_url_horizontal"))
+                    _media_ok, _media_why = True, "no_url"
+                    if _clip_ref:
+                        try:
+                            from modules.clip_qc_v2 import quick_media_gate
+                            _media_ok, _media_why = await quick_media_gate(_clip_ref)
+                        except Exception as _ge:
+                            _media_ok = True
+                            _media_why = f"gate_error:{str(_ge)[:60]}"
+                    if _media_ok:
+                        tick_qc_clip_validated(kill["id"])
+                    else:
+                        fail_qc_clip_validated(
+                            kill["id"], reason=f"media_gate: {_media_why[:80]}")
+                        log.warn("analyzer_media_gate_failed",
+                                 kill_id=kill["id"][:8], reason=_media_why[:120])
         except Exception as _e:
             log.warn("event_qc_tick_failed",
                      kill_id=kill["id"][:8], stage="analyzed", error=str(_e)[:120])
