@@ -378,11 +378,20 @@ async def process_game(
                     src = decryptage._ensure_official_source_row(game)
                     if src:
                         source_row_id = src["id"]
-                        decryptage.persist_decryptage(
+                        ok = decryptage.persist_decryptage(
                             game=game, source_row=src, model=model_obj,
                             confidence=confidence, samples=synth,
                             sync_method="epoch_anchor",
                         )
+                        if not ok:
+                            # migration 091 pas encore appliquée (le CHECK
+                            # refuse 'epoch_anchor') → provenance dégradée
+                            # mais modèle persisté quand même
+                            decryptage.persist_decryptage(
+                                game=game, source_row=src, model=model_obj,
+                                confidence=confidence, samples=synth,
+                                sync_method="official_epoch",
+                            )
 
     # 2ter. dérive l'ancre de CE modèle pour les games suivantes du VOD
     anchor_out: tuple[float, float] | None = None

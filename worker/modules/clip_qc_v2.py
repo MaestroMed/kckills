@@ -252,6 +252,7 @@ async def run_qc(
     budget: Optional[ProbeBudget] = None,
     allow_degraded: bool = False,
     is_duplicate: bool = False,
+    kill_at_in_clip: Optional[float] = None,
 ) -> QCResult:
     """Batterie complète sur un clip LOCAL.
 
@@ -382,8 +383,26 @@ async def run_qc(
             checks.append(QCCheck("actors_match", "skipped", blocking=False,
                                   method="gemini", detail="pas de données"))
     else:
-        checks.append(QCCheck("kill_visible", "skipped", blocking=False,
-                              method="none"))
+        # Vague 3 — pas de vision dispo : le killfeed local remplace le
+        # kill_visible Gemini. Une bannière kill fait un pic d'activité
+        # dans le quart haut-droit ; burst à ±12 s du moment attendu du
+        # kill = le kill est bien dans le clip. Gratuit.
+        kf_verdict, kf_detail = "skipped", "no vision, no kill_at"
+        if kill_at_in_clip is not None and dur.verdict == "pass":
+            try:
+                from modules import killfeed
+                delta = await killfeed.kill_activity_near(
+                    clip_path, kill_at_in_clip,
+                    window_s=min(30, kill_at_in_clip * 2 + 8))
+                if delta is not None:
+                    kf_verdict = "pass" if abs(delta) <= 12 else "fail"
+                    kf_detail = f"burst killfeed à {delta:+.1f}s du moment attendu"
+                else:
+                    kf_detail = "aucun burst killfeed détecté"
+            except Exception as e:
+                kf_detail = str(e)[:80]
+        checks.append(QCCheck("kill_visible", kf_verdict, blocking=False,
+                              method="killfeed_local", detail=kf_detail))
         checks.append(QCCheck("actors_match", "skipped", blocking=False,
                               method="none"))
 

@@ -1487,7 +1487,61 @@ async def run() -> int:
                     # Re-raise so the gather sees it and the batch-level log fires.
                     raise
 
-                if urls and urls.get("clip_url_horizontal"):
+                # Décryptage vague 3 — QC local AU MOMENT DU CLIP, gratuit
+                # (ffprobe + blackdetect/freezedetect + timer OCR si
+                # calibré). Un clip muet / gelé / hors-timing ne part plus
+                # vers l'analyzer (économise l'appel Gemini) ni vers la
+                # publication : needs_review direct. Best-effort : une
+                # erreur du QC lui-même ne bloque jamais le clip.
+                qc_local_ok, qc_why = True, ""
+                _local_h = (urls or {}).get("_local_h_path")
+                if urls and _local_h and os.path.exists(_local_h):
+                    try:
+                        from modules.clip_qc_v2 import (
+                            quick_media_gate, check_start_frames,
+                        )
+                        qc_local_ok, qc_why = await quick_media_gate(_local_h)
+                        if qc_local_ok:
+                            _frz = await check_start_frames(_local_h)
+                            if _frz.verdict == "fail":
+                                qc_local_ok = False
+                                qc_why = f"start_not_frozen: {_frz.detail}"
+                        if qc_local_ok:
+                            from modules import timer_ocr
+                            if timer_ocr.is_calibrated():
+                                from modules.decryptage import (
+                                    read_timer_at, ProbeBudget, DRIFT_TOLERANCE,
+                                )
+                                _s = await read_timer_at(
+                                    _local_h, 15, ProbeBudget(0))
+                                if _s is not None:
+                                    _gt = int(kill.get("game_time_seconds") or 0)
+                                    _expected = _gt - 30 + 15  # pad default 30
+                                    _drift = _s.game_time - _expected
+                                    if abs(_drift) > DRIFT_TOLERANCE:
+                                        qc_local_ok = False
+                                        qc_why = f"timer_drift: {_drift:+d}s"
+                    except Exception as _qc_e:
+                        qc_local_ok, qc_why = True, f"qc_error:{str(_qc_e)[:60]}"
+
+                if urls and urls.get("clip_url_horizontal") and not qc_local_ok:
+                    log.warn("clipper_local_qc_rejected",
+                             kill_id=kill["id"][:8], reason=qc_why[:120])
+                    await batched_safe_update(
+                        "kills", {"status": "needs_review"}, "id", kill["id"])
+                    try:
+                        from services.event_qc import fail_qc_clip_validated
+                        fail_qc_clip_validated(
+                            kill["id"], reason=f"clip_qc_local: {qc_why[:80]}")
+                    except Exception:
+                        pass
+                    if job is not None:
+                        await asyncio.to_thread(
+                            job_queue.succeed, job["id"],
+                            {"qc_local": "rejected", "reason": qc_why[:120]},
+                        )
+                    counters["qc_reject"] = counters.get("qc_reject", 0) + 1
+                elif urls and urls.get("clip_url_horizontal"):
                     payload = {**urls, "status": "clipped"}
                     payload.pop("_local_h_path", None)
                     await batched_safe_update("kills", payload, "id", kill["id"])

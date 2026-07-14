@@ -119,6 +119,7 @@ async def reclip_one(db, entry: dict, kill: dict, game: dict,
         victim_champion=kill.get("victim_champion"),
         budget=ProbeBudget(args.gemini_per_clip),
         allow_degraded=(entry.get("offset_confidence") or 0) >= 0.75,
+        kill_at_in_clip=before,   # le kill est à t=before dans le clip
     )
 
     # Vague 2 (flywheel) — les lectures de timer du QC deviennent des
