@@ -37,5 +37,8 @@ export async function GET(
     .eq("user_id", user.id)
     .eq("player_id", id)
     .maybeSingle();
-  return NextResponse.json({ ok: true, followed: !!data });
+  // Fans count via fn_player_fans_count (migration 090 — SECURITY DEFINER,
+  // exposes only the aggregate; works through the anon client).
+  const { data: fans } = await sb.rpc("fn_player_fans_count", { p_player_id: id });
+  return NextResponse.json({ ok: true, followed: !!data, fans_count: (fans as number | null) ?? null });
 }

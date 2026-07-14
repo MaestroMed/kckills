@@ -16,7 +16,7 @@
  * AdminCard + AdminBadge consumed from EA primitives.
  */
 import Link from "next/link";
-import { createServerSupabase } from "@/lib/supabase/server";
+import { createServerSupabase, createServiceSupabase } from "@/lib/supabase/server";
 import { AdminCard } from "@/components/admin/ui/AdminCard";
 import { AdminBadge } from "@/components/admin/ui/AdminBadge";
 
@@ -62,7 +62,10 @@ interface DlqRow {
 }
 
 export default async function PipelineDashboardPage() {
-  const sb = await createServerSupabase();
+  // Migration 090 flipped v_pipeline_health to security_invoker → anon reads
+  // return 0 rows. Admin-gated, server-only page → read via the service-role
+  // client (bypasses RLS), falling back to anon if the key isn't provisioned.
+  const sb = createServiceSupabase() ?? (await createServerSupabase());
 
   const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
   const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();

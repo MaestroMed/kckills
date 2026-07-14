@@ -11,7 +11,7 @@
  */
 
 import Link from "next/link";
-import { createServerSupabase } from "@/lib/supabase/server";
+import { createServerSupabase, createServiceSupabase } from "@/lib/supabase/server";
 import { PushBroadcastForm } from "./push-broadcast-form";
 import { AdminBadge } from "@/components/admin/ui/AdminBadge";
 import { AdminBreadcrumbs } from "@/components/admin/ui/AdminBreadcrumbs";
@@ -46,7 +46,10 @@ interface RecentRow {
 }
 
 async function getRecent(): Promise<RecentRow[]> {
-  const sb = await createServerSupabase();
+  // Migration 090 flipped v_recent_push_notifications to security_invoker →
+  // anon reads return 0 rows. Read via the service-role client (this runs only
+  // in the admin-gated /admin/push page), falling back to anon if unprovisioned.
+  const sb = createServiceSupabase() ?? (await createServerSupabase());
   const { data } = await sb
     .from("v_recent_push_notifications")
     .select("*")

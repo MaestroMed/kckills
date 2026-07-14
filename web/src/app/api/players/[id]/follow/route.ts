@@ -44,7 +44,11 @@ export async function POST(
   if (error) {
     return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
   }
-  return NextResponse.json({ ok: true, followed: true });
+  // Fans count via fn_player_fans_count (migration 090 — SECURITY DEFINER, so
+  // it exposes ONLY the aggregate and still works through the anon client).
+  // v_player_fans_count went security_invoker in 090 and no longer counts via anon.
+  const { data: fans } = await sb.rpc("fn_player_fans_count", { p_player_id: id });
+  return NextResponse.json({ ok: true, followed: true, fans_count: (fans as number | null) ?? null });
 }
 
 export async function DELETE(
@@ -70,5 +74,6 @@ export async function DELETE(
   if (error) {
     return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
   }
-  return NextResponse.json({ ok: true, followed: false });
+  const { data: fans } = await sb.rpc("fn_player_fans_count", { p_player_id: id });
+  return NextResponse.json({ ok: true, followed: false, fans_count: (fans as number | null) ?? null });
 }
