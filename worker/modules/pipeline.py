@@ -327,7 +327,16 @@ async def run_for_match(match_external_id: str) -> dict:
             if urls and urls.get("clip_url_horizontal"):
                 # Store local path for Gemini video analysis later
                 kill_row["_local_h_path"] = urls.pop("_local_h_path", None)
+                # HASH-FREE flip — keep content_hash/perceptual_hash OUT of the
+                # status PATCH so a byte-identical clip's 23505 on the UNIQUE
+                # kills.content_hash index can't strand the kill (the flip would
+                # be spilled to the SQLite cache and dropped permanently). Mirror
+                # the hashes out-of-band via the shared clipper helper.
+                _c_hash = urls.pop("content_hash", None)
+                _p_hash = urls.pop("perceptual_hash", None)
                 safe_update("kills", {**urls, "status": "clipped"}, "id", kill_row["id"])
+                from modules.clipper import _best_effort_kill_hashes
+                _best_effort_kill_hashes(kill_row["id"], _c_hash, _p_hash)
                 report["kills_clipped"] += 1
             else:
                 safe_update("kills", {"status": "clip_error"}, "id", kill_row["id"])

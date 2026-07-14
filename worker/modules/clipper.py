@@ -1027,6 +1027,49 @@ def _safe_remove(path: str):
 _CLIPPER_OWNED_ASSET_TYPES = ("horizontal", "vertical", "vertical_low", "thumbnail")
 
 
+def _best_effort_kill_hashes(
+    kill_id: str, c_hash: str | None, p_hash: str | None
+) -> None:
+    """Mirror the clip hashes onto kills.content_hash / perceptual_hash,
+    OUT of band from the status-flip PATCH, tolerating the UNIQUE collision.
+
+    kills.content_hash has a UNIQUE partial index (migration 010). Writing it
+    here — never inside the status='clipped' flip — means a byte-identical
+    (duplicate or degenerate) clip that 23505s simply declines the shared
+    hash, while the owning kill's status still advances. Goes DIRECT (not via
+    the batch writer) so a 409 is swallowed here instead of being spilled to
+    the SQLite cache and later DROPPED as a permanent UNIQUE violation. The
+    canonical per-asset hashes already live in kill_assets — kills.content_hash
+    is only a convenience mirror.
+    """
+    payload = {
+        k: v for k, v in (("content_hash", c_hash), ("perceptual_hash", p_hash)) if v
+    }
+    if not payload:
+        return
+    db = get_db()
+    if db is None:
+        return
+    try:
+        import httpx
+        r = httpx.patch(
+            f"{db.base}/kills",
+            headers={**db.headers, "Prefer": "return=minimal"},
+            params={"id": f"eq.{kill_id}"},
+            json=payload,
+            timeout=10.0,
+        )
+        if r.status_code == 409:
+            log.info("kill_hash_collision_skipped", kill_id=kill_id[:8])
+        elif r.status_code >= 400:
+            log.warn(
+                "kill_hash_update_nonzero",
+                kill_id=kill_id[:8], status=r.status_code, body=r.text[:120],
+            )
+    except Exception as e:
+        log.warn("kill_hash_update_threw", kill_id=kill_id[:8], error=str(e)[:120])
+
+
 def _compute_next_version(kill_id: str) -> int:
     """Return the next version number for a kill's assets.
 
@@ -1542,9 +1585,24 @@ async def run() -> int:
                         )
                     counters["qc_reject"] = counters.get("qc_reject", 0) + 1
                 elif urls and urls.get("clip_url_horizontal"):
-                    payload = {**urls, "status": "clipped"}
-                    payload.pop("_local_h_path", None)
-                    await batched_safe_update("kills", payload, "id", kill["id"])
+                    # HASH-FREE flip. kills.content_hash carries a UNIQUE partial
+                    # index (migration 010). Bundling content_hash/perceptual_hash
+                    # into this PATCH means a byte-identical / duplicate clip
+                    # 23505s the WHOLE payload → the batch writer spills it to the
+                    # SQLite cache → flush_cache DROPS it as a permanent UNIQUE
+                    # violation → the status flip is LOST and the kill is stranded
+                    # at raw/clipping forever. Strip the hashes from the
+                    # transition; mirror them out-of-band right after (best effort).
+                    c_hash = urls.get("content_hash")
+                    p_hash = urls.get("perceptual_hash")
+                    flip = {
+                        k: v for k, v in urls.items()
+                        if k not in ("_local_h_path", "content_hash", "perceptual_hash")
+                    }
+                    flip["status"] = "clipped"
+                    await batched_safe_update("kills", flip, "id", kill["id"])
+                    await asyncio.to_thread(
+                        _best_effort_kill_hashes, kill["id"], c_hash, p_hash)
                     try:
                         from services.event_qc import tick_qc_clip_produced
                         tick_qc_clip_produced(kill["id"])

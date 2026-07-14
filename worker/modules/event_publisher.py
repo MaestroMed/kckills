@@ -147,10 +147,12 @@ async def _fetch_retractable(db) -> list[dict]:
     """Get events whose is_publishable just went FALSE while their kill
     is still surfaced as status='published'. The ones to pull back.
 
-    Cross-table filter (kills.status='published' AND game_events.is_publishable=FALSE)
-    isn't a single PostgREST query — we approximate by fetching events
-    where is_publishable=FALSE AND published_at IS NOT NULL (i.e., they
-    WERE published before). Callers re-check the kill row's status.
+    The cross-table filter (kills.status='published' AND
+    game_events.is_publishable=FALSE) IS a single PostgREST query via a
+    kills!inner(status)=eq.published embed — so the set only ever contains
+    kills that are ACTUALLY still surfaced and self-drains as they're pulled
+    back. (The old published_at-not-null approximation re-flipped the same
+    already-'analyzed' events every cycle forever.)
     """
     try:
         # Wave 27.10 — offloaded.
@@ -159,10 +161,19 @@ async def _fetch_retractable(db) -> list[dict]:
             f"{db.base}/game_events",
             headers=db.headers,
             params={
-                "select": "id,kill_id,publish_blocked_reason",
+                # kills!inner(status)=eq.published expresses the cross-table
+                # condition directly. The old published_at-not-null-only filter
+                # churned the same ~700 already-retracted events forever
+                # (published_at is a permanent record, never cleared), each
+                # re-flipping an already-'analyzed' kill — a no-op counted as a
+                # retraction (permanent ~100% "retract" rate). The inner embed
+                # only surfaces kills STILL surfaced as published, so once a kill
+                # is pulled back it drops out of the set and the churn stops.
+                "select": "id,kill_id,publish_blocked_reason,kills!inner(status)",
                 "is_publishable": "eq.false",
                 "published_at": "not.is.null",
                 "kill_id": "not.is.null",
+                "kills.status": "eq.published",
                 "limit": RETRACT_BATCH,
             },
             timeout=15.0,
