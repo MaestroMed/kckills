@@ -1,6 +1,6 @@
 import Link from "next/link";
 import Image from "next/image";
-import { createServerSupabase } from "@/lib/supabase/server";
+import { createServerSupabase, createServiceSupabase } from "@/lib/supabase/server";
 import { getPublishedKills } from "@/lib/supabase/kills";
 
 export const dynamic = "force-dynamic";
@@ -53,7 +53,11 @@ interface MinimalKill {
 // ─── Page ──────────────────────────────────────────────────────────────
 
 export default async function AnalyticsPage() {
-  const sb = await createServerSupabase();
+  // Migration 090 flipped v_clip_engagement_24h / v_trending_kills_1h to
+  // security_invoker → anon reads return 0 rows. This is an admin-gated,
+  // server-only page, so read through the service-role client (bypasses RLS).
+  // Fall back to the anon client if the service key isn't provisioned.
+  const sb = createServiceSupabase() ?? (await createServerSupabase());
 
   // ── Existing legacy data (preserved) ─────────────────────────────
   // Wave 34 T2.2 — trim 500 → 300.

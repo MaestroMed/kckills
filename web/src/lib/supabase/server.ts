@@ -1,3 +1,9 @@
+// Defense-in-depth: this module exports createServiceSupabase() which reads
+// SUPABASE_SERVICE_ROLE_KEY (RLS bypass). `server-only` makes any accidental
+// import from a client component fail at build time. (The key already has no
+// NEXT_PUBLIC_ prefix so Next strips it from client bundles — this is a second
+// guard, matching the convention already used across the codebase.)
+import "server-only";
 import { createClient } from "@supabase/supabase-js";
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";

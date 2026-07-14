@@ -60,6 +60,11 @@ const NAV_GROUPS: { tKey: string; items: { href: string; tKey: string }[] }[] = 
       { href: "/community", tKey: "nav.community" },
       { href: "/alumni", tKey: "nav.alumni" },
       { href: "/hall-of-fame", tKey: "nav.hall_of_fame" },
+      // Wave 36 — the two hidden experiences surface in the nav. La
+      // Chambre existed with zero inbound link outside the homepage ;
+      // l'Antre was only reachable by typing B-C-C on Bo's page.
+      { href: "/chambre", tKey: "nav.chambre" },
+      { href: "/antre", tKey: "nav.antre" },
     ],
   },
 ];

@@ -90,6 +90,7 @@ const NAV: NavGroup[] = [
       { href: "/admin/pipeline/trigger", label: "Trigger Run", icon: "⚡" },
       { href: "/admin/pipeline/run", label: "Manual Run", icon: "▶" },
       { href: "/admin/pipeline/dlq", label: "Dead Letter", icon: "☠" },
+      { href: "/admin/ledger", label: "Clip Ledger", icon: "▤" },
     ],
   },
   {

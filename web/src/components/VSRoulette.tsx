@@ -42,6 +42,9 @@ import {
   formatEloDelta,
   getVSSessionHash,
   playLockInSfx,
+} from "@/lib/vs-roulette";
+import { MatchupIntro } from "@/components/vs/MatchupIntro";
+import {
   VS_MULTIKILL_OPTIONS,
   VS_ROLES,
   winRatePct,
@@ -62,6 +65,10 @@ interface VSRouletteProps {
 type SpinState =
   | { kind: "idle" }
   | { kind: "spinning" }
+  // Wave 36 — l'écran de matchup façon jeu de combat (MatchupIntro) :
+  // la roulette a verrouillé la paire, les vignettes claquent + lock-in,
+  // les clips préchargent derrière l'overlay, puis → "loaded".
+  | { kind: "intro"; a: VSKill; b: VSKill }
   | { kind: "loaded"; a: VSKill; b: VSKill }
   | { kind: "voting"; a: VSKill; b: VSKill; voted: "a" | "b" | "tie" }
   | {
@@ -177,8 +184,11 @@ export function VSRoulette({
         return;
       }
       if (!prefersReducedMotion) playLockInSfx();
+      // Wave 36 — le matchup façon jeu de combat s'intercale ici ; il
+      // joue ses propres beats de lock-in puis résout vers "loaded"
+      // (400 ms statiques sous prefers-reduced-motion).
       setState({
-        kind: "loaded",
+        kind: "intro",
         a: resultData.kill_a,
         b: resultData.kill_b,
       });
@@ -384,6 +394,32 @@ export function VSRoulette({
           onCancelAutoNext={cancelAutoNext}
         />
       </div>
+
+      {/* ─── Wave 36 — matchup façon jeu de combat (overlay) ─────── */}
+      {state.kind === "intro" && (
+        <MatchupIntro
+          left={{
+            name: state.a.killer_name ?? state.a.killer_champion ?? "?",
+            champion: state.a.killer_champion,
+            subtitle: state.a.victim_champion
+              ? `exécute ${state.a.victim_champion}`
+              : null,
+          }}
+          right={{
+            name: state.b.killer_name ?? state.b.killer_champion ?? "?",
+            champion: state.b.killer_champion,
+            subtitle: state.b.victim_champion
+              ? `exécute ${state.b.victim_champion}`
+              : null,
+          }}
+          reduce={prefersReducedMotion ?? false}
+          onDone={() =>
+            setState((s) =>
+              s.kind === "intro" ? { kind: "loaded", a: s.a, b: s.b } : s,
+            )
+          }
+        />
+      )}
     </div>
   );
 }

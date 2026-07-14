@@ -194,10 +194,18 @@ async def download_full_vod(youtube_id: str) -> str | None:
         #     bug on Windows that we hit repeatedly on KC Replay casts)
         # Fallback chain : muxed HLS -> separate avc1 video+audio merge
         # -> any 1080p video+audio -> best single stream.
-        "-f", "best[protocol=m3u8_native][height<=1080][vcodec^=avc1]/"
-              "best[protocol=m3u8_native][height<=1080]/"
+        # Décryptage 2026-07-14 — [acodec!=none] sur les sélections
+        # single-stream : `best[protocol=m3u8_native]` pouvait matcher un
+        # flux HLS VIDÉO-SEULE quand le muxé n'existait pas → 212 clips
+        # publiés muets (ffmpeg encode l'AAC demandé… de rien, sans
+        # erreur). Le tout dernier `best` reste sans garde : mieux vaut
+        # un clip muet que rien, le QC v2 `audio_present` le bloquera
+        # avant publication.
+        "-f", "best[protocol=m3u8_native][height<=1080][vcodec^=avc1][acodec!=none]/"
+              "best[protocol=m3u8_native][height<=1080][acodec!=none]/"
               "bestvideo[vcodec^=avc1][height<=1080]+bestaudio/"
-              "bestvideo[height<=1080]+bestaudio/best[height<=1080]",
+              "bestvideo[height<=1080]+bestaudio/"
+              "best[height<=1080][acodec!=none]/best[height<=1080]",
         "--merge-output-format", "mp4",
         # Wave 13e (2026-04-29) yt-dlp perf bumps — see _run_ytdlp() below.
         "--concurrent-fragments", "8",
@@ -253,6 +261,7 @@ async def clip_kill(
     match_context: str | None = None,
     local_vod_path: str | None = None,
     game_id: str | None = None,
+    window_override: dict | None = None,
 ) -> dict | None:
     """Encode and upload a single kill clip. Returns dict of R2 URLs or None.
 
@@ -266,6 +275,13 @@ async def clip_kill(
     versioned uploads are skipped and only the legacy flat keys are
     written — this preserves the path used by older callers (admin
     re-clip CLIs) that don't carry the parent game.
+
+    `window_override` — Décryptage vague 2 : {"before": s, "after": s}
+    calculé par l'appelant depuis la SÉQUENCE multi-kill du clip_ledger
+    (sequence_start → sequence_end). Un penta étalé sur 25 s clippé
+    -30/+10 autour du DERNIER kill amputait la première mort ; le
+    reclip_from_ledger passe désormais une fenêtre qui couvre toute la
+    séquence. None → CLIP_TIMING par tier, comportement historique.
     """
     os.makedirs(config.CLIPS_DIR, exist_ok=True)
     os.makedirs(config.THUMBNAILS_DIR, exist_ok=True)
@@ -274,6 +290,9 @@ async def clip_kill(
     timing = config.CLIP_TIMING.get(multi_kill or "", config.CLIP_TIMING["default"])
     before = timing["before"]
     after = timing["after"]
+    if window_override:
+        before = int(window_override.get("before", before))
+        after = int(window_override.get("after", after))
 
     vod_time = int(vod_offset_seconds or 0) + int(game_time_seconds or 0)
     clip_start = max(0, vod_time - before)
@@ -326,6 +345,10 @@ async def clip_kill(
             "-i", raw_path,
             "-vf", "scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2",
             *video_codec_args("hq"),
+            # Vague 2 — loudness normalisée EBU R128 : les casts LEC /
+            # Kameto / KC Replay ont des niveaux très différents, le
+            # scroll ne doit pas exploser les oreilles d'un clip à l'autre
+            "-af", "loudnorm=I=-16:TP=-1.5:LRA=11",
             "-c:a", "aac", "-b:a", "128k",
             "-movflags", "+faststart",
             "-y", h_path,
@@ -354,6 +377,7 @@ async def clip_kill(
             "-i", raw_path,
             "-vf", v_filter,
             *video_codec_args("hq"),
+            "-af", "loudnorm=I=-16:TP=-1.5:LRA=11",
             "-c:a", "aac", "-b:a", "128k",
             "-movflags", "+faststart",
             "-y", v_path,
@@ -367,6 +391,7 @@ async def clip_kill(
             "-i", raw_path,
             "-vf", "crop=ih*9/16:ih:iw/2-ih*9/32:0,scale=540:960",
             *video_codec_args("low"),
+            "-af", "loudnorm=I=-16:TP=-1.5:LRA=11",
             "-c:a", "aac", "-b:a", "80k",
             "-movflags", "+faststart",
             "-y", vl_path,
@@ -701,6 +726,10 @@ async def clip_moment(
             "-i", raw_path,
             "-vf", "scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2",
             *video_codec_args("hq"),
+            # Vague 2 — loudness normalisée EBU R128 : les casts LEC /
+            # Kameto / KC Replay ont des niveaux très différents, le
+            # scroll ne doit pas exploser les oreilles d'un clip à l'autre
+            "-af", "loudnorm=I=-16:TP=-1.5:LRA=11",
             "-c:a", "aac", "-b:a", "128k",
             "-movflags", "+faststart",
             "-y", h_path,
@@ -717,6 +746,7 @@ async def clip_moment(
             "-i", raw_path,
             "-vf", v_filter,
             *video_codec_args("hq"),
+            "-af", "loudnorm=I=-16:TP=-1.5:LRA=11",
             "-c:a", "aac", "-b:a", "128k",
             "-movflags", "+faststart",
             "-y", v_path,
@@ -730,6 +760,7 @@ async def clip_moment(
             "-i", raw_path,
             "-vf", "crop=ih*9/16:ih:iw/2-ih*9/32:0,scale=540:960",
             *video_codec_args("low"),
+            "-af", "loudnorm=I=-16:TP=-1.5:LRA=11",
             "-c:a", "aac", "-b:a", "80k",
             "-movflags", "+faststart",
             "-y", vl_path,
@@ -890,10 +921,13 @@ async def _run_ytdlp(url: str, output_path: str, start: float, end: float) -> bo
         # h264_nvenc) segfaults on AV1 input on Windows. The HLS muxed
         # format is the cleanest path (single stream, no merge needed).
         # Fallback chain mirrors download_full_vod's selector.
-        "-f", "best[protocol=m3u8_native][height<=1080][vcodec^=avc1]/"
-              "best[protocol=m3u8_native][height<=1080]/"
+        # Décryptage 2026-07-14 — même garde [acodec!=none] que
+        # download_full_vod (cause racine des 212 clips muets).
+        "-f", "best[protocol=m3u8_native][height<=1080][vcodec^=avc1][acodec!=none]/"
+              "best[protocol=m3u8_native][height<=1080][acodec!=none]/"
               "bestvideo[vcodec^=avc1][height<=1080]+bestaudio/"
-              "bestvideo[height<=1080]+bestaudio/best[height<=1080]",
+              "bestvideo[height<=1080]+bestaudio/"
+              "best[height<=1080][acodec!=none]/best[height<=1080]",
         "--merge-output-format", "mp4",
         # Wave 13e (2026-04-29) yt-dlp perf bumps :
         # * --concurrent-fragments 8 : parallel HLS/DASH fragment download
@@ -991,6 +1025,49 @@ def _safe_remove(path: str):
 # variants are produced by separate modules (og_generator, hls_packager)
 # and must NOT be archived here — only the four formats this module owns.
 _CLIPPER_OWNED_ASSET_TYPES = ("horizontal", "vertical", "vertical_low", "thumbnail")
+
+
+def _best_effort_kill_hashes(
+    kill_id: str, c_hash: str | None, p_hash: str | None
+) -> None:
+    """Mirror the clip hashes onto kills.content_hash / perceptual_hash,
+    OUT of band from the status-flip PATCH, tolerating the UNIQUE collision.
+
+    kills.content_hash has a UNIQUE partial index (migration 010). Writing it
+    here — never inside the status='clipped' flip — means a byte-identical
+    (duplicate or degenerate) clip that 23505s simply declines the shared
+    hash, while the owning kill's status still advances. Goes DIRECT (not via
+    the batch writer) so a 409 is swallowed here instead of being spilled to
+    the SQLite cache and later DROPPED as a permanent UNIQUE violation. The
+    canonical per-asset hashes already live in kill_assets — kills.content_hash
+    is only a convenience mirror.
+    """
+    payload = {
+        k: v for k, v in (("content_hash", c_hash), ("perceptual_hash", p_hash)) if v
+    }
+    if not payload:
+        return
+    db = get_db()
+    if db is None:
+        return
+    try:
+        import httpx
+        r = httpx.patch(
+            f"{db.base}/kills",
+            headers={**db.headers, "Prefer": "return=minimal"},
+            params={"id": f"eq.{kill_id}"},
+            json=payload,
+            timeout=10.0,
+        )
+        if r.status_code == 409:
+            log.info("kill_hash_collision_skipped", kill_id=kill_id[:8])
+        elif r.status_code >= 400:
+            log.warn(
+                "kill_hash_update_nonzero",
+                kill_id=kill_id[:8], status=r.status_code, body=r.text[:120],
+            )
+    except Exception as e:
+        log.warn("kill_hash_update_threw", kill_id=kill_id[:8], error=str(e)[:120])
 
 
 def _compute_next_version(kill_id: str) -> int:
@@ -1453,10 +1530,79 @@ async def run() -> int:
                     # Re-raise so the gather sees it and the batch-level log fires.
                     raise
 
-                if urls and urls.get("clip_url_horizontal"):
-                    payload = {**urls, "status": "clipped"}
-                    payload.pop("_local_h_path", None)
-                    await batched_safe_update("kills", payload, "id", kill["id"])
+                # Décryptage vague 3 — QC local AU MOMENT DU CLIP, gratuit
+                # (ffprobe + blackdetect/freezedetect + timer OCR si
+                # calibré). Un clip muet / gelé / hors-timing ne part plus
+                # vers l'analyzer (économise l'appel Gemini) ni vers la
+                # publication : needs_review direct. Best-effort : une
+                # erreur du QC lui-même ne bloque jamais le clip.
+                qc_local_ok, qc_why = True, ""
+                _local_h = (urls or {}).get("_local_h_path")
+                if urls and _local_h and os.path.exists(_local_h):
+                    try:
+                        from modules.clip_qc_v2 import (
+                            quick_media_gate, check_start_frames,
+                        )
+                        qc_local_ok, qc_why = await quick_media_gate(_local_h)
+                        if qc_local_ok:
+                            _frz = await check_start_frames(_local_h)
+                            if _frz.verdict == "fail":
+                                qc_local_ok = False
+                                qc_why = f"start_not_frozen: {_frz.detail}"
+                        if qc_local_ok:
+                            from modules import timer_ocr
+                            if timer_ocr.is_calibrated():
+                                from modules.decryptage import (
+                                    read_timer_at, ProbeBudget, DRIFT_TOLERANCE,
+                                )
+                                _s = await read_timer_at(
+                                    _local_h, 15, ProbeBudget(0))
+                                if _s is not None:
+                                    _gt = int(kill.get("game_time_seconds") or 0)
+                                    _expected = _gt - 30 + 15  # pad default 30
+                                    _drift = _s.game_time - _expected
+                                    if abs(_drift) > DRIFT_TOLERANCE:
+                                        qc_local_ok = False
+                                        qc_why = f"timer_drift: {_drift:+d}s"
+                    except Exception as _qc_e:
+                        qc_local_ok, qc_why = True, f"qc_error:{str(_qc_e)[:60]}"
+
+                if urls and urls.get("clip_url_horizontal") and not qc_local_ok:
+                    log.warn("clipper_local_qc_rejected",
+                             kill_id=kill["id"][:8], reason=qc_why[:120])
+                    await batched_safe_update(
+                        "kills", {"status": "needs_review"}, "id", kill["id"])
+                    try:
+                        from services.event_qc import fail_qc_clip_validated
+                        fail_qc_clip_validated(
+                            kill["id"], reason=f"clip_qc_local: {qc_why[:80]}")
+                    except Exception:
+                        pass
+                    if job is not None:
+                        await asyncio.to_thread(
+                            job_queue.succeed, job["id"],
+                            {"qc_local": "rejected", "reason": qc_why[:120]},
+                        )
+                    counters["qc_reject"] = counters.get("qc_reject", 0) + 1
+                elif urls and urls.get("clip_url_horizontal"):
+                    # HASH-FREE flip. kills.content_hash carries a UNIQUE partial
+                    # index (migration 010). Bundling content_hash/perceptual_hash
+                    # into this PATCH means a byte-identical / duplicate clip
+                    # 23505s the WHOLE payload → the batch writer spills it to the
+                    # SQLite cache → flush_cache DROPS it as a permanent UNIQUE
+                    # violation → the status flip is LOST and the kill is stranded
+                    # at raw/clipping forever. Strip the hashes from the
+                    # transition; mirror them out-of-band right after (best effort).
+                    c_hash = urls.get("content_hash")
+                    p_hash = urls.get("perceptual_hash")
+                    flip = {
+                        k: v for k, v in urls.items()
+                        if k not in ("_local_h_path", "content_hash", "perceptual_hash")
+                    }
+                    flip["status"] = "clipped"
+                    await batched_safe_update("kills", flip, "id", kill["id"])
+                    await asyncio.to_thread(
+                        _best_effort_kill_hashes, kill["id"], c_hash, p_hash)
                     try:
                         from services.event_qc import tick_qc_clip_produced
                         tick_qc_clip_produced(kill["id"])

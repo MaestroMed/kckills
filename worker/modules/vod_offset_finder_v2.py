@@ -215,7 +215,11 @@ async def _read_timer_at(youtube_id: str, vod_seconds: int) -> Optional[int]:
             return None
         return int(m.group(1)) * 60 + int(m.group(2))
     except Exception as e:
-        log.warn("vof2_read_timer_error", yt=youtube_id, error=str(e)[:120])
+        # Décryptage 2026-07-14 — un 429 RESOURCE_EXHAUSTED doit couper le
+        # quota du jour (circuit breaker), pas juste logguer et laisser le
+        # scan marteler l'API 20 probes de suite.
+        from services.gemini_client import handle_gemini_exception
+        handle_gemini_exception(e, where="vof2_read_timer")
         return None
     finally:
         if os.path.exists(frame_path):

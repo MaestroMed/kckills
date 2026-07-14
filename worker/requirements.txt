@@ -46,3 +46,7 @@ sentry-sdk[asyncio,httpx]>=2.20.0
 # pytest is optional — the tests also run directly via `python tests/test_*.py`
 # Uncomment if you want to use `pytest`:
 # pytest>=8.0.0
+
+# Decryptage 2026-07-14 - OCR local du timer (modules/timer_ocr.py)
+numpy>=2.0
+opencv-python-headless>=4.10

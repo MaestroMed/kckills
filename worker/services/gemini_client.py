@@ -304,6 +304,50 @@ async def analyze(
     except json.JSONDecodeError:
         log.warn("gemini_invalid_json")
     except Exception as e:
-        log.error("gemini_error", error=str(e))
+        handle_gemini_exception(e, where="analyze")
 
     return None
+
+
+# ─── Décryptage 2026-07-14 — circuit breaker 429/RESOURCE_EXHAUSTED ────
+#
+# Incident du 13/07 : spend cap mensuel Google atteint → 3 606 appels en
+# 429 en ~12 h parce qu'aucun call site ne distinguait « quota mort pour
+# la journée » d'une erreur transiente. Chaque module réessayait en
+# boucle. Ces deux helpers centralisent la classification : sur une
+# erreur quota, on déclenche scheduler.exhaust_quota("gemini") qui coupe
+# le service pour LES QUATRE process orchestrator jusqu'au reset
+# 07:00 UTC. À utiliser dans tout except autour d'un appel Gemini.
+
+_QUOTA_MARKERS = (
+    "RESOURCE_EXHAUSTED",
+    "429",
+    "quota",
+    "rate limit",
+    "billing",
+)
+
+
+def classify_gemini_error(e: Exception) -> str:
+    """'quota' (stop jusqu'au reset) | 'transient' (retry raisonnable)."""
+    msg = f"{type(e).__name__}: {e}".lower()
+    if any(m.lower() in msg for m in _QUOTA_MARKERS):
+        return "quota"
+    return "transient"
+
+
+def handle_gemini_exception(e: Exception, where: str = "") -> str:
+    """Log + trip le circuit breaker si l'erreur est un épuisement de
+    quota. Retourne la classification pour que l'appelant adapte son
+    comportement (quota → inutile de réessayer aujourd'hui)."""
+    kind = classify_gemini_error(e)
+    if kind == "quota":
+        try:
+            scheduler.exhaust_quota("gemini", reason=f"{where}: {str(e)[:120]}")
+        except Exception:
+            pass
+        log.error("gemini_quota_error_breaker_tripped",
+                  where=where, error=str(e)[:200])
+    else:
+        log.error("gemini_error", where=where, error=str(e)[:200])
+    return kind
