@@ -419,6 +419,42 @@ class LoLTokScheduler:
             return
         loop.create_task(self._record_call_shared(service, cost_usd=v))
 
+    def exhaust_quota(self, service: str, reason: str = "") -> None:
+        """Circuit-breaker : marque le quota du jour comme épuisé.
+
+        Décryptage 2026-07-14 — le 13/07 le worker a envoyé 3 606 requêtes
+        Gemini en 429 RESOURCE_EXHAUSTED en ~12 h : chaque module retentait
+        son appel alors que le provider avait déjà dit stop (spend cap
+        mensuel atteint). Ici on ferme la porte localement ET pour les
+        process frères :
+
+          * compteur RPD local → cap (wait_for retourne False direct) ;
+          * ledger partagé → on pousse la dépense au cost-cap via
+            record_cost(), ce qui coupe aussi les 3 autres process
+            orchestrator dans les 5 s (TTL du cache partagé).
+
+        La dépense synthétique poussée dans le ledger ne correspond pas à
+        de la facturation réelle — c'est un verrou. Réouverture automatique
+        au rollover 07:00 UTC.
+        """
+        self._reset_daily_if_needed()
+        if service in self.DAILY_QUOTAS:
+            self._daily_counts[service] = self.DAILY_QUOTAS[service]
+        cap = self.DAILY_COST_CAPS_USD.get(service)
+        if cap is not None:
+            spent = self._daily_cost_usd.get(service, 0.0)
+            if spent < cap:
+                self.record_cost(service, cap - spent)
+        try:
+            import structlog
+            structlog.get_logger().warn(
+                "quota_circuit_breaker_tripped",
+                service=service, reason=reason[:160],
+                reset_hour_utc=self.QUOTA_RESET_HOUR_UTC,
+            )
+        except Exception:
+            pass
+
     def get_remaining(self, service: str) -> int | None:
         """Get remaining daily quota for a service. None if no quota."""
         if service not in self.DAILY_QUOTAS:

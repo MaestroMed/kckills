@@ -194,10 +194,18 @@ async def download_full_vod(youtube_id: str) -> str | None:
         #     bug on Windows that we hit repeatedly on KC Replay casts)
         # Fallback chain : muxed HLS -> separate avc1 video+audio merge
         # -> any 1080p video+audio -> best single stream.
-        "-f", "best[protocol=m3u8_native][height<=1080][vcodec^=avc1]/"
-              "best[protocol=m3u8_native][height<=1080]/"
+        # Décryptage 2026-07-14 — [acodec!=none] sur les sélections
+        # single-stream : `best[protocol=m3u8_native]` pouvait matcher un
+        # flux HLS VIDÉO-SEULE quand le muxé n'existait pas → 212 clips
+        # publiés muets (ffmpeg encode l'AAC demandé… de rien, sans
+        # erreur). Le tout dernier `best` reste sans garde : mieux vaut
+        # un clip muet que rien, le QC v2 `audio_present` le bloquera
+        # avant publication.
+        "-f", "best[protocol=m3u8_native][height<=1080][vcodec^=avc1][acodec!=none]/"
+              "best[protocol=m3u8_native][height<=1080][acodec!=none]/"
               "bestvideo[vcodec^=avc1][height<=1080]+bestaudio/"
-              "bestvideo[height<=1080]+bestaudio/best[height<=1080]",
+              "bestvideo[height<=1080]+bestaudio/"
+              "best[height<=1080][acodec!=none]/best[height<=1080]",
         "--merge-output-format", "mp4",
         # Wave 13e (2026-04-29) yt-dlp perf bumps — see _run_ytdlp() below.
         "--concurrent-fragments", "8",
@@ -890,10 +898,13 @@ async def _run_ytdlp(url: str, output_path: str, start: float, end: float) -> bo
         # h264_nvenc) segfaults on AV1 input on Windows. The HLS muxed
         # format is the cleanest path (single stream, no merge needed).
         # Fallback chain mirrors download_full_vod's selector.
-        "-f", "best[protocol=m3u8_native][height<=1080][vcodec^=avc1]/"
-              "best[protocol=m3u8_native][height<=1080]/"
+        # Décryptage 2026-07-14 — même garde [acodec!=none] que
+        # download_full_vod (cause racine des 212 clips muets).
+        "-f", "best[protocol=m3u8_native][height<=1080][vcodec^=avc1][acodec!=none]/"
+              "best[protocol=m3u8_native][height<=1080][acodec!=none]/"
               "bestvideo[vcodec^=avc1][height<=1080]+bestaudio/"
-              "bestvideo[height<=1080]+bestaudio/best[height<=1080]",
+              "bestvideo[height<=1080]+bestaudio/"
+              "best[height<=1080][acodec!=none]/best[height<=1080]",
         "--merge-output-format", "mp4",
         # Wave 13e (2026-04-29) yt-dlp perf bumps :
         # * --concurrent-fragments 8 : parallel HLS/DASH fragment download

@@ -49,7 +49,32 @@ GEMINI_PRICES: dict[str, tuple[float, float]] = {
     # Flash, beats 3.1 Pro sur les benchmarks agentic. Cached-input
     # $0.15/M tokens (10× moins) — bonus séparé via compute helper.
     "gemini-3.5-flash":               (1.50, 9.00),
+    # Décryptage 2026-07-14 — variantes -preview facturées comme leur
+    # modèle GA. L'.env pointait sur gemini-3-flash-preview, absent de
+    # cette table → DEFAULT_PRICE flash-lite → le cap $10/jour
+    # sous-comptait la dépense réelle ~6× (une des causes des 50 €).
+    "gemini-3-flash-preview":         (0.30, 2.50),
+    "gemini-3.5-flash-preview":       (1.50, 9.00),
 }
+
+
+def resolve_gemini_price(model_name: str | None) -> tuple[float, float]:
+    """Prix (input, output) $/M tokens, avec fallback par préfixe.
+
+    Un modèle inconnu qui commence par un modèle connu (suffixes
+    -preview / -exp / -latest / date) hérite du prix du plus long
+    préfixe connu, au lieu de tomber silencieusement sur le tarif
+    flash-lite qui fausse le ledger de coûts.
+    """
+    if not model_name:
+        return DEFAULT_PRICE
+    if model_name in GEMINI_PRICES:
+        return GEMINI_PRICES[model_name]
+    best = None
+    for known, price in GEMINI_PRICES.items():
+        if model_name.startswith(known) and (best is None or len(known) > best[0]):
+            best = (len(known), price)
+    return best[1] if best else DEFAULT_PRICE
 
 # Cached input pricing — when the same prompt prefix is reused inside the
 # implicit cache window (Gemini batches identical context across calls
@@ -84,7 +109,9 @@ def compute_gemini_cost(
     """
     if input_tokens is None and output_tokens is None and cached_input_tokens is None:
         return None
-    in_price, out_price = GEMINI_PRICES.get(model_name or "", DEFAULT_PRICE)
+    # Décryptage 2026-07-14 — résolution par préfixe : les -preview
+    # héritent du tarif GA au lieu du DEFAULT_PRICE flash-lite.
+    in_price, out_price = resolve_gemini_price(model_name)
     in_tok = max(0, int(input_tokens or 0))
     out_tok = max(0, int(output_tokens or 0))
     cached_tok = max(0, int(cached_input_tokens or 0))

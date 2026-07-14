@@ -122,7 +122,9 @@ async def verify_clip_timing(
         return is_ok, drift
 
     except Exception as e:
-        log.error("clip_qc_error", error=str(e)[:80])
+        # Décryptage 2026-07-14 — circuit breaker sur épuisement de quota.
+        from services.gemini_client import handle_gemini_exception
+        handle_gemini_exception(e, where="clip_qc_verify")
         return False, 0
     finally:
         if os.path.exists(frame_path):
