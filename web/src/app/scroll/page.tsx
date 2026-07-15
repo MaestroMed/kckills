@@ -247,14 +247,17 @@ export default async function ScrollV2Page({ searchParams }: ScrollPageProps) {
     500,
   );
 
-  // Wave 41 — curated opener + quality-floored random pool.
-  //   • Opener : the top-30 clips by highlight_score — a "belle séquence" of
-  //     the very best clips, always first, in order.
+  // Wave 42 — quality opener with per-session VARIETY.
+  //   • Opener : OPENERS clips seed-SAMPLED from the top-OPENER_POOL by
+  //     highlight_score. Still all high quality (a "belle séquence" of the
+  //     best), but WHICH ones — and their order — varies per session via
+  //     feedSeed, so a returning visitor doesn't get the exact same 30 clips
+  //     on loop (Mehdi : "il se tape pas les mêmes clips en boucle"). Unused
+  //     pool members fall back into the general window (still >= QUALITY_FLOOR).
   //   • Rest   : a RANDOM window of the floored pool (score >= QUALITY_FLOOR),
   //     rotated per session by the feed seed, so it's varied across visits but
   //     skips the low-score junk (drafts / plateau / OTP-screen false positives
-  //     Gemini QC mis-passed) pending a full QC re-pass. Kills both the "same
-  //     ~10 clips on loop" feeling AND the "trop de mauvais clips" one.
+  //     Gemini QC mis-passed) pending a full QC re-pass.
   // Aggressive floor (Mehdi "régime maximum") — keeps ~820 clips scored >= 7,
   // dropping the ~580 lower tier where the draft/plateau/OTP junk concentrates.
   // env-tunable so the floor can move without a deploy once the QC re-pass runs.
@@ -263,6 +266,12 @@ export default async function ScrollV2Page({ searchParams }: ScrollPageProps) {
     Math.max(0, parseInt(process.env.SCROLL_QUALITY_FLOOR ?? "7", 10) || 7),
   );
   const OPENERS = 30;
+  // Sample the OPENERS from a larger top-score pool → quality kept, variety
+  // added. env-tunable : bigger pool = more variety, smaller = tighter quality.
+  const OPENER_POOL = Math.max(
+    OPENERS,
+    parseInt(process.env.SCROLL_OPENER_POOL ?? "90", 10) || 90,
+  );
   const [poolCount, catalogTotal] = await Promise.all([
     catalogEnabled ? getScrollFeedPoolCount(QUALITY_FLOOR) : Promise.resolve(0),
     getPublishedKcKillCount(),
@@ -271,19 +280,35 @@ export default async function ScrollV2Page({ searchParams }: ScrollPageProps) {
     catalogEnabled && poolCount > KILLS_LIMIT
       ? feedSeed % (poolCount - KILLS_LIMIT)
       : 0;
-  const [data, topKills, windowKills, roster] = await Promise.all([
+  const [data, topPool, windowKills, roster] = await Promise.all([
     Promise.resolve(loadRealData()),
-    catalogEnabled ? getTopScrollKills(OPENERS) : Promise.resolve([]),
+    catalogEnabled ? getTopScrollKills(OPENER_POOL) : Promise.resolve([]),
     catalogEnabled
       ? getScrollFeedKills(KILLS_LIMIT, windowOffset, QUALITY_FLOOR)
       : getPublishedKills(KILLS_LIMIT),
     getTrackedRoster(),
   ]);
-  // Merge : openers first (score order), then the window minus any opener
-  // already present (dedupe by id).
-  const openerIds = new Set(topKills.map((k) => k.id));
+  // Seed-sample the openers : Fisher-Yates the top-score pool with the
+  // per-session feedSeed, take OPENERS. All still top-OPENER_POOL quality, but
+  // the SET + order change across sessions → no more "mêmes clips en boucle".
+  const shuffledPool = [...topPool];
+  {
+    const rand = seededRandom(feedSeed);
+    for (let i = shuffledPool.length - 1; i > 0; i--) {
+      const j = Math.floor(rand() * (i + 1));
+      [shuffledPool[i], shuffledPool[j]] = [shuffledPool[j], shuffledPool[i]];
+    }
+  }
+  const topKills = shuffledPool.slice(0, OPENERS);
+  // Merge : seeded openers first, then the unused pool members, then the
+  // window — dedupe by id, preserving order.
+  const seenIds = new Set<string>();
   const allKills = catalogEnabled
-    ? [...topKills, ...windowKills.filter((k) => !openerIds.has(k.id))]
+    ? [...topKills, ...shuffledPool.slice(OPENERS), ...windowKills].filter((k) => {
+        if (seenIds.has(k.id)) return false;
+        seenIds.add(k.id);
+        return true;
+      })
     : windowKills;
 
   const ROLE_FOR_IGN: Record<string, "TOP" | "JGL" | "MID" | "ADC" | "SUP"> = {
