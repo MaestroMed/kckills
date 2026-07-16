@@ -155,11 +155,19 @@ class S3StorageBackend(StorageBackend):
         extra: dict[str, Any] = {"ContentType": content_type}
         if cache_control:
             extra["CacheControl"] = cache_control
+        # R2 Class-A economy — boto3's default multipart_threshold is 8 MB, so
+        # every ~20 MB clip became 5 billable ops (CreateMultipart + 3 parts +
+        # Complete) instead of 1 PUT. 64 MB threshold = single PUT for all our
+        # media (clips 6-21 MB, thumbs/OG < 1 MB); only a rare giant falls back
+        # to multipart. Audit 2026-07-16: this overhead alone pushed us toward
+        # ~1.3M ops/month vs the 1M free tier.
+        from boto3.s3.transfer import TransferConfig
         client.upload_file(
             Filename=file_path,
             Bucket=self._bucket,
             Key=key,
             ExtraArgs=extra,
+            Config=TransferConfig(multipart_threshold=64 * 1024 * 1024),
         )
         return self.public_url(key)
 
