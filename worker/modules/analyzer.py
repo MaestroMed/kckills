@@ -332,7 +332,7 @@ async def analyze_kill(
     family). The flag is ignored silently otherwise — older Gemini
     versions don't expose the API.
     """
-    if not config.GEMINI_API_KEY:
+    if not (config.GEMINI_API_KEY_FREE or config.GEMINI_API_KEY):
         log.warn("gemini_no_api_key")
         return None
 

@@ -53,6 +53,13 @@ class Config:
 
     # ─── AI ──────────────────────────────────────────────────
     GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "")
+    # Optional UNBILLED free-tier key. When set, steady-state daemons use it
+    # (flash-lite, ~500 req/day, $0) via get_client(prefer_free=True); backfill
+    # scripts pass prefer_free=False to keep the billed key for bursts. Safe to
+    # leave empty → everything falls back to the billed GEMINI_API_KEY. Only
+    # public VOD content is ever sent to Gemini (no user data), so the free
+    # tier's "Google may train on prompts" is acceptable here (see CLAUDE.md 7).
+    GEMINI_API_KEY_FREE: str = os.getenv("GEMINI_API_KEY_FREE", "")
     ANTHROPIC_API_KEY: str = os.getenv("ANTHROPIC_API_KEY", "")
 
     # ─── Encoding ────────────────────────────────────────────

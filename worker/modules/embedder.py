@@ -234,7 +234,7 @@ async def run() -> int:
       3. On success : safe_update kills.embedding + succeed(job).
       4. On failure : fail(job, retry_after=300, error_code='embed_failed').
     """
-    if not config.GEMINI_API_KEY:
+    if not (config.GEMINI_API_KEY_FREE or config.GEMINI_API_KEY):
         log.warn("embedder_no_api_key")
         return 0
 

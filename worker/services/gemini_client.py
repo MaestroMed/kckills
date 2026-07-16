@@ -27,27 +27,34 @@ log = structlog.get_logger()
 # Client is thread-safe and holds the API key + transport pool, so
 # instantiating it on every call would just leak HTTP connections.
 
-_client = None
+_clients: dict[str, object] = {}
 
 
-def get_client():
-    """Return a shared `google.genai.Client` instance (created lazily).
+def get_client(prefer_free: bool = True):
+    """Return a shared `google.genai.Client` (created lazily, cached per key).
 
-    Returns None if the API key is missing OR the SDK is not installed,
-    so callers can fall back to a degraded mode (text-only / no AI).
+    `prefer_free=True` (default) uses the UNBILLED free-tier key
+    (GEMINI_API_KEY_FREE) when set, so steady-state daemons ride the free
+    ~500-req/day quota at $0. Backfill scripts pass `prefer_free=False` to force
+    the billed key (GEMINI_API_KEY) so bursts don't exhaust the free quota.
+    Falls back to the billed key when no free key is configured
+    (backward-compatible). Returns None if no key at all OR the SDK is missing,
+    so callers can degrade to a text-only / no-AI mode.
     """
-    global _client
-    if _client is not None:
-        return _client
-    if not config.GEMINI_API_KEY:
+    key = (config.GEMINI_API_KEY_FREE if prefer_free else "") or config.GEMINI_API_KEY
+    if not key:
         return None
+    cached = _clients.get(key)
+    if cached is not None:
+        return cached
     try:
         from google import genai  # type: ignore
     except ImportError:
         log.warn("gemini_sdk_missing")
         return None
-    _client = genai.Client(api_key=config.GEMINI_API_KEY)
-    return _client
+    client = genai.Client(api_key=key)
+    _clients[key] = client
+    return client
 
 
 async def _wait_for_file_active(client, file_ref, timeout: int = 60) -> bool:
@@ -160,7 +167,7 @@ async def analyze(
         applied to thinking-aware models (currently 3.5-flash). Older
         models receive no thinking config (the SDK ignores it on >=0.x).
     """
-    if not config.GEMINI_API_KEY:
+    if not (config.GEMINI_API_KEY_FREE or config.GEMINI_API_KEY):
         return None
 
     can_call = await scheduler.wait_for("gemini")
