@@ -507,20 +507,17 @@ async def clip_kill(
         if game_id:
             await asyncio.to_thread(_archive_prior_assets, kill_id)
 
-        # ─── 8. Upload everything to R2 in parallel ─────────────────
-        # Both layouts go up : the LEGACY flat keys keep the
-        # kills.clip_url_* columns working (back-compat), and the
-        # VERSIONED keys feed the new kill_assets rows.
-        legacy_uploads = [
-            r2_client.upload_clip(kill_id, h_path, "h"),
-            r2_client.upload_clip(kill_id, v_path, "v"),
-            r2_client.upload_clip(kill_id, vl_path, "v_low") if os.path.exists(vl_path) else _noop(),
-            r2_client.upload_clip(kill_id, thumb_path, "thumb") if os.path.exists(thumb_path) else _noop(),
-        ]
-
-        versioned_uploads: list = []
+        # ─── 8. Upload to R2 in parallel — ONE layout only ───────────
+        # Audit 2026-07-16 : les deux layouts montaient (legacy flat +
+        # versionné) = chaque clip uploadé DEUX fois (~70 GB dupliqués / 2j,
+        # 2× les writes Class-A). Le versionné est canonique (kill_assets) et
+        # kills.clip_url_* sont de simples URLs — des kills servent déjà des
+        # URLs v1 (cf. mémoire r2-gc). Donc : versionné seul quand game_id
+        # existe, et clip_url_* pointe sur le versionné. Legacy seulement en
+        # secours si pas de game_id. Les objets legacy DÉJÀ uploadés restent
+        # (référencés par d'anciens clip_url_* — GC référence-based).
         if game_id:
-            versioned_uploads = [
+            uploads = [
                 r2_client.upload_versioned(game_id, kill_id, version, h_path, "horizontal"),
                 r2_client.upload_versioned(game_id, kill_id, version, v_path, "vertical"),
                 (
@@ -532,24 +529,26 @@ async def clip_kill(
                     if os.path.exists(thumb_path) else _noop()
                 ),
             ]
-
-        # Wave 13f: TaskGroup for atomic clip upload — if any of the 4
-        # (or 8) uploads fail, the clip is broken anyway, so fail-fast and
-        # let sibling uploads cancel cleanly instead of finishing wasted work.
-        legacy_tasks: list[asyncio.Task] = []
-        versioned_tasks: list[asyncio.Task] = []
-        async with asyncio.TaskGroup() as tg:
-            for coro in legacy_uploads:
-                legacy_tasks.append(tg.create_task(coro))
-            for coro in versioned_uploads:
-                versioned_tasks.append(tg.create_task(coro))
-        h_url, v_url, vl_url, thumb_url = [t.result() for t in legacy_tasks]
-        if game_id:
-            h_url_v, v_url_v, vl_url_v, thumb_url_v = [
-                t.result() for t in versioned_tasks
-            ]
         else:
-            h_url_v, v_url_v, vl_url_v, thumb_url_v = (None, None, None, None)
+            uploads = [
+                r2_client.upload_clip(kill_id, h_path, "h"),
+                r2_client.upload_clip(kill_id, v_path, "v"),
+                r2_client.upload_clip(kill_id, vl_path, "v_low") if os.path.exists(vl_path) else _noop(),
+                r2_client.upload_clip(kill_id, thumb_path, "thumb") if os.path.exists(thumb_path) else _noop(),
+            ]
+
+        # Wave 13f: TaskGroup for atomic clip upload — if any upload fails,
+        # the clip is broken anyway, so fail-fast and let sibling uploads
+        # cancel cleanly instead of finishing wasted work.
+        upload_tasks: list[asyncio.Task] = []
+        async with asyncio.TaskGroup() as tg:
+            for coro in uploads:
+                upload_tasks.append(tg.create_task(coro))
+        h_url, v_url, vl_url, thumb_url = [t.result() for t in upload_tasks]
+        # kill_assets rows reuse the same versioned URLs.
+        h_url_v, v_url_v, vl_url_v, thumb_url_v = (
+            (h_url, v_url, vl_url, thumb_url) if game_id else (None, None, None, None)
+        )
 
         # ─── 9. Insert kill_assets rows for each artefact ────────────
         # Probing each file is cheap (~50ms each) and runs off-thread so
