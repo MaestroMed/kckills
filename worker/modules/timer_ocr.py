@@ -76,7 +76,12 @@ def _binarize(gray):
 
 def _segment_digits(bw) -> list[tuple[int, int, int, int]]:
     """Boxes (x, y, w, h) des composantes 'chiffre', triées par x.
-    Filtre le ':' (petit) et le bruit (composantes minuscules ou plates)."""
+    Filtre le ':' (petit) et le bruit (composantes minuscules ou plates),
+    puis isole le CLUSTER timer : la zone croppée contient aussi les scores
+    K/D, l'or et des icônes (8-9 boxes observées en pratique) — le timer, lui,
+    est un run de 3-5 chiffres de hauteur uniforme, alignés sur la même ligne,
+    à espacement serré. Sans ce filtre, read() s'abstenait sur ~100 % des
+    frames réelles (benchmark 2026-07-16 : 0/24 lectures)."""
     n, _, stats, _ = cv2.connectedComponentsWithStats(bw, connectivity=8)
     boxes = []
     zone_h = bw.shape[0]
@@ -88,7 +93,42 @@ def _segment_digits(bw) -> list[tuple[int, int, int, int]]:
             continue                      # trop plat / trop petit
         boxes.append((int(x), int(y), int(w), int(h)))
     boxes.sort(key=lambda b: b[0])
-    return boxes
+    if len(boxes) <= 5:
+        return boxes
+    return _timer_cluster(boxes) or boxes
+
+
+def _timer_cluster(boxes: list[tuple[int, int, int, int]]) -> list[tuple[int, int, int, int]]:
+    """Extrait le run 3-5 boxes le plus 'timer-like' d'un ensemble bruité.
+
+    Critères : hauteur uniforme (±25 %), même ligne (centres y à ±40 % de h),
+    espacement horizontal serré (gap < ~1.6× la largeur médiane du run).
+    Préfère les runs de 4 chiffres (MM:SS) puis 3 (M:SS) puis 5 (MMM:SS).
+    Retourne [] si aucun run plausible — l'appelant garde alors son gate 3-5.
+    """
+    best: list[tuple[int, int, int, int]] = []
+    n = len(boxes)
+    for i in range(n):
+        run = [boxes[i]]
+        for j in range(i + 1, n):
+            prev, cand = run[-1], boxes[j]
+            ref_h = run[0][3]
+            med_w = sorted(b[2] for b in run)[len(run) // 2]
+            gap = cand[0] - (prev[0] + prev[2])
+            same_h = abs(cand[3] - ref_h) <= ref_h * 0.25
+            same_row = abs((cand[1] + cand[3] / 2) - (run[0][1] + ref_h / 2)) <= ref_h * 0.4
+            near = gap <= max(int(med_w * 1.6), 10)
+            if same_h and same_row and near:
+                run.append(cand)
+            elif cand[0] > prev[0] + prev[2] + max(int(med_w * 1.6), 10):
+                break                     # trou trop grand : le run est fini
+        if 3 <= len(run) <= 5:
+            # Priorité au format MM:SS (4 chiffres), puis M:SS (3), puis 5.
+            rank = {4: 3, 3: 2, 5: 1}[len(run)]
+            best_rank = {4: 3, 3: 2, 5: 1}.get(len(best), 0)
+            if rank > best_rank:
+                best = run
+    return best
 
 
 def _crop_zone(img, box_frac):

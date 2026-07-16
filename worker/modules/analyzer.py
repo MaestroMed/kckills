@@ -964,14 +964,21 @@ async def _process_one(kill: dict, clip_path: str | None,
                 except Exception as _e:
                     media_ok, media_why = True, f"gate_error:{str(_e)[:60]}"
 
+            # Wave 42 — score heuristique local en dégradé. Avant : score NULL
+            # → clip invisible du feed curé (plancher >= 7) jusqu'à réanalyse.
+            # heuristic_score est calibré sur la vérité terrain Gemini (MAE
+            # 0.67, benchmark scripts/benchmark_local_scorer.py) : fallback
+            # honnête, pas un remplaçant du classement fin (Spearman 0.44).
+            from modules.local_scorer import heuristic_score, heuristic_tags
             safe_update("kills", {
                 "status": "analyzed" if media_ok else "needs_review",
                 "ai_description": degraded_desc,
                 "ai_description_fr": degraded_desc,
-                "ai_tags": [],
+                "ai_tags": heuristic_tags(kill),
+                "highlight_score": heuristic_score(kill),
                 "kill_visible": True if media_ok else None,
                 "qc_status": "passed" if media_ok else "failed",
-                "ai_pipeline_version": "degraded-no-gemini",
+                "ai_pipeline_version": "degraded-local-heuristic",
             }, "id", kill["id"])
             # Tick the game_events QC gates so the publisher can surface it
             # (no-op if the event row isn't mapped yet — event.map below
