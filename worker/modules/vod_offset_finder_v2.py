@@ -170,6 +170,21 @@ async def _read_timer_at(youtube_id: str, vod_seconds: int) -> Optional[int]:
         if ff.returncode != 0 or not os.path.exists(frame_path):
             return None
 
+        # FREE-FIRST — local timer OCR (modules.timer_ocr, OpenCV template
+        # match, 0 token). Returns None below its confidence floor (it never
+        # guesses) → we fall through to Gemini, which then TEACHES the OCR via
+        # learn() below, so the next read of this overlay is free (flywheel).
+        try:
+            from modules import timer_ocr
+            _ocr_secs, _ocr_conf, _ocr_prof = timer_ocr.read(frame_path)
+            if _ocr_secs is not None:
+                log.info("vof2_timer_ocr", yt=youtube_id, vod_s=vod_seconds,
+                         timer=_ocr_secs, conf=round(_ocr_conf, 3),
+                         profile=_ocr_prof)
+                return _ocr_secs
+        except Exception as _ocr_e:
+            log.debug("vof2_ocr_read_failed", error=str(_ocr_e)[:120])
+
         if not await scheduler.wait_for("gemini"):
             return None
 
@@ -213,7 +228,15 @@ async def _read_timer_at(youtube_id: str, vod_seconds: int) -> Optional[int]:
         m = re.match(r"(\d+):(\d+)", text)
         if not m:
             return None
-        return int(m.group(1)) * 60 + int(m.group(2))
+        _gem_secs = int(m.group(1)) * 60 + int(m.group(2))
+        # Teach the OCR so the next read of this overlay is free (flywheel).
+        # Runs before the `finally` deletes frame_path — order is correct.
+        try:
+            from modules import timer_ocr
+            timer_ocr.learn(frame_path, _gem_secs)
+        except Exception:
+            pass
+        return _gem_secs
     except Exception as e:
         # Décryptage 2026-07-14 — un 429 RESOURCE_EXHAUSTED doit couper le
         # quota du jour (circuit breaker), pas juste logguer et laisser le
