@@ -322,6 +322,14 @@ async def package_clip(kill_id: str, mp4_url: str) -> str | None:
 async def run() -> int:
     """Find published clips without HLS master, package next batch.
 
+    Wave 44 gate — le front sert le MP4 en dur (FeedPlayerPool
+    hlsUrl=null) : les segments HLS ne sont JAMAIS servis mais brûlaient
+    ~79 % du quota d'écritures R2 (audit 2026-07-16). L'interval env parké
+    ne suffit pas : le superviseur exécute chaque module UNE fois à chaque
+    démarrage du daemon avant de dormir → un batch HLS repartait à chaque
+    restart. Cette gate coupe net. Réactiver : KCKILLS_HLS_PACKAGER_ENABLED=1
+    (le jour où le front re-sert le HLS).
+
     Wave 34 T4 fix (2026-05-28) — bug critique de catch-up.
 
     Avant : `safe_select(... status='published')` sans filter `is.null`
@@ -339,6 +347,10 @@ async def run() -> int:
     `created_at.asc` (drain les plus anciens d'abord, ils ont attendu
     longtemps) + limit explicite MAX_PER_RUN.
     """
+    import os as _os
+    if (_os.getenv("KCKILLS_HLS_PACKAGER_ENABLED", "0") or "0") != "1":
+        log.info("hls_packager_disabled_gate")
+        return 0
     log.info("hls_packager_start")
 
     # Wave 34 — custom httpx call to apply the is.null filter that

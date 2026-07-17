@@ -877,6 +877,25 @@ async def run() -> int:
                 external=game["external_id"],
                 skipped_non_kc=skipped,
             )
+            # Wave 44 — GIVE-UP sur les games mortes. Une game dont le match
+            # date de > 3 jours et qui rend 0 kill (livestats 404/204 — le
+            # feed n'aura JAMAIS ses données) restait kills_extracted=false
+            # pour toujours : re-scannée chaque cycle, elle occupait la file
+            # oldest-first et a fait rater le harvest LIVE du 17/07 (KC vs
+            # AL). On la marque extraite (0 kill est son état final) ; ses
+            # kills, s'ils existent, viennent d'un autre data_source.
+            try:
+                _sched = (game.get("matches") or {}).get("scheduled_at")
+                if _sched:
+                    from datetime import datetime as _dt, timezone as _tz, timedelta as _tdl
+                    _sd = _dt.fromisoformat(str(_sched).replace("Z", "+00:00"))
+                    if _sd < _dt.now(_tz.utc) - _tdl(days=3):
+                        safe_update("games", {"kills_extracted": True}, "id", game["id"])
+                        log.info("harvester_gave_up_dead_game",
+                                 game_id=game["id"][:8],
+                                 external=game["external_id"], age_ok=True)
+            except Exception as _ge:
+                log.debug("harvester_give_up_failed", error=str(_ge)[:100])
 
     log.info(
         "harvester_scan_done",

@@ -100,8 +100,39 @@ async def run() -> int:
     # clipper throughput → pipeline_jobs ballooned to 20K+ → claim RPC
     # statement-timeout → DB DoS. Bounded producer = bounded queue.
     if job_queue.should_throttle_enqueue("clip.create"):
-        log.info("transitioner_backpressure_skip", raw_available=len(raw_kills))
-        return 0
+        # Wave 44 — VOIE RAPIDE matchs récents. Le skip total sous
+        # backpressure rendait les kills du match DU JOUR invisibles pendant
+        # tout un backfill (vécu 2026-07-17 : les 40 kills KC vs AL sont
+        # restés à raw ~2h alors que la VOD était branchée — la file était
+        # pleine des 3 500 jobs du backfill historique). Un match frais est
+        # LA priorité produit : on laisse passer un filet de kills récents
+        # (< 48 h, cap 50/cycle) en priorité 61 (au-dessus du backfill 50-58,
+        # sous l'éditorial 70). Le reste attend toujours que la file draine.
+        import time as _t
+        cutoff_ms = (_t.time() - 48 * 3600) * 1000
+        recent = [
+            k for k in raw_kills
+            if (k.get("event_epoch") or 0) > cutoff_ms
+            and k.get("game_id") in games_with_vod
+        ][:50]
+        fast_t = fast_e = 0
+        for kill in recent:
+            safe_update("kills", {"status": "vod_found"}, "id", kill["id"])
+            fast_t += 1
+            jid = await asyncio.to_thread(
+                job_queue.enqueue,
+                "clip.create", "kill", kill["id"],
+                None, 61, None, 3,
+            )
+            if jid:
+                fast_e += 1
+        log.info(
+            "transitioner_backpressure_skip",
+            raw_available=len(raw_kills),
+            fast_lane_transitioned=fast_t,
+            fast_lane_enqueued=fast_e,
+        )
+        return fast_t
 
     transitioned = 0
     enqueued = 0
