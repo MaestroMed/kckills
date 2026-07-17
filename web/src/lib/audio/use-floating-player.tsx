@@ -269,6 +269,11 @@ export function FloatingPlayerProvider({ children }: { children: ReactNode }) {
    *  "click immediately on first mount" UX — without it, the first click
    *  is dropped because playerRef is still null. */
   const pendingPlayRef = useRef<boolean>(false);
+  /** Wave 45 — pause VOLONTAIRE. Le first-gesture autoplay se réarmait après
+   *  chaque pause (deps sur isPlaying) : cliquer n'importe où — fermer le
+   *  player, lancer un spin /vs — relançait la musique. true dès que
+   *  l'utilisateur met pause ; seul un play() explicite le lève. */
+  const userPausedRef = useRef<boolean>(false);
   /** youtubeIds that errored in the IFrame this session (YT 100/101/150 —
    *  embed disabled or region-blocked, common on label/VEVO music uploads
    *  even when the Data API says embeddable). advanceTrack skips them so the
@@ -337,7 +342,7 @@ export function FloatingPlayerProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     // /chambre owns the audio (its dread player) — never let the scroll
     // playlist start under it, not even on the "Descendre" gesture.
-    if (!isOptedIn || isPlaying || pathname === "/chambre") return;
+    if (!isOptedIn || isPlaying || userPausedRef.current || pathname === "/chambre") return;
     let armed = true;
 
     const onFirstGesture = () => {
@@ -444,6 +449,7 @@ export function FloatingPlayerProvider({ children }: { children: ReactNode }) {
 
   // ─── Actions ─────────────────────────────────────────────────────
   const play = useCallback(() => {
+    userPausedRef.current = false;
     wlog("play() invoked", {
       hasPlayer: !!playerRef.current,
       playlistId,
@@ -470,6 +476,7 @@ export function FloatingPlayerProvider({ children }: { children: ReactNode }) {
 
   const pause = useCallback(() => {
     wlog("pause() invoked");
+    userPausedRef.current = true;
     pendingPlayRef.current = false;
     try {
       playerRef.current?.pauseVideo();

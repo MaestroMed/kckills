@@ -44,6 +44,7 @@ import {
   playLockInSfx,
 } from "@/lib/vs-roulette";
 import { MatchupIntro } from "@/components/vs/MatchupIntro";
+import { VSShowcase } from "@/components/vs/VSShowcase";
 import {
   VS_MULTIKILL_OPTIONS,
   VS_ROLES,
@@ -69,6 +70,10 @@ type SpinState =
   // la roulette a verrouillé la paire, les vignettes claquent + lock-in,
   // les clips préchargent derrière l'overlay, puis → "loaded".
   | { kind: "intro"; a: VSKill; b: VSKill }
+  // Wave 45 — présentation séquentielle : le clip BLEU plein cadre, puis le
+  // ROUGE, puis l'écran de vote. « Il faut qu'on voit bien les deux clips,
+  // un par un » (Mehdi).
+  | { kind: "showcase"; a: VSKill; b: VSKill; showing: "a" | "b" }
   | { kind: "loaded"; a: VSKill; b: VSKill }
   | { kind: "voting"; a: VSKill; b: VSKill; voted: "a" | "b" | "tie" }
   | {
@@ -385,6 +390,14 @@ export function VSRoulette({
       <div className="mt-8 md:mt-12">
         <Arena
           state={state}
+          onShowcaseAdvance={() =>
+            setState((s) => {
+              if (s.kind !== "showcase") return s;
+              return s.showing === "a"
+                ? { ...s, showing: "b" }
+                : { kind: "loaded", a: s.a, b: s.b };
+            })
+          }
           thumbnails={rouletteThumbnails}
           prefersReducedMotion={prefersReducedMotion ?? false}
           onVote={(choice) => void castVote(choice)}
@@ -415,7 +428,9 @@ export function VSRoulette({
           reduce={prefersReducedMotion ?? false}
           onDone={() =>
             setState((s) =>
-              s.kind === "intro" ? { kind: "loaded", a: s.a, b: s.b } : s,
+              s.kind === "intro"
+                ? { kind: "showcase", a: s.a, b: s.b, showing: "a" }
+                : s,
             )
           }
         />
@@ -845,6 +860,7 @@ function Arena({
   thumbnails,
   prefersReducedMotion,
   onVote,
+  onShowcaseAdvance,
   onSpinAgain,
   onResetFilters,
   autoNextLeft,
@@ -854,6 +870,7 @@ function Arena({
   thumbnails: string[];
   prefersReducedMotion: boolean;
   onVote: (choice: "a" | "b" | "tie") => void;
+  onShowcaseAdvance: () => void;
   onSpinAgain: () => void;
   onResetFilters: () => void;
   autoNextLeft: number | null;
@@ -924,6 +941,25 @@ function Arena({
     );
   }
 
+  if (state.kind === "showcase") {
+    const showingKill = state.showing === "a" ? state.a : state.b;
+    return (
+      <AnimatePresence mode="wait">
+        <VSShowcase
+          key={state.showing}
+          kill={showingKill}
+          side={state.showing === "a" ? "blue" : "red"}
+          stepLabel={state.showing === "a" ? "CLIP 1 / 2" : "CLIP 2 / 2"}
+          ctaLabel={
+            state.showing === "a" ? "CHALLENGER ROUGE →" : "PASSER AU VOTE →"
+          }
+          onNext={onShowcaseAdvance}
+          reduce={prefersReducedMotion}
+        />
+      </AnimatePresence>
+    );
+  }
+
   // loaded / voting / voted — same layout
   const a = state.a;
   const b = state.b;
@@ -938,7 +974,7 @@ function Arena({
         <ClipPanel
           kill={a}
           side="left"
-          accent="var(--cyan)"
+          accent="var(--blue-kc)"
           highlight={voted === "a"}
           dimmed={isVoted && voted !== "a" && voted !== "tie"}
           prefersReducedMotion={prefersReducedMotion}
@@ -947,7 +983,7 @@ function Arena({
         <ClipPanel
           kill={b}
           side="right"
-          accent="var(--gold)"
+          accent="var(--red)"
           highlight={voted === "b"}
           dimmed={isVoted && voted !== "b" && voted !== "tie"}
           prefersReducedMotion={prefersReducedMotion}
