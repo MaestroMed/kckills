@@ -4,21 +4,14 @@ import { Suspense } from "react";
 import { loadRealData, getCurrentRoster, getTeamStats, getMatchesSorted, displayRole } from "@/lib/real-data";
 import { championIconUrl, championSplashUrl } from "@/lib/constants";
 import { PLAYER_PHOTOS, TEAM_LOGOS, KC_LOGO } from "@/lib/kc-assets";
-import { getPublishedKills, getViShowcase } from "@/lib/supabase/kills";
+import { getPublishedKills } from "@/lib/supabase/kills";
 import { loadHeroVideos } from "@/lib/hero-videos/storage";
-import { getEraRosters } from "@/lib/era-rosters";
 import { getServerT } from "@/lib/i18n/server-lang";
-import { DesktopOnly } from "@/components/DesktopOnly";
 // 🔴 2026-04-28 — heavy desktop-only sections live in a client wrapper
 // file (`homepage-desktop-sections.tsx`) because Next.js 15 forbids
 // `next/dynamic({ssr:false})` directly inside server components. The
 // wrappers handle the dynamic import + the DesktopOnly gate themselves
 // so this server page just renders them like any other component.
-import {
-  HomeRosterEraCarouselSection,
-  HomeQuoteRotatorSection,
-  EraComparisonChartSection,
-} from "@/components/homepage-desktop-sections";
 // Wave 13h (2026-05-07) — hero RIGHT column extracted to its own async
 // server component so the LEFT column (title + CTAs + roster pills) can
 // stream into the static shell without blocking on the four Supabase
@@ -36,21 +29,12 @@ import { SectionSkeleton } from "@/components/home/SectionSkeleton";
 // the new wolf-shaped UI + dual playlist (homepage / scroll).
 // import { AudioPlayer } from "@/components/AudioPlayer";
 // HomeFilteredContent removed — was a duplicate of /matches page
-import { HomeRareCards } from "@/components/HomeRareCards";
-import { HomeYouTubeShowcase } from "@/components/HomeYouTubeShowcase";
 import { KillOfTheWeek } from "@/components/KillOfTheWeek";
 import { HomeRecentClips } from "@/components/HomeRecentClips";
-import { HomeWeekendBestClips } from "@/components/HomeWeekendBestClips";
-import { ViShowcase } from "@/components/home/ViShowcase";
-import { FormCalendar } from "@/components/home/FormCalendar";
-import { ChampionLadders } from "@/components/home/ChampionLadders";
-import { PlayerSpotlight } from "@/components/home/PlayerSpotlight";
 // Wave 28 (2026-05-11) — "Ce jour-là dans l'histoire KC". Nostalgia
 // banner that surfaces past-year kills played on today's calendar date.
-import { OnThisDay } from "@/components/OnThisDay";
 import { HomeTimelineFeed } from "@/components/timeline/HomeTimelineFeed";
 // QuoteCard import removed — was unused since the QuoteRotator replaced it.
-import { QUOTES } from "@/lib/quotes";
 // HomeQuoteRotator + EraComparisonChart now lazy-loaded via next/dynamic above
 import { AnimatedNumber } from "@/components/AnimatedNumber";
 import { MacronEasterEgg } from "@/components/MacronEasterEgg";
@@ -204,7 +188,6 @@ export default async function HomePage() {
     .map(([name]) => championSplashUrl(name));
   const isEmpty = data.total_matches === 0;
   const HERO_CLIPS = await buildHeroClips();
-  const viShowcase = await getViShowcase({ buildTime: true });
 
   // Wave 13h (2026-05-07) — the four Supabase queries that feed the
   // hero RIGHT column (clip count, last match, career stats, top
@@ -397,50 +380,19 @@ export default async function HomePage() {
         <HomeGridSection />
       </Suspense>
 
-      {/* ═══ ON THIS DAY — nostalgia banner ════════════════════════════
-          Surfaces kills played on today's calendar date in past years.
-          Wave 28 (2026-05-11). Renders nothing when no historical match
-          exists, so doesn't bloat the homepage on calendar holes. */}
-      <Suspense fallback={<SectionSkeleton size="md" label={t("p_home.loading_on_this_day")} />}>
-        <OnThisDay />
-      </Suspense>
-
-      <Suspense fallback={<SectionSkeleton size="lg" label={t("p_home.loading_weekend_best")} />}>
-        <HomeWeekendBestClips />
-      </Suspense>
-
       {/* ═══ KILL OF THE WEEK — surface the featured clip first ═════════ */}
       <Suspense fallback={<SectionSkeleton size="md" label={t("p_home.loading_kill_of_week")} />}>
         <KillOfTheWeek />
       </Suspense>
 
-      {/* ═══ VI — KC's signature champion showcase ══════════════════════
-          Replaces the old "Train Vi" momentum tracker (misread as champion
-          Vi). Celebrates Karmine Corp on Vi: the redemption arc, Yike's
-          near-unbeatable winrate, and a browsable strip of the best Vi
-          highlights — over a Vi splash hero. */}
-      <ViShowcase {...viShowcase} />
-
-      {/* ═══ PLAYER SPOTLIGHT — who's carrying right now (Wave 32) ══════
-          Picks the top KC performer over the last 5 series via a weighted
-          score (kills*2.5 + assists*1.2 - deaths*1.5 + winRate*15). Big
-          photo + 4 stat tiles with count-up animation. */}
-      <PlayerSpotlight matches={allMatches} windowSize={5} />
-
-      {/* ═══ FORM CALENDAR — 84-day W/L heatmap (Wave 32) ════════════════
-          GitHub-contributions-style grid. Each cell is one day, coloured
-          by KC's outcome (gold = win day, red = loss day, dim = rest).
-          Hover/click any cell to drop the day's matchups into the side
-          panel. Pairs with TrainVi above : the train shows the streak
-          shape, the calendar shows the rhythm. */}
-      <FormCalendar matches={allMatches} days={84} />
-
-      {/* ═══ CHAMPION LADDERS — KC picks vs preferred victims (Wave 32) ══
-          Two side-by-side leaderboards : top 10 champions KC picks the
-          most (left, gold bars) and top 10 enemy champions that die the
-          most against KC (right, cyan bars). Each row deep-links into
-          /scroll with the right filter. */}
-      <ChampionLadders matches={allMatches} top={10} />
+      {/* Wave 43 — homepage declutter (Mehdi : « alléger la homepage »).
+          17 sections empilées → 7. Coupées : OnThisDay, WeekendBestClips
+          (doublon de KOTW), ViShowcase, PlayerSpotlight, FormCalendar,
+          ChampionLadders, RosterEraCarousel, QuoteRotator, RareCards,
+          YouTubeShowcase, EraComparisonCharts. Le vrai gain : ces sections
+          client sérialisaient TOUT l'historique de matchs dans le payload
+          RSC (HTML 1.78 MB). Elles vivent encore dans le repo — /stats,
+          /records et /matches restent leurs foyers naturels. */}
 
       {/* ═══ KC TIMELINE + DEFAULT FEED ════════════════════════════════
           Per CLAUDE.md §6.2 : the timeline is a horizontal era strip
@@ -511,68 +463,6 @@ export default async function HomePage() {
           </Link>
         </div>
       </section>
-
-      {/* ═══ ROSTER ERA CAROUSEL — Iconic lineup per year ═══════════════
-          Wrapped in HomeRosterEraCarouselSection which gates on desktop
-          AND lazy-loads via next/dynamic with ssr:false. */}
-      <HomeRosterEraCarouselSection rosters={getEraRosters()} />
-
-      {/* ═══ ROTATING CITATIONS — slow rotation, particle dissolve ═════
-          Same lazy + DesktopOnly pattern. */}
-      <HomeQuoteRotatorSection quotes={QUOTES} />
-
-      {/* ═══ CARTES LEGENDAIRES — TCG visual layer en showcase home ═════ */}
-      <Suspense fallback={<SectionSkeleton size="lg" label={t("p_home.loading_legendary_cards")} />}>
-        <HomeRareCards />
-      </Suspense>
-
-      {/* ═══ YOUTUBE PARALLAX SHOWCASE (RSS-driven 3D carousel) ═══════════
-          🔴 DesktopOnly : the parallax 3D transforms + drag handlers +
-          all the curated YouTube thumbnails were the heaviest single
-          mobile-hostile section. Skipped entirely on mobile. */}
-      <DesktopOnly>
-        <Suspense fallback={<SectionSkeleton size="xl" label={t("p_home.loading_youtube_showcase")} />}>
-          <HomeYouTubeShowcase />
-        </Suspense>
-      </DesktopOnly>
-
-      {/* ═══ ERA COMPARISON CHARTS ═══════════════════════════════════════ */}
-      {(() => {
-        // Group matches by year-split to build era stats
-        const eraPeriods = [
-          { key: "2024 W", filter: (d: string) => d >= "2024-01-01" && d < "2024-04-01" },
-          { key: "2024 Sp", filter: (d: string) => d >= "2024-03-01" && d < "2024-06-01" },
-          { key: "2024 Su", filter: (d: string) => d >= "2024-06-01" && d < "2024-10-01" },
-          { key: "2025 W", filter: (d: string) => d >= "2025-01-01" && d < "2025-04-01" },
-          { key: "2025 Sp", filter: (d: string) => d >= "2025-03-01" && d < "2025-06-01" },
-          { key: "2025 Su", filter: (d: string) => d >= "2025-06-01" && d < "2025-10-01" },
-          { key: "2026 V", filter: (d: string) => d >= "2026-01-01" && d < "2026-03-01" },
-          { key: "2026 Sp", filter: (d: string) => d >= "2026-03-01" && d < "2026-07-01" },
-        ];
-        const eraData = eraPeriods
-          .map((era) => {
-            const matches = allMatches.filter((m) => era.filter(m.date));
-            if (matches.length === 0) return null;
-            const wins = matches.filter((m) => m.kc_won).length;
-            const totalGames = matches.reduce((a, m) => a + m.games.length, 0);
-            const kcKills = matches.reduce((a, m) => a + m.games.reduce((b, g) => b + g.kc_kills, 0), 0);
-            const oppKills = matches.reduce((a, m) => a + m.games.reduce((b, g) => b + g.opp_kills, 0), 0);
-            return {
-              era: era.key,
-              period: era.key,
-              matches: matches.length,
-              wins,
-              losses: matches.length - wins,
-              winRate: Math.round((wins / matches.length) * 100),
-              avgKcKills: totalGames > 0 ? +(kcKills / totalGames).toFixed(1) : 0,
-              avgOppKills: totalGames > 0 ? +(oppKills / totalGames).toFixed(1) : 0,
-            };
-          })
-          .filter(Boolean) as { era: string; period: string; matches: number; wins: number; losses: number; winRate: number; avgKcKills: number; avgOppKills: number }[];
-
-        if (eraData.length < 2) return null;
-        return <EraComparisonChartSection data={eraData} />;
-      })()}
 
       {/* HomeFilteredContent removed — duplicate of /matches page */}
 
