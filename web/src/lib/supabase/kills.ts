@@ -241,6 +241,15 @@ const KILL_SELECT = `
     )
   )
 `.trim();
+
+// Wave 44 (audit repasse) — variante INNER de KILL_SELECT, à n'utiliser QUE
+// quand on filtre par match. Sans !inner, `.eq("games.matches.external_id")`
+// ne filtre pas les LIGNES (il vide juste l'embed) → chaque page /match
+// embarquait la TOTALITÉ du catalogue (1409 kills, 12,5 MB de HTML). Le drop
+// du !inner de Wave 30l reste correct pour /scroll (pas de filtre embed).
+const KILL_SELECT_MATCH_INNER = KILL_SELECT
+  .replace("games (", "games!inner (")
+  .replace("matches (", "matches!inner (");
 // Wave 30l (2026-05-14) — !inner dropped on both joins. With ~1650
 // published rows and a default 250-limit on /scroll, the inner-join
 // was forcing PostgREST to materialise the cross-product before the
@@ -1232,7 +1241,7 @@ export const getKillsForGrid = cache(async function getKillsForGrid(
     // is the migration-window safety net.
     let publishedQuery = supabase
       .from("kills")
-      .select(KILL_SELECT)
+      .select(opts.matchExternalId ? KILL_SELECT_MATCH_INNER : KILL_SELECT)
       .or(
         "publication_status.eq.published," +
           "and(publication_status.is.null,status.eq.published)",
@@ -1251,7 +1260,7 @@ export const getKillsForGrid = cache(async function getKillsForGrid(
     // unanalysed historical rows still surface as data-only cards.
     let golggQuery = supabase
       .from("kills")
-      .select(KILL_SELECT)
+      .select(opts.matchExternalId ? KILL_SELECT_MATCH_INNER : KILL_SELECT)
       .eq("data_source", "gol_gg")
       .or("kill_visible.eq.true,kill_visible.is.null")
       .order("game_time_seconds", { ascending: true })
@@ -1266,7 +1275,7 @@ export const getKillsForGrid = cache(async function getKillsForGrid(
     // as data-only cards.
     let livestatsDataOnlyQuery = supabase
       .from("kills")
-      .select(KILL_SELECT)
+      .select(opts.matchExternalId ? KILL_SELECT_MATCH_INNER : KILL_SELECT)
       .or(
         "pipeline_status.eq.failed," +
           "and(pipeline_status.is.null,status.eq.clip_error)," +
@@ -1405,7 +1414,7 @@ export async function getKillsByMatchExternalId(
     const [publishedRes, golggRes, livestatsRes] = await Promise.all([
       supabase
         .from("kills")
-        .select(KILL_SELECT)
+        .select(KILL_SELECT_MATCH_INNER)
         // PR23 split-status fallback (see getPublishedKills).
         .or(
           "publication_status.eq.published," +
@@ -1416,7 +1425,7 @@ export async function getKillsByMatchExternalId(
         .order("game_time_seconds", { ascending: true }),
       supabase
         .from("kills")
-        .select(KILL_SELECT)
+        .select(KILL_SELECT_MATCH_INNER)
         .eq("data_source", "gol_gg")
         .eq("games.matches.external_id", matchExternalId)
         .order("game_time_seconds", { ascending: true }),
@@ -1424,7 +1433,7 @@ export async function getKillsByMatchExternalId(
       // PR23 split-status fallback (see getKillsForGrid).
       supabase
         .from("kills")
-        .select(KILL_SELECT)
+        .select(KILL_SELECT_MATCH_INNER)
         .or(
           "pipeline_status.eq.failed," +
             "and(pipeline_status.is.null,status.eq.clip_error)," +
