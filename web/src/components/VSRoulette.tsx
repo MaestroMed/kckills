@@ -147,13 +147,23 @@ export function VSRoulette({
     let rpcError: string | null = null;
 
     try {
-      const { data, error } = await sb.rpc("fn_pick_vs_pair", {
-        left_filters: cleanedLeft,
-        right_filters: cleanedRight,
-      });
-      if (error) {
-        rpcError = error.message;
-      } else {
+      // Wave 45 — KC ONLY. fn_pick_vs_pair (059) ne filtre pas
+      // tracked_team_involvement : les morts KC publiées (le pool de la
+      // Chambre) fuyaient dans la roulette (Humanoid, Isma…). Garde client :
+      // on re-tire jusqu'à 4 fois tant qu'un des deux kills n'est pas un
+      // kill DE la KC. La 093 corrige le RPC à la source ; cette garde reste
+      // en ceinture-bretelles.
+      const isKcKill = (k: VSKill | null) =>
+        !!k && k.tracked_team_involvement === "team_killer";
+      for (let attempt = 0; attempt < 4; attempt++) {
+        const { data, error } = await sb.rpc("fn_pick_vs_pair", {
+          left_filters: cleanedLeft,
+          right_filters: cleanedRight,
+        });
+        if (error) {
+          rpcError = error.message;
+          break;
+        }
         // The RPC returns a TABLE → supabase-js gives us an array of
         // exactly one row (or empty on failure). The row shape mirrors
         // the SQL projection : { kill_a, kill_b }.
@@ -164,6 +174,11 @@ export function VSRoulette({
         resultData = row
           ? { kill_a: row.kill_a ?? null, kill_b: row.kill_b ?? null }
           : { kill_a: null, kill_b: null };
+        if (isKcKill(resultData.kill_a) && isKcKill(resultData.kill_b)) break;
+        if (attempt === 3) {
+          // Le pool filtré ne rend que du non-KC — plutôt vide que hors-sujet.
+          resultData = { kill_a: null, kill_b: null };
+        }
       }
     } catch (err) {
       rpcError = err instanceof Error ? err.message : t("p_vsgame.error_network");
