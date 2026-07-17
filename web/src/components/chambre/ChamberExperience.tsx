@@ -17,6 +17,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useReducedMotion } from "motion/react";
 import type { ChamberCircle, ChamberClip } from "@/lib/supabase/chamber";
+import { loreForDepth, type ChamberLoreMoment } from "@/lib/chamber-lore";
 
 const MULTI_LABEL: Record<string, string> = {
   penta: "PENTAKILL SUBI",
@@ -318,6 +319,17 @@ function CircleSection({
         <p className="mt-1.5 text-sm italic text-white/45">{circle.tagline}</p>
       </div>
 
+      {/* Moments Maudits — la couche lore curatée (Wave 44). Les vieilles
+          blessures YouTube du club, intercalées AVANT les morts du cercle :
+          le récit d'abord, le sang ensuite. Data : lib/chamber-lore.ts. */}
+      {loreForDepth(circle.depth).length > 0 && (
+        <div className="mx-auto mb-8 grid max-w-6xl gap-4 lg:grid-cols-2">
+          {loreForDepth(circle.depth).map((m) => (
+            <LoreMomentCard key={m.youtubeId} moment={m} depth={circle.depth} reduce={reduce} />
+          ))}
+        </div>
+      )}
+
       {/* Deaths grid */}
       <div className="mx-auto grid max-w-6xl grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
         {circle.clips.map((clip) => (
@@ -325,6 +337,87 @@ function CircleSection({
         ))}
       </div>
     </section>
+  );
+}
+
+// ════════════════════════════════════════════════════════════════════
+// LoreMomentCard — un Moment Maudit : récit + lite-embed YouTube.
+// Thumbnail seule au chargement (zéro iframe tant qu'on ne clique pas),
+// iframe youtube-nocookie autoplay au clic. Gradée par la profondeur.
+// ════════════════════════════════════════════════════════════════════
+
+function LoreMomentCard({
+  moment,
+  depth,
+  reduce,
+}: {
+  moment: ChamberLoreMoment;
+  depth: number;
+  reduce: boolean;
+}) {
+  const [playing, setPlaying] = useState(false);
+  const g = depth / 10;
+  const intense = depth >= 8;
+  return (
+    <figure
+      className="relative overflow-hidden rounded-xl border bg-black/60"
+      style={{
+        borderColor: `rgba(232,64,87,${0.15 + g * 0.35})`,
+        boxShadow: intense && !reduce ? "0 0 32px rgba(232,64,87,0.22)" : "none",
+      }}
+    >
+      <div className="relative aspect-video w-full bg-black">
+        {playing ? (
+          <iframe
+            className="absolute inset-0 h-full w-full"
+            src={`https://www.youtube-nocookie.com/embed/${moment.youtubeId}?autoplay=1&rel=0`}
+            title={moment.title}
+            allow="autoplay; encrypted-media; picture-in-picture"
+            allowFullScreen
+          />
+        ) : (
+          <button
+            type="button"
+            onClick={() => setPlaying(true)}
+            aria-label={`Regarder : ${moment.title}`}
+            className="group absolute inset-0 h-full w-full"
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element -- thumb YouTube externe, pas d'optimisation next/image nécessaire */}
+            <img
+              src={`https://img.youtube.com/vi/${moment.youtubeId}/hqdefault.jpg`}
+              alt=""
+              className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.03]"
+              style={{
+                filter: `grayscale(${(g * 0.7).toFixed(2)}) sepia(${(g * 0.3).toFixed(2)}) brightness(${(0.95 - g * 0.2).toFixed(2)})`,
+              }}
+              loading="lazy"
+            />
+            <span
+              aria-hidden
+              className="absolute inset-0 flex items-center justify-center bg-black/30 transition-colors group-hover:bg-black/15"
+            >
+              <span className="flex h-14 w-14 items-center justify-center rounded-full border border-[var(--red)]/70 bg-black/70 text-xl text-[var(--red)] backdrop-blur-sm transition-transform group-hover:scale-110">
+                ▶
+              </span>
+            </span>
+          </button>
+        )}
+      </div>
+      <figcaption className="space-y-1.5 p-4">
+        <div className="flex items-center gap-2">
+          <span className="rounded-full border border-[var(--red)]/40 bg-[var(--red)]/10 px-2 py-0.5 font-data text-[9px] uppercase tracking-[0.25em] text-[var(--red)]">
+            Moment maudit
+          </span>
+          <span className="font-data text-[10px] uppercase tracking-[0.2em] text-white/40">
+            {moment.era}
+          </span>
+        </div>
+        <h3 className="font-display text-lg font-black leading-tight text-[var(--gold-bright)]">
+          {moment.title}
+        </h3>
+        <p className="text-[13px] leading-relaxed text-white/60">{moment.story}</p>
+      </figcaption>
+    </figure>
   );
 }
 
