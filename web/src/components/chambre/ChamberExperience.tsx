@@ -58,6 +58,9 @@ function RespectButton({ killId, reduce }: { killId: string; reduce: boolean }) 
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ emoji: "💀", delta }),
+      // Audit — keepalive : le flush de fermeture d'onglet partait dans un
+      // cleanup React et se faisait annuler ; keepalive le laisse aboutir.
+      keepalive: true,
     }).catch(() => {});
   }, [killId]);
 
@@ -484,6 +487,14 @@ function ClipCard({
         className="h-full w-full object-cover"
         style={{ opacity: play ? 1 : 0.85, filter: videoFilter }}
       />
+      {/* Wave 44 (audit) — chaque mort est cliquable vers sa page /kill.
+          Le Link couvre la carte SOUS le RespectButton (z-10) qui garde
+          son stopPropagation ; aria-label explicite pour les lecteurs. */}
+      <Link
+        href={`/kill/${clip.id}`}
+        aria-label={`Voir la mort : ${clip.victimChampion ?? "?"} face à ${clip.killerChampion ?? "?"}`}
+        className="absolute inset-0 z-[5]"
+      />
       {/* bottom scrim + caption */}
       <figcaption className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 via-black/40 to-transparent p-2.5">
         {badge && (
@@ -496,6 +507,13 @@ function ClipCard({
           <span className="text-white/40"> tombe face à </span>
           {clip.killerChampion ?? "?"}
         </p>
+        {/* Audit — la description IA existait en payload mais n'était jamais
+            montrée : révélée au hover/focus, 2 lignes max. */}
+        {clip.description && (
+          <p className="mt-0.5 hidden text-[10px] leading-snug text-white/55 line-clamp-2 group-hover:block group-focus-within:block">
+            {clip.description}
+          </p>
+        )}
       </figcaption>
     </figure>
   );
