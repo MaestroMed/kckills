@@ -71,6 +71,9 @@ TARGETS = [
     ("LEC 2026 Spring Playoffs",         "LEC/2026 Season/Spring Playoffs",               19),
     ("MSI 2026",                         "2026 Mid-Season Invitational",                   9),
     ("EWC 2026 Online Qualifier - EMEA", "Esports World Cup 2026/Online Qualifiers/EMEA",  11),
+    # Main event EWC (Riyadh, jul. 2026) — importé le 2026-07-17 (6 games vs
+    # TSW/Sentinels). Page LP à la racine du tournoi (pas de sous-page split).
+    ("Esports World Cup 2026",           "Esports World Cup 2026",                          6),
     # ── Full-history extension (2026-07-10) — pages confirmed by a KC
     # OverviewPage discovery scan where possible; LFL pages follow the
     # "LFL/{year} Season/{Split} {Phase}" pattern verified on 2023 Summer.

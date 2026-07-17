@@ -235,8 +235,10 @@ export const DEFAULT_SCROLL_PLAYLIST: BgmTrack[] = [
     id: "heavy-is-the-crown",
     title: "Heavy Is The Crown",
     artist: "Linkin Park",
-    youtubeId: "R8OqqaBwcl8",
-    durationSeconds: 271,
+    // 2026-07-17 — Mehdi : version ORIGINALE (Official Audio), pas la
+    // Worlds 2024 Finals Opening Ceremony (R8OqqaBwcl8). Vérifié oEmbed.
+    youtubeId: "ZAt8oxY0GQo",
+    durationSeconds: 163,
     genre: "anthemic",
   },
   {

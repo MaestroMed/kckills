@@ -140,6 +140,9 @@ KC_TOURNAMENTS: list[tuple[str, int, int, str]] = [
     ("LEC 2026 Spring Playoffs",       2899, 2026, "spring_po"),
     ("MSI 2026",                       2899, 2026, "msi"),
     ("EWC 2026 Online Qualifier - EMEA", 2899, 2026, "ewc_qual"),
+    # Main event EWC (Riyadh) — label découvert sur la matchlist team-2899 le
+    # 2026-07-17 (matchs vs TSW + Sentinels des 14-16 juillet).
+    ("Esports World Cup 2026",         2899, 2026, "ewc"),
 ]
 
 
