@@ -596,7 +596,20 @@ export function ScrollFeedV2({
   // some environments / on tablet rotation). SSR-safe default = false.
   useEffect(() => {
     const mq = window.matchMedia("(min-width: 1024px)");
-    const apply = () => setIsWideStage(mq.matches);
+    const apply = () => {
+      setIsWideStage(mq.matches);
+      // Wave 44 — desktop ouvre en 16:9 par défaut (Mehdi : « on peut pas
+      // l'avoir en Desktop direct ? »). Le mode cinéma démarre ON sur le wide
+      // stage, sauf si l'utilisateur l'a explicitement coupé (F) — préférence
+      // persistée dans kc_scroll_cinema ("0" = vertical voulu).
+      if (mq.matches) {
+        try {
+          if (localStorage.getItem("kc_scroll_cinema") !== "0") setCinema(true);
+        } catch {
+          setCinema(true);
+        }
+      }
+    };
     apply();
     mq.addEventListener("change", apply);
     window.addEventListener("resize", apply);
@@ -803,8 +816,16 @@ export function ScrollFeedV2({
       // store the FeedSidebarV2 onBookmark stub writes, then notify listeners.
       onBookmark: () => bookmarkActiveItem(),
       // F (cinema) → expand the StageFrame 9:16 → 16:9 (wide stage only).
+      // Wave 44 — persiste le choix : desktop ouvre en 16:9 par défaut,
+      // "0" mémorise qu'on préfère le vertical.
       onCinema: () => {
-        if (isWideStage) setCinema((c) => !c);
+        if (isWideStage)
+          setCinema((c) => {
+            try {
+              localStorage.setItem("kc_scroll_cinema", c ? "0" : "1");
+            } catch { /* privé/quota — non bloquant */ }
+            return !c;
+          });
       },
       // 1–5 → rate the active kill.
       onRate: rateActiveItem,
