@@ -1319,7 +1319,7 @@ export const ko: FrDict = {
     "breadcrumb_aria": "탐색 경로",
     "vs_breadcrumb_home": "홈",
     "vs_breadcrumb_current": "VS 룰렛",
-    "vs_eyebrow": "킬 룰렛 · Wave 25.3",
+    "vs_eyebrow": "킬 룰렛",
     "vs_hero_subtitle": "두 개의 클립. 하나의 룰렛. 단 한 명의 승자. 선수, 챔피언, 시대 또는 킬 유형으로 필터링하고 — 어떤 Karmine Corp 킬이 최고인지 커뮤니티가 결정하게 하세요.",
     "vs_see_elo_ranking": "ELO 순위 보기",
     "vs_scroll_mode": "스크롤 모드",

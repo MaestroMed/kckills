@@ -92,14 +92,46 @@ export function championIconUrl(championName: string): string {
   return `https://ddragon.leagueoflegends.com/cdn/${DDRAGON}/img/champion/${championName}.png`;
 }
 
+// Wave 44 (audit roulette) — normalisation des noms champions vers les clés
+// Data Dragon. La DB stocke la graphie broadcast (Wukong, LeBlanc, Renata
+// Glasc…) mais DDragon veut sa clé interne (MonkeyKing, Leblanc, Renata) —
+// sans ça, splash/loading 403 et l'écran VS affiche des images cassées.
+const DDRAGON_NAME_FIX: Record<string, string> = {
+  "Wukong": "MonkeyKing",
+  "LeBlanc": "Leblanc",
+  "Renata Glasc": "Renata",
+  "RenataGlasc": "Renata",
+  "Fiddlesticks": "FiddleSticks",
+  "Cho'Gath": "Chogath",
+  "Kai'Sa": "Kaisa",
+  "Kha'Zix": "Khazix",
+  "Vel'Koz": "Velkoz",
+  "Rek'Sai": "RekSai",
+  "K'Sante": "KSante",
+  "Bel'Veth": "Belveth",
+  "Nunu & Willump": "Nunu",
+  "Dr. Mundo": "DrMundo",
+  "Jarvan IV": "JarvanIV",
+  "Lee Sin": "LeeSin",
+  "Master Yi": "MasterYi",
+  "Miss Fortune": "MissFortune",
+  "Twisted Fate": "TwistedFate",
+  "Xin Zhao": "XinZhao",
+  "Aurelion Sol": "AurelionSol",
+  "Tahm Kench": "TahmKench",
+};
+export function ddragonKey(championName: string): string {
+  return DDRAGON_NAME_FIX[championName] ?? championName.replace(/[^A-Za-z]/g, "");
+}
+
 /** Full splash art — used as background in scroll mode */
 export function championSplashUrl(championName: string, skinNum = 0): string {
-  return `https://ddragon.leagueoflegends.com/cdn/img/champion/splash/${championName}_${skinNum}.jpg`;
+  return `https://ddragon.leagueoflegends.com/cdn/img/champion/splash/${ddragonKey(championName)}_${skinNum}.jpg`;
 }
 
 /** Loading screen art — tall format, good for vertical */
 export function championLoadingUrl(championName: string, skinNum = 0): string {
-  return `https://ddragon.leagueoflegends.com/cdn/img/champion/loading/${championName}_${skinNum}.jpg`;
+  return `https://ddragon.leagueoflegends.com/cdn/img/champion/loading/${ddragonKey(championName)}_${skinNum}.jpg`;
 }
 
 export function formatGameTime(ms: number): string {

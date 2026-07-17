@@ -1308,7 +1308,7 @@ export const en: FrDict = {
     "breadcrumb_aria": "Breadcrumb",
     "vs_breadcrumb_home": "Home",
     "vs_breadcrumb_current": "VS Roulette",
-    "vs_eyebrow": "The kill roulette · Wave 25.3",
+    "vs_eyebrow": "The kill roulette",
     "vs_hero_subtitle": "Two clips. One roulette. A single winner. Filter by player, champion, era or kill type — let the community decide which Karmine Corp kill is the best.",
     "vs_see_elo_ranking": "View the ELO ranking",
     "vs_scroll_mode": "Scroll mode",

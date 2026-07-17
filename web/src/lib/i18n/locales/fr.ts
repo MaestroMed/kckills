@@ -1327,7 +1327,7 @@ const _fr = {
     "breadcrumb_aria": "Fil d'Ariane",
     "vs_breadcrumb_home": "Accueil",
     "vs_breadcrumb_current": "VS Roulette",
-    "vs_eyebrow": "La roulette des kills · Wave 25.3",
+    "vs_eyebrow": "La roulette des kills",
     "vs_hero_subtitle": "Deux clips. Une roulette. Un seul gagnant. Filtre par joueur, champion, époque ou type de kill — laisse la communauté décider quel kill Karmine Corp est le plus fort.",
     "vs_see_elo_ranking": "Voir le classement ELO",
     "vs_scroll_mode": "Mode scroll",

@@ -1312,7 +1312,7 @@ export const es: FrDict = {
     "breadcrumb_aria": "Ruta de navegación",
     "vs_breadcrumb_home": "Inicio",
     "vs_breadcrumb_current": "VS Roulette",
-    "vs_eyebrow": "La ruleta de los kills · Wave 25.3",
+    "vs_eyebrow": "La ruleta de los kills",
     "vs_hero_subtitle": "Dos clips. Una ruleta. Un solo ganador. Filtra por jugador, campeón, era o tipo de kill — deja que la comunidad decida cuál es el mejor kill de Karmine Corp.",
     "vs_see_elo_ranking": "Ver la clasificación ELO",
     "vs_scroll_mode": "Modo scroll",

@@ -64,7 +64,9 @@ export default async function VSLeaderboardPage() {
 
   // ─── Parallel pre-fetch ────────────────────────────────────────────
   const [initialRows, initialStats, champions] = await Promise.all([
-    getEloLeaderboard({ limit: 50, offset: 0, minBattles: 5 }),
+    // Audit — amorçage : 2 votes en base au total, le seuil 5 rendait le
+    // classement définitivement vide. 1 tant que l'ELO n'a pas de volume.
+    getEloLeaderboard({ limit: 50, offset: 0, minBattles: 1 }),
     getEloStats(),
     getLeaderboardChampions(),
   ]);
