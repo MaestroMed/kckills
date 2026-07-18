@@ -286,6 +286,7 @@ function CaveDashboard({
         id="antre-main"
       >
         <CoupDePoingRoom sessionHashRef={sessionHashRef} supabaseRef={supabaseRef} />
+        <SalonDesReactionsRoom />
         <ScoutingLabRoom />
         <StarkCultureRoom supabaseRef={supabaseRef} sessionHashRef={sessionHashRef} />
         <LanceTomatesRoom sessionHashRef={sessionHashRef} supabaseRef={supabaseRef} />
@@ -600,6 +601,99 @@ function CoupDePoingRoom({ sessionHashRef, supabaseRef }: RpcRefs) {
 // ════════════════════════════════════════════════════════════════════
 // Room II — Le Labo d'Observation (KR Challenger ladder)
 // ════════════════════════════════════════════════════════════════════
+
+
+// ════════════════════════════════════════════════════════════════════
+// Le Salon des Réactions — Wave 46 (demande Mehdi 2026-07-19).
+// Les grosses VOD « Les Streamers Réagissent à… » (chaîne KCORP Reactions)
+// projetées dans le manoir : un mur d'écrans où le monde entier s'étrangle
+// devant la Karmine. Lite-embed : vignette sépia au chargement, iframe
+// youtube-nocookie au clic (zéro iframe tant qu'on ne regarde pas).
+// IDs vérifiés oEmbed le 2026-07-19. Ajouter une VOD = une entrée ici.
+// ════════════════════════════════════════════════════════════════════
+
+const REACTION_VODS: readonly { id: string; title: string; tag: string }[] = [
+  { id: "06EOkLGS2vA", title: "Le monde réagit : KC élimine Team Secret à l'EWC", tag: "EWC 2026" },
+  { id: "Lfjax20nCLw", title: "Caedrel, Doublelift & Jankos sur KC vs Sentinels", tag: "EWC 2026" },
+  { id: "gO07Yy8J_6E", title: "Les streamers Valorant voient KC sortir PRX", tag: "EWC 2026" },
+  { id: "gIeO6zLyREs", title: "KC vs G2 pour le titre LEC — la tension", tag: "LEC" },
+  { id: "IaHxC84N2Jo", title: "Le presque « MIRACLE » en finale", tag: "LEC Finale" },
+  { id: "3BZu7WoNQ00", title: "La Karmine humilie Fnatic", tag: "LEC" },
+  { id: "fVqEwGqWibQ", title: "Yike détruit Vitality", tag: "LEC" },
+  { id: "KQG1GhF3skM", title: "KC élimine KOI et file au MSI", tag: "Route MSI" },
+  { id: "6XlKfxSkAC4", title: "KC écrase KOI, une fois de plus", tag: "LEC" },
+  { id: "frRnM8GZafw", title: "KC, père de GX — encore", tag: "LEC" },
+];
+
+function SalonDesReactionsRoom() {
+  const [playing, setPlaying] = useState<string | null>(null);
+  return (
+    <section aria-label="Le Salon des Réactions" className="space-y-5">
+      <div className="flex items-baseline justify-between border-b border-[var(--antre-ink-soft)]/35 pb-2">
+        <h2 className="antre-engraved" style={{ fontSize: 13, letterSpacing: "0.45em", color: "#6b1a26" }}>
+          LE SALON DES RÉACTIONS
+        </h2>
+        <p className="antre-engraved" style={{ fontSize: 10, letterSpacing: "0.3em", opacity: 0.65 }}>
+          LE MONDE ENTIER REGARDE
+        </p>
+      </div>
+      <p className="text-[13px] italic leading-relaxed opacity-70">
+        Dans ce salon, on projette les archives : les plus grands streamers du
+        globe qui s&apos;étranglent, hurlent et s&apos;inclinent devant la
+        Karmine. Installe-toi, le fauteuil grince mais le spectacle est
+        éternel.
+      </p>
+      <div className="grid gap-5 sm:grid-cols-2">
+        {REACTION_VODS.map((v) => (
+          <figure
+            key={v.id}
+            className="antre-parchment overflow-hidden p-3"
+            style={{ transform: `rotate(${(v.id.charCodeAt(0) % 3) - 1}0.15deg)` }}
+          >
+            <div className="relative aspect-video w-full overflow-hidden rounded-sm bg-black">
+              {playing === v.id ? (
+                <iframe
+                  className="absolute inset-0 h-full w-full"
+                  src={`https://www.youtube-nocookie.com/embed/${v.id}?autoplay=1&rel=0`}
+                  title={v.title}
+                  allow="autoplay; encrypted-media; picture-in-picture"
+                  allowFullScreen
+                />
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setPlaying(v.id)}
+                  aria-label={`Projeter : ${v.title}`}
+                  className="group absolute inset-0 h-full w-full"
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element -- vignette YouTube externe */}
+                  <img
+                    src={`https://img.youtube.com/vi/${v.id}/hqdefault.jpg`}
+                    alt=""
+                    loading="lazy"
+                    className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.04]"
+                    style={{ filter: "sepia(0.35) contrast(1.05) brightness(0.9)" }}
+                  />
+                  <span aria-hidden className="absolute inset-0 grid place-items-center bg-black/25 transition-colors group-hover:bg-black/10">
+                    <span className="grid h-12 w-12 place-items-center rounded-full border-2 border-[#d8b45a]/80 bg-black/65 text-lg text-[#d8b45a] transition-transform group-hover:scale-110">
+                      ▶
+                    </span>
+                  </span>
+                </button>
+              )}
+            </div>
+            <figcaption className="pt-2.5">
+              <p className="antre-engraved" style={{ fontSize: 9, letterSpacing: "0.3em", color: "#6b1a26" }}>
+                {v.tag}
+              </p>
+              <p className="mt-0.5 text-[13px] font-semibold leading-snug">{v.title}</p>
+            </figcaption>
+          </figure>
+        ))}
+      </div>
+    </section>
+  );
+}
 
 function ScoutingLabRoom() {
   const t = useT();
