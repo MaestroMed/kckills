@@ -102,8 +102,21 @@ async function buildHeroClips() {
   // uploaded anything yet (fresh deploy).
   const youtubeClips = YOUTUBE_HERO_CLIPS;
 
+  // Wave 46 — LE MASHUP T1. 9 streams du monde entier qui réagissent en même
+  // temps à la demi-finale EWC gagnée contre T1 (Caliste vs Peyz, le 22-22 de
+  // la game 3). Monté depuis les compils KarmineUpdates, hébergé R2 (hero/).
+  // Épinglé en tête tant que l'euphorie dure — retirer l'entrée pour revenir
+  // au flux normal.
+  const t1Mashup = {
+    mp4Url: "https://clips.kckills.com/hero/t1_reactions_mashup.mp4",
+    title: "LE MONDE ENTIER A VU KC BATTRE T1",
+    context: "EWC 2026 · Demi-finale · Les réactions",
+    durationMs: 20000,
+    audioVolume: 0,
+  };
+
   // Operator clips first (curated), then R2 auto-best-of, then YouTube.
-  return [...operatorClips, ...r2Clips, ...youtubeClips];
+  return [t1Mashup, ...operatorClips, ...r2Clips, ...youtubeClips];
 }
 
 const YOUTUBE_HERO_CLIPS = [
