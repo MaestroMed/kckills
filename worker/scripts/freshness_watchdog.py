@@ -59,6 +59,21 @@ def daemon_pids() -> list[int]:
     return pids
 
 
+def spawn_daemon() -> None:
+    """Relance main.py détaché, stdout/err en append dans daemon.log.
+    Wave 46 — le watchdog devient LE superviseur : le wrapper .bat s'est
+    montré fragile (cmd via WMI/Start-Process meurt sans console, timeout
+    /nobreak KO hors console interactive). Ici : Popen direct, flags
+    DETACHED, handle en append — survit à la mort du watchdog."""
+    py = str(_ROOT / ".venv" / "Scripts" / "python.exe")
+    logf = open(_ROOT / "logs" / "daemon.log", "ab")
+    flags = 0x00000008 | 0x00000200  # DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP
+    p = subprocess.Popen([py, "main.py"], cwd=str(_ROOT),
+                         stdout=logf, stderr=subprocess.STDOUT,
+                         creationflags=flags)
+    wlog(f"daemon relancé par le watchdog (pid {p.pid})")
+
+
 def main() -> None:
     wlog(f"watchdog démarré (stall>{STALL_MIN}min -> kill, check {CHECK_S}s)")
     while True:
@@ -74,7 +89,9 @@ def main() -> None:
                     wlog("daemon tué — le wrapper start_daemon relance")
                     time.sleep(120)  # laisser le restart s'installer
                 else:
-                    wlog(f"log figé {age_min:.0f} min mais aucun daemon python — wrapper mort ?")
+                    wlog(f"log figé {age_min:.0f} min et aucun daemon — respawn direct")
+                    spawn_daemon()
+                    time.sleep(120)
         except Exception as e:
             wlog(f"erreur: {str(e)[:150]}")
         time.sleep(CHECK_S)
