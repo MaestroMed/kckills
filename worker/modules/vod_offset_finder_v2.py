@@ -98,7 +98,7 @@ async def _vod_metadata(youtube_id: str) -> Optional[dict]:
     if not await scheduler.wait_for("ytdlp"):
         return None
     try:
-        result = subprocess.run(
+        result = await asyncio.to_thread(subprocess.run, 
             [
                 __import__("sys").executable, "-m", "yt_dlp",
                 *youtube_cookies.cli_args(),
@@ -145,7 +145,7 @@ async def _read_timer_at(youtube_id: str, vod_seconds: int) -> Optional[int]:
     try:
         if not await scheduler.wait_for("ytdlp"):
             return None
-        url_proc = subprocess.run(
+        url_proc = await asyncio.to_thread(subprocess.run, 
             [
                 __import__("sys").executable, "-m", "yt_dlp",
                 *youtube_cookies.cli_args(),
@@ -159,7 +159,7 @@ async def _read_timer_at(youtube_id: str, vod_seconds: int) -> Optional[int]:
             return None
         media_url = url_proc.stdout.strip().splitlines()[0]
 
-        ff = subprocess.run(
+        ff = await asyncio.to_thread(subprocess.run, 
             [
                 "ffmpeg", "-y", "-ss", str(vod_seconds), "-i", media_url,
                 "-frames:v", "1", "-q:v", "2",

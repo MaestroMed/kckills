@@ -241,19 +241,40 @@ async def supervised_task(name: str, interval: int, run_func):
 
 
 async def run_daemon():
-    """Start every module as an independent supervised asyncio task.
-
-    Wave 34 T3.2 — graceful shutdown on SIGTERM / SIGINT. Before this
-    fix, `docker stop` / `systemctl kill` would kill the daemon process
-    mid-stream while ffmpeg was encoding a clip, leaving R2 with a
-    corrupted file. Now we install signal handlers that set an
-    asyncio.Event, then race the gather() against the event. On
-    shutdown : cancel module tasks, drain in-flight work with a 5 s
-    budget, then close pooled clients cleanly.
-
-    Mirrors orchestrator.run_child() (orchestrator.py:192-206) so both
-    entry points behave identically under container orchestrators.
-    """
+    """Start every module as an independent supervised asyncio task."""
+    # ── Audit 2.0 : FAMINE DE THREADS = LE GEL ────────────────────────
+    # 30 modules partagent l'executor par défaut d'asyncio, dimensionné à
+    # min(32, cpu+4) = 16 threads sur ce PC. Chaque asyncio.to_thread
+    # (ffprobe, ffmpeg, yt-dlp, httpx synchrone) prend un thread ; dès que
+    # 16 appels lents coexistent, TOUT le daemon se fige — y compris le
+    # garde-fou wait_for de la supervision, qui a besoin d'un thread pour
+    # s'exécuter. C'est le mode de défaillance nominal, pas un accident :
+    # 43,5 h de gel du 20 au 22 juillet, 62 lignes de log, zéro alerte.
+    # 64 threads : les modules lents ne peuvent plus s'affamer mutuellement.
+    import concurrent.futures as _cf
+    _exec = _cf.ThreadPoolExecutor(max_workers=64, thread_name_prefix="kckills")
+    asyncio.get_running_loop().set_default_executor(_exec)
+    log.info("executor_configured", max_workers=64)
+    # ── Notes d'origine (Wave 34 T3.2, arrêt gracieux) ──
+    #
+    # Wave 34 T3.2 — graceful shutdown on SIGTERM / SIGINT. Before this
+    # fix, `docker stop` / `systemctl kill` would kill the daemon process
+    # mid-stream while ffmpeg was encoding a clip, leaving R2 with a
+    # corrupted file. Now we install signal handlers that set an
+    # asyncio.Event, then race the gather() against the event. On
+    # shutdown : cancel module tasks, drain in-flight work with a 5 s
+    #
+    # Wave 34 T3.2 — graceful shutdown on SIGTERM / SIGINT. Before this
+    # fix, `docker stop` / `systemctl kill` would kill the daemon process
+    # mid-stream while ffmpeg was encoding a clip, leaving R2 with a
+    # corrupted file. Now we install signal handlers that set an
+    # asyncio.Event, then race the gather() against the event. On
+    # shutdown : cancel module tasks, drain in-flight work with a 5 s
+    # budget, then close pooled clients cleanly.
+    #
+    # Mirrors orchestrator.run_child() (orchestrator.py:192-206) so both
+    # entry points behave identically under container orchestrators.
+    #
     log.info("daemon_start", modules=[m[0] for m in DAEMON_MODULES])
 
     import importlib
