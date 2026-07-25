@@ -84,3 +84,8 @@ worker/hls_temp/
 worker/vods_to_download.csv
 worker/fonts.conf
 worker/.fontcache/
+
+# Sauvegardes de .env — contiennent les secrets prod (audit 2026-07-25)
+.env.bak*
+**/.env.bak*
+*.env.bak*
