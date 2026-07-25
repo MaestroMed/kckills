@@ -210,6 +210,9 @@ def main() -> None:
     ap.add_argument("--delete", action="store_true")
     ap.add_argument("--limit", type=int, default=None)
     ap.add_argument("--batch", type=int, default=200)
+    ap.add_argument("--stale-only", action="store_true",
+                    help="ne purger QUE les orphelins is_current=false "
+                         "(exclut la categorie a risque)")
     args = ap.parse_args()
 
     print("=" * 64)
@@ -237,6 +240,17 @@ def main() -> None:
             kept.append(a)
         else:
             orphans.append(a)
+
+    # --stale-only : premier lot volontairement conservateur. Un orphelin
+    # is_current=TRUE est le cas louche (l'asset est marque courant mais
+    # aucune URL de la base ne le designe : soit un manifest pas rafraichi,
+    # soit une incoherence). On les EXCLUT du premier passage — ils meritent
+    # un examen, pas une suppression de masse.
+    if args.stale_only:
+        risky = [a for a in orphans if a.get("is_current")]
+        orphans = [a for a in orphans if not a.get("is_current")]
+        print(f"  --stale-only : {len(risky)} orphelins is_current=TRUE "
+              f"EXCLUS ; {len(orphans)} retenus")
 
     def est(a):
         return a.get("size_bytes") or EST_BYTES.get(a.get("type"), 12_000_000)
