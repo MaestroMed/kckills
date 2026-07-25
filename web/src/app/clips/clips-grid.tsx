@@ -6,9 +6,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { championIconUrl } from "@/lib/constants";
 import { TEAM_LOGOS } from "@/lib/kc-assets";
-import { isDescriptionClean } from "@/lib/scroll/sanitize-description";
 import { Breadcrumb } from "@/components/Breadcrumb";
-import { Description } from "@/components/i18n/Description";
 import { useCurrentLang, useT } from "@/lib/i18n/use-lang";
 import type { Lang } from "@/lib/i18n/lang";
 
@@ -39,13 +37,11 @@ export interface ClipCard {
   ratingCount: number;
   commentCount: number;
   impressionCount: number;
-  aiDescription: string | null;
-  // PR14 multi-language descriptions — picked client-side by <Description>
+  /** Description déjà résolue pour la langue active (voir clips/page.tsx). */
+  desc: string;
+  /** Faux si la description de base est du bruit — la carte n'affiche rien. */
+  descClean: boolean;
   // via the active LangProvider. Optional so existing callers compile.
-  aiDescriptionFr?: string | null;
-  aiDescriptionEn?: string | null;
-  aiDescriptionKo?: string | null;
-  aiDescriptionEs?: string | null;
   aiTags: string[];
   multiKill: string | null;
   isFirstBlood: boolean;
@@ -102,19 +98,8 @@ const FIGHT_TYPE_LABELS: Record<string, string> = {
  * filter matches against this so a non-FR user can find a word visible in
  * the displayed (localized) description, not just the base ai_description.
  */
-function cardDescription(card: ClipCard, lang: Lang): string {
-  const localized =
-    lang === "fr" ? card.aiDescriptionFr :
-    lang === "en" ? card.aiDescriptionEn :
-    lang === "ko" ? card.aiDescriptionKo :
-    lang === "es" ? card.aiDescriptionEs :
-    null;
-  return (
-    (localized && localized.trim()) ||
-    (card.aiDescriptionFr && card.aiDescriptionFr.trim()) ||
-    (card.aiDescription && card.aiDescription.trim()) ||
-    ""
-  );
+function cardDescription(card: ClipCard): string {
+  return card.desc;
 }
 
 export function ClipsGrid({ initialCards, initialFilters }: { initialCards: ClipCard[]; initialFilters?: InitialFilters }) {
@@ -193,7 +178,7 @@ export function ClipsGrid({ initialCards, initialFilters }: { initialCards: Clip
         (c) =>
           c.killerChampion.toLowerCase().includes(q) ||
           c.victimChampion.toLowerCase().includes(q) ||
-          cardDescription(c, lang).toLowerCase().includes(q),
+          cardDescription(c).toLowerCase().includes(q),
       );
     }
 
@@ -411,7 +396,7 @@ function ClipCardComponent({ card }: { card: ClipCard }) {
     ? new Date(card.matchDate).toLocaleDateString("fr-FR", { day: "numeric", month: "short" })
     : "";
 
-  const showDesc = isDescriptionClean(card.aiDescription);
+  const showDesc = card.descClean && card.desc.length > 0;
   const oppLogo = TEAM_LOGOS[card.opponentCode];
 
   // PR23 — data-only kills (gol.gg historical, no clip on R2) deep-link
@@ -561,17 +546,7 @@ function ClipCardComponent({ card }: { card: ClipCard }) {
           <span>{dateStr}</span>
         </div>
         {showDesc && (
-          <Description
-            kill={{
-              ai_description: card.aiDescription,
-              ai_description_fr: card.aiDescriptionFr ?? null,
-              ai_description_en: card.aiDescriptionEn ?? null,
-              ai_description_ko: card.aiDescriptionKo ?? null,
-              ai_description_es: card.aiDescriptionEs ?? null,
-            }}
-            as="p"
-            className="text-[10px] text-white/70 italic leading-tight mt-1 line-clamp-2"
-          />
+          <p className="text-[10px] text-white/70 italic leading-tight mt-1 line-clamp-2">{card.desc}</p>
         )}
       </div>
     </Link>

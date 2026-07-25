@@ -4,6 +4,9 @@ import { loadRealData } from "@/lib/real-data";
 import { JsonLd, clipsCollectionLD } from "@/lib/seo/jsonld";
 import { getAssetMetadata, pickAssetUrl } from "@/lib/kill-assets";
 import { ClipsGrid, type ClipCard, type InitialFilters } from "./clips-grid";
+import { pickDescription } from "@/lib/i18n/server";
+import { getServerLang } from "@/lib/i18n/server-lang";
+import { isDescriptionClean } from "@/lib/scroll/sanitize-description";
 
 // 300s cache — /clips pulls 500 kills and filters client-side. The
 // catalog doesn't churn per-minute; 5-min ISR is plenty.
@@ -50,6 +53,7 @@ export default async function ClipsPage({ searchParams }: { searchParams?: Promi
     search: sp.q ?? "",
   };
 
+  const lang = await getServerLang();
   const [kills, data] = await Promise.all([
     // PR23 — getKillsForGrid pulls BOTH the published-with-clip rows
     // AND the data-only gol.gg historical rows (no clip but verified
@@ -87,11 +91,12 @@ export default async function ClipsPage({ searchParams }: { searchParams?: Promi
         ratingCount: k.rating_count ?? 0,
         commentCount: k.comment_count ?? 0,
         impressionCount: k.impression_count ?? 0,
-        aiDescription: k.ai_description,
-        aiDescriptionFr: k.ai_description_fr,
-        aiDescriptionEn: k.ai_description_en,
-        aiDescriptionKo: k.ai_description_ko,
-        aiDescriptionEs: k.ai_description_es,
+        // Résolu ici et pas côté client : envoyer les 5 variantes de langue
+        // pour 1000+ cartes coûtait ~400 KB par chargement de page alors
+        // qu'une seule est affichable. Le sélecteur de langue appelle
+        // router.refresh(), donc le serveur recalcule avec la bonne langue.
+        desc: pickDescription(k, lang),
+        descClean: isDescriptionClean(k.ai_description),
         aiTags: k.ai_tags ?? [],
         multiKill: k.multi_kill,
         isFirstBlood: k.is_first_blood,
