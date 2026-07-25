@@ -43,6 +43,11 @@ export async function GET() {
     const sorted = events
       .filter((ev) => {
         if (ev.state !== "unstarted" && ev.state !== "inProgress") return false;
+        // Audit 2.0 : sans borne temporelle, un match terminé restait "le
+        // prochain" et le hero affichait EN DIRECT 7 h après le coup de
+        // sifflet. On ignore tout ce qui a commencé il y a plus de 4 h.
+        const started = Date.parse(ev.startTime);
+        if (Number.isFinite(started) && started < now - 4 * 3600 * 1000) return false;
         const teams = ev.match?.teams ?? [];
         return teams.some((t) => t?.code === "KC");
       })

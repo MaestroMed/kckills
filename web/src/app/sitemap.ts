@@ -6,7 +6,16 @@ import { getPublishedKills } from "@/lib/supabase/kills";
 
 const SITE_URL =
   process.env.NEXT_PUBLIC_SITE_URL ??
-  (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "https://kckills.com");
+  // Audit 2.0 : en PRODUCTION on force le domaine canonique. Avant, le
+  // fallback VERCEL_URL renvoyait l'URL de déploiement (kckills-xxx.
+  // vercel.app), qui partait dans les 1978 URLs du sitemap, robots.txt,
+  // canonical et og:url — le site s'auto-désindexait au profit d'un host
+  // jetable. NEXT_PUBLIC_SITE_URL reste prioritaire si elle est définie.
+  (process.env.VERCEL_ENV === "production"
+    ? "https://www.kckills.com"
+    : process.env.VERCEL_URL
+      ? `https://${process.env.VERCEL_URL}`
+      : "http://localhost:3000");
 
 // Cap how many clip URLs we expose in the sitemap so it stays under
 // Google's 50K-entry / 50MB hard limit even at scale, and so the

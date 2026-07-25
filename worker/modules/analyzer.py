@@ -1279,9 +1279,14 @@ def _build_analysis_patch(result: dict, kill: dict) -> dict:
             qc_timer_sec = int(m.group(1)) * 60 + int(m.group(2))
             expected = int(kill.get("game_time_seconds") or 0)
             if expected > 0:
-                qc_drift_sec = abs(qc_timer_sec - expected)
+                # Audit 2.0 : le abs() rendait la correction d'offset
+                # MATHÉMATIQUEMENT impossible — sans le signe, impossible de
+                # savoir s'il faut avancer ou reculer le clip. 51 % du
+                # catalogue désynchronisé, 1 593 clips sans le kill dedans.
+                # On garde le signe ; les comparaisons de seuil utilisent abs().
+                qc_drift_sec = qc_timer_sec - expected
 
-    needs_reclip_due_to_drift = (qc_drift_sec is not None and qc_drift_sec > 30)
+    needs_reclip_due_to_drift = (qc_drift_sec is not None and abs(qc_drift_sec) > 30)
 
     # Wave 35 #11 — derive qc_status alongside the kill_visible flip so
     # the new-system status_split columns stay in sync. Migration 027 had

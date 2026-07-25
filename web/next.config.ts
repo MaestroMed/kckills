@@ -49,6 +49,23 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
+  // Audit 2.0 : ces routes étaient des page.tsx faisant redirect() —
+  // 200 + 937 KB de HTML par rebond au lieu d'un 308 edge à 0 octet.
+  // EndOfFeedCard en pointait 5 sur 6.
+  async redirects() {
+    return [
+      { source: "/best", destination: "/clips?sort=score", permanent: true },
+      { source: "/first-bloods", destination: "/clips?fb=1", permanent: true },
+      { source: "/game", destination: "/scroll", permanent: true },
+      { source: "/matchups", destination: "/clips", permanent: true },
+      { source: "/multikills", destination: "/clips?multi=1", permanent: true },
+      { source: "/recent", destination: "/clips?sort=recent", permanent: true },
+      { source: "/review", destination: "/admin/clips", permanent: true },
+      { source: "/scroll-v2", destination: "/scroll", permanent: true },
+      { source: "/sphere", destination: "/scroll", permanent: true },
+      { source: "/top", destination: "/clips?sort=impressions", permanent: true },
+    ];
+  },
   // ─── 2026-04-28 SOTA stack (Next.js 16) ──────────────────────────
   //
   // React Compiler : auto-memoization (useMemo / useCallback are now
@@ -72,7 +89,10 @@ const nextConfig: NextConfig = {
     viewTransition: true,
     // Inline critical CSS into the SSR HTML so first paint doesn't
     // wait on the stylesheet HTTP request. Big mobile latency win.
-    inlineCss: true,
+    // Audit 2.0 : inlineCss dupliquait 877 KB de CSS dans CHAQUE réponse
+    // (288 KB en <style> + 589 KB ré-échappés dans le payload RSC), jamais
+    // mis en cache. Le CSS en fichier est cacheable une fois pour toutes.
+    inlineCss: false,
     // Wave 13g (2026-05-07) — auto tree-shake barrel imports for the
     // libraries that ship enormous index re-exports. Without this,
     // `import { Heart } from "lucide-react"` pulls every icon into the
