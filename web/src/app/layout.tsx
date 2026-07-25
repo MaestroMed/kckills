@@ -13,6 +13,7 @@ import { SpeedInsights } from "@vercel/speed-insights/next";
 import "./globals.css";
 import { Providers } from "@/components/Providers";
 import { LayoutChrome } from "@/components/LayoutChrome";
+import { LANG_META } from "@/lib/i18n/lang";
 
 // Wave 13i (2026-05-07) — self-hosted Google Fonts via next/font/google.
 // Replaces the previous raw <link rel=preload> + async-CSS pattern with:
@@ -272,7 +273,10 @@ export default async function RootLayout({
   // client picks them up immediately. This change ONLY affects the
   // very first paint of a visitor whose chosen lang isn't FR.
   const initialLang = "fr" as const;
-  const { LANG_META } = await import("@/lib/i18n/lang");
+  // Audit 2.0 : import statique (avant : `await import()` dans le corps du
+  // layout — un await à l'exécution dans le layout RACINE empêche le
+  // pré-rendu de TOUT l'arbre, et lazy-charger une table de constantes
+  // n'apporte rien).
   const htmlLang = LANG_META[initialLang].htmlLang;
 
   return (

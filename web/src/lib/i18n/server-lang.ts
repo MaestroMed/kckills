@@ -30,7 +30,7 @@ export { getServerLang, pickDescription } from "./server";
 export type { KillI18nFields } from "./server";
 
 // Server translator helpers (serverT / getServerT) for UI string keys.
-export { serverT, getServerT } from "./getServerLang";
+export { serverT, getServerT, getStaticT } from "./getServerLang";
 export type { ServerTranslateFn } from "./getServerLang";
 
 // Re-export the shared Lang type + default so callers don't need a

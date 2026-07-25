@@ -105,10 +105,11 @@ export function KCTimeline({
     });
   }, []);
 
-  // Pre-fetch each era page so navigation is instant after a click
-  useEffect(() => {
-    ERAS.forEach((e) => router.prefetch(`/era/${e.id}`));
-  }, [router]);
+  // Audit 2.0 — préchargement des 17 pages /era SUPPRIMÉ. Il déclenchait 34
+  // requêtes RSC (~259 KB) au montage de la frise, sur CHAQUE visite de la
+  // home, pour des pages qu'un visiteur donné ne visitera quasiment jamais.
+  // Next préfetche déjà les <Link> visibles quand le navigateur est au repos ;
+  // c'est suffisant et c'est gratuit.
 
   // Close the popup on ESC
   useEffect(() => {

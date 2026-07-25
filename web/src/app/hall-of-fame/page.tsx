@@ -4,7 +4,7 @@ import Link from "next/link";
 import { getCardKills } from "@/lib/supabase/kills";
 import { HomeRareCards } from "@/components/HomeRareCards";
 import { Breadcrumb } from "@/components/Breadcrumb";
-import { getServerT } from "@/lib/i18n/server-lang";
+import { getStaticT } from "@/lib/i18n/server-lang";
 
 /**
  * /hall-of-fame — the immortal moments (Vague 5, audit 2026-07-05).
@@ -22,7 +22,7 @@ export const metadata: Metadata = {
 };
 
 export default async function HallOfFamePage() {
-  const { t } = await getServerT();
+  const { t } = getStaticT();
   const kills = await getCardKills(300);
 
   // Wilson-ish: demand a minimum rating volume so a 5★-from-2-votes

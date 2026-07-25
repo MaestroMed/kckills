@@ -20,7 +20,7 @@ import { isDescriptionClean } from "@/lib/scroll/sanitize-description";
 import { Breadcrumb } from "@/components/Breadcrumb";
 import { JsonLd, breadcrumbLD, recordsCollectionLD } from "@/lib/seo/jsonld";
 import { Description } from "@/components/i18n/Description";
-import { getServerT, type ServerTranslateFn } from "@/lib/i18n/getServerLang";
+import { getStaticT, type ServerTranslateFn } from "@/lib/i18n/getServerLang";
 
 /**
  * /records — "Records Absolus" hall-of-fame.
@@ -173,7 +173,7 @@ export default async function RecordsPage() {
   // Wave 36 — getCardKills (slim CARD_SELECT) instead of getPublishedKills:
   // this page renders only card fields, so the ~25 extra columns the fat
   // loader ships were dead egress. Cuts the per-cache-miss payload ~2-3×.
-  const { t } = await getServerT();
+  const { t } = getStaticT();
   const all = await getCardKills(500, { buildTime: true });
   const scored = all.filter((k) => k.kill_visible !== false);
 

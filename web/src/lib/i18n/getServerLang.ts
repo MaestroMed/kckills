@@ -15,7 +15,7 @@
 import "server-only";
 import { getServerLang } from "./server";
 import { locales } from "./locales";
-import type { Lang } from "./lang";
+import { DEFAULT_LANG, type Lang } from "./lang";
 
 export { getServerLang } from "./server";
 
@@ -76,4 +76,28 @@ export function serverT(lang: Lang): ServerTranslateFn {
 export async function getServerT(): Promise<{ lang: Lang; t: ServerTranslateFn }> {
   const lang = await getServerLang();
   return { lang, t: serverT(lang) };
+}
+
+/**
+ * getStaticT — traducteur SSR qui ne touche AUCUNE API dynamique.
+ *
+ * Audit 2.0 : `getServerT()` appelle `cookies()` + `headers()` via
+ * `getServerLang()`. En Next 15+, toute page qui touche une API dynamique
+ * sort du pré-rendu — résultat mesuré : 0 page sur 87 en cache CDN, tous
+ * les `revalidate` écrits dans le code étaient morts, et chaque visiteur
+ * déclenchait un SSR complet (X-Vercel-Cache: MISS partout).
+ *
+ * Ce traducteur rend la langue par défaut, exactement comme le layout
+ * racine le fait déjà depuis le correctif de cache d'avril
+ * (`const initialLang = "fr"`). Le LangProvider client détecte ensuite
+ * le cookie / localStorage au montage et rebascule dans la langue du
+ * visiteur — même compromis, déjà accepté et documenté, mais étendu aux
+ * pages : un bref premier rendu FR contre un site réellement cacheable.
+ *
+ * À utiliser sur toute page SANS dépendance à la requête. Les pages qui
+ * lisent `searchParams` ou des cookies restent sur `getServerT()` : elles
+ * sont dynamiques par nature, rien à gagner.
+ */
+export function getStaticT(): { lang: Lang; t: ServerTranslateFn } {
+  return { lang: DEFAULT_LANG, t: serverT(DEFAULT_LANG) };
 }

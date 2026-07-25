@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { Metadata } from "next";
-import { getServerT } from "@/lib/i18n/server-lang";
+import { getStaticT } from "@/lib/i18n/server-lang";
 
 export const metadata: Metadata = {
   title: "Politique de confidentialit\u00e9",
@@ -9,7 +9,7 @@ export const metadata: Metadata = {
 };
 
 export default async function PrivacyPage() {
-  const { t } = await getServerT();
+  const { t } = getStaticT();
   return (
     <div className="mx-auto max-w-3xl space-y-8 py-8">
       <nav className="flex items-center gap-2 text-sm text-[var(--text-muted)]">
