@@ -171,7 +171,6 @@ export function HeroClipBackground({ clips, posterSrc = "/images/hero-bg.jpg", m
   // cheap volume ramp on the new clip after it mounts.
   useEffect(() => {
     const video = videoRef.current;
-    const current = clips[index];
     if (!video || !current?.mp4Url) return;
 
     const targetVolume = current.audioVolume ?? 0.8;
@@ -270,6 +269,10 @@ export function HeroClipBackground({ clips, posterSrc = "/images/hero-bg.jpg", m
     );
   }
 
+  // HERO 2.0 — le clip mobile : le premier MP4 du flux, choisi une fois
+  // pour toutes (pas de rotation sur mobile = pas de crash iOS).
+  const firstMobileClip = clips.find((c) => Boolean(c.mp4Url));
+
   const current = clips[index];
   const wantsAudio = audioEnabled && Boolean(current?.mp4Url) && (current?.audioVolume ?? 0.8) > 0;
 
@@ -300,7 +303,34 @@ export function HeroClipBackground({ clips, posterSrc = "/images/hero-bg.jpg", m
           Wave 18 — the motion-using rotating overlay + caption are
           now rendered inside the lazy `HeroClipMotionLayer` so
           motion/react no longer ships in the homepage initial JS. */}
-      {isMobile && !reducedMotion && (mobileMorphImages?.length ?? 0) > 0 && (
+      {/* ── HERO 2.0 (Audit, 2026-07-25) — LE MOBILE VOIT ENFIN UN KILL ──
+          Constat de l'audit : sous 768 px le hero ne montrait AUCUN clip.
+          L'audience n°1 du « TikTok des kills » arrivait sur une photo
+          figée + un morph de splash arts. Le hero décrivait le produit au
+          lieu de l'ÊTRE.
+
+          La mitigation iOS d'avril visait la ROTATION (plusieurs <video>
+          montés/démontés en boucle + iframe YouTube), pas la lecture
+          vidéo elle-même. On garde donc le principe — zéro rotation sur
+          mobile — mais on joue UN clip, monté une seule fois, muet, en
+          boucle, sans AnimatePresence : la pression GPU d'un seul élément
+          statique est celle d'un <img>. Sous prefers-reduced-motion ou
+          sans clip MP4, on retombe sur le poster (branche ci-dessus). */}
+      {isMobile && !reducedMotion && firstMobileClip && (
+        <video
+          key={firstMobileClip.mp4Url}
+          src={firstMobileClip.mp4Url}
+          poster={firstMobileClip.posterUrl}
+          autoPlay
+          muted
+          loop
+          playsInline
+          preload="metadata"
+          aria-hidden
+          className="absolute inset-0 h-full w-full object-cover opacity-90"
+        />
+      )}
+      {isMobile && !reducedMotion && !firstMobileClip && (mobileMorphImages?.length ?? 0) > 0 && (
         <PortraitCubeMorphLazy
           images={mobileMorphImages!}
           cols={56}
