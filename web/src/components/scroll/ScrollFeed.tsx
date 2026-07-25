@@ -470,19 +470,19 @@ function ScrollEmptyState({ chipFilters }: { chipFilters?: ChipFilters }) {
               Reset filtres
             </Link>
             <Link
-              href="/multikills"
+              href="/clips?multi=1"
               className="rounded-xl border border-[var(--orange)]/45 bg-[var(--orange)]/10 px-4 py-2.5 font-display text-xs font-bold uppercase tracking-widest text-[var(--orange)]"
             >
               Multi-kills
             </Link>
             <Link
-              href="/first-bloods"
+              href="/clips?fb=1"
               className="rounded-xl border border-[var(--red)]/45 bg-[var(--red)]/10 px-4 py-2.5 font-display text-xs font-bold uppercase tracking-widest text-[var(--red)]"
             >
               First Bloods
             </Link>
             <Link
-              href="/best"
+              href="/clips?sort=score"
               className="rounded-xl border border-white/15 bg-black/30 px-4 py-2.5 font-display text-xs font-bold uppercase tracking-widest text-white/80"
             >
               Meilleurs

@@ -482,7 +482,7 @@ function EmptyResults({ searchParams }: { searchParams: URLSearchParams }) {
             {t("p_search.discover_scroll")}
           </Link>
           <Link
-            href="/top"
+            href="/clips?sort=impressions"
             className="rounded-full border border-[var(--border-gold)] bg-[var(--bg-surface)] px-4 py-2 text-xs text-[var(--text-secondary)] hover:border-[var(--gold)]/40 hover:text-[var(--gold)]"
           >
             {t("p_search.top_kills")}

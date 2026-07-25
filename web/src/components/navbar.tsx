@@ -36,7 +36,7 @@ const NAV_GROUPS: { tKey: string; items: { href: string; tKey: string }[] }[] = 
     tKey: "nav.g_discover",
     items: [
       { href: "/week", tKey: "nav.week" },
-      { href: "/best", tKey: "nav.best" },
+      { href: "/clips?sort=score", tKey: "nav.best" },
       { href: "/records", tKey: "nav.records" },
       { href: "/saved", tKey: "nav.saved" },
     ],

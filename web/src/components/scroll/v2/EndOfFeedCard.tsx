@@ -72,13 +72,13 @@ export function EndOfFeedCard({ itemHeight, onReshuffle, totalSeen }: Props) {
 
           <div className="grid grid-cols-2 gap-3">
             <Link
-              href="/best"
+              href="/clips?sort=score"
               className="rounded-2xl border border-[var(--gold)]/40 bg-black/40 backdrop-blur-md py-3 px-4 font-display text-xs font-bold uppercase tracking-widest text-[var(--gold)] transition-all hover:bg-[var(--gold)]/10 active:scale-95"
             >
               {t("p_scroll.item_end_best")}
             </Link>
             <Link
-              href="/multikills"
+              href="/clips?multi=1"
               className="rounded-2xl border border-[var(--orange)]/40 bg-black/40 backdrop-blur-md py-3 px-4 font-display text-xs font-bold uppercase tracking-widest text-[var(--orange)] transition-all hover:bg-[var(--orange)]/10 active:scale-95"
             >
               {t("p_scroll.item_end_multikills")}
@@ -87,19 +87,19 @@ export function EndOfFeedCard({ itemHeight, onReshuffle, totalSeen }: Props) {
 
           <div className="grid grid-cols-3 gap-2 pt-2">
             <Link
-              href="/first-bloods"
+              href="/clips?fb=1"
               className="rounded-xl border border-white/10 bg-black/30 py-2 text-[10px] font-data uppercase tracking-widest text-white/60 transition-colors hover:text-white"
             >
               {t("p_scroll.item_end_fb")}
             </Link>
             <Link
-              href="/matchups"
+              href="/clips"
               className="rounded-xl border border-white/10 bg-black/30 py-2 text-[10px] font-data uppercase tracking-widest text-white/60 transition-colors hover:text-white"
             >
               {t("p_scroll.item_end_matchups")}
             </Link>
             <Link
-              href="/recent"
+              href="/clips?sort=recent"
               className="rounded-xl border border-white/10 bg-black/30 py-2 text-[10px] font-data uppercase tracking-widest text-white/60 transition-colors hover:text-white"
             >
               {t("p_scroll.item_end_recent")}
