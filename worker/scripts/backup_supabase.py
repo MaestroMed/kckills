@@ -72,6 +72,15 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import boto3  # noqa: E402  (loaded lazily by services.r2_client too)
 import httpx  # noqa: E402
 
+# Console Windows en cp1252 : les accents/flèches des messages plantaient
+# le script AVANT toute sauvegarde. Un backup ne doit jamais échouer sur
+# un problème d'affichage.
+try:
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+except Exception:
+    pass
+
 RETENTION_KEEP_DEFAULT = 8  # weekly backups → 2 months
 
 
@@ -94,6 +103,119 @@ def env_or_none(key: str) -> str | None:
         return None
 
 
+# ═══════════════════════════════════════════════════════════════════════
+# REPLI LOGIQUE — export NDJSON gzip via PostgREST, poussé sur R2.
+# ═══════════════════════════════════════════════════════════════════════
+
+_BACKUP_TABLES = [
+    "kills", "games", "matches", "tournaments", "players", "teams",
+    "game_events", "clip_ledger", "kill_assets", "game_vod_sources",
+    "ratings", "comments", "profiles",
+]
+
+
+def _logical_backup(*, dry_run: bool = False, keep: int = 7) -> int:
+    """Sauvegarde logique. Retourne un code de sortie (0 = OK)."""
+    import gzip
+    import json as _json
+    from pathlib import Path as _Path
+    import httpx as _httpx
+
+    sys.path.insert(0, str(_Path(__file__).resolve().parent.parent))
+    from services.supabase_client import get_db
+
+    db = get_db()
+    if db is None:
+        print("  ÉCHEC : pas de connexion Supabase")
+        return 2
+
+    stamp = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d")
+    out_dir = _Path(__file__).resolve().parent.parent / "backups" / stamp
+    out_dir.mkdir(parents=True, exist_ok=True)
+    manifest = {"created_utc": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+                "mode": "logical_postgrest", "tables": {}, "errors": []}
+    t0 = time.time()
+
+    for table in _BACKUP_TABLES:
+        path = out_dir / f"{table}.ndjson.gz"
+        try:
+            n, offset = 0, 0
+            with gzip.open(path, "wt", encoding="utf-8") as f:
+                while True:
+                    params = {"select": "*", "offset": str(offset), "limit": "1000"}
+                    r = _httpx.get(f"{db.base}/{table}", headers=db.headers,
+                                   params=params, timeout=120)
+                    r.raise_for_status()
+                    rows = r.json()
+                    if not isinstance(rows, list) or not rows:
+                        break
+                    for row in rows:
+                        f.write(_json.dumps(row, ensure_ascii=False, default=str) + "\n")
+                    n += len(rows)
+                    if len(rows) < 1000:
+                        break
+                    offset += 1000
+            manifest["tables"][table] = {"rows": n, "bytes": path.stat().st_size}
+            print(f"    {table:20s} {n:>7} lignes  {path.stat().st_size/1024:.0f} KB")
+        except Exception as e:
+            manifest["errors"].append(f"{table}: {str(e)[:150]}")
+            print(f"    {table:20s} ÉCHEC {str(e)[:70]}")
+
+    manifest["elapsed_s"] = round(time.time() - t0, 1)
+    (out_dir / "manifest.json").write_text(
+        _json.dumps(manifest, indent=2, ensure_ascii=False), encoding="utf-8")
+
+    if manifest["errors"]:
+        print(f"  ÉCHEC : {len(manifest['errors'])} table(s) en erreur")
+        return 1
+    total = sum(v["rows"] for v in manifest["tables"].values())
+    print(f"  local OK — {total} lignes en {manifest['elapsed_s']}s")
+
+    if dry_run:
+        print("  DRY-RUN : pas d'upload")
+        return 0
+
+    from services.storage_factory import get_storage_backend
+    storage = get_storage_backend()
+    prefix = f"backups/logical/{stamp}"
+    for f in sorted(out_dir.iterdir()):
+        storage.upload_file(
+            key=f"{prefix}/{f.name}", file_path=str(f),
+            content_type="application/gzip" if f.suffix == ".gz" else "application/json",
+            cache_control="private, no-store",
+        )
+
+    # PREUVE : on relit le manifeste depuis R2. Un backup non vérifié est un
+    # backup qui n'existe pas — c'est exactement ce qui a permis à la tâche
+    # planifiée de mentir pendant des mois.
+    client = storage._get_client()
+    obj = client.get_object(Bucket=storage._bucket, Key=f"{prefix}/manifest.json")
+    remote = _json.loads(obj["Body"].read())
+    if set(remote.get("tables", {})) != set(manifest["tables"]):
+        print("  ÉCHEC : manifeste relu depuis R2 non conforme")
+        return 1
+    print(f"  R2 OK — {prefix} (manifeste relu et vérifié)")
+
+    # rotation R2 + ménage local
+    try:
+        page = client.list_objects_v2(Bucket=storage._bucket, Prefix="backups/logical/")
+        days = sorted({o["Key"].split("/")[2] for o in page.get("Contents", []) if o["Key"].count("/") > 2})
+        for old in days[:-keep]:
+            objs = client.list_objects_v2(Bucket=storage._bucket, Prefix=f"backups/logical/{old}/")
+            keys = [{"Key": o["Key"]} for o in objs.get("Contents", [])]
+            if keys:
+                client.delete_objects(Bucket=storage._bucket, Delete={"Objects": keys})
+            print(f"    rotation : {old} purgé")
+    except Exception as e:
+        print(f"    rotation ignorée : {str(e)[:70]}")
+    base_dir = out_dir.parent
+    for d in sorted([p for p in base_dir.iterdir() if p.is_dir()])[:-2]:
+        for f in d.iterdir():
+            f.unlink()
+        d.rmdir()
+    return 0
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--dry-run", action="store_true",
@@ -102,13 +224,22 @@ def main() -> None:
                         help=f"Keep last N backups (default {RETENTION_KEEP_DEFAULT})")
     args = parser.parse_args()
 
-    # ─── 1. Verify pg_dump is on PATH ────────────────────────────────
-    if shutil.which("pg_dump") is None:
-        print("ERROR: pg_dump not found in PATH. Install Postgres client tools first.")
-        print("  macOS: brew install libpq && brew link --force libpq")
-        print("  Windows: download Postgres from postgresql.org")
-        print("  Linux: apt install postgresql-client")
-        sys.exit(1)
+    # ─── 1. pg_dump dispo ? Sinon REPLI LOGIQUE ──────────────────────
+    # Audit 2.0 : pg_dump n'est PAS installé sur le PC et SUPABASE_DB_URL
+    # n'existe pas dans le .env — donc ce script sortait en erreur depuis
+    # toujours, pendant que la tâche planifiée affichait vert. Résultat :
+    # zéro sauvegarde, jamais, de 15 724 kills. Plutôt que d'exiger une
+    # installation Postgres, on bascule sur un export LOGIQUE via PostgREST
+    # (clé service role, déjà présente) : NDJSON gzip par table, poussé sur
+    # R2. Ce n'est pas un pg_dump (pas de schéma) — mais le schéma vit dans
+    # supabase/migrations/ sous git, donc migrations + données = restauration
+    # complète. Un filet imparfait qui existe bat un filet parfait qui n'a
+    # jamais tourné.
+    if shutil.which("pg_dump") is None or not os.getenv("SUPABASE_DB_URL"):
+        reason = ("pg_dump absent" if shutil.which("pg_dump") is None
+                  else "SUPABASE_DB_URL absente")
+        print(f"  {reason} → repli sur l'export logique PostgREST")
+        sys.exit(_logical_backup(dry_run=args.dry_run, keep=args.keep))
 
     db_url = env_or_die("SUPABASE_DB_URL")
     r2_account = env_or_die("R2_ACCOUNT_ID")

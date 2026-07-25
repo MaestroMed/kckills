@@ -95,19 +95,31 @@ async def qc_one(k: dict, tmpdir: str) -> tuple[bool, str]:
         #   * drift > 35 s (kill hors cadre, pad 30) -> eject
         #   * drift <= 35 s : le kill est encore dans le cadre -> ON GARDE
         #     visible, mais needs_reclip pour la refonte offset.
+        # ⚠️ RÈGLE DE PREUVE POSITIVE (incident 2026-07-23) : la v1 éjectait
+        # sur ABSENCE de preuve — quand l'OCR n'était pas calibré pour un
+        # overlay ET que Gemini était à court de quota, timer_matches et
+        # start_is_gameplay tombaient tous les deux en "fail" faute d'avoir
+        # RIEN pu lire (drift=None) → 3 580 clips masqués sur 3 887 (92 %),
+        # site vidé. On n'éjecte plus que sur ce que l'outillage a
+        # RÉELLEMENT VU :
+        #   * checks média (ffprobe LOCAL, jamais aveugle) → confiance totale
+        #   * drift mesuré (drift is not None) et > 35 s → kill hors cadre
+        #   * is_gameplay=false EXPLICITE de la vision (pas "vision muette")
+        # Un outillage aveugle laisse le clip en ligne et demande un reclip.
         MEDIA = {"duration_sane", "audio_present", "start_not_frozen"}
+        vision_saw = getattr(res, "vision_result", None) is not None
         eject = (
-            "start_is_gameplay" in failed
-            or any(c in MEDIA for c in failed)
-            or ("timer_matches" in failed and (drift is None or abs(drift) > 35))
+            any(c in MEDIA for c in failed)
+            or ("timer_matches" in failed and drift is not None and abs(drift) > 35)
+            or ("start_is_gameplay" in failed and vision_saw)
         )
-        soft_reclip = "timer_matches" in failed and not eject
+        soft_reclip = bool(failed) and not eject
         if soft_reclip:
             httpx.patch(f"{DBREF['db'].base}/kills",
                         headers={**DBREF['db'].headers, "Prefer": "return=minimal"},
                         params={"id": f"eq.{k['id']}"},
                         json={"needs_reclip": True,
-                              "reclip_reason": f"qc_repass_soft: drift={drift:+d}s"},
+                              "reclip_reason": f"qc_soft: {','.join(failed)[:80]} drift={drift}"},
                         timeout=30)
         detail = f"{','.join(failed) or 'pass'} drift={drift}"
         return (not eject), detail

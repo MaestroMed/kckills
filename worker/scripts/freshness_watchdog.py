@@ -74,6 +74,35 @@ def spawn_daemon() -> None:
     wlog(f"daemon relancé par le watchdog (pid {p.pid})")
 
 
+BACKUP_MARK = _ROOT / "logs" / ".last_backup_day"
+
+
+def daily_backup_if_due() -> None:
+    """Sauvegarde quotidienne — le watchdog est le seul process toujours
+    vivant, donc c'est lui qui la porte (Audit 2.0 : la tache planifiee
+    Windows echouait en silence en affichant vert depuis des mois)."""
+    today = time.strftime("%Y-%m-%d")
+    try:
+        if BACKUP_MARK.exists() and BACKUP_MARK.read_text().strip() == today:
+            return
+    except Exception:
+        pass
+    py = str(_ROOT / ".venv" / "Scripts" / "python.exe")
+    wlog("sauvegarde quotidienne : demarrage")
+    try:
+        r = subprocess.run([py, "scripts/backup_supabase.py"], cwd=str(_ROOT),
+                           capture_output=True, text=True, timeout=3600)
+        tail = (r.stdout or "").strip().splitlines()[-1:] or [""]
+        if r.returncode == 0:
+            BACKUP_MARK.write_text(today)
+            wlog(f"sauvegarde OK — {tail[0][:120]}")
+        else:
+            # On n'ecrit PAS le marqueur : on retentera au prochain tick.
+            wlog(f"SAUVEGARDE ECHOUEE (code {r.returncode}) — {tail[0][:120]}")
+    except Exception as e:
+        wlog(f"sauvegarde exception: {str(e)[:150]}")
+
+
 def main() -> None:
     wlog(f"watchdog démarré (stall>{STALL_MIN}min -> kill, check {CHECK_S}s)")
     while True:
@@ -92,6 +121,7 @@ def main() -> None:
                     wlog(f"log figé {age_min:.0f} min et aucun daemon — respawn direct")
                     spawn_daemon()
                     time.sleep(120)
+            daily_backup_if_due()
         except Exception as e:
             wlog(f"erreur: {str(e)[:150]}")
         time.sleep(CHECK_S)

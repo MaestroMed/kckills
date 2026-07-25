@@ -89,3 +89,6 @@ worker/.fontcache/
 .env.bak*
 **/.env.bak*
 *.env.bak*
+
+# Sauvegardes logiques locales (poussées sur R2, 2 jours gardés sur disque)
+worker/backups/
