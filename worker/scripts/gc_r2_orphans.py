@@ -56,7 +56,7 @@ SB_KEY = (os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
 SB_H = {"apikey": SB_KEY, "Authorization": f"Bearer {SB_KEY}"}
 
 CLIP_HOSTS = ("https://clips.kckills.com/", "http://clips.kckills.com/")
-PAGE = 1000
+PAGE = 500
 # Fallback size estimates when size_bytes is NULL (recon measurements).
 EST_BYTES = {"horizontal": 19_000_000, "vertical": 19_000_000,
              "vertical_low": 5_900_000, "thumbnail": 210_000}
@@ -91,8 +91,23 @@ def sb_page(table: str, params: dict) -> list[dict]:
         p = {**params, "limit": str(PAGE), "offset": str(offset)}
         if use_order:
             p["order"] = "id"
-        r = requests.get(f"{SB_URL}/rest/v1/{table}", headers=SB_H,
-                         params=p, timeout=60)
+        # Retry avec backoff : un timeout réseau ne doit pas faire échouer
+        # le GC (et surtout jamais produire une page vide silencieuse, qui
+        # se traduirait par des références manquantes = objets vivants
+        # classés orphelins).
+        r = None
+        for attempt in range(4):
+            try:
+                r = requests.get(f"{SB_URL}/rest/v1/{table}", headers=SB_H,
+                                 params=p, timeout=180)
+                break
+            except Exception as e:
+                if attempt == 3:
+                    raise RuntimeError(
+                        f"pagination {table} offset={offset} échouée après "
+                        f"4 tentatives ({str(e)[:100]}) — GC ABANDONNÉ"
+                    ) from e
+                time.sleep(2 ** attempt)
         if r.status_code == 400 and use_order and offset == 0:
             use_order = False
             continue
@@ -158,8 +173,16 @@ def build_reference_set() -> set[str]:
         try:
             rows = sb_page(table, {"select": ",".join(cols)})
         except Exception as e:
-            print(f"  [warn] scan {table} KO ({str(e)[:80]}) — table ignorée")
-            continue
+            # LEÇON DE L'INCIDENT QC (2026-07-25) : un scan raté ne doit
+            # JAMAIS se traduire par « moins de références » — ici ça
+            # transformerait des objets VIVANTS en orphelins supprimables.
+            # Un GC qui n'a pas pu lire toutes les sources n'a pas le droit
+            # de conclure. On abandonne bruyamment.
+            raise RuntimeError(
+                f"scan de {table} impossible ({str(e)[:120]}) — GC ABANDONNÉ : "
+                "un ensemble de références incomplet rendrait des objets "
+                "servis par le site éligibles à la suppression."
+            ) from e
         before = len(refs)
         for row in rows:
             refs |= harvest_urls(row)
