@@ -39,7 +39,7 @@ import Link from "next/link";
 import { useLang, useT } from "@/lib/i18n/use-lang";
 import { formatDate } from "@/lib/i18n/lang";
 import { m, useReducedMotion } from "motion/react";
-import type { VideoFeedItem } from "@/components/scroll/ScrollFeed";
+import type { VideoFeedItem } from "@/components/scroll/feed-types";
 import { StarRating } from "@/components/star-rating";
 import { rateKill } from "@/components/community/actions";
 import { InlineAuthPrompt } from "@/components/community/InlineAuthPrompt";

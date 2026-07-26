@@ -40,7 +40,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { m, AnimatePresence, useReducedMotion } from "motion/react";
-import type { VideoFeedItem } from "@/components/scroll/ScrollFeed";
+import type { VideoFeedItem } from "@/components/scroll/feed-types";
 import { ScrollRail } from "./ScrollRail";
 import { ScrollContextPanel, type RelatedFeedCandidate } from "./ScrollContextPanel";
 import { StageFrame } from "./StageFrame";

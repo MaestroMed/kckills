@@ -69,7 +69,7 @@ import { ScrollChipBar, type ChipFilters } from "@/components/scroll/ScrollChipB
 import type {
   FeedItem,
   VideoFeedItem,
-} from "@/components/scroll/ScrollFeed";
+} from "@/components/scroll/feed-types";
 import type { RecommendedKillRow } from "@/lib/supabase/recommendations";
 import { rateKill } from "@/components/community/actions";
 import { track } from "@/lib/analytics/track";

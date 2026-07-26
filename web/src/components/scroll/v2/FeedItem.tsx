@@ -24,7 +24,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import type { VideoFeedItem, MomentFeedItem } from "@/components/scroll/ScrollFeed";
+import type { VideoFeedItem, MomentFeedItem } from "@/components/scroll/feed-types";
 import { isDescriptionClean } from "@/lib/scroll/sanitize-description";
 import { useImpressionTracker } from "./hooks/useImpressionTracker";
 import { useFeedItemError } from "./hooks/useFeedItemError";

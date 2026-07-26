@@ -28,7 +28,7 @@ import { requireAdmin } from "@/lib/admin/audit";
 import {
   type FeedItem,
   type VideoFeedItem,
-} from "@/components/scroll/ScrollFeed";
+} from "@/components/scroll/feed-types";
 import { ScrollFeedV2 } from "@/components/scroll/v2/ScrollFeedV2";
 import type { GridAxisId } from "@/lib/grid/axis-config";
 import { JsonLd, breadcrumbLD } from "@/lib/seo/jsonld";
