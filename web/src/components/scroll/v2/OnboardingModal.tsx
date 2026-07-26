@@ -35,6 +35,8 @@ interface RosterPick {
 
 interface Props {
   roster: RosterPick[];
+  /** Clips parcourus depuis l'ouverture du feed (voir CLIPS_BEFORE_ASKING). */
+  clipsSeen?: number;
 }
 
 function shouldShow(): boolean {
@@ -55,7 +57,10 @@ function markDone(value: "true" | "skipped") {
   }
 }
 
-export function OnboardingModal({ roster }: Props) {
+/** Nombre de clips parcourus avant de proposer la personnalisation. */
+const CLIPS_BEFORE_ASKING = 4;
+
+export function OnboardingModal({ roster, clipsSeen = 0 }: Props) {
   const t = useT();
   const [open, setOpen] = useState(false);
   const [picked, setPicked] = useState<Set<string>>(new Set());
@@ -63,13 +68,15 @@ export function OnboardingModal({ roster }: Props) {
   const panelRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    // Wait one frame so the SSR feed paints first — onboarding shows
-    // as a layered modal, not as a blocker on first paint.
-    const t = window.setTimeout(() => {
-      if (shouldShow()) setOpen(true);
-    }, 600);
-    return () => window.clearTimeout(t);
-  }, []);
+    // L'ouverture etait declenchee 600 ms apres le montage, donc avant
+    // meme que le visiteur ait vu un kill en entier : la premiere chose
+    // qu'il recevait etait une modale par-dessus la video. On attend
+    // maintenant qu'il ait parcouru quelques clips — a ce moment il a
+    // montre son interet, et proposer de personnaliser le feed a du sens.
+    if (clipsSeen < CLIPS_BEFORE_ASKING) return;
+    if (!shouldShow()) return;
+    setOpen(true);
+  }, [clipsSeen]);
 
   const togglePick = (id: string) => {
     setPicked((prev) => {

@@ -43,13 +43,13 @@ export const runtime = "nodejs";
 
 // ─── Allowed event types — keep in sync with migration 029 ─────────────
 //
-// NOTE on `timeline.era_selected` : the value is allowed at the API gate
-// so the request shape validates client-side, BUT the DB CHECK constraint
-// in migration 029 doesn't list it yet. Inserts with this event_type will
-// be silently dropped by Postgres (logged on the server, never surfaced
-// to the client — tracker is best-effort by design). A follow-up
-// migration should extend the constraint when we want to actually count
-// these events.
+// Cette liste doit rester alignée sur la contrainte CHECK
+// user_events_event_type_check (dernier état : migration 094). Un type
+// accepté ici mais absent de la contrainte est perdu en silence :
+// Postgres rejette l'insertion, la route journalise et répond quand même
+// 204. Pour vérifier l'alignement, tenter une insertion réelle de chaque
+// type — c'est ainsi que la dérive de feed.recommendation_score a été
+// trouvée le 2026-07-26.
 
 const ALLOWED_EVENT_TYPES = new Set<string>([
   "feed.view",
@@ -81,18 +81,12 @@ const ALLOWED_EVENT_TYPES = new Set<string>([
   "auth.login",
   "auth.logout",
   // ─── Wave 7 — Riot OAuth optional linking (Agent AG) ───────────────
-  // FOLLOW-UP MIGRATION REQUIRED: extend user_events_event_type_check
-  // CHECK constraint (migration 040) to whitelist these. Until then,
-  // inserts silently drop on the DB side (logged server-side, swallowed
-  // client-side per the tracker's best-effort design).
+  // Régularisés en base (vérifié le 2026-07-26 par insertion réelle).
   "auth.riot_linked",
   "auth.riot_unlinked",
   "riot.link_started",
   // ─── Wave 6 — scroll feed UX polish (Agent AB) ─────────────────────
-  // FOLLOW-UP MIGRATION REQUIRED: extend user_events_event_type_check
-  // CHECK constraint to whitelist these values. Until then, inserts
-  // will be silently dropped by Postgres (logged server-side, swallowed
-  // client-side per the tracker's best-effort design).
+  // Régularisés en base (vérifié le 2026-07-26 par insertion réelle).
   "clip.error",
   "feed.scroll_restored",
   "feed.offline_entered",
@@ -108,11 +102,9 @@ const ALLOWED_EVENT_TYPES = new Set<string>([
   // FeedPlayerPool successfully attaches a source to.
   "clip.delivery",
   // ─── Wave 11 — Recommendation engine (Agent DI) ────────────────────
-  // FOLLOW-UP MIGRATION REQUIRED : extend user_events_event_type_check
-  // (last touched in migration 041 / 047) to whitelist this value. Until
-  // then, inserts are silently dropped by Postgres (logged server-side,
-  // swallowed client-side per the tracker's best-effort design). Same
-  // pattern as the Wave 6/7/9 events when they first landed.
+  // Le SEUL type que la contrainte CHECK refusait encore : chaque envoi
+  // était perdu pendant que la route répondait 204. Réparé par la
+  // migration 094 (à appliquer côté Supabase).
   "feed.recommendation_score",
 ]);
 

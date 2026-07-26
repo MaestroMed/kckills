@@ -307,7 +307,7 @@ export function ScrollFeedV2({
   }, []);
 
   // ─── Network-driven quality (Phase 3) ─────────────────────────────
-  const { quality, useLowQuality, effectiveType } = useNetworkQuality();
+  const { quality, useLowQuality } = useNetworkQuality();
 
   // ─── Live mode (Wave 4 P1) ────────────────────────────────────────
   // Polls /api/live/kc-status every 60s. When KC has a match in
@@ -1370,9 +1370,12 @@ export function ScrollFeedV2({
             KCKILLS
           </span>
           <StreakBadge />
+          {/* Le numero de version interne et le type de reseau (« v2 · 4g »)
+              n'apprennent rien a un visiteur — c'etait de la chrome de
+              developpement livree en production. Seul le compte de clips
+              a du sens pour lui. */}
           <span className="font-data text-[9px] uppercase tracking-widest text-[var(--gold)]/50">
-            v2 · {displayClipCount} clips
-            {effectiveType ? ` · ${effectiveType}` : ""}
+            {displayClipCount} clips
           </span>
         </div>
         <div className="flex items-center gap-2">
@@ -1425,6 +1428,7 @@ export function ScrollFeedV2({
           returning users. Roster picks from the SSR-fetched chips. */}
       {rosterChips && rosterChips.length > 0 && (
         <OnboardingModal
+          clipsSeen={activeIndex}
           roster={rosterChips.map((p) => ({
             id: p.id,
             ign: p.ign,

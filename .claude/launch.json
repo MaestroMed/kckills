@@ -2,12 +2,11 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "loltok",
+      "name": "kckills-web",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev", "--", "-p", "3137"],
-      "port": 3137,
-      "cwd": "web",
-      "autoPort": false
+      "runtimeArgs": ["run", "dev"],
+      "port": 3000,
+      "cwd": "web"
     }
   ]
 }

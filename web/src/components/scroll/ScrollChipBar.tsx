@@ -132,16 +132,23 @@ export function ScrollChipBar({ filters, rosterChips = [] }: Props) {
       // floating chip bar, which now also covers the 768–1023 band (the
       // wide-stage shell only mounts at 1024, so md:hidden left that band
       // with neither chips nor rail). Sacred <768 path is untouched.
-      className="lg:hidden fixed left-0 right-0 z-40 px-3"
+      className="lg:hidden fixed right-3 z-40 flex justify-end"
       style={{ top: "calc(env(safe-area-inset-top, 0.75rem) + 56px)" }}
     >
       <div
-        className={`mx-auto max-w-3xl rounded-2xl border border-[var(--gold)]/20 bg-black/65 backdrop-blur-md shadow-lg shadow-black/30 transition-all ${
+        className={`ml-auto w-fit max-w-[calc(100vw-1.5rem)] rounded-2xl border border-[var(--gold)]/20 bg-black/65 backdrop-blur-md shadow-lg shadow-black/30 transition-all ${
           isPending ? "opacity-70" : ""
         }`}
       >
         {/* Compact row — always visible */}
         <div className="flex items-center gap-1.5 overflow-x-auto px-2 py-2 scrollbar-none">
+          {/* Le haut du feed tenait sur deux barres empilees au meme
+              `top` : la pilule d'onglets et cette rangee pleine largeur
+              se chevauchaient. Elle se reduit maintenant au bouton
+              filtres (avec sa pastille de compte) tant que rien n'est
+              actif, et ne deroule ses raccourcis qu'une fois ouverte ou
+              qu'un filtre est pose — une seule ligne de chrome au-dessus
+              de la video, comme un feed vertical doit l'avoir. */}
           <ChipButton
             active={hasAny}
             onClick={() => setExpanded((v) => !v)}
@@ -158,7 +165,7 @@ export function ScrollChipBar({ filters, rosterChips = [] }: Props) {
             )}
           </ChipButton>
 
-          {/* Quick toggles — always inline because they're the highest-value */}
+          {(expanded || hasAny) && (<>
           <ChipButton
             active={filters.multiKillsOnly}
             onClick={() => toggleBoolean("multi", filters.multiKillsOnly)}
@@ -203,6 +210,8 @@ export function ScrollChipBar({ filters, rosterChips = [] }: Props) {
           >
             {t("p_scroll.rail_side_vs_kc")}
           </ChipButton>
+
+          </>)}
 
           {hasAny && (
             <button
