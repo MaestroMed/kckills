@@ -38,7 +38,8 @@ import { HomeTimelineFeed } from "@/components/timeline/HomeTimelineFeed";
 // HomeQuoteRotator + EraComparisonChart now lazy-loaded via next/dynamic above
 import { AnimatedNumber } from "@/components/AnimatedNumber";
 import { MacronEasterEgg } from "@/components/MacronEasterEgg";
-import { HeroClipBackground } from "@/components/HeroClipBackground";
+import { HeroImageCarousel } from "@/components/HeroImageCarousel";
+import { HERO_IMAGES } from "@/lib/hero-images";
 import { NextMatchOverlay } from "@/components/NextMatchOverlay";
 import { PageViewTracker } from "@/components/analytics/PageViewTracker";
 // Scroll Vivant grid — resurrected 2026-07-05 (Vague 3 of the
@@ -198,7 +199,6 @@ export default async function HomePage() {
     .slice(0, 6)
     .map(([name]) => championSplashUrl(name));
   const isEmpty = data.total_matches === 0;
-  const HERO_CLIPS = await buildHeroClips();
 
   // Wave 13h (2026-05-07) — the four Supabase queries that feed the
   // hero RIGHT column (clip count, last match, career stats, top
@@ -239,11 +239,12 @@ export default async function HomePage() {
 
       {/* ═══ HERO — 2-col layout with clip rotator (full-bleed via parent) ═══ */}
       <section className="relative min-h-[100vh] md:min-h-[92vh] overflow-hidden">
-        <HeroClipBackground
-          clips={HERO_CLIPS}
-          posterSrc="/images/hero-bg.jpg"
-          mobileMorphImages={heroMorphImages}
-        />
+        {/* Fond du hero : carrousel de photos, plus de vidéo. Un seul clip
+            pesait 19,4 Mo en autoPlay, soit 85 % du poids de la page d'accueil
+            téléchargés avant même le premier scroll. Les photos passent par
+            next/image — deux ordres de grandeur plus légères, et plus nettes
+            en plein écran qu'une vidéo compressée étirée. */}
+        <HeroImageCarousel images={HERO_IMAGES} />
 
         {/* Very light overlays — let the video breathe and feel alive.
             Only the bottom fade stays strong to blend into the next section.
