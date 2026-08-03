@@ -434,18 +434,38 @@ export function KCTimeline({
             >
               {era.image && (
                 <>
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <m.img
-                    src={era.image}
-                    alt=""
-                    className="absolute inset-0 w-full h-full object-cover pointer-events-none"
-                    draggable={false}
+                  {/* Mesure du 03/08/2026 sur la production : ces douze visuels
+                      partaient en <img> brut, hors optimiseur, pour 845 Ko —
+                      plus de la moitié du poids de la page d'accueil, chargés
+                      en même temps que le hero. Le `eslint-disable` masquait
+                      précisément l'avertissement qui le signalait.
+
+                      La carte fait 320 px de large : `sizes="320px"` fait
+                      servir la variante 640 (rétine comprise) au lieu du
+                      fichier d'origine. Le chargement différé de next/image
+                      fait le reste — la rangée défile horizontalement, seules
+                      les cartes visibles téléchargent quelque chose.
+
+                      L'animation passe sur un calque parent : `fill` a besoin
+                      de piloter l'inset de l'image, la scaler directement
+                      entrerait en conflit. */}
+                  <m.div
+                    className="absolute inset-0 pointer-events-none"
                     animate={{
                       scale: isHovered ? 1.15 : 1.05,
                       opacity: isHovered ? 1 : 0.75,
                     }}
                     transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
-                  />
+                  >
+                    <Image
+                      src={era.image}
+                      alt=""
+                      fill
+                      sizes="320px"
+                      draggable={false}
+                      className="object-cover"
+                    />
+                  </m.div>
                   <div className="absolute inset-0 bg-gradient-to-t from-black via-black/70 to-black/20 pointer-events-none" />
                   <m.div
                     className="absolute inset-0 pointer-events-none"
