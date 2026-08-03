@@ -1,8 +1,9 @@
 """ffmpeg operations — encoding, cropping, thumbnails.
 
-All output formats are 1080p as of the V2 quality bump:
-  horizontal       16:9   1920x1080   main 4.0   4M cap
-  vertical         9:16   1080x1920   main 4.0   4M cap
+All output formats are 1080p as of the V2 quality bump, 30 fps since the
+2026-08-03 bitrate pass:
+  horizontal       16:9   1920x1080   main 4.0   2.5M cap
+  vertical         9:16   1080x1920   main 4.0   2.5M cap
   vertical_low     9:16    540x 960   baseline 3.1  1.2M cap (slow networks)
   thumbnail        9:16   1080x1920   JPEG q=2
 
@@ -15,7 +16,7 @@ GPU encoding (NVENC, RTX 4070 Ti, 8th-gen Ada Lovelace):
 - `has_nvenc()` is cached and probes ffmpeg once per process.
 - All encode_* helpers accept `encoder="auto"|"nvenc"|"libx264"`.
 - "auto" picks NVENC when available AND config.USE_NVENC permits.
-- NVENC settings target equivalent quality to libx264 -preset fast -crf 22.
+- NVENC settings target equivalent quality to libx264 -preset fast -crf 25.
 """
 
 import asyncio
@@ -88,7 +89,9 @@ def _nvenc_args_hq(maxrate: str, bufsize: str, profile: str = "high",
         "-preset", "p5",
         "-tune", "hq",
         "-rc", "vbr",
-        "-cq", "23",
+        # 03/08/2026 — 23 -> 26, pendant NVENC du passage x264 crf 22 -> 25.
+        # Voir la note de débit dans video_codec_args().
+        "-cq", "26",
         "-b:v", "0",                  # let cq drive, but cap at maxrate
         "-maxrate", maxrate,
         "-bufsize", bufsize,
@@ -137,7 +140,7 @@ def _nvenc_args_low(maxrate: str, bufsize: str) -> list[str]:
 
 
 def _libx264_args_hq(maxrate: str, bufsize: str, profile: str = "main",
-                     level: str = "4.0", crf: str = "22") -> list[str]:
+                     level: str = "4.0", crf: str = "25") -> list[str]:
     return [
         "-c:v", "libx264", "-preset", "fast", "-crf", crf,
         "-profile:v", profile, "-level", level,
@@ -169,8 +172,26 @@ def video_codec_args(
     chosen = _resolve_encoder(encoder)
 
     if variant == "hq":
-        mr = maxrate or "4M"
-        bs = bufsize or "8M"
+        # ─── Débit : 4M -> 2,5M (03/08/2026) ──────────────────────────
+        # Mesure des fichiers en production : un clip pesait 19,4 Mo pour
+        # 40 s, soit 4,07 Mbps qu'il fallait tenir EN CONTINU pour lire
+        # sans s'arrêter. C'est le double de ce que servent TikTok ou
+        # Reels, et c'était la cause des gels signalés sur /scroll — le
+        # lecteur vidait son tampon puis attendait.
+        #
+        # Comparaison VMAF sur un clip réel (réencodage 30 fps depuis la
+        # sortie 4 Mbps existante, donc pire cas ; un encodage frais
+        # depuis le VOD fait mieux à réglage égal) :
+        #
+        #   crf 23 / max 3M    13,1 Mo   2,75 Mbps   VMAF 92,3
+        #   crf 25 / max 2,5M  10,8 Mo   2,27 Mbps   VMAF 89,6   <- retenu
+        #   crf 26 / max 2M     8,9 Mo   1,87 Mbps   VMAF 85,7
+        #
+        # 89,6 tient largement sur un écran de téléphone en 9:16, pour
+        # 44 % de poids en moins. Le passage à 30 fps (voir CLIP_FPS dans
+        # clipper.py) fait l'essentiel du gain.
+        mr = maxrate or "2500k"
+        bs = bufsize or "5000k"
         prof = profile or "high"
         # PR23.7 — `level or "4.1"` was forcing the explicit "4.1" string
         # back through the NVENC pipeline, bypassing _nvenc_args_hq's
@@ -199,7 +220,8 @@ async def encode_horizontal(input_path: str, output_path: str, encoder: str = "a
     await scheduler.wait_for("ffmpeg_cooldown")
     return _run([
         "-i", input_path,
-        "-vf", "scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2",
+        # 03/08/2026 — fps=30 : voir CLIP_FPS dans modules/clipper.py.
+        "-vf", "fps=30,scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2",
         *video_codec_args("hq", encoder=encoder),
         "-c:a", "aac", "-b:a", "128k",
         "-movflags", "+faststart",
@@ -212,7 +234,8 @@ async def encode_vertical(input_path: str, output_path: str, encoder: str = "aut
     await scheduler.wait_for("ffmpeg_cooldown")
     return _run([
         "-i", input_path,
-        "-vf", "crop=ih*9/16:ih:iw/2-ih*9/32:0,scale=1080:1920",
+        # 03/08/2026 — fps=30 : voir CLIP_FPS dans modules/clipper.py.
+        "-vf", "fps=30,crop=ih*9/16:ih:iw/2-ih*9/32:0,scale=1080:1920",
         *video_codec_args("hq", encoder=encoder),
         "-c:a", "aac", "-b:a", "128k",
         "-movflags", "+faststart",
@@ -225,7 +248,8 @@ async def encode_vertical_low(input_path: str, output_path: str, encoder: str = 
     await scheduler.wait_for("ffmpeg_cooldown")
     return _run([
         "-i", input_path,
-        "-vf", "crop=ih*9/16:ih:iw/2-ih*9/32:0,scale=540:960",
+        # 03/08/2026 — fps=30 : voir CLIP_FPS dans modules/clipper.py.
+        "-vf", "fps=30,crop=ih*9/16:ih:iw/2-ih*9/32:0,scale=540:960",
         *video_codec_args("low", encoder=encoder),
         "-c:a", "aac", "-b:a", "80k",
         "-movflags", "+faststart",

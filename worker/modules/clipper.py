@@ -46,6 +46,16 @@ from services.supabase_client import get_db, safe_select, safe_update
 
 log = structlog.get_logger()
 
+# ─── Cadence de sortie ───────────────────────────────────────────────────
+# 03/08/2026 — les VOD sont en 60 fps et les clips l'étaient aussi, ce qui
+# doublait le débit nécessaire sans rien apporter dans un fil vertical au
+# format téléphone : TikTok et Reels servent du 30 fps. C'est le plus gros
+# levier de poids, avant même le CRF — un clip mesuré en production faisait
+# 19,4 Mo pour 40 s (4,07 Mbps), à tenir en continu pour lire sans caler.
+# Le `-g 60` des réglages NVENC suppose d'ailleurs déjà 30 fps.
+CLIP_FPS = 30
+_FPS_VF = f"fps={CLIP_FPS},"
+
 FFMPEG_TIMEOUT = 180  # seconds per ffmpeg invocation
 # Wave 27.17 — bumped from 180 to 300s. Daemon log analysis shows
 # ALL clip_download failures are pure asyncio.wait_for timeouts (zero
@@ -343,7 +353,7 @@ async def clip_kill(
         await scheduler.wait_for("ffmpeg_cooldown")
         if not await _ffmpeg([
             "-i", raw_path,
-            "-vf", "scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2",
+            "-vf", _FPS_VF + "scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2",
             *video_codec_args("hq"),
             # Vague 2 — loudness normalisée EBU R128 : les casts LEC /
             # Kameto / KC Replay ont des niveaux très différents, le
@@ -361,7 +371,7 @@ async def clip_kill(
         # The LoL broadcast camera tracks action slightly right-of-center,
         # and the kill feed is in the top-right quadrant.
         # Standard center: iw/2 - ih*9/32. Shifted right: + iw*0.08
-        v_crop = "crop=ih*9/16:ih:iw/2-ih*9/32+iw*0.08:0,scale=1080:1920"
+        v_crop = _FPS_VF + "crop=ih*9/16:ih:iw/2-ih*9/32+iw*0.08:0,scale=1080:1920"
         if killer_champion and victim_champion:
             overlay = _build_overlay_filter(
                 killer_champion, victim_champion,
@@ -389,7 +399,7 @@ async def clip_kill(
         await scheduler.wait_for("ffmpeg_cooldown")
         if not await _ffmpeg([
             "-i", raw_path,
-            "-vf", "crop=ih*9/16:ih:iw/2-ih*9/32:0,scale=540:960",
+            "-vf", _FPS_VF + "crop=ih*9/16:ih:iw/2-ih*9/32:0,scale=540:960",
             *video_codec_args("low"),
             "-af", "loudnorm=I=-16:TP=-1.5:LRA=11",
             "-c:a", "aac", "-b:a", "80k",
@@ -723,7 +733,7 @@ async def clip_moment(
         await scheduler.wait_for("ffmpeg_cooldown")
         if not await _ffmpeg([
             "-i", raw_path,
-            "-vf", "scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2",
+            "-vf", _FPS_VF + "scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2",
             *video_codec_args("hq"),
             # Vague 2 — loudness normalisée EBU R128 : les casts LEC /
             # Kameto / KC Replay ont des niveaux très différents, le
@@ -737,7 +747,7 @@ async def clip_moment(
             return None
 
         # ─── 3. Vertical 9:16 HQ (no burnt-in overlay — frontend handles badges)
-        v_crop = "crop=ih*9/16:ih:iw/2-ih*9/32+iw*0.08:0,scale=1080:1920"
+        v_crop = _FPS_VF + "crop=ih*9/16:ih:iw/2-ih*9/32+iw*0.08:0,scale=1080:1920"
         v_filter = v_crop
 
         await scheduler.wait_for("ffmpeg_cooldown")
@@ -757,7 +767,7 @@ async def clip_moment(
         await scheduler.wait_for("ffmpeg_cooldown")
         if not await _ffmpeg([
             "-i", raw_path,
-            "-vf", "crop=ih*9/16:ih:iw/2-ih*9/32:0,scale=540:960",
+            "-vf", _FPS_VF + "crop=ih*9/16:ih:iw/2-ih*9/32:0,scale=540:960",
             *video_codec_args("low"),
             "-af", "loudnorm=I=-16:TP=-1.5:LRA=11",
             "-c:a", "aac", "-b:a", "80k",
