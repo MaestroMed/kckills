@@ -4,7 +4,7 @@ import { getPublishedKills, getKillById } from "@/lib/supabase/kills";
 import { createAnonSupabase } from "@/lib/supabase/server";
 import { championIconUrl } from "@/lib/constants";
 import { isDescriptionClean } from "@/lib/scroll/sanitize-description";
-import { getServerT } from "@/lib/i18n/server-lang";
+import { getStaticT } from "@/lib/i18n/server-lang";
 
 /**
  * Kill of the Week — Editorial-curated featured clip if set, otherwise
@@ -46,7 +46,9 @@ export async function KillOfTheWeek() {
     isFeatured = false;
   }
   if (!kill) return null;
-  const { t } = await getServerT();
+  // Traducteur statique — voir `buildTime: true` plus haut : `getServerT()`
+  // lit cookies() et rendrait la page hôte dynamique malgré cet effort.
+  const { t } = getStaticT();
   const isKc = kill.tracked_team_involvement === "team_killer";
   const gt = kill.game_time_seconds ?? 0;
   const mm = Math.floor(gt / 60);

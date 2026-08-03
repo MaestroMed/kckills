@@ -3,7 +3,7 @@ import Image from "next/image";
 import { getRecentPublishedKills } from "@/lib/supabase/kills";
 import { TEAM_LOGOS } from "@/lib/kc-assets";
 import { championIconUrl } from "@/lib/constants";
-import { getServerT } from "@/lib/i18n/server-lang";
+import { getStaticT } from "@/lib/i18n/server-lang";
 
 /**
  * HomeRecentClips — horizontal strip of the 8 most recent clips.
@@ -26,7 +26,10 @@ export async function HomeRecentClips() {
 
   if (cards.length === 0) return null;
 
-  const { t } = await getServerT();
+  // Traducteur statique : le commentaire ci-dessus explique pourquoi le
+  // loader passe en `buildTime: true`. `getServerT()` lit cookies() et
+  // annulait exactement ce bénéfice deux lignes plus bas.
+  const { t } = getStaticT();
 
   return (
     <section>

@@ -5,7 +5,7 @@ import {
   MINUTE_BUCKETS,
   type GridAxisId,
 } from "@/lib/grid/axis-config";
-import { getServerT } from "@/lib/i18n/server-lang";
+import { getStaticT } from "@/lib/i18n/server-lang";
 import { HomeGridClient } from "./home-grid-client";
 
 /**
@@ -26,8 +26,11 @@ const AXIS_Y: GridAxisId = "opponent_team_code";
 const MIN_CELLS = 4;
 
 export async function HomeGridSection() {
-  const [{ t }, cells, roster] = await Promise.all([
-    getServerT(),
+  // Traducteur statique : `getServerT()` lit cookies() + headers() et sort
+  // la page hôte du pré-rendu. Il n'a rien à faire dans un Promise.all de
+  // requêtes DB — ce n'est pas une lecture asynchrone.
+  const { t } = getStaticT();
+  const [cells, roster] = await Promise.all([
     getGridCells(AXIS_X, AXIS_Y),
     getTrackedRoster(),
   ]);

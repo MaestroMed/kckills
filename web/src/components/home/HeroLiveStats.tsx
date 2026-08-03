@@ -17,7 +17,7 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { getServerT } from "@/lib/i18n/server-lang";
+import { getStaticT } from "@/lib/i18n/server-lang";
 import { type RealData, type RosterPlayer, displayRole } from "@/lib/real-data";
 import { PLAYER_PHOTOS, TEAM_LOGOS, KC_LOGO } from "@/lib/kc-assets";
 // Wave 13n (2026-05-07) — switched from raw fetchers to unstable_cache-
@@ -48,7 +48,12 @@ export async function HeroLiveStats({
   stats,
   allMatches,
 }: HeroLiveStatsProps) {
-  const { t } = await getServerT();
+  // `getStaticT()` et non `getServerT()` : ce dernier lit cookies() +
+  // headers() et suffit à faire sortir la page hôte du pré-rendu, ce qui
+  // annule le `buildTime: true` posé juste en dessous. Même arbitrage que
+  // le layout racine — rendu FR côté serveur, le LangProvider client
+  // rebascule dans la langue du visiteur au montage.
+  const { t } = getStaticT();
   // ─── Live data fetch — parallel ───────────────────────────────────
   // `buildTime: true` opts into the cookie-less anon Supabase client so
   // the page stays cacheable per its `revalidate` ISR setting. Each
