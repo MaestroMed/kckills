@@ -57,6 +57,13 @@ import {
 import { useHlsPlayer } from "./hooks/useHlsPlayer";
 import { track } from "@/lib/analytics/track";
 
+/** Durée d'immobilité de la tête de lecture au-delà de laquelle on
+ *  considère le clip gelé. Deux secondes laissent passer les micro-cales
+ *  que le tampon rattrape seul, sans faire attendre le visiteur. */
+const STALL_MS = 2000;
+/** Fréquence d'échantillonnage de la tête de lecture. */
+const STALL_POLL_MS = 500;
+
 /**
  * Versioned-asset manifest (kills.assets_manifest, migration 026).
  * Mirror of `KillAssetsManifest` in lib/supabase/kills.ts but kept
@@ -235,6 +242,9 @@ export function FeedPlayerPool({
   );
   const ttffReportedRef = useRef<Set<string>>(new Set());
   const sessionFirstTtffRef = useRef<boolean>(true);
+  /** Items déjà passés en basse définition par le garde-fou de lecture.
+   *  Un item n'est déclassé qu'une fois par session. */
+  const downgradedRef = useRef<Set<string>>(new Set());
 
   /** Sync mute state across all 5 elements when shared mute toggles. */
   useEffect(() => {
@@ -418,7 +428,12 @@ export function FeedPlayerPool({
 
       // Did this slot just take a new item? Update src (HLS-aware) + reset hasPlayed.
       if (itemIdx !== prevItemIdx) {
-        const fallbackMp4 = pickSrc(item, isDesktop, useLowQuality, isWideStage, cinema);
+        // Un item que le garde-fou a déjà déclassé repart directement en
+        // basse définition. Sans ça, revenir dessus rebinderait la source
+        // haute définition et on regelerait au même endroit.
+        const fallbackMp4 =
+          (downgradedRef.current.has(item.id) ? pickLowSrc(item) : null) ??
+          pickSrc(item, isDesktop, useLowQuality, isWideStage, cinema);
         // PR23.8 — On desktop with a horizontal MP4 available, SKIP HLS
         // entirely. The HLS master playlist only carries the 9:16 vertical
         // ladder (which is what the worker's hls_packager produces today),
@@ -583,6 +598,92 @@ export function FeedPlayerPool({
    *  attach the listener. If containerY isn't passed (Phase 1 fallback),
    *  the listener fires on the no-op fallback motion value (which never
    *  changes) and the callback short-circuits via the `if` guard. */
+  /** Garde-fou de lecture — bascule sur la variante basse définition
+   *  quand le clip cale.
+   *
+   *  Mesure du 03/08/2026 sur les fichiers R2 : un clip fait 40 s pour
+   *  19,4 Mo, soit 4,07 Mbps qu'il faut tenir en continu pour lire sans
+   *  s'arrêter. Le lecteur remplit quelques secondes de tampon, les vide,
+   *  puis attend — c'est le gel « au bout de 5 ou 10 secondes » selon ce
+   *  que donne la connexion à cet instant. La variante `v_low` fait
+   *  1,28 Mbps pour la même durée : trois fois moins de débit à tenir.
+   *
+   *  Le garde-fou surveille la tête de lecture du slot LIVE. Si elle n'a
+   *  pas avancé pendant STALL_MS alors que la vidéo est censée jouer, on
+   *  rebascule sur `v_low` au même endroit. Un gel devient une baisse de
+   *  définition : c'est visible, mais ça continue de jouer.
+   *
+   *  Un seul déclassement par item. Sans ce garde, un réseau durablement
+   *  lent ferait osciller la source à chaque cale, et chaque bascule coûte
+   *  un rechargement. La marque tombe quand le slot change d'item.
+   *
+   *  Ce garde-fou traite le symptôme. La cause est le débit des fichiers
+   *  eux-mêmes — voir le chantier de réencodage côté worker.
+   */
+  useEffect(() => {
+    const liveSlot = priorities.indexOf("live");
+    if (liveSlot === -1) return;
+    const v = videoRefs.current[liveSlot];
+    const itemIdx = slotItemIndex[liveSlot];
+    if (!v || itemIdx === -1) return;
+    const item = items[itemIdx];
+    if (!item || downgradedRef.current.has(item.id)) return;
+
+    const lowSrc = pickLowSrc(item);
+    if (!lowSrc || v.currentSrc === lowSrc) return;
+
+    let lastTime = v.currentTime;
+    let frozenSince: number | null = null;
+
+    const id = setInterval(() => {
+      // Une vidéo en pause, terminée, ou dont la lecture n'a jamais
+      // démarré n'est pas en train de caler — elle attend autre chose.
+      if (v.paused || v.ended || v.readyState === 0) {
+        frozenSince = null;
+        lastTime = v.currentTime;
+        return;
+      }
+      if (v.currentTime !== lastTime) {
+        frozenSince = null;
+        lastTime = v.currentTime;
+        return;
+      }
+      frozenSince ??= performance.now();
+      if (performance.now() - frozenSince < STALL_MS) return;
+
+      clearInterval(id);
+      downgradedRef.current.add(item.id);
+
+      const resumeAt = v.currentTime;
+      const restore = () => {
+        v.removeEventListener("loadedmetadata", restore);
+        try {
+          v.currentTime = resumeAt;
+        } catch {
+          // Certains navigateurs refusent le seek avant d'avoir les
+          // métadonnées complètes ; repartir de zéro reste préférable
+          // à un écran figé.
+        }
+        void v.play().catch(() => {});
+      };
+      v.addEventListener("loadedmetadata", restore);
+      v.src = lowSrc;
+      v.load();
+
+      try {
+        track("clip.quality_downgrade", {
+          entityType: "kill",
+          entityId: item.id,
+          metadata: { at_seconds: Math.round(resumeAt), reason: "stall" },
+        });
+      } catch {
+        /* tracker is silent on failure by design */
+      }
+    }, STALL_POLL_MS);
+
+    return () => clearInterval(id);
+  }, [priorities, slotItemIndex, items]);
+
   const fallbackY = useMotionValue(0);
   useMotionValueEvent(containerY ?? fallbackY, "change", (latest) => {
     if (!containerY) return;
@@ -878,6 +979,17 @@ function pickSrc(
   if (useLowQuality && item.clipVerticalLow) return item.clipVerticalLow;
   if (wantHorizontal && item.clipHorizontal) return item.clipHorizontal;
   return item.clipVertical;
+}
+
+/** Source basse définition d'un item, ou null s'il n'en a pas.
+ *
+ *  Même ordre de priorité que `pickSrc` : le manifeste versionné fait foi,
+ *  les colonnes plates sont le repli pour les lignes clippées avant la
+ *  migration 026. Les rares items sans variante basse ne sont pas
+ *  déclassables — le garde-fou les laisse tranquilles.
+ */
+function pickLowSrc(item: PoolItem): string | null {
+  return item.assetsManifest?.vertical_low?.url ?? item.clipVerticalLow ?? null;
 }
 
 /** Map an HTMLMediaError numeric code to a stable string suitable for

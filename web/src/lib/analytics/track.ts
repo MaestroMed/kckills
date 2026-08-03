@@ -158,6 +158,12 @@ export type EventType =
   //     cold_start: bool }          // first item of the session
   // Surfaced on the perf dashboard alongside Web Vitals.
   | "clip.ttff"
+  // 03/08/2026 — le garde-fou de lecture a rebasculé un clip en basse
+  // définition parce que la tête de lecture était figée depuis 2 s.
+  // metadata: { at_seconds: number, reason: 'stall' }
+  // Sert à mesurer le taux de gel avant / après le réencodage des clips :
+  // aujourd'hui la variante haute définition demande 4,07 Mbps en continu.
+  | "clip.quality_downgrade"
   // V14 (Wave 21.2) — AI-tag chip click. Fired by FeedItem when a user
   // taps an `ai_tags` chip → filter applied. metadata: { tag: string }
   | "clip.tag_clicked"
