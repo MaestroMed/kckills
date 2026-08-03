@@ -29,7 +29,7 @@ import {
   type TeamKillCard,
 } from "@/lib/teams-loader";
 import { JsonLd, breadcrumbLD } from "@/lib/seo/jsonld";
-import { getServerT, type ServerTranslateFn } from "@/lib/i18n/server-lang";
+import { getStaticT, type ServerTranslateFn } from "@/lib/i18n/server-lang";
 
 export const revalidate = 1800; // Wave 13d : DB pressure
 
@@ -71,7 +71,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
 export default async function TeamPage({ params }: Props) {
   const { slug } = await params;
-  const { t } = await getServerT();
+  const { t } = getStaticT();
   const team = await getTeamBySlug(slug);
   if (!team) notFound();
 

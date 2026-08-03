@@ -20,7 +20,7 @@ import {
   type TopQuoteRow,
 } from "@/lib/supabase/quotes";
 import { JsonLd, breadcrumbLD } from "@/lib/seo/jsonld";
-import { getServerT } from "@/lib/i18n/server-lang";
+import { getStaticT } from "@/lib/i18n/server-lang";
 import type { QuoteCardData } from "@/components/quotes/QuoteCard";
 
 export const revalidate = 900;
@@ -89,7 +89,7 @@ function pickFeatured(rows: TopQuoteRow[]): TopQuoteRow | null {
 }
 
 export default async function QuotesPage() {
-  const { t } = await getServerT();
+  const { t } = getStaticT();
   const [stats, top] = await Promise.all([
     getQuotesStats({ buildTime: true }),
     getTopQuotes(60, 1, { buildTime: true }),

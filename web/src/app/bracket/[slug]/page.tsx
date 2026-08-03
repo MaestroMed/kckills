@@ -14,7 +14,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
-import { getServerT } from "@/lib/i18n/server-lang";
+import { getStaticT } from "@/lib/i18n/server-lang";
 import { JsonLd, breadcrumbLD } from "@/lib/seo/jsonld";
 import {
   getBracketBySlug,
@@ -61,7 +61,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 
 export default async function BracketArchivePage({ params }: PageProps) {
   const { slug } = await params;
-  const { t } = await getServerT();
+  const { t } = getStaticT();
   const [bundle, pastWinners] = await Promise.all([
     getBracketBySlug(slug),
     getPastWinners(12),

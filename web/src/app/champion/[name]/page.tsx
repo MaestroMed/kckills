@@ -6,7 +6,7 @@ import { championLoadingUrl, championSplashUrl, championIconUrl } from "@/lib/co
 import { ClipReel } from "@/components/ClipReel";
 import { PortraitCubeMorph } from "@/components/PortraitCubeMorph";
 import { getClipsFiltered } from "@/lib/supabase/clips";
-import { getServerT } from "@/lib/i18n/server-lang";
+import { getStaticT } from "@/lib/i18n/server-lang";
 
 /**
  * Safe decode for route params. Next already decodes params once —
@@ -55,7 +55,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 }
 
 export default async function ChampionPage({ params }: Props) {
-  const { t } = await getServerT();
+  const { t } = getStaticT();
   const { name } = await params;
   const champ = safeDecode(name);
 

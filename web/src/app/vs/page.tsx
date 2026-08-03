@@ -41,7 +41,7 @@ import {
 
 import { VSRoulette } from "@/components/VSRoulette";
 import { JsonLd, breadcrumbLD } from "@/lib/seo/jsonld";
-import { getServerT } from "@/lib/i18n/server-lang";
+import { getStaticT } from "@/lib/i18n/server-lang";
 
 export const revalidate = 1800;
 
@@ -183,7 +183,7 @@ async function buildChampionsAndThumbnails(): Promise<{
 }
 
 export default async function VSPage() {
-  const { t } = await getServerT();
+  const { t } = getStaticT();
   const [players, { champions, rouletteThumbnails }, eraOptions] =
     await Promise.all([
       buildPlayerOptions(),

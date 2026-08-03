@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { loadRealData, getKCRoster, getPlayerStats } from "@/lib/real-data";
 import { Breadcrumb } from "@/components/Breadcrumb";
-import { getServerT } from "@/lib/i18n/server-lang";
+import { getStaticT } from "@/lib/i18n/server-lang";
 import { CompareClient, type ComparablePlayer } from "./compare-client";
 
 /**
@@ -21,7 +21,7 @@ export const metadata: Metadata = {
 };
 
 export default async function ComparePage() {
-  const { t } = await getServerT();
+  const { t } = getStaticT();
   const data = loadRealData();
   const roster = getKCRoster(data);
 

@@ -20,7 +20,7 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { Breadcrumb } from "@/components/Breadcrumb";
-import { getServerT } from "@/lib/i18n/server-lang";
+import { getStaticT } from "@/lib/i18n/server-lang";
 
 export const revalidate = 600;
 
@@ -54,7 +54,7 @@ export default async function PublicProfilePage({ params }: Props) {
   const { username } = await params;
   if (!username || username.length > 64) notFound();
 
-  const { t } = await getServerT();
+  const { t } = getStaticT();
   const sb = await createServerSupabase();
   const { data: profile } = (await sb
     .from("profiles")

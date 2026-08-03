@@ -6,7 +6,7 @@ import { championIconUrl, championSplashUrl } from "@/lib/constants";
 import { PLAYER_PHOTOS, TEAM_LOGOS, KC_LOGO } from "@/lib/kc-assets";
 import { getPublishedKills } from "@/lib/supabase/kills";
 import { loadHeroVideos } from "@/lib/hero-videos/storage";
-import { getServerT } from "@/lib/i18n/server-lang";
+import { getStaticT } from "@/lib/i18n/server-lang";
 // 🔴 2026-04-28 — heavy desktop-only sections live in a client wrapper
 // file (`homepage-desktop-sections.tsx`) because Next.js 15 forbids
 // `next/dynamic({ssr:false})` directly inside server components. The
@@ -177,7 +177,7 @@ const YOUTUBE_HERO_CLIPS = [
 export const revalidate = 1800;
 
 export default async function HomePage() {
-  const { t } = await getServerT();
+  const { t } = getStaticT();
   const data = loadRealData();
   const roster = getCurrentRoster(data);
   const stats = getTeamStats(data);

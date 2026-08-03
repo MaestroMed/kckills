@@ -3,7 +3,7 @@ import { loadRealData, getMatchesSorted } from "@/lib/real-data";
 import { getPublishedKills } from "@/lib/supabase/kills";
 import { createAnonSupabase } from "@/lib/supabase/server";
 import { Breadcrumb } from "@/components/Breadcrumb";
-import { getServerT } from "@/lib/i18n/getServerLang";
+import { getStaticT } from "@/lib/i18n/getServerLang";
 import { MatchesAccordion } from "./matches-accordion";
 
 export const revalidate = 600; // Wave 13d : new match every 1-3 days
@@ -24,7 +24,7 @@ export const metadata: Metadata = {
 };
 
 export default async function MatchesPage() {
-  const { t } = await getServerT();
+  const { t } = getStaticT();
   // Audit 2026-07-02 : createAnonSupabase() throws when the Supabase
   // env is absent (this page was the ONLY one killing `next build` in
   // env-less contexts — every other page degrades). Null client →

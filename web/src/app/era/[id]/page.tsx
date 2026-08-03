@@ -11,7 +11,7 @@ import { getQuotesByEra } from "@/lib/quotes";
 import { QuoteRow } from "@/components/QuoteCard";
 import { PortraitCubeMorph } from "@/components/PortraitCubeMorph";
 import { countKillsByEra } from "@/lib/supabase/kills";
-import { getServerT, type ServerTranslateFn } from "@/lib/i18n/server-lang";
+import { getStaticT, type ServerTranslateFn } from "@/lib/i18n/server-lang";
 import { formatDate } from "@/lib/i18n/lang";
 
 export const revalidate = 3600;
@@ -86,7 +86,7 @@ export default async function EraPage({ params }: Props) {
   const era = getEraById(id);
   if (!era) notFound();
 
-  const { lang, t } = await getServerT();
+  const { lang, t } = getStaticT();
   const data = loadRealData();
   const periodMatches = matchesInEra(data.matches, era);
   const wins = periodMatches.filter((m) => m.kc_won).length;

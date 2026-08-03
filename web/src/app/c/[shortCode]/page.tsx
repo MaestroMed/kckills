@@ -35,7 +35,7 @@ import {
 } from "@/lib/supabase/compilations";
 import { championIconUrl } from "@/lib/constants";
 import { visitorNameFromHash } from "@/components/bcc/visitor-names";
-import { getServerT } from "@/lib/i18n/server-lang";
+import { getStaticT } from "@/lib/i18n/server-lang";
 import { CompilationPlayer } from "./CompilationPlayer";
 
 const SITE_URL =
@@ -118,7 +118,7 @@ function estimateChapterOffset(
 // ─── Page ──────────────────────────────────────────────────────────────
 
 export default async function CompilationViewerPage({ params }: Props) {
-  const { t } = await getServerT();
+  const { t } = getStaticT();
   const { shortCode } = await params;
   if (!/^[0-9A-Za-z]{6,12}$/.test(shortCode)) notFound();
 
@@ -430,7 +430,7 @@ async function RenderingSplash({
   clipCount: number;
   author: string;
 }) {
-  const { t } = await getServerT();
+  const { t } = getStaticT();
   return (
     <>
       {/* Auto-refresh every 20 s so a fresh share-link visitor sees the
@@ -476,7 +476,7 @@ async function FailedSplash({
   renderError: string | null;
   author: string;
 }) {
-  const { t } = await getServerT();
+  const { t } = getStaticT();
   return (
     <div className="mx-auto flex min-h-[60vh] max-w-2xl flex-col items-center justify-center px-4 text-center">
       <span aria-hidden className="text-3xl text-[var(--red)]">
