@@ -23,6 +23,13 @@ import { AnimatePresence, m } from "motion/react";
  * La première image est prioritaire et sert d'élément LCP : elle est rendue
  * sans animation d'entrée, sinon on retomberait sur le problème d'opacité
  * initiale qui retarde la peinture.
+ *
+ * Seule l'image courante est montée — c'est ce qui rend le carrousel gratuit
+ * en bande passante tant que le visiteur reste peu de temps. Contrepartie : le
+ * fondu démarrerait sur un fichier pas encore téléchargé, donc sur du noir. Un
+ * calque invisible précharge donc l'image suivante pendant les huit secondes
+ * du plan en cours. Il ne s'arme qu'après la peinture initiale, pour ne pas
+ * disputer la bande passante à l'image LCP.
  */
 
 export interface HeroImage {
@@ -46,9 +53,16 @@ interface HeroImageCarouselProps {
 
 const FADE_SECONDS = 3;
 
+/**
+ * Délai avant d'armer le préchargement. L'image LCP doit être peinte avant
+ * qu'une deuxième requête image ne parte, sinon on déplace le problème.
+ */
+const PRELOAD_DELAY_MS = 2000;
+
 export function HeroImageCarousel({ images, holdMs = 8000 }: HeroImageCarouselProps) {
   const [index, setIndex] = useState(0);
   const [reducedMotion, setReducedMotion] = useState(false);
+  const [preloadArmed, setPreloadArmed] = useState(false);
 
   useEffect(() => {
     const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
@@ -68,9 +82,17 @@ export function HeroImageCarousel({ images, holdMs = 8000 }: HeroImageCarouselPr
     return () => clearInterval(id);
   }, [reducedMotion, images.length, holdMs]);
 
+  useEffect(() => {
+    const id = setTimeout(() => setPreloadArmed(true), PRELOAD_DELAY_MS);
+    return () => clearTimeout(id);
+  }, []);
+
   if (images.length === 0) return null;
 
   const current = images[index];
+  const next = images[(index + 1) % images.length];
+  // Inutile de précharger si le carrousel ne tournera jamais.
+  const preloading = preloadArmed && !reducedMotion && images.length > 1;
 
   return (
     <div className="absolute inset-0 overflow-hidden" aria-hidden={images.length > 1}>
@@ -102,6 +124,12 @@ export function HeroImageCarousel({ images, holdMs = 8000 }: HeroImageCarouselPr
           </m.div>
         </m.div>
       </AnimatePresence>
+
+      {preloading && (
+        <div className="pointer-events-none absolute inset-0 opacity-0" aria-hidden>
+          <Image src={next.src} alt="" fill sizes="100vw" className="object-cover" />
+        </div>
+      )}
     </div>
   );
 }
