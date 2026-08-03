@@ -102,21 +102,19 @@ async function buildHeroClips() {
   // uploaded anything yet (fresh deploy).
   const youtubeClips = YOUTUBE_HERO_CLIPS;
 
-  // Wave 46 — LE MASHUP T1. 9 streams du monde entier qui réagissent en même
-  // temps à la demi-finale EWC gagnée contre T1 (Caliste vs Peyz, le 22-22 de
-  // la game 3). Monté depuis les compils KarmineUpdates, hébergé R2 (hero/).
-  // Épinglé en tête tant que l'euphorie dure — retirer l'entrée pour revenir
-  // au flux normal.
-  const t1Mashup = {
-    mp4Url: "https://clips.kckills.com/hero/t1_reactions_mashup.mp4",
-    title: "LE MONDE ENTIER A VU KC BATTRE T1",
-    context: "EWC 2026 · Demi-finale · Les réactions",
-    durationMs: 20000,
-    audioVolume: 0,
-  };
-
-  // Operator clips first (curated), then R2 auto-best-of, then YouTube.
-  return [t1Mashup, ...operatorClips, ...r2Clips, ...youtubeClips];
+  // Wave 46 — LE MASHUP T1 (9 streams réagissant à la demi-finale EWC gagnée
+  // contre T1) était épinglé en tête du hero. Son fichier pèse 12,5 Mo, soit
+  // 85 % des 14,29 Mo mesurés sur la page d'accueil : le <video> est en
+  // autoPlay, donc chaque visiteur le téléchargeait entièrement avant même de
+  // scroller. Le commentaire d'origine prévoyait de retirer l'entrée « pour
+  // revenir au flux normal » une fois l'euphorie passée — c'est fait.
+  //
+  // Le hero rejoue donc sa rotation normale : clips curatés par l'opérateur,
+  // puis le best-of automatique des kills publiés (r2Clips, tiré de la base),
+  // puis les reels YouTube en dernier recours. Pour ré-épingler un montage
+  // événementiel, passer par /admin/hero-videos plutôt que par ce fichier :
+  // les vidéos opérateur arrivent déjà en tête de liste.
+  return [...operatorClips, ...r2Clips, ...youtubeClips];
 }
 
 const YOUTUBE_HERO_CLIPS = [
