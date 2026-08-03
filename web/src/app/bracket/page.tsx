@@ -19,7 +19,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 import { JsonLd, breadcrumbLD } from "@/lib/seo/jsonld";
-import { getServerT } from "@/lib/i18n/server-lang";
+import { getStaticT } from "@/lib/i18n/server-lang";
 import {
   getCurrentBracket,
   getPastWinners,
@@ -52,7 +52,7 @@ export const metadata: Metadata = {
 };
 
 export default async function BracketPage() {
-  const { t } = await getServerT();
+  const { t } = getStaticT();
 
   const [bundle, pastWinners] = await Promise.all([
     getCurrentBracket(),

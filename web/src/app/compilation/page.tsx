@@ -25,7 +25,7 @@ import { Film, Clock, Link2 } from "lucide-react";
 
 import { getPublishedKills } from "@/lib/supabase/kills";
 import { pickAssetUrl } from "@/lib/kill-assets";
-import { getServerT } from "@/lib/i18n/server-lang";
+import { getStaticT } from "@/lib/i18n/server-lang";
 import { Breadcrumb } from "@/components/Breadcrumb";
 import { CompilationBuilder } from "./CompilationBuilder";
 import type { BuilderKill } from "./CompilationBuilder";
@@ -63,7 +63,7 @@ export const metadata = {
 };
 
 export default async function CompilationPage() {
-  const { t } = await getServerT();
+  const { t } = getStaticT();
 
   // Top 200 published KC kills. We filter to team_killer = KC and
   // require a horizontal clip (the worker concatenates the 16:9

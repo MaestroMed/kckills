@@ -28,7 +28,7 @@ import type { Metadata } from "next";
 import { getAlumniBySlug, getAllAlumniSlugs, ALUMNI } from "@/lib/alumni";
 import { getEraById } from "@/lib/eras";
 import { championSplashUrl } from "@/lib/constants";
-import { getServerT } from "@/lib/i18n/server-lang";
+import { getStaticT } from "@/lib/i18n/server-lang";
 import { PLAYER_PHOTOS } from "@/lib/kc-assets";
 import { AntreTrigger } from "@/components/AntreTrigger";
 
@@ -148,7 +148,7 @@ function SectionEyebrow({ label, accent }: { label: string; accent: string }) {
 
 export default async function AlumniDetailPage({ params }: Props) {
   const { slug } = await params;
-  const { t } = await getServerT();
+  const { t } = getStaticT();
   const alumni = getAlumniBySlug(slug);
   if (!alumni) notFound();
 

@@ -15,7 +15,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { getEraById } from "@/lib/eras";
-import { getServerT } from "@/lib/i18n/server-lang";
+import { getStaticT } from "@/lib/i18n/server-lang";
 
 export const metadata: Metadata = {
   title: "L'ere sombre",
@@ -37,7 +37,7 @@ const SUMMER = getEraById("lec-2024-summer");
 const SACRE = getEraById("lec-2025-winter");
 
 export default async function DarknessPage() {
-  const { t } = await getServerT();
+  const { t } = getStaticT();
   return (
     <div className="darkness-root relative -mx-4 -my-6 min-h-[calc(100vh+200px)] overflow-hidden">
       {/* ── Background layers ───────────────────────────────────── */}

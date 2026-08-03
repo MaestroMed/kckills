@@ -135,6 +135,27 @@ const nextConfig: NextConfig = {
     ],
     // Modern formats — Next.js 16 default but explicit for clarity.
     formats: ["image/avif", "image/webp"],
+
+    // ─── Maîtrise du coût des transformations d'image ──────────────────
+    // Vercel facture chaque variante générée. Sans les trois réglages
+    // ci-dessous, une seule image source peut produire jusqu'à 32 variantes
+    // (8 deviceSizes × 8 imageSizes bornés par le sizes utilisé, × 2 formats),
+    // et le cache expirait assez vite pour que tout soit régénéré en boucle.
+    //
+    // Un an de TTL est le bon ordre de grandeur ici : les icônes de champions
+    // (ddragon), les portraits de joueurs et les logos d'équipe ne changent
+    // jamais. Les visuels qui bougent vraiment (miniatures de clips) portent
+    // déjà une URL distincte par clip, donc le TTL long ne les fige pas.
+    minimumCacheTTL: 31_536_000,
+
+    // Largeurs réellement utilisées par le site, au lieu des 8 valeurs par
+    // défaut. Couvre mobile / tablette / desktop / retina sans générer les
+    // paliers intermédiaires que personne ne demande.
+    deviceSizes: [640, 828, 1080, 1920],
+
+    // Idem pour les images à taille fixe (icônes de champions, avatars,
+    // pastilles de rôle) : ces quatre paliers suffisent.
+    imageSizes: [32, 64, 128, 256],
   },
   async headers() {
     return [{ source: "/(.*)", headers: securityHeaders }];

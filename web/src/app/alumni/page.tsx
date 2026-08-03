@@ -15,7 +15,7 @@ import Image from "next/image";
 import { ALUMNI } from "@/lib/alumni";
 import { championSplashUrl } from "@/lib/constants";
 import { Breadcrumb } from "@/components/Breadcrumb";
-import { getServerT } from "@/lib/i18n/server-lang";
+import { getStaticT } from "@/lib/i18n/server-lang";
 
 export const metadata: Metadata = {
   title: "Alumni",
@@ -88,7 +88,7 @@ function groupByYear(alumni: typeof ALUMNI) {
 }
 
 export default async function AlumniPage() {
-  const { t } = await getServerT();
+  const { t } = getStaticT();
   const grouped = groupByYear(ALUMNI);
 
   const ROLE_LABEL: Record<string, string> = {

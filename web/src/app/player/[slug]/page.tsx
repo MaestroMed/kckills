@@ -29,7 +29,7 @@ import { TeammatesGrid } from "@/components/player/TeammatesGrid";
 import { PrevNextNavCard } from "@/components/player/PrevNextNavCard";
 import { HeadToHead } from "@/components/player/HeadToHead";
 import { ERAS, type Era } from "@/lib/eras";
-import { getServerT } from "@/lib/i18n/server-lang";
+import { getStaticT } from "@/lib/i18n/server-lang";
 import { formatDate } from "@/lib/i18n/lang";
 
 /**
@@ -173,7 +173,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 export default async function PlayerPage({ params }: Props) {
   const { slug } = await params;
   const name = safeDecode(slug);
-  const { lang, t } = await getServerT();
+  const { lang, t } = getStaticT();
   const data = loadRealData();
   const stats = getPlayerStats(data, name);
 

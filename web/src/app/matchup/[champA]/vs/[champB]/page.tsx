@@ -7,7 +7,7 @@ import { ClipReel } from "@/components/ClipReel";
 import { PortraitCubeMorph } from "@/components/PortraitCubeMorph";
 import { getClipsFiltered } from "@/lib/supabase/clips";
 import { Breadcrumb } from "@/components/Breadcrumb";
-import { getServerT } from "@/lib/i18n/server-lang";
+import { getStaticT } from "@/lib/i18n/server-lang";
 
 /**
  * Safe decode for route params. Next already decodes params once —
@@ -96,7 +96,7 @@ export default async function MatchupPage({ params }: Props) {
     notFound();
   }
 
-  const { t } = await getServerT();
+  const { t } = getStaticT();
 
   // ─── JSON-LD: tells Google this is a video collection about a specific
   //     LoL champion match-up. Two CollectionPage facets per matchup, one

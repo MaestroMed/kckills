@@ -6,7 +6,7 @@ import { championIconUrl, championLoadingUrl } from "@/lib/constants";
 import { PLAYER_PHOTOS } from "@/lib/kc-assets";
 import { ALUMNI } from "@/lib/alumni";
 import { Breadcrumb } from "@/components/Breadcrumb";
-import { getServerT } from "@/lib/i18n/server-lang";
+import { getStaticT } from "@/lib/i18n/server-lang";
 
 export const revalidate = 1800; // Wave 13d : DB pressure (roster stable)
 export const metadata: Metadata = {
@@ -24,7 +24,7 @@ export const metadata: Metadata = {
 };
 
 export default async function PlayersPage() {
-  const { t } = await getServerT();
+  const { t } = getStaticT();
   const data = loadRealData();
 
   const data2026 = { ...data, matches: data.matches.filter((m) => m.date >= "2026-01-01") };

@@ -1,12 +1,12 @@
 import Image from "next/image";
 import Link from "next/link";
 import { championSplashUrl } from "@/lib/constants";
-import { getServerT } from "@/lib/i18n/getServerLang";
+import { getStaticT } from "@/lib/i18n/getServerLang";
 
 // Metadata uses the FR canonical strings — Next.js generates static
-// metadata at build time, before per-request locale resolution. The
-// in-page body still flips to the active locale at request time via
-// getServerT() below.
+// metadata at build time, before per-request locale resolution. Le corps
+// de la page rend désormais la langue par défaut via getStaticT (cf. le
+// correctif de cache) ; le LangProvider client rebascule au montage.
 export const metadata = {
   title: "404 — Page introuvable",
   description: "Cette page n'existe pas dans l'univers de la Karmine Corp.",
@@ -17,7 +17,7 @@ const NOT_FOUND_CHAMPS = ["Jhin", "Yasuo", "Aphelios", "Kaisa", "Zed", "Ahri"];
 const randomChamp = NOT_FOUND_CHAMPS[Math.floor(Math.random() * NOT_FOUND_CHAMPS.length)];
 
 export default async function NotFound() {
-  const { t } = await getServerT();
+  const { t } = getStaticT();
   return (
     <div className="-mx-4 -mt-6 relative min-h-[85vh] overflow-hidden flex items-center justify-center">
       {/* Full-screen champion splash background */}

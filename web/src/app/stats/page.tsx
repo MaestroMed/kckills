@@ -4,7 +4,7 @@ import { ChampionLadders } from "@/components/home/ChampionLadders";
 import { FormCalendar } from "@/components/home/FormCalendar";
 import { StatCard } from "@/components/ui/StatCard";
 import { Breadcrumb } from "@/components/Breadcrumb";
-import { getServerT } from "@/lib/i18n/server-lang";
+import { getStaticT } from "@/lib/i18n/server-lang";
 
 /**
  * /stats — team dashboard (Vague 5, audit 2026-07-05).
@@ -23,7 +23,7 @@ export const metadata: Metadata = {
 };
 
 export default async function StatsPage() {
-  const { t } = await getServerT();
+  const { t } = getStaticT();
   const data = loadRealData();
   const matches = getMatchesSorted(data);
 

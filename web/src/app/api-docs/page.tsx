@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { Metadata } from "next";
-import { getServerT } from "@/lib/i18n/server-lang";
+import { getStaticT } from "@/lib/i18n/server-lang";
 
 export const metadata: Metadata = {
   title: "API Documentation",
@@ -8,7 +8,7 @@ export const metadata: Metadata = {
 };
 
 export default async function ApiDocsPage() {
-  const { t } = await getServerT();
+  const { t } = getStaticT();
   const endpointLabels = {
     params: t("p_pubpages.apidocs_label_params"),
     example: t("p_pubpages.apidocs_label_example"),

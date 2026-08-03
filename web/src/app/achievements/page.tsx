@@ -26,7 +26,7 @@ import {
   getUserPointsSummary,
 } from "@/lib/supabase/achievements";
 import { JsonLd, breadcrumbLD } from "@/lib/seo/jsonld";
-import { getServerT } from "@/lib/i18n/server-lang";
+import { getStaticT } from "@/lib/i18n/server-lang";
 
 export const revalidate = 60;
 
@@ -52,7 +52,7 @@ export const metadata: Metadata = {
 };
 
 export default async function AchievementsPage() {
-  const { t } = await getServerT();
+  const { t } = getStaticT();
 
   // First-render pass : no session hash because we're on the server with
   // no localStorage access. The client refreshes once it knows the hash.

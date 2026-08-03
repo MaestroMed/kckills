@@ -13,7 +13,7 @@ import {
 } from "@/lib/supabase/match";
 import { ERAS, type Era } from "@/lib/eras";
 import { JsonLd, breadcrumbLD } from "@/lib/seo/jsonld";
-import { getServerT } from "@/lib/i18n/server-lang";
+import { getStaticT } from "@/lib/i18n/server-lang";
 
 import { ReplayHero } from "@/components/match/ReplayHero";
 import { MatchSummaryCard } from "@/components/match/MatchSummaryCard";
@@ -125,7 +125,7 @@ export default async function MatchReplayPage({ params }: Props) {
   const match = await getMatchBySlug(slug);
   if (!match) notFound();
 
-  const { t } = await getServerT();
+  const { t } = getStaticT();
 
   const [kills, mvp, related] = await Promise.all([
     getMatchKills(match.externalId),

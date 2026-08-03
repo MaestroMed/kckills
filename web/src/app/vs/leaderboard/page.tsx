@@ -31,7 +31,7 @@ import {
   getLeaderboardChampions,
 } from "@/lib/supabase/vs-leaderboard";
 import { JsonLd, breadcrumbLD } from "@/lib/seo/jsonld";
-import { getServerT } from "@/lib/i18n/server-lang";
+import { getStaticT } from "@/lib/i18n/server-lang";
 
 import { VSLeaderboard } from "@/components/vs-leaderboard/VSLeaderboard";
 import { formatNumber } from "@/lib/i18n/lang";
@@ -60,7 +60,7 @@ export const metadata: Metadata = {
 };
 
 export default async function VSLeaderboardPage() {
-  const { lang, t } = await getServerT();
+  const { lang, t } = getStaticT();
 
   // ─── Parallel pre-fetch ────────────────────────────────────────────
   const [initialRows, initialStats, champions] = await Promise.all([
