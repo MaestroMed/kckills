@@ -44,7 +44,12 @@ export function LangSwitcher({
           aria-expanded={open}
           className="inline-flex items-center gap-1.5 rounded-md border border-[var(--border-gold)] bg-[var(--bg-surface)]/70 px-2 py-1 text-[10px] font-data uppercase tracking-widest text-[var(--text-secondary)] hover:border-[var(--gold)]/60 hover:text-[var(--gold)] transition-colors"
         >
-          <span aria-hidden className="text-base leading-none">{current.flag}</span>
+          {/* Windows n'a pas de police emoji drapeaux : 🇫🇷 s'affichait en
+              lettres « FR » → doublon « FR FR ». Globe neutre à la place. */}
+          <svg aria-hidden className="h-3.5 w-3.5 opacity-80" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+            <circle cx="12" cy="12" r="9" />
+            <path d="M3 12h18M12 3c2.5 2.6 3.8 5.7 3.8 9S14.5 18.4 12 21c-2.5-2.6-3.8-5.7-3.8-9S9.5 5.6 12 3z" />
+          </svg>
           <span>{current.label}</span>
           <svg className="h-2.5 w-2.5 opacity-60" viewBox="0 0 12 12" fill="none">
             <path d="M3 4.5L6 7.5L9 4.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
@@ -83,7 +88,6 @@ export function LangSwitcher({
                         : "text-[var(--text-secondary)] hover:bg-[var(--bg-surface)] hover:text-white"
                     }`}
                   >
-                    <span aria-hidden className="text-base leading-none">{m.flag}</span>
                     <span className="font-data uppercase tracking-widest text-[10px]">{m.label}</span>
                     <span className="ml-auto text-[10px] opacity-70">{m.nativeName}</span>
                     {active && (
@@ -127,7 +131,6 @@ export function LangSwitcher({
             aria-label={`Switch to ${m.nativeName}`}
             aria-pressed={active}
           >
-            <span aria-hidden className="text-sm">{m.flag}</span>
             <span>{m.label}</span>
           </button>
         );

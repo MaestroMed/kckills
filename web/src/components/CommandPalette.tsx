@@ -53,7 +53,6 @@ const PAGES: Entry[] = [
   { id: "page-scroll",  group: "page", label: "Scroll kills",  subtitle: "Mode TikTok",      href: "/scroll",      searchText: "scroll tiktok feed clips kills" },
   { id: "page-best",    group: "page", label: "Meilleurs",     subtitle: "Curation IA + comm.", href: "/clips?sort=score",     searchText: "meilleurs best top curation legendaires" },
   { id: "page-recent",  group: "page", label: "Derniers clips", subtitle: "Chronologique",   href: "/clips?sort=recent",     searchText: "recent derniers chronologique latest nouveau frais" },
-  { id: "page-sphere",  group: "page", label: "Sphere immersif", subtitle: "Mode 3D 360",   href: "/sphere",     searchText: "sphere 3d 360 immersif experimental orbit" },
   { id: "page-players", group: "page", label: "Joueurs",       subtitle: "Roster KC",        href: "/players",     searchText: "joueurs players roster" },
   { id: "page-champions", group: "page", label: "Champions",   subtitle: "Browse par champ", href: "/champions",   searchText: "champions champion picks pool meta" },
   { id: "page-matchups",  group: "page", label: "Match-ups",     subtitle: "Confrontations",   href: "/clips",    searchText: "matchups match-ups vs versus confrontations rivalites duels champions" },
@@ -70,7 +69,6 @@ const PAGES: Entry[] = [
   // read-only /clips catalog (no submission surface yet). Re-add when
   // the real community_clips submit page ships.
   { id: "page-api",     group: "page", label: "API Docs",       subtitle: "Documentation",    href: "/api-docs",    searchText: "api documentation endpoints rest developers" },
-  { id: "page-review",  group: "page", label: "Review QA",      subtitle: "Clip quality",     href: "/review",      searchText: "review qa quality test noter clips" },
   // Audit 2026-07-02 — community features shipped without palette
   // entries (several were unreachable from any public surface).
   { id: "page-vs",      group: "page", label: "VS — Duels",     subtitle: "Vote 1v1 de clips", href: "/vs",         searchText: "vs versus duel vote roulette elo battle" },
@@ -415,8 +413,28 @@ export function CommandPalette() {
     // Flat list order must match the visual order so keyboard nav is consistent
     const flat: Entry[] = [];
     for (const g of GROUP_ORDER) flat.push(...map[g]);
-    return { map, flat };
-  }, [results]);
+    // Header 2.0 — passerelle vers la recherche plein-texte /search. La
+    // palette n'indexe que le statique (pages, ères, roster, matchs) ; dès
+    // que l'utilisateur tape une vraie requête, la dernière entrée est
+    // toujours « Recherche complète » → /search?q=. C'est ce qui permet de
+    // mutualiser les deux anciens blocs de recherche du header sans perdre
+    // le full-text.
+    const q = query.trim();
+    const fts: Entry | null =
+      q.length >= 2
+        ? {
+            id: "fts-handoff",
+            group: "page",
+            label: t("search.palette_fts", { query: q }),
+            subtitle: t("search.palette_fts_sub"),
+            href: `/search?q=${encodeURIComponent(q)}`,
+            hint: "FTS",
+            searchText: "",
+          }
+        : null;
+    if (fts) flat.push(fts);
+    return { map, flat, fts };
+  }, [results, query, t]);
 
   const navigate = useCallback(
     (entry: Entry) => {
@@ -486,7 +504,8 @@ export function CommandPalette() {
               {t("search.no_results", { query })}
             </div>
           ) : (
-            GROUP_ORDER.map((group) => {
+            <>
+            {GROUP_ORDER.map((group) => {
               const entries = grouped.map[group];
               if (entries.length === 0) return null;
               return (
@@ -540,7 +559,49 @@ export function CommandPalette() {
                   </ul>
                 </div>
               );
-            })
+            })}
+            {/* Passerelle plein-texte — toujours en dernière position de la
+                liste plate, donc atteignable en ↓ jusqu'au bout + Enter. */}
+            {grouped.fts && (() => {
+              const flatIdx = grouped.flat.length - 1;
+              const isActive = flatIdx === active;
+              const fts = grouped.fts;
+              return (
+                <div className="mt-1 border-t border-[var(--border-gold)] pt-1.5">
+                  <button
+                    role="option"
+                    aria-selected={isActive}
+                    onMouseEnter={() => setActive(flatIdx)}
+                    onClick={() => navigate(fts)}
+                    className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left transition-colors ${
+                      isActive
+                        ? "bg-[var(--gold)]/15 text-[var(--gold-bright)]"
+                        : "text-[var(--text-secondary)] hover:bg-[var(--bg-elevated)]/60"
+                    }`}
+                  >
+                    <span
+                      className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-md ${
+                        isActive
+                          ? "bg-[var(--gold)]/25 text-[var(--gold-bright)]"
+                          : "bg-[var(--bg-elevated)] text-[var(--gold)]"
+                      }`}
+                    >
+                      <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 1 1-14 0 7 7 0 0 1 14 0z" />
+                      </svg>
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <div className={`truncate text-sm font-medium ${isActive ? "text-[var(--gold-bright)]" : "text-[var(--text-primary)]"}`}>
+                        {fts.label}
+                      </div>
+                      <div className="truncate text-[11px] text-[var(--text-muted)]">{fts.subtitle}</div>
+                    </div>
+                    <span className="shrink-0 text-[var(--gold)]" aria-hidden>{"↵"}</span>
+                  </button>
+                </div>
+              );
+            })()}
+            </>
           )}
         </div>
 
@@ -592,10 +653,10 @@ export function CommandPaletteButton({ className = "" }: { className?: string })
       aria-label={t("nav.search_aria")}
       className={`flex items-center gap-2 rounded-lg border border-[var(--border-gold)] bg-[var(--bg-surface)] px-2.5 py-1.5 text-xs text-[var(--text-muted)] transition-all hover:border-[var(--gold)]/50 hover:text-[var(--gold)] ${className}`}
     >
-      <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <svg className="h-3.5 w-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 1 1-14 0 7 7 0 0 1 14 0z" />
       </svg>
-      <span className="hidden lg:inline">{t("nav.search_short")}</span>
+      <span className="hidden lg:inline flex-1 text-left">{t("nav.search_short")}</span>
       <kbd className="hidden sm:inline-flex h-4 items-center rounded border border-[var(--border-gold)] bg-[var(--bg-elevated)] px-1 font-data text-[9px] text-[var(--text-secondary)]">
         {mac ? "\u2318" : "Ctrl"} K
       </kbd>

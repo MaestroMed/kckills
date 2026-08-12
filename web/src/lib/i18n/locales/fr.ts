@@ -341,6 +341,8 @@ const _fr = {
     palette_navigate: "naviguer",
     palette_open: "ouvrir",
     palette_close: "fermer",
+    palette_fts: "Recherche complète pour « {query} »",
+    palette_fts_sub: "Tous les clips — recherche plein texte",
     palette_group_pages: "Pages",
     palette_group_eras: "Époques",
     palette_group_players: "Joueurs",

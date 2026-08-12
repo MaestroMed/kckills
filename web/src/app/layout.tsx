@@ -7,6 +7,7 @@ import {
   Playfair_Display,
   Cormorant_Garamond,
   IM_Fell_English,
+  Graduate,
 } from "next/font/google";
 import { Analytics } from "@vercel/analytics/next";
 import { SpeedInsights } from "@vercel/speed-insights/next";
@@ -82,6 +83,19 @@ const imFellEnglish = IM_Fell_English({
   weight: ["400"],
   style: ["normal", "italic"],
   variable: "--font-im-fell",
+  display: "swap",
+  preload: false,
+});
+
+// Header 2.0 (Mehdi 2026-08-12) — lettrage varsity du wordmark « SCROLL »
+// dans la barre de nav. Graduate = collegiate slab, un seul poids (400),
+// subset latin ≈ 15-20 KB. Il porte le CTA signature présent sur toutes
+// les pages, mais le swap est indolore (le mot est court) → preload:false
+// pour préserver le critical path.
+const graduate = Graduate({
+  subsets: ["latin"],
+  weight: ["400"],
+  variable: "--font-varsity",
   display: "swap",
   preload: false,
 });
@@ -282,7 +296,7 @@ export default async function RootLayout({
   return (
     <html
       lang={htmlLang}
-      className={`${oswald.variable} ${interTight.variable} ${jetbrainsMono.variable} ${playfairDisplay.variable} ${cormorantGaramond.variable} ${imFellEnglish.variable}`}
+      className={`${oswald.variable} ${interTight.variable} ${jetbrainsMono.variable} ${playfairDisplay.variable} ${cormorantGaramond.variable} ${imFellEnglish.variable} ${graduate.variable}`}
     >
       <head>
         <link rel="manifest" href="/manifest.json" />

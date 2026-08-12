@@ -325,6 +325,8 @@ export const es: FrDict = {
     palette_navigate: "navegar",
     palette_open: "abrir",
     palette_close: "cerrar",
+    palette_fts: "Búsqueda completa de « {query} »",
+    palette_fts_sub: "Todos los clips — búsqueda de texto completo",
     palette_group_pages: "Páginas",
     palette_group_eras: "Eras",
     palette_group_players: "Jugadores",

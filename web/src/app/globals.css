@@ -986,3 +986,103 @@ button:focus-visible {
 /* No new keyframes are introduced by this block, so there is nothing extra
    to gate for prefers-reduced-motion — the global reduce guard above already
    neutralises any animation/transition these surfaces might inherit. */
+
+/* ─── Header 2.0 — barre flottante + CTA glossy + étendards KC ──────────
+   Demande Mehdi 2026-08-12 : header contenu (plus bord-à-bord), recherche
+   unique, Discord en icône, CTA « Scroll » glossy à gros contours, et
+   étendards KC or accrochés aux coins de la barre. */
+
+/* Le CTA signature — PAS un bouton : le mot « SCROLL » en lettrage
+   varsity (Graduate), collé façon sticker : gros contour crème + contour
+   navy + lettres or, léger tilt, glow néon 80s au hover. */
+.scroll-wordmark {
+  display: inline-flex;
+  align-items: center;
+  transform: rotate(-2deg);
+  transition: transform 0.2s ease, filter 0.25s ease;
+  filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.6))
+    drop-shadow(0 0 10px rgba(200, 170, 110, 0.3));
+}
+.scroll-wordmark:hover {
+  transform: rotate(-2deg) scale(1.06);
+  filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.6))
+    drop-shadow(0 0 14px rgba(200, 170, 110, 0.6))
+    drop-shadow(0 0 28px rgba(10, 200, 185, 0.35));
+}
+.scroll-wordmark:active {
+  transform: rotate(-2deg) scale(0.98);
+}
+.scroll-wordmark-svg {
+  height: 36px;
+  width: auto;
+  overflow: visible;
+}
+.scroll-wordmark-svg--lg {
+  height: 44px;
+}
+.scroll-wordmark-text {
+  font-family: var(--font-varsity), var(--font-oswald), sans-serif;
+  font-size: 27px;
+  letter-spacing: 0.05em;
+  paint-order: stroke fill;
+}
+
+/* Étendards KC — bannières héraldiques accrochées sous les coins de la
+   barre. Le wrap gère position + taille ; dedans, soit le fallback SVG
+   statique (balancement CSS), soit le canvas R3F « vrai tissu ».
+   Décoratif pur : aria-hidden + pointer-events-none, desktop only. */
+.kc-pennant-wrap {
+  pointer-events: none;
+  position: absolute;
+  top: 100%;
+  margin-top: -2px;
+  width: 58px;
+  height: 150px;
+  transform-origin: 50% 0;
+  z-index: 5;
+  transition: transform 0.45s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.35s ease;
+}
+/* Au scroll la barre se condense : les étendards se replient dessous
+   (ils ne chevauchent jamais le contenu en milieu de page) et
+   redescendent en haut de page. */
+nav[data-scrolled="true"] .kc-pennant-wrap {
+  transform: translateY(-70%);
+  opacity: 0;
+}
+.kc-pennant-wrap--left {
+  left: 12px;
+}
+.kc-pennant-wrap--right {
+  right: 12px;
+}
+.kc-pennant-static {
+  width: 100%;
+  height: auto;
+  filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.5));
+  transform-origin: 50% 0;
+  animation: kc-pennant-sway 6s ease-in-out infinite alternate;
+}
+.kc-pennant-wrap--right .kc-pennant-static {
+  animation-delay: -3s;
+}
+.kc-pennant-cloth {
+  width: 100%;
+  height: 100%;
+  filter: drop-shadow(0 5px 8px rgba(0, 0, 0, 0.45));
+}
+@keyframes kc-pennant-sway {
+  from {
+    transform: rotate(-2.5deg);
+  }
+  to {
+    transform: rotate(2.5deg);
+  }
+}
+
+/* Surface de la barre flottante (le .glass historique porte un
+   border-bottom pensé pour la barre bord-à-bord ; la barre flottante
+   gère ses bordures via les classes Tailwind). */
+.glass-bar {
+  backdrop-filter: blur(16px) saturate(180%);
+  background: rgba(10, 20, 40, 0.72);
+}

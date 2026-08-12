@@ -331,6 +331,8 @@ export const ko: FrDict = {
     palette_navigate: "이동",
     palette_open: "열기",
     palette_close: "닫기",
+    palette_fts: "“{query}” 전체 검색",
+    palette_fts_sub: "모든 클립 — 전문 검색",
     palette_group_pages: "페이지",
     palette_group_eras: "시대",
     palette_group_players: "선수",

@@ -114,7 +114,9 @@ export function NextMatchOverlay() {
 
   return (
     <div
-      className="absolute top-[max(env(safe-area-inset-top,0px),5.5rem)] right-4 md:right-8 z-30 pointer-events-none"
+      // lg: +offset vertical et horizontal pour laisser respirer l'étendard
+      // KC qui pend du coin droit du header 2.0.
+      className="absolute top-[max(env(safe-area-inset-top,0px),5.5rem)] right-4 md:right-8 lg:top-[15rem] lg:right-10 z-30 pointer-events-none"
       aria-live="polite"
     >
       <Link
