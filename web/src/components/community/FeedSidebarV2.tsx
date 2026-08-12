@@ -59,8 +59,12 @@ const LONG_PRESS_MS = 500;
 // spec is layered ONLY on `lg:` utilities. Rest = cream-wash over a
 // black scrim + thin gold border ; hover = full gold border + glow +
 // stronger wash (the .gold-glow utility lives in globals.css).
+// Audit 2026-08-12 — lisibilité mobile : les tuiles black/55 + bord
+// white/15 disparaissaient sur le footage sombre (mesuré : rail peint et
+// au-dessus, mais indiscernable sur screenshot). Bord et ombre renforcés,
+// même langage dark-glass.
 const SECONDARY_TILE =
-  "bg-black/55 backdrop-blur-sm border border-white/15 hover:bg-black/75 hover:border-white/25 shadow-[0_4px_18px_rgba(0,0,0,0.5)] " +
+  "bg-black/55 backdrop-blur-sm border border-white/30 hover:bg-black/75 hover:border-white/45 shadow-[0_4px_18px_rgba(0,0,0,0.6),0_0_0_1px_rgba(0,0,0,0.4)] " +
   "lg:bg-[var(--cream-wash)] lg:bg-black/35 lg:backdrop-blur-md lg:border-[var(--gold)]/45 lg:shadow-[0_8px_26px_rgba(0,0,0,0.5)] " +
   "lg:hover:bg-[var(--cream-wash-strong)] lg:hover:border-[var(--gold)] lg:hover:shadow-[0_0_20px_rgba(200,170,110,0.15),0_0_60px_rgba(200,170,110,0.05)] motion-safe:lg:hover:scale-[1.04]";
 
@@ -68,7 +72,8 @@ const SECONDARY_TILE =
 const SECONDARY_TILE_ON =
   "border bg-[var(--gold)] border-[var(--gold)] shadow-[0_8px_26px_rgba(200,170,110,0.4),0_0_30px_rgba(200,170,110,0.25)] motion-safe:lg:hover:scale-[1.04]";
 
-const SECONDARY_GLYPH = "text-white lg:text-[var(--gold)] transition-colors";
+const SECONDARY_GLYPH =
+  "text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)] lg:text-[var(--gold)] lg:drop-shadow-none transition-colors";
 
 // Count / label sits in the gap — font-data, legible over bright frames
 // via a drop-shadow. Mobile keeps its original size; bumps to 13px on lg.
@@ -290,7 +295,7 @@ export function FeedSidebarV2({
           aria-label={t("p_comm.rate_kill_aria")}
           className="flex lg:hidden flex-col items-center gap-1 group select-none"
         >
-          <span className="flex h-10 w-10 items-center justify-center rounded-full bg-black/55 backdrop-blur-sm border border-white/15 transition-all group-hover:bg-black/75 active:scale-90">
+          <span className="flex h-10 w-10 items-center justify-center rounded-full bg-black/55 backdrop-blur-sm border border-white/30 shadow-[0_4px_18px_rgba(0,0,0,0.6)] transition-all group-hover:bg-black/75 active:scale-90">
             <svg
               className="h-5 w-5 text-[var(--gold)]"
               viewBox="0 0 24 24"
