@@ -72,7 +72,13 @@ const WARN_LABEL_KEYS: Record<string, string> = {
 
 export function RiotLinkCard({ profile, loggedIn, callbackState }: Props) {
   const t = useT();
-  const [linkedProfile, setLinkedProfile] = useState<RiotLinkProfile | null>(profile);
+  // Résync prop → affichage (audit 2026-08-12) : le parent résout /api/me
+  // APRÈS le premier render (profile null au mount, puis profil réel). Un
+  // useState(profile) figeait la valeur initiale → CTA « non lié » affiché
+  // à un utilisateur déjà lié. On dérive donc de la prop à chaque render ;
+  // seul le délien local (bouton « Délier ») est un vrai état.
+  const [unlinked, setUnlinked] = useState(false);
+  const linkedProfile = unlinked ? null : profile;
   const [pending, startTransition] = useTransition();
   const [unlinkError, setUnlinkError] = useState<string | null>(null);
   // Découvert au CLIC (pas de probe au chargement) : passe à true quand
@@ -185,7 +191,7 @@ export function RiotLinkCard({ profile, loggedIn, callbackState }: Props) {
           setUnlinkError(t("p_setcard.riot_unlink_error"));
           return;
         }
-        setLinkedProfile(null);
+        setUnlinked(true);
         track("auth.riot_unlinked");
       } catch {
         setUnlinkError(t("p_setcard.riot_unlink_error_network"));

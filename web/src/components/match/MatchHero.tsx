@@ -193,8 +193,10 @@ export function MatchHero({
           {/* Opponent */}
           <div className="flex flex-col items-center gap-3 group">
             <div
-              className="relative grid place-items-center h-20 w-20 md:h-28 md:w-28 rounded-2xl border-2 border-white/20 bg-[var(--bg-surface)]
-                         transition-all duration-500 group-hover:border-white/40 group-hover:scale-105"
+              // className mono-ligne : un littéral multi-ligne embarque \r\n
+              // sur un checkout CRLF → mismatch d'hydration (le DOM SSR
+              // normalise CRLF→LF, la prop client non). Cf. KillCinematicView.
+              className="relative grid place-items-center h-20 w-20 md:h-28 md:w-28 rounded-2xl border-2 border-white/20 bg-[var(--bg-surface)] transition-all duration-500 group-hover:border-white/40 group-hover:scale-105"
               style={{ boxShadow: "0 0 18px rgba(255,255,255,0.05)" }}
             >
               {opponentLogoSrc ? (

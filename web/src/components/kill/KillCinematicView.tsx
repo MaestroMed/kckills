@@ -553,11 +553,15 @@ export function KillCinematicView({
 
           {kill.ai_tags && kill.ai_tags.length > 0 && (
             <div className="mt-10 flex flex-wrap gap-2 justify-center">
+              {/* className sur UNE ligne : un littéral JSX multi-ligne embarque
+                  les fins de ligne CRLF du fichier dans l'attribut ; le parseur
+                  HTML normalise \r\n → \n côté DOM mais la prop client garde
+                  \r\n → hydration mismatch React 19 ("attributes didn't
+                  match"). Idem pour les deux <Link> plus bas. */}
               {kill.ai_tags.map((tag) => (
                 <span
                   key={tag}
-                  className="rounded-full border border-[var(--gold)]/30 bg-gradient-to-b from-[var(--gold)]/10 to-transparent px-3.5 py-1
-                             text-[11px] font-data font-bold uppercase tracking-widest text-[var(--gold)]"
+                  className="rounded-full border border-[var(--gold)]/30 bg-gradient-to-b from-[var(--gold)]/10 to-transparent px-3.5 py-1 text-[11px] font-data font-bold uppercase tracking-widest text-[var(--gold)]"
                 >
                   #{tag}
                 </span>
@@ -601,10 +605,10 @@ export function KillCinematicView({
       {/* ─── MATCH CONTEXT ────────────────────────────────────────────── */}
       <section className="max-w-5xl mx-auto px-6 py-8">
         {matchExternalId ? (
+          // className mono-ligne — cf. note CRLF/hydration section tags.
           <Link
             href={`/match/${matchExternalId}`}
-            className="group block rounded-2xl border border-[var(--border-gold)] bg-gradient-to-br from-[var(--bg-surface)] to-[var(--bg-elevated)]
-                       p-5 transition-all duration-300 hover:border-[var(--gold)]/60 hover:from-[var(--bg-elevated)] hover:to-[var(--bg-surface)]"
+            className="group block rounded-2xl border border-[var(--border-gold)] bg-gradient-to-br from-[var(--bg-surface)] to-[var(--bg-elevated)] p-5 transition-all duration-300 hover:border-[var(--gold)]/60 hover:from-[var(--bg-elevated)] hover:to-[var(--bg-surface)]"
           >
             <div className="flex items-center justify-between gap-4">
               <div>
@@ -625,8 +629,13 @@ export function KillCinematicView({
                   {matchScheduled && (
                     <>
                       {" "}·{" "}
+                      {/* timeZone épinglé : composant client rendu en SSR —
+                          sans lui le jour affiché dépend du fuseau du runtime
+                          (UTC sur Vercel vs navigateur du visiteur) →
+                          hydration mismatch sur le texte autour de minuit. */}
                       {new Date(matchScheduled).toLocaleDateString("fr-FR", {
                         day: "numeric", month: "long", year: "numeric",
+                        timeZone: "Europe/Paris",
                       })}
                     </>
                   )}
@@ -671,11 +680,11 @@ export function KillCinematicView({
           </header>
           <div className="flex gap-4 overflow-x-auto snap-x snap-mandatory pb-4 scrollbar-thin scrollbar-thumb-[var(--gold)]/30">
             {relatedKills.map((rk) => (
+              // className mono-ligne — cf. note CRLF/hydration section tags.
               <Link
                 key={rk.id}
                 href={`/kill/${rk.id}`}
-                className="snap-start shrink-0 w-56 rounded-xl overflow-hidden border border-[var(--border-gold)]
-                           bg-[var(--bg-surface)] hover:border-[var(--gold)]/60 transition-all group"
+                className="snap-start shrink-0 w-56 rounded-xl overflow-hidden border border-[var(--border-gold)] bg-[var(--bg-surface)] hover:border-[var(--gold)]/60 transition-all group"
               >
                 <div className="relative aspect-video w-full bg-black overflow-hidden">
                   {rk.thumbnail_url ? (

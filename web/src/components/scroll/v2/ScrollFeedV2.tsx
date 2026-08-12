@@ -1113,7 +1113,10 @@ export function ScrollFeedV2({
   const feedStage = (
     <div
       ref={containerRef}
-      className="absolute inset-0 overflow-hidden"
+      // bg-black (fix rail 2026-08-12) : le sol noir vit ICI, sous le pool,
+      // depuis que les FeedItem sont transparents (voir zIndex: 10 plus bas).
+      // Mobile l'héritait déjà de la racine fixed ; la StageFrame non.
+      className="absolute inset-0 overflow-hidden bg-black"
       // Touch-action: pan-y so the browser doesn't fight the drag. (Was on
       // the old fixed-inset-0 root ; moved here verbatim so the gesture math
       // is identical and the wide-stage frame gets the same touch contract.)
@@ -1153,10 +1156,23 @@ export function ScrollFeedV2({
 
       {/* Items container — gesture-driven, items absolutely positioned.
           role="feed" + aria-label per WCAG 2.2 feed pattern. The roving
-          tabindex / inert state is applied per-slide below off activeIndex. */}
+          tabindex / inert state is applied per-slide below off activeIndex.
+
+          zIndex: 10 (fix rail 2026-08-12) — ce conteneur porte y + will-change,
+          donc il forme TOUJOURS un stacking context (will-change à l'arrêt,
+          translateY(≠0) dès l'item 1). En z-auto il peignait en étage 6, sous
+          le pool vidéo (zIndex 5, étage 7) : la vidéo live recouvrait TOUS les
+          overlays des items (rail d'actions, badges, matchup, description) —
+          mesuré au débogage : rail invisible sur capture mobile, flagrant sur
+          les clips 16:9 letterboxés (barres noires), masqué par la texture du
+          footage sur les 9:16. On inverse : items AU-DESSUS du pool, et chaque
+          FeedItem laisse une fenêtre transparente (poster masqué, fond
+          transparent — voir FeedItem.tsx) pour que la vidéo reste visible.
+          Le sandwich voulu (fond < vidéo < overlays) est ainsi réalisé sans
+          toucher au pool ni au geste. */}
       <m.div
         className="absolute inset-0"
-        style={{ y, willChange: "transform" }}
+        style={{ y, willChange: "transform", zIndex: 10 }}
         role="feed"
         aria-label={t("p_scroll.sh_feed_aria")}
         aria-busy={isRefreshing}

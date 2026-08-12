@@ -42,7 +42,7 @@ export default async function StatsPage() {
 
   return (
     <div className="space-y-10">
-      <Breadcrumb items={[{ label: "Stats" }]} />
+      <Breadcrumb items={[{ label: t("nav.home"), href: "/" }, { label: "Stats" }]} />
       <header>
         <p className="font-data text-[10px] uppercase tracking-[0.3em] text-[var(--gold)]/70 mb-2">
           Karmine Corp
