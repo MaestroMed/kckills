@@ -109,11 +109,14 @@ const _fr = {
   },
   p_stats: {
     title: "Stats d'équipe",
-    subtitle: "La Karmine Corp en chiffres — picks, forme et tendances sur toutes les games trackées.",
-    kpi_games: "Games jouées",
-    kpi_winrate: "Winrate",
-    kpi_kills: "Kills totaux",
-    kpi_matches: "Matchs",
+    // Audit compteurs 12/08 : cette page vit sur le périmètre « log
+    // détaillé » (games avec stats vérifiées), pas la carrière complète
+    // de la home — les libellés le disent désormais.
+    subtitle: "La Karmine Corp en chiffres — picks, forme et tendances sur les games au log détaillé (stats par game vérifiées).",
+    kpi_games: "Games détaillées",
+    kpi_winrate: "Winrate games (est.)",
+    kpi_kills: "Kills KC · games détaillées",
+    kpi_matches: "Matchs · log détaillé",
   },
   p_champions: {
     title: "Champions",
@@ -453,7 +456,10 @@ const _fr = {
     winrate: "{rate}% winrate",
     wins_short: "{n}V",
     losses_short: "{n}D",
+    // Audit compteurs 12/08 — V + D + sans-résultat = total du hero.
+    no_result_short: "{n} sans résultat",
     games_count: "{n} games",
+    games_detail_count: "{n} games détaillées",
     clips_count: "{n} clips",
     filter_placeholder: "Filtrer par adversaire…",
     filter_aria: "Filtrer les matchs par adversaire",
@@ -931,9 +937,12 @@ const _fr = {
     "breadcrumb_clips": "Clips",
     "hero_title_pre": "Tous les",
     "hero_title_accent": "clips",
-    "count_filtered": "clips filtrés",
-    "count_published": "clips publiés",
-    "count_total": "au total",
+    // Audit compteurs 12/08 : les cartes mêlent clips jouables et kills
+    // data-only → « kills affichés » ; le total = compteur canonique des
+    // clips publiés (stats-scopes), pas la taille du fetch plafonné.
+    "count_filtered": "kills filtrés",
+    "count_published": "kills affichés",
+    "count_total": "clips publiés au total",
     "records_link": "Records Absolus",
     "search_placeholder": "Filtrer par champion ou description...",
     "search_aria": "Filtrer les clips par champion ou description",
@@ -1152,7 +1161,7 @@ const _fr = {
     "item_loading_next": "Chargement du clip suivant…",
     "item_end_eyebrow": "Fin du feed",
     "item_end_seen_pre": "Tu as vu les",
-    "item_end_seen_post": "clips",
+    "item_end_seen_post": "clips de cette sélection",
     "item_end_body": "La suite du KCKILLS, à toi de choisir le rythme. Ré-explore le même feed dans un autre ordre, ou plonge dans une sélection plus serrée.",
     "item_end_reshuffle": "Mélanger à nouveau",
     "item_end_best": "★ Meilleurs",

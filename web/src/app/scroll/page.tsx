@@ -17,12 +17,15 @@ import { cookies, headers } from "next/headers";
 import { loadRealData } from "@/lib/real-data";
 import {
   getKillById,
-  getPublishedKcKillCount,
   getPublishedKills,
   getScrollFeedKills,
   getScrollFeedPoolCount,
   getTopScrollKills,
 } from "@/lib/supabase/kills";
+// Audit compteurs 2026-08-12 — le compteur « X clips » du header vient du
+// module canonique stats-scopes (même implémentation que la home, /clips
+// et /matches : kills KC publiés avec clip jouable).
+import { getCachedPublishedClipsCount } from "@/lib/stats-scopes";
 import { getTrackedRoster } from "@/lib/supabase/players";
 import { requireAdmin } from "@/lib/admin/audit";
 import {
@@ -284,7 +287,7 @@ export default async function ScrollV2Page({ searchParams }: ScrollPageProps) {
   );
   const [poolCount, catalogTotal] = await Promise.all([
     catalogEnabled ? getScrollFeedPoolCount(QUALITY_FLOOR) : Promise.resolve(0),
-    getPublishedKcKillCount(),
+    getCachedPublishedClipsCount(),
   ]);
   const windowOffset =
     catalogEnabled && poolCount > KILLS_LIMIT

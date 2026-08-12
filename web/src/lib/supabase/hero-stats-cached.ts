@@ -39,7 +39,7 @@ import {
   type HeroCareerStats,
   type HeroTopScorer,
 } from "./hero-stats";
-import { getPublishedKcKillCount as _getPublishedKcKillCount } from "./kills";
+import { getCachedPublishedClipsCount } from "@/lib/stats-scopes";
 
 const HERO_TAG = "hero-stats" as const;
 
@@ -61,11 +61,10 @@ export const getCachedHeroTopScorer = unstable_cache(
   { revalidate: 1800, tags: [HERO_TAG] },
 );
 
-export const getCachedPublishedKcKillCount = unstable_cache(
-  async (): Promise<number> => _getPublishedKcKillCount({ buildTime: true }),
-  ["published-kc-kill-count"],
-  { revalidate: 300, tags: [HERO_TAG] },
-);
+/** ♻️ Audit compteurs 2026-08-12 — alias du compteur canonique « clips »
+ *  (lib/stats-scopes.ts, vue 095 → fallback getPublishedKcKillCount).
+ *  Une seule implémentation partagée avec /scroll, /clips et /matches. */
+export const getCachedPublishedKcKillCount = getCachedPublishedClipsCount;
 
 /** Re-export the tag constant so server actions can revalidate
  *  ('hero-stats') without hard-coding the string. */

@@ -23,6 +23,12 @@ import {
   createServerSupabase,
   rethrowIfDynamic,
 } from "@/lib/supabase/server";
+import {
+  fetchDetectedKcKillsCount,
+  fetchGamesAllCompetCount,
+  fetchMatchesAllCompet,
+  fetchPublishedClipsCount,
+} from "@/lib/stats-scopes";
 
 export interface HeroLastMatch {
   matchId: string;
@@ -41,7 +47,10 @@ export interface HeroCareerStats {
   totalGames: number;
   wins: number;
   losses: number;
-  winRate: number; // 0..1
+  /** Matchs terminés sans winner_team_id en base (backfill gol.gg) —
+   *  exclus de `losses` ET du winrate depuis l'audit compteurs 12/08. */
+  unknownResults: number;
+  winRate: number; // 0..1 — sur matchs décidés uniquement (W+L)
   publishedClips: number;
   yearStart: number;
   yearEnd: number;
@@ -219,115 +228,45 @@ export const getHeroLastMatch = cache(async function getHeroLastMatch(
  * filtre de ligue ni de date : elle agrège TOUS les matchs terminés de
  * KC, toutes compétitions confondues (LFL 2021, EU Masters, LEC…) — le
  * libellé de la carte hero doit donc dire « toutes compétitions », pas
- * « LEC ». Counts kills (KC offensive only), wins/losses/games from
- * completed matches.
+ * « LEC ».
+ *
+ * ♻️ Audit compteurs 2026-08-12 : cette fonction COMPOSE désormais les
+ * compteurs canoniques de `lib/stats-scopes.ts` au lieu de porter ses
+ * propres requêtes. Deux bugs corrigés au passage :
+ *   * `losses` comptait « pas gagné = perdu » → les 42 matchs backfillés
+ *     sans winner_team_id gonflaient les défaites (305W-232L, WR 56,8 %)
+ *     — ils vivent maintenant dans `unknownResults` (305W-190L, 61,6 %).
+ *   * `publishedClips` comptait TOUTES les lignes status=published (deux
+ *     camps, avec ou sans clip → « 9 276 CLIPS » sur la home) alors que
+ *     /scroll affichait 5 224. C'est maintenant LE compteur « clips »
+ *     canonique (kills KC publiés avec clip jouable).
+ *
+ * Le paramètre `buildTime` est conservé pour compat d'appel mais n'a
+ * plus d'effet : les compteurs canoniques sont anon-only (données
+ * publiques, clé de cache stable cross-request).
  */
 export const getHeroCareerStats = cache(async function getHeroCareerStats(
-  buildTime = false,
+  _buildTime = false,
 ): Promise<HeroCareerStats | null> {
   try {
-    const sb = buildTime
-      ? createAnonSupabase()
-      : await createServerSupabase();
-    const teamId = await getTrackedTeamId(buildTime);
-    if (!teamId) return null;
-
-    // Completed matches involving KC. `tournaments(year)` est embarqué
-    // pour la fenêtre d'années : la majorité des matchs backfillés
-    // gol.gg ont scheduled_at NULL — seul le tournoi porte l'année
-    // réelle (2021+).
-    const { data: matches } = await sb
-      .from("matches")
-      .select(
-        "id, winner_team_id, team_blue_id, team_red_id, scheduled_at, tournaments(year)",
-      )
-      .or(`team_blue_id.eq.${teamId},team_red_id.eq.${teamId}`)
-      .eq("state", "completed");
-
-    let wins = 0;
-    let losses = 0;
-    let matchCount = 0;
-    let yearMin = 9999;
-    let yearMax = 0;
-    for (const m of (matches ?? []) as unknown as Array<{
-      id: string;
-      winner_team_id: string | null;
-      scheduled_at: string | null;
-      tournaments: { year: number | null } | null;
-    }>) {
-      matchCount++;
-      if (m.winner_team_id === teamId) wins++;
-      else losses++;
-      // 🐛 2026-04-28 fix : `new Date(null).getUTCFullYear()` returns
-      // 1970 (epoch), which used to pull yearMin all the way down and
-      // make the hero card show "Carrière LEC · 1970 → 2026". Guard
-      // against null/invalid scheduled_at AND clamp to the LoL esports
-      // era so a single mis-dated row can't poison the whole window.
-      // 🐛 2026-08-12 fix : année du tournoi d'abord — sans elle, les
-      // ~475 matchs gol.gg sans scheduled_at sortaient de la fenêtre et
-      // la carte affichait « 2025 → 2026 » pour une carrière 2021+.
-      const yr =
-        m.tournaments?.year ??
-        (m.scheduled_at ? new Date(m.scheduled_at).getUTCFullYear() : NaN);
-      if (!Number.isFinite(yr) || yr < 2011 || yr > 2030) continue;
-      if (yr < yearMin) yearMin = yr;
-      if (yr > yearMax) yearMax = yr;
-    }
-
-    // Total games + total KC kills (tracked_team_involvement = team_killer)
-    let totalGames = 0;
-    let totalKills = 0;
-    if (matchCount > 0) {
-      // 🐛 2026-08-12 fix : l'ancien `.in("match_id", matchIds)` passait
-      // ~537 UUID dans l'URL PostgREST → requête rejetée (URL trop
-      // longue), count null, et la carte hero affichait « 0 G ». Le join
-      // embarqué filtre côté serveur sans liste d'ids dans l'URL.
-      const { count: gamesCount } = await sb
-        .from("games")
-        .select("id, matches!inner(id)", { count: "exact", head: true })
-        .or(`team_blue_id.eq.${teamId},team_red_id.eq.${teamId}`, {
-          referencedTable: "matches",
-        })
-        .eq("matches.state", "completed");
-      totalGames = gamesCount ?? 0;
-
-      // KC offensive kills count via the tracked_team_involvement filter.
-      // Only counts PUBLISHED kills with kill_visible=true so the displayed
-      // total matches what users see on the scroll feed and avoids inflated
-      // numbers from unpublished raw rows (pipeline in-flight, Gemini
-      // failures, manual_review queue, etc.).
-      //
-      // ⚠️ Bug history (2026-04-26) : without these two filters the counter
-      // returned 124+ "career" kills which the user flagged as suspicious
-      // after only NAVI (yesterday) + SHIFTERS (today) had been processed —
-      // that was raw harvested rows, not the actual visible-on-feed count.
-      const { count: killsCount } = await sb
-        .from("kills")
-        .select("id", { count: "exact", head: true })
-        .eq("tracked_team_involvement", "team_killer")
-        .eq("status", "published")
-        .eq("kill_visible", true);
-      totalKills = killsCount ?? 0;
-    }
-
-    // Total published clips count (separate metric, used in the rail)
-    const { count: clipsCount } = await sb
-      .from("kills")
-      .select("id", { count: "exact", head: true })
-      .eq("status", "published");
-
-    const winRate =
-      wins + losses > 0 ? wins / (wins + losses) : 0;
+    const [tally, totalGames, totalKills, publishedClips] = await Promise.all([
+      fetchMatchesAllCompet(),
+      fetchGamesAllCompetCount(),
+      fetchDetectedKcKillsCount(),
+      fetchPublishedClipsCount(),
+    ]);
+    if (!tally) return null;
 
     return {
       totalKills,
       totalGames,
-      wins,
-      losses,
-      winRate,
-      publishedClips: clipsCount ?? 0,
-      yearStart: yearMin === 9999 ? new Date().getUTCFullYear() : yearMin,
-      yearEnd: yearMax === 0 ? new Date().getUTCFullYear() : yearMax,
+      wins: tally.wins,
+      losses: tally.losses,
+      unknownResults: tally.unknown,
+      winRate: tally.winratePct != null ? tally.winratePct / 100 : 0,
+      publishedClips,
+      yearStart: tally.yearStart,
+      yearEnd: tally.yearEnd,
     };
   } catch (err) {
     rethrowIfDynamic(err);

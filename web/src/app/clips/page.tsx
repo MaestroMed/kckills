@@ -1,5 +1,10 @@
 import type { Metadata } from "next";
 import { getKillsForGrid, isDataOnlyKill } from "@/lib/supabase/kills";
+// Audit compteurs 2026-08-12 — le header affichait « 1 181 clips publiés »
+// alors que le catalogue réel en compte ~5 224 : le fetch est plafonné à
+// 2000 lignes (top highlight_score). Le total vient désormais du compteur
+// canonique partagé avec /scroll, la home et /matches.
+import { getCachedPublishedClipsCount } from "@/lib/stats-scopes";
 import { loadRealData } from "@/lib/real-data";
 import { JsonLd, clipsCollectionLD } from "@/lib/seo/jsonld";
 import { getAssetMetadata, pickAssetUrl } from "@/lib/kill-assets";
@@ -55,7 +60,7 @@ export default async function ClipsPage({ searchParams }: { searchParams?: Promi
   };
 
   const lang = await getServerLang();
-  const [kills, data] = await Promise.all([
+  const [kills, data, publishedClipsTotal] = await Promise.all([
     // PR23 — getKillsForGrid pulls BOTH the published-with-clip rows
     // AND the data-only gol.gg historical rows (no clip but verified
     // killer/victim/champions/timestamp). The /scroll feed continues
@@ -63,6 +68,7 @@ export default async function ClipsPage({ searchParams }: { searchParams?: Promi
     // get the full 6-year catalog.
     getKillsForGrid(2000),
     Promise.resolve(loadRealData()),
+    getCachedPublishedClipsCount(),
   ]);
 
   // KC team_killer kills, visible (clip OR data-only). isDataOnlyKill
@@ -137,7 +143,11 @@ export default async function ClipsPage({ searchParams }: { searchParams?: Promi
   return (
     <>
       <JsonLd data={ld} />
-      <ClipsGrid initialCards={cards} initialFilters={initialFilters} />
+      <ClipsGrid
+        initialCards={cards}
+        initialFilters={initialFilters}
+        publishedClipsTotal={publishedClipsTotal}
+      />
     </>
   );
 }

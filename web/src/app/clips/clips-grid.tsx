@@ -102,7 +102,19 @@ function cardDescription(card: ClipCard): string {
   return card.desc;
 }
 
-export function ClipsGrid({ initialCards, initialFilters }: { initialCards: ClipCard[]; initialFilters?: InitialFilters }) {
+export function ClipsGrid({
+  initialCards,
+  initialFilters,
+  publishedClipsTotal,
+}: {
+  initialCards: ClipCard[];
+  initialFilters?: InitialFilters;
+  /** Audit compteurs 2026-08-12 — total canonique des clips publiés
+   *  (stats-scopes, même chiffre que /scroll, la home et /matches). Le
+   *  fetch de la grille est plafonné (top 2000 par score), donc
+   *  `initialCards.length` sous-compte le catalogue réel. */
+  publishedClipsTotal?: number;
+}) {
   const [sortKey, setSortKey] = useState<SortKey>(initialFilters?.sort ?? "recent");
   const [opponentFilter, setOpponentFilter] = useState<string | null>(initialFilters?.opponent ?? null);
   const [fightTypeFilter, setFightTypeFilter] = useState<string | null>(initialFilters?.fightType ?? null);
@@ -224,8 +236,12 @@ export function ClipsGrid({ initialCards, initialFilters }: { initialCards: Clip
           <h1 className="font-display text-3xl font-black uppercase">
             {t("p_clips.hero_title_pre")} <span className="text-gold-gradient">{t("p_clips.hero_title_accent")}</span>
           </h1>
+          {/* Audit compteurs 12/08 : « X kills affichés · Y clips publiés au
+              total ». Les cartes mêlent clips jouables et kills data-only
+              (gol.gg) → « kills affichés » ; le total canonique vient de
+              stats-scopes (le fetch plafonné à 2000 sous-comptait : 1 181). */}
           <p className="text-sm text-[var(--text-muted)] mt-2">
-            {filtered.length} {hasActiveFilter ? t("p_clips.count_filtered") : t("p_clips.count_published")} · {initialCards.length} {t("p_clips.count_total")}
+            {filtered.length} {hasActiveFilter ? t("p_clips.count_filtered") : t("p_clips.count_published")} · {(publishedClipsTotal ?? initialCards.length).toLocaleString(lang === "fr" ? "fr-FR" : undefined)} {t("p_clips.count_total")}
           </p>
         </div>
         {/* Hall-of-Fame cross-link — discoverability from the main catalog.

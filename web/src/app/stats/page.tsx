@@ -1,5 +1,10 @@
 import type { Metadata } from "next";
 import { loadRealData, getMatchesSorted } from "@/lib/real-data";
+// Audit compteurs 2026-08-12 — les KPI viennent du périmètre canonique
+// « log détaillé » (stats-scopes.getTrackedGamesDetailed) et les libellés
+// le disent : ce sont les games du snapshot statique (stats par game
+// vérifiées), PAS la carrière toutes compétitions de la home.
+import { getTrackedGamesDetailed } from "@/lib/stats-scopes";
 import { ChampionLadders } from "@/components/home/ChampionLadders";
 import { FormCalendar } from "@/components/home/FormCalendar";
 import { StatCard } from "@/components/ui/StatCard";
@@ -18,7 +23,7 @@ export const revalidate = 3600;
 export const metadata: Metadata = {
   title: "Stats",
   description:
-    "La Karmine Corp en chiffres — picks, forme et tendances sur toutes les games trackées.",
+    "La Karmine Corp en chiffres — picks, forme et tendances sur les games au log détaillé.",
   alternates: { canonical: "/stats" },
 };
 
@@ -27,18 +32,12 @@ export default async function StatsPage() {
   const data = loadRealData();
   const matches = getMatchesSorted(data);
 
-  let games = 0;
-  let gameWins = 0;
-  let kills = 0;
-  for (const m of matches) {
-    for (const g of m.games) {
-      games += 1;
-      kills += g.kc_kills;
-      if (g.kc_kills > g.opp_kills) gameWins += 1;
-    }
-  }
-  const matchWins = matches.filter((m) => m.kc_won).length;
-  const winrate = games > 0 ? Math.round((gameWins / games) * 100) : 0;
+  // Périmètre « log détaillé » — une seule implémentation (stats-scopes).
+  // NB : le winrate par game est ESTIMÉ (proxy kc_kills > opp_kills, le
+  // log ne porte pas le vainqueur par game) — le libellé KPI le précise.
+  const detailed = getTrackedGamesDetailed();
+  const winrate =
+    detailed.gameWinratePct != null ? Math.round(detailed.gameWinratePct) : 0;
 
   return (
     <div className="space-y-10">
@@ -56,12 +55,12 @@ export default async function StatsPage() {
       </header>
 
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <StatCard label={t("p_stats.kpi_games")} value={String(games)} variant="gold" />
+        <StatCard label={t("p_stats.kpi_games")} value={String(detailed.games)} variant="gold" />
         <StatCard label={t("p_stats.kpi_winrate")} value={`${winrate}%`} variant="cyan" />
-        <StatCard label={t("p_stats.kpi_kills")} value={String(kills)} variant="red" />
+        <StatCard label={t("p_stats.kpi_kills")} value={String(detailed.kcKills)} variant="red" />
         <StatCard
           label={t("p_stats.kpi_matches")}
-          value={`${matchWins}W — ${matches.length - matchWins}L`}
+          value={`${detailed.matchWins}W — ${detailed.matchLosses}L`}
           variant="neutral"
         />
       </div>
