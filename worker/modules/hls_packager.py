@@ -13,6 +13,24 @@ Caps at 5 clips per run to avoid R2 storage spikes.
 NOTE: This module is OPTIONAL — the scroll player falls back to
 clip_url_vertical MP4 when hls_master_url is null. Adds ~6-8 MB
 of HLS variants per clip but enables adaptive bitrate on slow networks.
+
+POST-MORTEM "master sans segments" (diagnostic 2026-08-12) :
+  1. Avant le 2026-07-05, la boucle d'upload ne vérifiait que le retour de
+     master.m3u8 — un .ts en échec publiait quand même hls_master_url, et
+     le scanner (filtre hls_master_url IS NULL) ne re-packageait jamais le
+     kill cassé. Corrigé ici le 05/07 (upload atomique, master en dernier)
+     mais le stock cassé n'a jamais été réparé → hotfix web 2026-07-13
+     (FeedPlayerPool hlsUrl=null) puis gate Wave 44 ci-dessous → packaged=0.
+  2. Danger structurel restant : les segments .ts / playlists de variantes
+     ne sont référencés NULLE PART en base (seul le master l'est). Le GC
+     inverse scripts/gc_r2_unlisted.py les supprimait donc comme "morts" —
+     protégé depuis le 2026-08-12 (hls/ dans PROTECTED_PREFIXES).
+  État au 2026-08-12 : cleanup_hls_prefix.py a tout purgé (0 hls_master_url
+  en base, préfixe hls/ vide). RÉACTIVATION : (a) fix GC déployé,
+  (b) KCKILLS_HLS_PACKAGER_ENABLED=1 + RESTART du daemon (ce module est
+  chargé au démarrage), (c) backfill du stock via scripts/hls_backfill.py
+  (réutilise package_clip ci-dessous, donc le même fix), (d) re-servir le
+  HLS côté web (FeedPlayerPool.tsx, hlsUrl=null en dur à lever).
 """
 from __future__ import annotations
 
