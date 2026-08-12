@@ -16,11 +16,35 @@
  *
  * All functions are best-effort : storage or network failures never
  * throw to the caller.
+ *
+ * Bruit API (audit 2026-08-12) : chaque page déclenchait un GET
+ * /api/bookmarks → 401 pour les visiteurs anonymes (merge au montage
+ * via LayoutChrome). Toute sollicitation de l'API est désormais gatée
+ * par hasSupabaseSession() — lecture LOCALE de la session, zéro réseau
+ * pour un anonyme, qui reste 100 % localStorage.
  */
 
 const LS_KEY = "kc_bookmarks_v1";
 const MERGED_FLAG = "kc_bookmarks_merged_v1";
 const CHANGE_EVENT = "kc:bookmarks-changed";
+
+/**
+ * True quand une session Supabase existe côté navigateur.
+ *
+ * `auth.getSession()` lit le storage local (cookies) — AUCUN appel
+ * réseau pour un visiteur anonyme — donc on peut court-circuiter avant
+ * de solliciter /api/bookmarks. Import dynamique pour garder le client
+ * Supabase hors du graphe synchrone (même précédent que la navbar).
+ */
+export async function hasSupabaseSession(): Promise<boolean> {
+  try {
+    const { createSupabaseBrowser } = await import("@/lib/supabase-browser");
+    const { data } = await createSupabaseBrowser().auth.getSession();
+    return data.session != null;
+  } catch {
+    return false; // Supabase non configuré — traité comme anonyme
+  }
+}
 
 export function readLocalBookmarks(): Set<string> {
   try {
@@ -55,14 +79,21 @@ export function setBookmark(killId: string, on: boolean): void {
   else set.delete(killId);
   writeLocalBookmarks(set);
 
-  void fetch("/api/bookmarks", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ kill_id: killId }),
-    credentials: "same-origin",
-  }).catch(() => {
-    /* offline / anonymous (401) — localStorage already updated */
-  });
+  // Miroir DB seulement quand une session existe — l'anonyme reste
+  // 100 % localStorage (zéro requête, zéro 401 en console).
+  void (async () => {
+    try {
+      if (!(await hasSupabaseSession())) return;
+      await fetch("/api/bookmarks", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ kill_id: killId }),
+        credentials: "same-origin",
+      });
+    } catch {
+      /* offline — localStorage already updated */
+    }
+  })();
 }
 
 /**
@@ -74,10 +105,13 @@ export function setBookmark(killId: string, on: boolean): void {
 export async function mergeLocalBookmarksOnce(): Promise<void> {
   try {
     if (window.localStorage.getItem(MERGED_FLAG) === "1") return;
+    // Session locale d'abord (lecture storage, pas de réseau) — un
+    // anonyme ne sollicite JAMAIS l'API ; on retentera après login.
+    if (!(await hasSupabaseSession())) return;
     const local = readLocalBookmarks();
 
     const res = await fetch("/api/bookmarks", { credentials: "same-origin" });
-    if (res.status === 401) return; // anonymous — retry next visit
+    if (res.status === 401) return; // session périmée côté serveur — retry next visit
     if (!res.ok) return;
     const body = (await res.json()) as { rows?: { kill_id: string }[] };
     const remote = new Set((body.rows ?? []).map((r) => r.kill_id));

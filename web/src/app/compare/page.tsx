@@ -27,10 +27,12 @@ export default async function ComparePage() {
 
   const players: ComparablePlayer[] = roster.map((p) => {
     const s = getPlayerStats(data, p.name);
-    const topChamps = Object.entries(s.champions)
-      .map(([name, c]) => ({ name, games: c.games, wins: c.wins }))
-      .sort((a, b) => b.games - a.games)
-      .slice(0, 5);
+    // s.champions est DÉJÀ un tableau { name, games, wins… } trié par games
+    // desc (real-data.ts) — Object.entries() dessus donnait les indices du
+    // tableau ("0", "1"…) comme noms de champions (audit 12/08/2026).
+    const topChamps = s.champions
+      .slice(0, 5)
+      .map((c) => ({ name: c.name, games: c.games, wins: c.wins }));
     return {
       name: p.name,
       role: p.role,

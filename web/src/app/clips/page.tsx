@@ -7,6 +7,7 @@ import { ClipsGrid, type ClipCard, type InitialFilters } from "./clips-grid";
 import { pickDescription } from "@/lib/i18n/server";
 import { getServerLang } from "@/lib/i18n/server-lang";
 import { isDescriptionClean } from "@/lib/scroll/sanitize-description";
+import { cleanTeamCode } from "@/lib/team-display";
 
 // 300s cache — /clips pulls 500 kills and filters client-side. The
 // catalog doesn't churn per-minute; 5-min ISR is plenty.
@@ -105,7 +106,9 @@ export default async function ClipsPage({ searchParams }: { searchParams?: Promi
         gameNumber: k.games?.game_number ?? 1,
         matchStage: k.games?.matches?.stage ?? "LEC",
         matchDate: k.games?.matches?.scheduled_at ?? k.created_at,
-        opponentCode: matchJson?.opponent.code ?? "LEC",
+        // Plus de fallback "LEC" mensonger ni d'id numérique gol.gg :
+        // match non résolu → "" et la carte affiche juste "KC" + la date.
+        opponentCode: cleanTeamCode(matchJson?.opponent.code) ?? "",
         opponentName: matchJson?.opponent.name ?? null,
         kcWon: matchJson?.kc_won ?? null,
         matchScore: matchJson ? `${matchJson.kc_score}-${matchJson.opp_score}` : null,

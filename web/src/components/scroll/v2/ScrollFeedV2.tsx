@@ -162,7 +162,10 @@ function recommendationToFeedItem(row: RecommendedKillRow): VideoFeedItem | null
     matchExternalId: k.games?.matches?.external_id ?? "",
     matchStage: k.games?.matches?.stage ?? "LEC",
     matchDate: k.games?.matches?.scheduled_at ?? k.created_at,
-    opponentCode: "LEC",
+    // Adversaire inconnu sur ce data-path (pas de kc_matches.json côté
+    // client) : "" plutôt que le placeholder "LEC" — la carte affiche le
+    // stage à la place. Règle : jamais un faux code équipe à l'écran.
+    opponentCode: "",
     kcWon: null,
     matchScore: null,
   };

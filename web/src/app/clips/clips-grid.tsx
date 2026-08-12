@@ -475,15 +475,20 @@ function ClipCardComponent({ card }: { card: ClipCard }) {
           </span>
         )}
 
-        {/* Top overlay: opponent + date */}
+        {/* Top overlay: opponent + date. Adversaire non résolu (code vide) →
+            pill "KC" seul, jamais de "vs LEC" placeholder ni d'id numérique. */}
         <div className="absolute top-1.5 left-1.5 right-1.5 flex items-center justify-between text-[10px] z-10">
           <div className="flex items-center gap-1 rounded-full bg-black/70 backdrop-blur-sm px-2 py-0.5 border border-white/10">
             <span className="font-bold text-[var(--gold)]">KC</span>
-            <span className="text-white/50">vs</span>
-            {oppLogo ? (
-              <Image src={oppLogo} alt="" width={12} height={12} className="h-3 w-3 object-contain" />
+            {card.opponentCode ? (
+              <>
+                <span className="text-white/50">vs</span>
+                {oppLogo ? (
+                  <Image src={oppLogo} alt="" width={12} height={12} className="h-3 w-3 object-contain" />
+                ) : null}
+                <span className="font-bold text-white">{card.opponentCode}</span>
+              </>
             ) : null}
-            <span className="font-bold text-white">{card.opponentCode}</span>
           </div>
           {card.matchScore && card.kcWon !== null && (
             <span className={`rounded-full px-2 py-0.5 text-[9px] font-bold backdrop-blur-sm ${

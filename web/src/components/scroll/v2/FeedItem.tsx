@@ -730,11 +730,20 @@ export function FeedItemVideo({
             </ul>
           )}
 
-          {/* Match meta — small line at the bottom */}
+          {/* Match meta — small line at the bottom. Les segments sont
+              joints par " · " uniquement quand ils existent : adversaire
+              non résolu (opponentCode vide) + stage vide ne doivent pas
+              laisser un séparateur orphelin devant "G1". */}
           <p className="font-data text-[10px] md:text-[11px] uppercase tracking-[0.2em] text-white/55">
-            {item.opponentCode ? `vs ${item.opponentCode}` : item.matchStage}
-            {item.gameNumber ? ` · G${item.gameNumber}` : ""}
-            {item.matchScore ? ` · ${item.matchScore}` : ""}
+            {[
+              item.opponentCode
+                ? `vs ${item.opponentCode}`
+                : (item.matchStage ?? "").trim() || null,
+              item.gameNumber ? `G${item.gameNumber}` : null,
+              item.matchScore || null,
+            ]
+              .filter(Boolean)
+              .join(" · ")}
             {item.kcWon != null ? (
               <span className={`ml-2 font-bold ${item.kcWon ? "text-[var(--green)]" : "text-[var(--red)]"}`}>
                 {item.kcWon ? "W" : "L"}

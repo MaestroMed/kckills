@@ -111,8 +111,9 @@ export async function HeroLiveStats({
     const isLiveTop = !!liveTopIgn && p.name.toLowerCase().includes(liveTopIgn);
     const kda = computeKda(p);
     let achievementLabel = t("p_home.ach_starter");
+    // Le carrousel affiche déjà le rôle sur sa propre ligne — ne pas le
+    // répéter dans le texte d'achievement (bug « JGL · JGL · 23 parties »).
     let achievement = t("p_home.ach_starter_desc", {
-      role: displayRole(p.role),
       games: p.gamesPlayed,
     });
     if (isLiveTop && liveTopScorer) {

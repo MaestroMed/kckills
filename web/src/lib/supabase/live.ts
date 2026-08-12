@@ -19,6 +19,7 @@
 
 import "server-only";
 import { createAnonSupabase, createServerSupabase, rethrowIfDynamic } from "./server";
+import { httpsLogoUrl } from "@/lib/team-display";
 
 /**
  * Minimal shape of a live match, scoped to what the banner + /live
@@ -212,7 +213,8 @@ export async function getCurrentLiveMatch(opts: {
         name: t.name,
         code: t.code,
         slug: t.slug,
-        logo_url: t.logo_url ?? null,
+        // http→https — voir lib/team-display.ts (next/image rejette http).
+        logo_url: httpsLogoUrl(t.logo_url),
         is_tracked: Boolean(t.is_tracked),
       });
     }

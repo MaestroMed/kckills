@@ -1,3 +1,6 @@
+import { existsSync } from "node:fs";
+import path from "node:path";
+
 import { notFound } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
@@ -202,7 +205,17 @@ export default async function PlayerPage({ params }: Props) {
       )
     : 0;
 
-  const customBg = `/images/players/player-bg-${name.toLowerCase()}.jpg`;
+  // Audit 2026-08-12 — l'URL était construite sans vérifier que le fichier
+  // existe (aucun bg custom n'a jamais été déposé dans public/images/players/),
+  // donc chaque profil déclenchait une requête /_next/image en 400. On ne
+  // référence le bg que si le fichier est réellement présent ; sinon
+  // PlayerHero garde son fallback splash (prop customBgUrl absente).
+  const customBgFile = `player-bg-${name.toLowerCase()}.jpg`;
+  const customBg = existsSync(
+    path.join(process.cwd(), "public", "images", "players", customBgFile),
+  )
+    ? `/images/players/${customBgFile}`
+    : undefined;
 
   // ─── Year range from match history (first → last) ───────────────────────
   const yearRange =

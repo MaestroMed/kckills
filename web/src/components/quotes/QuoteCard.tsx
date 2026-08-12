@@ -38,6 +38,10 @@ export interface QuoteCardData {
 interface Props {
   quote: QuoteCardData;
   variant?: "full" | "inline";
+  /** Masque le blockquote — pour les contextes où le texte de la phrase
+   *  est déjà affiché par le parent (ex : « Phrase du jour » de /quotes,
+   *  qui rendait la citation deux fois). Défaut : true. */
+  showQuoteText?: boolean;
 }
 
 function EnergyFlames({ level }: { level: number | null }) {
@@ -105,7 +109,7 @@ function eraOfMatchDate(iso: string | null | undefined): string | null {
   return null;
 }
 
-export function QuoteCard({ quote, variant = "full" }: Props) {
+export function QuoteCard({ quote, variant = "full", showQuoteText = true }: Props) {
   const era = variant === "full" ? eraOfMatchDate(quote.match_date) : null;
   const killerVictim =
     quote.killer_champion && quote.victim_champion
@@ -153,22 +157,24 @@ export function QuoteCard({ quote, variant = "full" }: Props) {
       )}
 
       {/* Quote text — the hero of the card */}
-      <blockquote
-        className={[
-          "font-display text-[var(--text-primary)]",
-          variant === "full"
-            ? "text-xl md:text-2xl leading-snug text-center min-h-[5.5rem] flex items-center justify-center"
-            : "text-base md:text-lg leading-snug",
-        ].join(" ")}
-      >
-        <span className="text-[var(--gold)] mr-1" aria-hidden>
-          &laquo;
-        </span>
-        {quote.quote_text}
-        <span className="text-[var(--gold)] ml-1" aria-hidden>
-          &raquo;
-        </span>
-      </blockquote>
+      {showQuoteText && (
+        <blockquote
+          className={[
+            "font-display text-[var(--text-primary)]",
+            variant === "full"
+              ? "text-xl md:text-2xl leading-snug text-center min-h-[5.5rem] flex items-center justify-center"
+              : "text-base md:text-lg leading-snug",
+          ].join(" ")}
+        >
+          <span className="text-[var(--gold)] mr-1" aria-hidden>
+            &laquo;
+          </span>
+          {quote.quote_text}
+          <span className="text-[var(--gold)] ml-1" aria-hidden>
+            &raquo;
+          </span>
+        </blockquote>
+      )}
 
       {/* Meta row : caster + energy */}
       <div className="flex items-center justify-between gap-3 text-[11px] text-[var(--text-secondary)]">
@@ -178,7 +184,7 @@ export function QuoteCard({ quote, variant = "full" }: Props) {
               {quote.caster_name}
             </span>
           ) : (
-            <span className="text-[var(--text-muted)] italic">Caster ?</span>
+            <span className="text-[var(--text-muted)] italic">Caster inconnu</span>
           )}
           <EnergyFlames level={quote.energy_level} />
         </span>

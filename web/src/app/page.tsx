@@ -4,8 +4,6 @@ import { Suspense } from "react";
 import { loadRealData, getCurrentRoster, getTeamStats, getMatchesSorted, displayRole } from "@/lib/real-data";
 import { championIconUrl, championSplashUrl } from "@/lib/constants";
 import { PLAYER_PHOTOS, TEAM_LOGOS, KC_LOGO } from "@/lib/kc-assets";
-import { getPublishedKills } from "@/lib/supabase/kills";
-import { loadHeroVideos } from "@/lib/hero-videos/storage";
 import { getStaticT } from "@/lib/i18n/server-lang";
 // 🔴 2026-04-28 — heavy desktop-only sections live in a client wrapper
 // file (`homepage-desktop-sections.tsx`) because Next.js 15 forbids
@@ -50,121 +48,13 @@ import { PageViewTracker } from "@/components/analytics/PageViewTracker";
 // mobile = lightweight snap row, <4 cells = renders nothing.
 import { HomeGridSection } from "@/components/home/HomeGridSection";
 
-/** Iconic clips that play in the hero background, one after the other.
- *
- *  CURATED for maximum impact — only the best outplays and highest-emotion
- *  moments make the cut. Ordered to tell a story: highlights first, then
- *  reactions, then individual plays.
- *
- *  Minimum duration is 22s per clip so short clips (like the 34s Rekkles
- *  pentakill) play through their entirety before rotating.
- *
- *  To add more clips, paste the full YouTube watch URL in the list — the
- *  extractYouTubeId helper handles it. Curation is manual on purpose so
- *  we never show a random clip on the hero.
- *
- *  TODO (user request): admin backoffice to edit this list without a deploy
- */
-/**
- * Build the hero clips array: top-scored R2 kills first (no CAPTCHA, instant),
- * then YouTube fallback reels for variety. Called from the server component so
- * we can query Supabase.
- */
-async function buildHeroClips() {
-  // Tier 1 \u2014 operator-curated MP4 montages (Wave 12 EF). Mehdi's own
-  // edits / intros / backstage clips uploaded via /admin/hero-videos to
-  // R2. They take priority because they're hand-picked, and their audio
-  // plays when the user has opted-in via the wolf player.
-  const operatorVideos = await loadHeroVideos();
-  const operatorClips = operatorVideos.map((v) => ({
-    mp4Url: v.videoUrl,
-    posterUrl: v.posterUrl,
-    title: v.title,
-    context: v.context ?? "Hero curate",
-    durationMs: v.durationMs,
-    audioVolume: v.audioVolume,
-  }));
-
-  // Tier 2 \u2014 auto-pulled top published kills from R2 (best-of from the
-  // pipeline). Muted (no caster audio worth playing on raw clips).
-  const topKills = await getPublishedKills(5, { buildTime: true });
-  const r2Clips = topKills
-    .filter((k) => k.clip_url_horizontal)
-    .slice(0, 3)
-    .map((k) => ({
-      mp4Url: k.clip_url_horizontal!,
-      title: k.ai_description ?? `${k.killer_champion} \u2192 ${k.victim_champion}`,
-      context: `Game ${k.games?.game_number ?? "?"} \u00b7 ${k.games?.matches?.stage ?? "LEC"}`,
-      durationMs: 15000,
-      audioVolume: 0,
-    }));
-
-  // Tier 3 — YouTube fallback reels for variety / when operator hasn't
-  // uploaded anything yet (fresh deploy).
-  const youtubeClips = YOUTUBE_HERO_CLIPS;
-
-  // Wave 46 — LE MASHUP T1 (9 streams réagissant à la demi-finale EWC gagnée
-  // contre T1) était épinglé en tête du hero. Son fichier pèse 12,5 Mo, soit
-  // 85 % des 14,29 Mo mesurés sur la page d'accueil : le <video> est en
-  // autoPlay, donc chaque visiteur le téléchargeait entièrement avant même de
-  // scroller. Le commentaire d'origine prévoyait de retirer l'entrée « pour
-  // revenir au flux normal » une fois l'euphorie passée — c'est fait.
-  //
-  // Le hero rejoue donc sa rotation normale : clips curatés par l'opérateur,
-  // puis le best-of automatique des kills publiés (r2Clips, tiré de la base),
-  // puis les reels YouTube en dernier recours. Pour ré-épingler un montage
-  // événementiel, passer par /admin/hero-videos plutôt que par ce fichier :
-  // les vidéos opérateur arrivent déjà en tête de liste.
-  return [...operatorClips, ...r2Clips, ...youtubeClips];
-}
-
-const YOUTUBE_HERO_CLIPS = [
-  // --- Individual outplays (the real killers) ---
-  {
-    videoId: "pMSFp7wku5Y",
-    title: "Vladi Viktor 10/1/7 — Game 3 MVP run",
-    context: "Le Sacre · Vladi MVP",
-    durationMs: 30000,
-    start: 15,
-  },
-  {
-    videoId: "j9JlExfa9mY",
-    title: "REKKLES PENTAKILL JINX vs GameWard",
-    context: "L'Ere Rekkles · LFL 2022",
-    durationMs: 34000, // clip is only 36s total, play nearly full
-    start: 3,
-  },
-  {
-    videoId: "EfN64vP2n2o",
-    title: "Top 10 Caliste Plays — Best of 2025",
-    context: "Caliste · Rookie of the Year",
-    durationMs: 28000,
-    start: 5,
-  },
-  // --- Emotional moments / backstage ---
-  {
-    videoId: "AelCWTFNOZQ",
-    title: "« WE ARE THE CHAMPIONS ! » — KC VoiceComms",
-    context: "Le Sacre · Backstage",
-    durationMs: 25000,
-    start: 5,
-  },
-  {
-    videoId: "VXdc0Q2HdCg",
-    title: "Le discours de Kameto apres la finale",
-    context: "Le Sacre · Post-match",
-    durationMs: 25000,
-    start: 10,
-  },
-  // --- Comebacks ---
-  {
-    videoId: "8AJP6HleZh8",
-    title: "KC vs CFO — Un match dans la legende",
-    context: "First Stand · Seoul 2025",
-    durationMs: 25000,
-    start: 60,
-  },
-];
+// 2026-08-12 — code mort supprimé : buildHeroClips() + YOUTUBE_HERO_CLIPS.
+// La fonction exécutait loadHeroVideos() + getPublishedKills(5) côté
+// serveur sans qu’aucun rendu ne consomme son résultat — le hero affiche
+// HeroImageCarousel (photos) depuis que la vidéo de fond a été retirée
+// pour le poids. Pour ré-épingler un montage événementiel, passer par
+// /admin/hero-videos (les composants dédiés lisent ce store), pas par ce
+// fichier.
 
 // Bumped 60s → 300s → 1800s (Wave 13d, 2026-04-28). Supabase free tier
 // audit found 80k DB requests/24h driven mostly by SSR refetches on
@@ -255,8 +145,12 @@ export default async function HomePage() {
         {/* ─── Floating "next rendez-vous" overlay — top-right of hero ─── */}
         <NextMatchOverlay />
 
-        {/* ─── Full-width 2-column grid on desktop ─── */}
-        <div className="relative z-10 min-h-[100vh] md:min-h-[92vh] max-w-[1920px] mx-auto px-6 md:px-10 lg:px-16 py-24 md:py-0 flex flex-col md:grid md:grid-cols-12 md:items-center gap-8">
+        {/* ─── Full-width 2-column grid on desktop ───
+            Mobile : pt-44 (et non py-24) pour que le logo KC + la rangée
+            de tags démarrent SOUS la carte flottante « PROCHAIN RDV »
+            (absolue, top 5.5rem + ~70px de haut) au lieu d'être
+            recouverts. md:py-0 inchangé → placement desktop intact. */}
+        <div className="relative z-10 min-h-[100vh] md:min-h-[92vh] max-w-[1920px] mx-auto px-6 md:px-10 lg:px-16 pt-44 pb-24 md:py-0 flex flex-col md:grid md:grid-cols-12 md:items-center gap-8">
 
           {/* ─── LEFT : title + tagline + CTAs ─── */}
           <div className="md:col-span-7 lg:col-span-6 flex flex-col items-center md:items-start text-center md:text-left">

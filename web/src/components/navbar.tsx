@@ -88,6 +88,13 @@ export function Navbar() {
     pathname === href || pathname.startsWith(href + "/");
   const [mobileOpen, setMobileOpen] = useState(false);
   const [user, setUser] = useState<{ name: string; avatar: string } | null>(null);
+  // Audit 2026-08-12 — les étendards pendent ~196px sous la barre quand la
+  // page est en haut (ils ne se replient qu'au scroll). Sur toute page dont
+  // la première ligne est du contenu haut-gauche (breadcrumb de /records,
+  // /compare, /hall-of-fame, /stats…), le drapeau gauche recouvrait le fil
+  // d'Ariane. Ils ne s'affichent donc que sur la home, dont le hero
+  // plein-écran est le seul décor conçu pour les accueillir.
+  const showPennants = pathname === "/";
   // Header 2.0 — passe à true quand on peut monter les étendards en tissu
   // 3D (desktop, WebGL, pas de reduced-motion, après idle).
   const [clothReady, setClothReady] = useState(false);
@@ -192,25 +199,30 @@ export function Navbar() {
         className="pointer-events-auto relative mx-auto max-w-7xl"
       >
         {/* Étendards KC — décoratifs, hors flux, accrochés sous les coins.
-            Tissu 3D quand la machine le permet, SVG statique sinon. */}
-        <div aria-hidden className="kc-pennant-wrap kc-pennant-wrap--left hidden lg:block">
-          {clothReady ? (
-            <div className="kc-pennant-cloth">
-              <KCPennantCloth side="left" />
+            Tissu 3D quand la machine le permet, SVG statique sinon.
+            Home uniquement (voir showPennants). */}
+        {showPennants && (
+          <>
+            <div aria-hidden className="kc-pennant-wrap kc-pennant-wrap--left hidden lg:block">
+              {clothReady ? (
+                <div className="kc-pennant-cloth">
+                  <KCPennantCloth side="left" />
+                </div>
+              ) : (
+                <KCPennantStatic side="left" />
+              )}
             </div>
-          ) : (
-            <KCPennantStatic side="left" />
-          )}
-        </div>
-        <div aria-hidden className="kc-pennant-wrap kc-pennant-wrap--right hidden lg:block">
-          {clothReady ? (
-            <div className="kc-pennant-cloth">
-              <KCPennantCloth side="right" />
+            <div aria-hidden className="kc-pennant-wrap kc-pennant-wrap--right hidden lg:block">
+              {clothReady ? (
+                <div className="kc-pennant-cloth">
+                  <KCPennantCloth side="right" />
+                </div>
+              ) : (
+                <KCPennantStatic side="right" />
+              )}
             </div>
-          ) : (
-            <KCPennantStatic side="right" />
-          )}
-        </div>
+          </>
+        )}
 
         <div
           className={`relative rounded-2xl border glass-bar transition-[border-color,box-shadow] duration-500 ${
