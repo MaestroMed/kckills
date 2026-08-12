@@ -50,11 +50,12 @@ function useBannerTexture(): THREE.CanvasTexture {
       ctx.closePath();
     };
 
-    // Corps navy (dégradé profond, léger vignettage).
+    // Corps bleu KC (demande Mehdi : « étendards bleus de base ») —
+    // dégradé profond du bleu marque vers un bleu nuit.
     const g = ctx.createLinearGradient(0, 0, W, H);
-    g.addColorStop(0, "#13233f");
-    g.addColorStop(0.55, "#0A1428");
-    g.addColorStop(1, "#060d1a");
+    g.addColorStop(0, "#0a63ff");
+    g.addColorStop(0.5, "#0047d1");
+    g.addColorStop(1, "#012372");
     swallow();
     ctx.fillStyle = g;
     ctx.fill();
@@ -92,7 +93,7 @@ function useBannerTexture(): THREE.CanvasTexture {
     // dessiné dès que le PNG est chargé puis needsUpdate.
     const img = new Image();
     img.onload = () => {
-      const size = W * 0.62;
+      const size = W * 0.64;
       const off = document.createElement("canvas");
       off.width = off.height = size;
       const octx = off.getContext("2d")!;
@@ -109,7 +110,8 @@ function useBannerTexture(): THREE.CanvasTexture {
       ctx.shadowColor = "rgba(0,0,0,0.55)";
       ctx.shadowBlur = 10;
       ctx.shadowOffsetY = 3;
-      ctx.drawImage(off, (W - size) / 2, H * 0.16, size, size);
+      // Logo descendu au tiers bas de la bannière (demande Mehdi).
+      ctx.drawImage(off, (W - size) / 2, H * 0.34, size, size);
       ctx.restore();
       tex.needsUpdate = true;
     };

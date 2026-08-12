@@ -1036,8 +1036,8 @@ button:focus-visible {
   position: absolute;
   top: 100%;
   margin-top: -2px;
-  width: 58px;
-  height: 150px;
+  width: 76px;
+  height: 196px;
   transform-origin: 50% 0;
   z-index: 5;
   transition: transform 0.45s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.35s ease;

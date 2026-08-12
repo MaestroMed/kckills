@@ -554,6 +554,11 @@ function KCPennantStatic({ side }: { side: "left" | "right" }) {
           <stop offset="0.5" stopColor="#C8AA6E" />
           <stop offset="1" stopColor="#785A28" />
         </linearGradient>
+        <linearGradient id={`${gradId}-blue`} x1="0" y1="0" x2="58" y2="150">
+          <stop stopColor="#0a63ff" />
+          <stop offset="0.5" stopColor="#0047d1" />
+          <stop offset="1" stopColor="#012372" />
+        </linearGradient>
         {/* Recolore le logo (blanc → or) via son canal alpha. */}
         <filter id={goldizeId} x="-20%" y="-20%" width="140%" height="140%">
           <feFlood floodColor="#C8AA6E" result="gold" />
@@ -562,10 +567,10 @@ function KCPennantStatic({ side }: { side: "left" | "right" }) {
       </defs>
       {/* tringle d'accroche */}
       <rect x="0" y="0" width="58" height="6" rx="3" fill={`url(#${gradId})`} />
-      {/* corps navy, queue d'aronde */}
+      {/* corps bleu KC, queue d'aronde */}
       <path
         d="M4 6 H54 V138 L29 122 L4 138 Z"
-        fill="#0A1428"
+        fill={`url(#${gradId}-blue)`}
         stroke={`url(#${gradId})`}
         strokeWidth="3.5"
         strokeLinejoin="round"
@@ -578,11 +583,11 @@ function KCPennantStatic({ side }: { side: "left" | "right" }) {
         strokeWidth="1"
         fill="none"
       />
-      {/* vrai logo KC, teinté or */}
+      {/* vrai logo KC, teinté or — au tiers bas */}
       <image
         href="/images/kc-logo.png"
         x="11"
-        y="28"
+        y="58"
         width="36"
         height="36"
         filter={`url(#${goldizeId})`}
