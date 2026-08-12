@@ -1088,6 +1088,7 @@ export const en: FrDict = {
     "act_streak_aria": "{n}-day streak",
     "act_streak_title": "You've come back {n} days in a row",
     "act_day_n": "Day {n}",
+    "hint_swipe": "Swipe up",
     "ban_live": "KC LIVE NOW",
     "ban_game_n": "Game {n}",
     "ban_in_progress": "IN PROGRESS",

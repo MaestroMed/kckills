@@ -86,6 +86,13 @@ export function useFeedPlayer({
    *  the latest values without depending on stale closure values. */
   const slotItemIndexRef = useRef(slotItemIndex);
   slotItemIndexRef.current = slotItemIndex;
+  /** Perf (2026-08-12) — même pattern pour priorities : l'effet
+   *  d'allocation les LIT (comparaison structurelle « changed ») mais ne
+   *  doit pas en DÉPENDRE. Avant, `priorities` était dans les deps alors
+   *  que l'effet appelle setPriorities → chaque changement d'activeIndex
+   *  déclenchait l'effet 2× et 1-2 renders de FeedPlayerPool en trop. */
+  const prioritiesRef = useRef(priorities);
+  prioritiesRef.current = priorities;
 
   useEffect(() => {
     if (totalItems === 0) return;
@@ -120,14 +127,16 @@ export function useFeedPlayer({
     }
 
     // 4. Skip update if nothing changed (avoid unnecessary re-renders).
+    //    priorities est lu via ref (voir prioritiesRef) : UNE passe par
+    //    changement d'index, la sémantique d'allocation est inchangée.
     const changed =
       prevSlots.some((v, i) => v !== newSlots[i]) ||
-      priorities.some((p, i) => p !== newPriorities[i]);
+      prioritiesRef.current.some((p, i) => p !== newPriorities[i]);
     if (changed) {
       setSlotItemIndex(newSlots);
       setPriorities(newPriorities);
     }
-  }, [activeIndex, totalItems, priorities]);
+  }, [activeIndex, totalItems]);
 
   const assignments = useMemo(() => {
     const m = new Map<number, number>();

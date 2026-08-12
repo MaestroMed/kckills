@@ -1109,6 +1109,7 @@ const _fr = {
     "act_streak_aria": "Série de {n} jours",
     "act_streak_title": "Tu reviens depuis {n} jours d'affilée",
     "act_day_n": "Jour {n}",
+    "hint_swipe": "Glisse vers le haut",
     "ban_live": "KC EN LIVE",
     "ban_game_n": "Game {n}",
     "ban_in_progress": "EN COURS",

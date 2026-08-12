@@ -316,6 +316,20 @@ button:focus-visible {
 }
 
 /* ─── Progress bar (TikTok-style) ────────────────── */
+/* Vague 4 (2026-08-12) — ravivée pour le feed v2. Le FeedPlayerPool
+   écrit --p (currentTime/duration du slot LIVE) sur le rail
+   .kc-clip-progress via rAF — zéro setState, la barre est pur
+   compositor (transform scaleX). La piste (track) est le conteneur,
+   la barre dorée est l'enfant .scroll-progress-bar. */
+.kc-clip-progress {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: rgba(255, 255, 255, 0.14);
+  pointer-events: none;
+  --p: 0;
+}
 .scroll-progress-bar {
   position: absolute;
   bottom: 0;
@@ -328,6 +342,55 @@ button:focus-visible {
   transform: scaleX(var(--p, 0));
   will-change: transform;
   pointer-events: none;
+}
+
+/* ─── Buffering indicator (slot LIVE, readyState < 3) ── */
+/* Vague 4 — anneau discret par-dessus le poster quand le clip actif
+   met > 300 ms à bufferiser. Toggle imperatif (classList) depuis le
+   FeedPlayerPool, jamais de re-render React. */
+.kc-clip-buffering {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 180ms ease-out;
+}
+.kc-clip-buffering.is-visible {
+  opacity: 1;
+}
+.kc-clip-buffering-ring {
+  width: 42px;
+  height: 42px;
+  border-radius: 9999px;
+  border: 2.5px solid rgba(200, 170, 110, 0.2);
+  border-top-color: var(--gold);
+  background: rgba(0, 0, 0, 0.25);
+  animation: kc-buffer-spin 0.9s linear infinite;
+}
+@keyframes kc-buffer-spin {
+  to { transform: rotate(360deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .kc-clip-buffering-ring {
+    animation: none;
+    border-color: rgba(200, 170, 110, 0.45);
+    border-top-color: var(--gold);
+  }
+}
+
+/* ─── Swipe hint (1re visite) ────────────────────── */
+/* Vague 4 — chevron « glisse vers le haut », 2 cycles puis fin
+   (le composant SwipeHint écoute onAnimationEnd pour se démonter). */
+@keyframes kc-swipe-hint {
+  0%   { opacity: 0; transform: translateY(22px); }
+  25%  { opacity: 0.95; transform: translateY(0); }
+  55%  { opacity: 0.9; transform: translateY(-16px); }
+  100% { opacity: 0; transform: translateY(-26px); }
+}
+.kc-swipe-hint-chevron {
+  animation: kc-swipe-hint 1.4s cubic-bezier(0.22, 1, 0.36, 1) 3 both;
 }
 
 /* Bottom-overlay fade-in: short + opacity-only → cheap on the compositor.

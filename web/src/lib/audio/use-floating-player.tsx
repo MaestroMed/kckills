@@ -107,6 +107,15 @@ interface FloatingPlayerState {
   position: number;
   /** Compact (just the wolf head) vs expanded (track info + controls). */
   isExpanded: boolean;
+  /** Perf (2026-08-12) — l'API YouTube IFrame n'est plus chargée au
+   *  montage : ce flag passe à true au PREMIER geste qui demande de
+   *  l'audio (clic sur le loup, ou first-gesture autoplay d'un visiteur
+   *  déjà opt-in). Tant qu'il est false, HiddenAudioIframe ne fait RIEN
+   *  (zéro script tiers youtube.com sur les pages). */
+  isActivated: boolean;
+  /** Le YT.Player est attaché et prêt (onReady passé). Sert d'état
+   *  « chargement » au bouton : isActivated && !isPlayerReady. */
+  isPlayerReady: boolean;
   /** Active override (null = none, "bcc" = cave hijack, etc.). When set,
    *  it bypasses the route-driven playlist selection. */
   playlistOverride: PlaylistId | null;
@@ -260,6 +269,10 @@ export function FloatingPlayerProvider({ children }: { children: ReactNode }) {
   const [volume, setVolumeState] = useState(0.4);
   const [position, setPosition] = useState(0);
   const [isExpanded, setIsExpanded] = useState(false);
+  // Perf (2026-08-12) — chargement paresseux de l'API YouTube. Voir la
+  // doc des champs isActivated / isPlayerReady dans FloatingPlayerState.
+  const [isActivated, setIsActivated] = useState(false);
+  const [isPlayerReady, setIsPlayerReady] = useState(false);
 
   const playerRef = useRef<YTPlayerLike | null>(null);
   const positionTimerRef = useRef<number | null>(null);
@@ -351,6 +364,11 @@ export function FloatingPlayerProvider({ children }: { children: ReactNode }) {
       window.removeEventListener("pointerdown", onFirstGesture);
       window.removeEventListener("keydown", onFirstGesture);
       wlog("first-gesture autoplay fired");
+      // Lazy-load : c'est le premier signal « on veut de l'audio » —
+      // déclenche l'injection de l'API YT (HiddenAudioIframe observe
+      // isActivated). Le pendingPlayRef ci-dessous drainera le play()
+      // quand le player s'attachera.
+      setIsActivated(true);
       // Try to resume — if YT player isn't ready yet, set flag for the
       // onReady callback to pick up.
       if (playerRef.current) {
@@ -456,6 +474,8 @@ export function FloatingPlayerProvider({ children }: { children: ReactNode }) {
       currentTrackId: currentTrack?.id,
     });
     setIsOptedIn(true);
+    // Lazy-load : premier play() = feu vert pour injecter l'API YT.
+    setIsActivated(true);
     writeLS(LS_OPTED, "1");
     if (playerRef.current) {
       try {
@@ -619,6 +639,7 @@ export function FloatingPlayerProvider({ children }: { children: ReactNode }) {
   const _attachPlayer = useCallback((p: YTPlayerLike | null) => {
     wlog("_attachPlayer", { attached: !!p });
     playerRef.current = p;
+    setIsPlayerReady(!!p);
     if (p && pendingPlayRef.current) {
       pendingPlayRef.current = false;
       wlog("draining queued play()");
@@ -664,6 +685,8 @@ export function FloatingPlayerProvider({ children }: { children: ReactNode }) {
       volume,
       position,
       isExpanded,
+      isActivated,
+      isPlayerReady,
       currentTrack,
       iframeId: "kc-wolf-player-iframe",
       play,
@@ -690,6 +713,8 @@ export function FloatingPlayerProvider({ children }: { children: ReactNode }) {
       volume,
       position,
       isExpanded,
+      isActivated,
+      isPlayerReady,
       currentTrack,
       play,
       pause,

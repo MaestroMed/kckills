@@ -103,7 +103,6 @@ const nextConfig: NextConfig = {
       "lucide-react",
       "motion",
       "date-fns",
-      "@react-three/drei",
       "@supabase/ssr",
       "@supabase/supabase-js",
     ],

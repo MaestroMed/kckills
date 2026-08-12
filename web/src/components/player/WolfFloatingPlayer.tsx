@@ -342,6 +342,7 @@ function HiddenAudioIframe() {
     iframeId,
     currentTrack,
     isOptedIn,
+    isActivated,
     volume,
     _attachPlayer,
     _onPlayerStateChange,
@@ -375,6 +376,11 @@ function HiddenAudioIframe() {
   // wolf player share a single API load.
   useEffect(() => {
     if (typeof window === "undefined") return;
+    // Perf (2026-08-12) — chargement paresseux. Tant que l'utilisateur
+    // n'a pas demandé d'audio (clic sur le loup, ou first-gesture d'un
+    // visiteur opt-in), on n'injecte PAS le script youtube.com/iframe_api
+    // et on ne crée aucun player : zéro requête tierce sur / et /scroll.
+    if (!isActivated) return;
     if (!currentTrack) {
       // eslint-disable-next-line no-console
       console.debug("[wolf] no currentTrack — skipping player init");
@@ -548,10 +554,11 @@ function HiddenAudioIframe() {
     return () => {
       cancelled = true;
     };
-    // We only re-run when the actual video changes. isOptedIn / volume
-    // are read inside the closure ; they don't need to retrigger init.
+    // We only re-run when the actual video changes (ou quand l'activation
+    // paresseuse arrive). isOptedIn / volume are read inside the closure ;
+    // they don't need to retrigger init.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentTrack?.youtubeId, iframeId]);
+  }, [currentTrack?.youtubeId, iframeId, isActivated]);
 
   return (
     <div
@@ -574,11 +581,22 @@ function HiddenAudioIframe() {
 // ─── Compact pill (always visible, bottom-right) ─────────────────
 function CompactPill({ onExpand }: { onExpand: () => void }) {
   const t = useT();
-  const { isPlaying, isOptedIn, toggle, currentTrack, playlistOverride } =
-    useFloatingPlayerInternal();
+  const {
+    isPlaying,
+    isOptedIn,
+    isActivated,
+    isPlayerReady,
+    toggle,
+    currentTrack,
+    playlistOverride,
+  } = useFloatingPlayerInternal();
   const reducedMotion = useReducedMotion() ?? false;
   const showOptInPulse = !isOptedIn && !isPlaying;
   const bccActive = playlistOverride === "bcc";
+  // Perf (2026-08-12) — lazy YT : entre le clic sur le loup et le
+  // onReady du player (script iframe_api + création du player), le
+  // bouton affiche un anneau de chargement au lieu du pulse opt-in.
+  const isLoading = isActivated && !isPlayerReady && !isPlaying;
 
   return (
     <m.div
@@ -637,7 +655,24 @@ function CompactPill({ onExpand }: { onExpand: () => void }) {
     >
       {/* Wolf head with optional pulse ring */}
       <div className="relative" data-wolf-toggle>
-        {showOptInPulse && !reducedMotion && (
+        {isLoading ? (
+          // Anneau de chargement (lazy YT) — tourne le temps que le
+          // script iframe_api + le player arrivent. reduced-motion →
+          // anneau statique semi-transparent (pas de rotation).
+          <m.div
+            className={`absolute inset-0 rounded-full border-2 border-transparent ${
+              bccActive
+                ? "border-t-[var(--red)]"
+                : "border-t-[var(--gold)]"
+            }`}
+            animate={reducedMotion ? { opacity: 0.7 } : { rotate: 360 }}
+            transition={
+              reducedMotion
+                ? undefined
+                : { duration: 0.9, repeat: Infinity, ease: "linear" }
+            }
+          />
+        ) : showOptInPulse && !reducedMotion ? (
           <m.div
             className={`absolute inset-0 rounded-full border-2 ${
               bccActive ? "border-[var(--red)]" : "border-[var(--gold)]"
@@ -645,7 +680,7 @@ function CompactPill({ onExpand }: { onExpand: () => void }) {
             animate={{ scale: [1, 1.4, 1], opacity: [0.7, 0, 0.7] }}
             transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
           />
-        )}
+        ) : null}
         <WolfHead
           isPlaying={isPlaying}
           reducedMotion={reducedMotion}

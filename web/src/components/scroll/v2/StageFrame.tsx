@@ -128,12 +128,17 @@ export function StageFrame({ children, cinema = false }: StageFrameProps) {
     // wrapper, which is `absolute inset-0` of THIS frame. When the frame size
     // changes (first measure, window resize, cinema toggle) the pool must
     // re-measure or its <video> height/translate3d math stays anchored to the
-    // stale viewport height. ScrollFeedV2 already listens for `resize`, so we
-    // nudge it on the next frame once the frame box is committed — this wins
-    // the first-paint race between the frame's sizing and the pool's RO read.
+    // stale viewport height. We nudge it on the next frame once the frame box
+    // is committed — this wins the first-paint race between the frame's
+    // sizing and the pool's RO read.
+    //
+    // Perf (2026-08-12) — CustomEvent CIBLÉ `kc:stage-resize` (écouté par le
+    // seul consommateur réel : la mesure d'itemHeight dans ScrollFeedV2).
+    // Avant : window.dispatchEvent(new Event("resize")) qui réveillait TOUS
+    // les listeners resize de l'app à chaque commit de taille.
     const raf = requestAnimationFrame(() => {
       try {
-        window.dispatchEvent(new Event("resize"));
+        window.dispatchEvent(new CustomEvent("kc:stage-resize"));
       } catch {
         /* no-op in non-DOM envs */
       }

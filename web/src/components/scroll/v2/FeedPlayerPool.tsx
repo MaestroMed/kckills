@@ -246,6 +246,16 @@ export function FeedPlayerPool({
    *  Un item n'est déclassé qu'une fois par session. */
   const downgradedRef = useRef<Set<string>>(new Set());
 
+  /** Vague 4 — barre de progression du clip. Le rail (track) porte la
+   *  variable CSS --p (0→1) que .scroll-progress-bar consomme en
+   *  scaleX. Écrite via rAF sur le slot LIVE uniquement — zéro
+   *  setState, zéro re-render. */
+  const progressTrackRef = useRef<HTMLDivElement | null>(null);
+  /** Vague 4 — indicateur de buffering (anneau discret). Toggle
+   *  imperatif via classList quand le slot LIVE reste readyState < 3
+   *  au-delà de 300 ms alors qu'il devrait jouer. */
+  const bufferingRef = useRef<HTMLDivElement | null>(null);
+
   /** Sync mute state across all 5 elements when shared mute toggles. */
   useEffect(() => {
     for (const v of videoRefs.current) {
@@ -684,9 +694,141 @@ export function FeedPlayerPool({
     return () => clearInterval(id);
   }, [priorities, slotItemIndex, items]);
 
+  /** Vague 4 — barre de progression. Un rAF (ou un intervalle 250 ms en
+   *  prefers-reduced-motion : on saute l'interpolation, on garde la
+   *  position) lit currentTime/duration du slot LIVE et écrit --p sur le
+   *  rail. En pause la tête ne bouge plus → aucune écriture → la barre
+   *  se fige toute seule. Au changement de clip l'effet se relance et
+   *  remet --p à 0 immédiatement. */
+  useEffect(() => {
+    const track = progressTrackRef.current;
+    if (!track) return;
+    const liveSlot = priorities.indexOf("live");
+    const v = liveSlot !== -1 ? videoRefs.current[liveSlot] : null;
+    const itemIdx = liveSlot !== -1 ? slotItemIndex[liveSlot] : -1;
+    // Reset au (re)bind — la barre repart de zéro sur chaque clip.
+    track.style.setProperty("--p", "0");
+    if (!v || itemIdx === -1) return;
+
+    let lastP = 0;
+    const write = () => {
+      const d = v.duration;
+      if (!Number.isFinite(d) || d <= 0) return;
+      const p = Math.min(1, Math.max(0, v.currentTime / d));
+      // Seuil ~0.05 % : évite les setProperty inutiles quand la tête
+      // n'a pas bougé (pause, buffering).
+      if (Math.abs(p - lastP) < 0.0005) return;
+      lastP = p;
+      track.style.setProperty("--p", p.toFixed(4));
+    };
+
+    if (reducedMotion) {
+      // Pas d'interpolation 60 fps — mise à jour ~4 Hz, position exacte.
+      const id = window.setInterval(write, 250);
+      write();
+      return () => window.clearInterval(id);
+    }
+    let raf = 0;
+    const loop = () => {
+      write();
+      raf = requestAnimationFrame(loop);
+    };
+    raf = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(raf);
+  }, [priorities, slotItemIndex, items, reducedMotion]);
+
+  /** Vague 4 — skeleton de buffering. Quand le slot LIVE devrait jouer
+   *  mais reste readyState < 3 au-delà de ~300 ms (démarrage à froid,
+   *  réseau lent), on affiche l'anneau par-dessus le poster ; retiré dès
+   *  que la lecture démarre (playing/canplay). Une vidéo en pause n'est
+   *  pas en train de bufferiser — on masque. */
+  useEffect(() => {
+    const el = bufferingRef.current;
+    if (!el) return;
+    const hide = () => el.classList.remove("is-visible");
+    const liveSlot = priorities.indexOf("live");
+    const v = liveSlot !== -1 ? videoRefs.current[liveSlot] : null;
+    const itemIdx = liveSlot !== -1 ? slotItemIndex[liveSlot] : -1;
+    if (!v || itemIdx === -1) {
+      hide();
+      return;
+    }
+    let timer: number | null = null;
+    const arm = () => {
+      if (timer != null) return;
+      timer = window.setTimeout(() => {
+        timer = null;
+        // Re-check à l'échéance : le buffer a pu se remplir entre-temps.
+        if (v.readyState < 3 && !v.paused && !v.ended) {
+          el.classList.add("is-visible");
+        }
+      }, 300);
+    };
+    const disarm = () => {
+      if (timer != null) {
+        window.clearTimeout(timer);
+        timer = null;
+      }
+      hide();
+    };
+    // État initial au bind : la source vient d'être posée, readyState 0.
+    if (v.readyState < 3) arm();
+    else hide();
+    v.addEventListener("waiting", arm);
+    v.addEventListener("stalled", arm);
+    v.addEventListener("playing", disarm);
+    v.addEventListener("canplay", disarm);
+    v.addEventListener("pause", disarm);
+    return () => {
+      if (timer != null) window.clearTimeout(timer);
+      v.removeEventListener("waiting", arm);
+      v.removeEventListener("stalled", arm);
+      v.removeEventListener("playing", disarm);
+      v.removeEventListener("canplay", disarm);
+      v.removeEventListener("pause", disarm);
+      hide();
+    };
+  }, [priorities, slotItemIndex, items]);
+
+  /** Perf (2026-08-12) — promotion will-change CONDITIONNELLE. Avant :
+   *  `willChange: "transform"` en dur dans le style JSX = les 5 <video>
+   *  promues en couches compositeur EN PERMANENCE (mémoire GPU + freins
+   *  compositeur au repos). Maintenant : promotion au premier mouvement
+   *  du containerY (début de geste / snap), rétrogradation à "auto"
+   *  ~200 ms après la dernière frame de mouvement (debounce via ref +
+   *  setTimeout — zéro setState, zéro re-render). Le style JSX porte
+   *  "auto" : un commit React au repos ne ré-écrit rien (React ne diffe
+   *  que ses propres valeurs, la valeur impérative survit au commit). */
+  const wcActiveRef = useRef(false);
+  const wcTimerRef = useRef<number | null>(null);
+  useEffect(() => {
+    // Cleanup au démontage — ne laisse pas un timer orphelin écrire sur
+    // des refs de <video> recyclées.
+    return () => {
+      if (wcTimerRef.current != null) window.clearTimeout(wcTimerRef.current);
+    };
+  }, []);
+
   const fallbackY = useMotionValue(0);
   useMotionValueEvent(containerY ?? fallbackY, "change", (latest) => {
     if (!containerY) return;
+    // Ça bouge → promeut les vidéos (une seule écriture par gesture,
+    // gardée par wcActiveRef).
+    if (!wcActiveRef.current) {
+      wcActiveRef.current = true;
+      for (const v of videoRefs.current) {
+        if (v) v.style.willChange = "transform";
+      }
+    }
+    // Ré-arme la rétrogradation : silence de 200 ms = repos → "auto".
+    if (wcTimerRef.current != null) window.clearTimeout(wcTimerRef.current);
+    wcTimerRef.current = window.setTimeout(() => {
+      wcTimerRef.current = null;
+      wcActiveRef.current = false;
+      for (const v of videoRefs.current) {
+        if (v) v.style.willChange = "auto";
+      }
+    }, 200);
     for (let s = 0; s < POOL_SIZE; s++) {
       const v = videoRefs.current[s];
       if (!v) continue;
@@ -758,7 +900,11 @@ export function FeedPlayerPool({
             backgroundColor: "#000",
             opacity: 0,
             transform: "translate3d(0, 0, 0)",
-            willChange: "transform",
+            // Perf (2026-08-12) — plus de promotion permanente : le
+            // will-change est écrit impérativement pendant le geste/snap
+            // (voir wcActiveRef près du useMotionValueEvent) et retiré
+            // au repos. "auto" est la valeur de base.
+            willChange: "auto",
             backfaceVisibility: "hidden",
             WebkitBackfaceVisibility: "hidden",
           }}
@@ -926,6 +1072,32 @@ export function FeedPlayerPool({
           data-reduced-motion={reducedMotion ? "true" : undefined}
         />
       ))}
+
+      {/* Vague 4 — anneau de buffering. Rendu APRÈS les vidéos (ordre
+          DOM = au-dessus dans le stacking du pool), toggle imperatif
+          via classList — voir l'effet dédié plus haut. */}
+      <div ref={bufferingRef} className="kc-clip-buffering" aria-hidden>
+        <span className="kc-clip-buffering-ring" />
+      </div>
+
+      {/* Vague 4 — barre de progression du clip actif. Fine (2 px), en
+          bas du stage. Sur mobile le disclaimer Riot (fixed bottom-1,
+          z-70, ~16 px de haut) occupe le bord : la barre se place juste
+          au-dessus. Sur le wide stage le disclaimer vit SOUS la frame →
+          la barre colle au bord bas de la frame. --p est écrit par le
+          rAF de l'effet dédié — la barre enfant fait scaleX(var(--p)). */}
+      <div
+        ref={progressTrackRef}
+        className="kc-clip-progress"
+        style={{
+          bottom: isWideStage
+            ? 0
+            : "calc(env(safe-area-inset-bottom, 0px) + 17px)",
+        }}
+        aria-hidden
+      >
+        <div className="scroll-progress-bar" />
+      </div>
     </div>
   );
 }

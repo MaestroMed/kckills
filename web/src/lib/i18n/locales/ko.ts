@@ -1099,6 +1099,7 @@ export const ko: FrDict = {
     "act_streak_aria": "{n}일 연속",
     "act_streak_title": "{n}일 연속 방문 중",
     "act_day_n": "{n}일째",
+    "hint_swipe": "위로 스와이프",
     "ban_live": "KC 라이브",
     "ban_game_n": "{n}번째 게임",
     "ban_in_progress": "진행 중",
