@@ -177,6 +177,10 @@ function normalize(row: RawKillSelect): PublishedKillRow {
             scheduled_at: matches.scheduled_at ?? null,
             stage: matches.stage ?? null,
             format: matches.format ?? null,
+            // Ce select n'embarque pas les codes équipes (chemin reco :
+            // l'adversaire est résolu par le mapper du feed si dispo).
+            team_blue_code: null,
+            team_red_code: null,
           }
         : null,
     };

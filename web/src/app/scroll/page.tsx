@@ -37,7 +37,7 @@ import type { GridAxisId } from "@/lib/grid/axis-config";
 import { JsonLd, breadcrumbLD } from "@/lib/seo/jsonld";
 import { pickAssetUrl } from "@/lib/kill-assets";
 import { getServerT } from "@/lib/i18n/server-lang";
-import { cleanTeamCode } from "@/lib/team-display";
+import { cleanTeamCode, resolveOpponentFromCodes } from "@/lib/team-display";
 
 const SITE_URL =
   process.env.NEXT_PUBLIC_SITE_URL ??
@@ -364,10 +364,15 @@ export default async function ScrollV2Page({ searchParams }: ScrollPageProps) {
     const matchMeta = k.games?.matches;
     const matchJson = data.matches.find((m) => m.id === (matchMeta?.external_id ?? ""));
     // Plus de fallback "LEC" mensonger : quand le match n'est pas résolu
-    // dans kc_matches.json (backfill gol.gg, EWC…), on rend "" et la carte
-    // affiche le stage/la date à la place de "vs LEC". cleanTeamCode filtre
-    // aussi les ids numériques gol.gg — jamais de "vs 1155" à l'écran.
-    const opponentCode = cleanTeamCode(matchJson?.opponent.code) ?? "";
+    // dans kc_matches.json (backfill gol.gg, EWC…), on retombe sur les
+    // codes équipes embarqués par KILL_SELECT (2026-08-13) — c'est ce qui
+    // rend le filtre ?axis=opponent_team_code opérant sur le stock
+    // historique (LFL 2021-22 : SOL, VITB…). cleanTeamCode filtre les ids
+    // numériques gol.gg — jamais de "vs 1155" à l'écran.
+    const opponentCode =
+      cleanTeamCode(matchJson?.opponent.code) ??
+      resolveOpponentFromCodes(matchMeta?.team_blue_code, matchMeta?.team_red_code) ??
+      "";
     const kcWon = matchJson?.kc_won ?? null;
     const matchScore = matchJson ? `${matchJson.kc_score}-${matchJson.opp_score}` : null;
 

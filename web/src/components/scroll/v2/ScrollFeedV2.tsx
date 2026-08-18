@@ -72,6 +72,7 @@ import type {
   VideoFeedItem,
 } from "@/components/scroll/feed-types";
 import type { RecommendedKillRow } from "@/lib/supabase/recommendations";
+import { resolveOpponentFromCodes } from "@/lib/team-display";
 import { rateKill } from "@/components/community/actions";
 import { track } from "@/lib/analytics/track";
 import { useT } from "@/lib/i18n/use-lang";
@@ -163,10 +164,14 @@ function recommendationToFeedItem(row: RecommendedKillRow): VideoFeedItem | null
     matchExternalId: k.games?.matches?.external_id ?? "",
     matchStage: k.games?.matches?.stage ?? "LEC",
     matchDate: k.games?.matches?.scheduled_at ?? k.created_at,
-    // Adversaire inconnu sur ce data-path (pas de kc_matches.json côté
-    // client) : "" plutôt que le placeholder "LEC" — la carte affiche le
-    // stage à la place. Règle : jamais un faux code équipe à l'écran.
-    opponentCode: "",
+    // Pas de kc_matches.json côté client, mais KILL_SELECT embarque les
+    // codes équipes (2026-08-13) : on résout l'adversaire depuis la DB.
+    // Règle inchangée : jamais un faux code équipe à l'écran ("" sinon).
+    opponentCode:
+      resolveOpponentFromCodes(
+        k.games?.matches?.team_blue_code,
+        k.games?.matches?.team_red_code,
+      ) ?? "",
     kcWon: null,
     matchScore: null,
   };

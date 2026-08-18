@@ -180,6 +180,9 @@ export interface PublishedKillRow {
       scheduled_at: string | null;
       stage: string | null;
       format: string | null;
+      /** Codes équipes embarqués (résolution d'adversaire hors kc_matches.json). */
+      team_blue_code: string | null;
+      team_red_code: string | null;
     } | null;
   } | null;
 }
@@ -237,10 +240,17 @@ const KILL_SELECT = `
       external_id,
       scheduled_at,
       stage,
-      format
+      format,
+      team_blue:teams!matches_team_blue_id_fkey ( code ),
+      team_red:teams!matches_team_red_id_fkey ( code )
     )
   )
 `.trim();
+// 2026-08-13 — team_blue/team_red (code seul, ~30 octets/kill) : permet de
+// résoudre l'adversaire depuis la DB quand le match n'est pas dans
+// kc_matches.json (backfill gol.gg : LFL 2021-22, EWC…). Avant ça, ~285
+// items du feed n'avaient pas d'adversaire et le filtre
+// ?axis=opponent_team_code était aveugle sur tout ce stock.
 
 // Wave 44 (audit repasse) — variante INNER de KILL_SELECT, à n'utiliser QUE
 // quand on filtre par match. Sans !inner, `.eq("games.matches.external_id")`
@@ -517,6 +527,12 @@ interface RawMatchSelect {
   scheduled_at?: string | null;
   stage?: string | null;
   format?: string | null;
+  team_blue?: RawTeamCodeSelect | RawTeamCodeSelect[] | null;
+  team_red?: RawTeamCodeSelect | RawTeamCodeSelect[] | null;
+}
+
+interface RawTeamCodeSelect {
+  code?: string | null;
 }
 
 function normalize(row: RawKillSelect): PublishedKillRow {
@@ -527,6 +543,10 @@ function normalize(row: RawKillSelect): PublishedKillRow {
   let gamesNormalized: PublishedKillRow["games"] = null;
   if (games) {
     const matches = Array.isArray(games.matches) ? games.matches[0] ?? null : games.matches ?? null;
+    const teamCode = (t: RawTeamCodeSelect | RawTeamCodeSelect[] | null | undefined) => {
+      const row = Array.isArray(t) ? t[0] ?? null : t ?? null;
+      return row?.code ?? null;
+    };
     gamesNormalized = {
       external_id: String(games.external_id ?? ""),
       game_number: Number(games.game_number ?? 1),
@@ -537,6 +557,8 @@ function normalize(row: RawKillSelect): PublishedKillRow {
             scheduled_at: matches.scheduled_at ?? null,
             stage: matches.stage ?? null,
             format: matches.format ?? null,
+            team_blue_code: teamCode(matches.team_blue),
+            team_red_code: teamCode(matches.team_red),
           }
         : null,
     };
