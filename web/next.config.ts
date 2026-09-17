@@ -83,10 +83,10 @@ const nextConfig: NextConfig = {
   // cacheComponents: true,
 
   experimental: {
-    // View Transitions API — native browser route transitions.
-    // Replaces framer-motion AnimatePresence on page nav. Zero JS
-    // cost, GPU-composited. App-like feel on mobile.
-    viewTransition: true,
+    // View Transitions API — l'ancien flag `experimental.viewTransition`
+    // n'existe plus en Next 16.3 (clé rejetée par le schéma de config) :
+    // React 19.3 exporte <ViewTransition> en stable, plus rien à activer
+    // côté Next. Retiré le 2026-09-17 lors du refresh SOTA.
     // Inline critical CSS into the SSR HTML so first paint doesn't
     // wait on the stylesheet HTTP request. Big mobile latency win.
     // Audit 2.0 : inlineCss dupliquait 877 KB de CSS dans CHAQUE réponse
