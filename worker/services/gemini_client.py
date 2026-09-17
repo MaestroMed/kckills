@@ -120,8 +120,11 @@ def _build_thinking_config(types_mod, model_name: str, budget: str | None):
     # Only thinking-aware models benefit. Keep the allowlist tight so we
     # don't accidentally bill a 3.1-flash-lite call for a budget that
     # would inflate output tokens.
-    THINKING_AWARE = ("gemini-3.5-",)
-    if not any(model_name.startswith(p) for p in THINKING_AWARE):
+    # 2026-09-17 : élargi à toute la famille Flash 3.5+ (3.6/3.7/3.8 Flash
+    # partagent l'API de budget string-enum de 3.5). Les Lite restent hors
+    # liste tant que leur support n'est pas vérifié en live.
+    THINKING_AWARE = ("gemini-3.5-flash", "gemini-3.6-flash", "gemini-3.7-flash", "gemini-3.8-flash")
+    if model_name.endswith("-lite") or not any(model_name.startswith(p) for p in THINKING_AWARE):
         return None
     ThinkingConfig = getattr(types_mod, "ThinkingConfig", None)
     if ThinkingConfig is None:

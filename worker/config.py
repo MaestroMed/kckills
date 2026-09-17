@@ -114,26 +114,31 @@ class Config:
             "offset":   "gemini-3.1-flash-lite",
             "quotes":   "gemini-3.1-flash-lite",
         },
-        "balanced": {  # 3 Flash for descriptions, 3.1 Lite for QC
-            "analyzer": "gemini-3-flash",
+        # Refresh SOTA 2026-09-17 (ai.google.dev/gemini-api/docs/pricing +
+        # models.list sur la clé du worker) :
+        #   * `gemini-3-flash` n'est plus servi qu'en `-preview` → le tier
+        #     balanced pointait sur un id mort. Remplacé par 3.5 Flash-Lite,
+        #     MÊME prix ($0.30/$2.50), génération suivante.
+        #   * Gemini 3.8 Flash ($0.75/$3.75 promo jusqu'au 31/12/2026, puis
+        #     $1.50/$7.50) est 2× moins cher que 3.5 Flash ($1.50/$9) et trois
+        #     générations plus récent → nouveau premium (+ auto-upgrade).
+        "balanced": {  # 3.5 Flash-Lite pour descriptions/quotes, 3.1 Lite pour QC/OCR
+            "analyzer": "gemini-3.5-flash-lite",
             "qc":       "gemini-3.1-flash-lite",
             "offset":   "gemini-3.1-flash-lite",
-            "quotes":   "gemini-3-flash",
+            "quotes":   "gemini-3.5-flash-lite",
         },
-        "premium": {  # Wave 33 — UPGRADED : 3.5-flash for analyzer.
-            # Was 2.5-pro pre-Wave-33. 3.5 Flash beats 3.1 Pro on agentic,
-            # 4× faster, similar price band. Use `pro-legacy` if you
-            # really want 2.5-pro for backward compat.
-            "analyzer": "gemini-3.5-flash",
+        "premium": {  # 3.8 Flash pour l'analyzer (et l'auto-upgrade penta/quadra/FB)
+            "analyzer": "gemini-3.8-flash",
             "qc":       "gemini-3.1-flash-lite",
             "offset":   "gemini-3.1-flash-lite",
-            "quotes":   "gemini-3-flash",
+            "quotes":   "gemini-3.5-flash-lite",
         },
         "pro-legacy": {  # Kept for budgeted one-shots that pre-budgeted 2.5-pro
             "analyzer": "gemini-2.5-pro",
             "qc":       "gemini-3.1-flash-lite",
             "offset":   "gemini-3.1-flash-lite",
-            "quotes":   "gemini-3-flash",
+            "quotes":   "gemini-3.5-flash-lite",
         },
         "experimental": {  # Pro 3.1 Preview (shutdown risk!)
             "analyzer": "gemini-3.1-pro-preview",

@@ -351,8 +351,10 @@ def test_gemini_provider_cost_constants():
     p = GeminiProvider(api_key="fake")
     assert p.name == "gemini"
     assert p.model_name == "gemini-3.1-flash-lite"
-    assert p.cost_per_m_input == 0.10
-    assert p.cost_per_m_output == 0.40
+    # Refresh 2026-09-17 : grille officielle 3.1 Flash-Lite = $0.25 / $1.50
+    # (le routeur lit ai_pricing.GEMINI_PRICES — une seule source de vérité).
+    assert p.cost_per_m_input == 0.25
+    assert p.cost_per_m_output == 1.50
     assert p.supports_vision is True
 
 

@@ -110,11 +110,32 @@ def test_tier_defaults_have_quotes_stage():
         assert mapping["quotes"].startswith("gemini-")
 
 
-def test_premium_tier_uses_3_5_flash():
-    """Wave 33 — `premium` was 2.5-pro, now upgraded to 3.5-flash."""
+def test_premium_tier_uses_3_8_flash():
+    """Wave 33 : 2.5-pro → 3.5-flash. Refresh 2026-09-17 : 3.5-flash → 3.8-flash
+    (2× moins cher en promo 2026, trois générations plus récent)."""
     from config import Config
 
-    assert Config._TIER_DEFAULTS["premium"]["analyzer"] == "gemini-3.5-flash"
+    assert Config._TIER_DEFAULTS["premium"]["analyzer"] == "gemini-3.8-flash"
+
+
+def test_balanced_tier_no_longer_points_at_dead_3_flash():
+    """`gemini-3-flash` n'est plus servi qu'en -preview (models.list du
+    2026-09-17) : le tier balanced doit viser un modèle GA existant."""
+    from config import Config
+
+    assert Config._TIER_DEFAULTS["balanced"]["analyzer"] == "gemini-3.5-flash-lite"
+
+
+def test_new_flash_models_are_priced():
+    """Un modèle routé sans prix retombe sur DEFAULT_PRICE et sous-compte le
+    cap journalier (cause n°2 des 50 € du 13/07) — chaque modèle des tiers
+    doit avoir une entrée explicite dans la grille."""
+    from config import Config
+    from services import ai_pricing
+
+    for tier in Config._TIER_DEFAULTS.values():
+        for model in tier.values():
+            assert model in ai_pricing.GEMINI_PRICES, f"{model} absent de GEMINI_PRICES"
 
 
 def test_pro_legacy_tier_kept_for_25_pro():
@@ -288,7 +309,8 @@ def test_auto_upgrade_on_penta():
     finally:
         A.analyze_kill = orig
 
-    assert captured["model_override"] == "gemini-3.5-flash"
+    # Refresh 2026-09-17 : le premium (= modèle d'auto-upgrade) est 3.8 Flash.
+    assert captured["model_override"] == "gemini-3.8-flash"
     assert result["_auto_upgraded"] is True
 
 
@@ -305,7 +327,8 @@ def test_auto_upgrade_on_first_blood():
         "tracked_team_involvement": "team_killer",
     }
     asyncio.run(A.analyze_kill_row(row))
-    assert captured["model_override"] == "gemini-3.5-flash"
+    # Refresh 2026-09-17 : le premium (= modèle d'auto-upgrade) est 3.8 Flash.
+    assert captured["model_override"] == "gemini-3.8-flash"
 
 
 def test_no_auto_upgrade_on_routine_kill():
