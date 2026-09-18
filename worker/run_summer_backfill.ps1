@@ -41,7 +41,9 @@ foreach ($m in $matches) {
     if ($Only -gt 0 -and $done -ge $Only) { break }
     $log = Join-Path $logDir ("pipeline_summer_" + $m.label + ".log")
     Write-Host ("[{0}] pipeline {1} ({2}) -> {3}" -f (Get-Date -Format "HH:mm:ss"), $m.label, $m.id, $log)
-    & $py main.py pipeline $m.id *>> $log
+    # cmd redirige les octets bruts (python écrit en UTF-8) — la redirection
+    # PowerShell *>> encodait le log en UTF-16 (illisible pour grep/iconv).
+    cmd /c ("""$py"" main.py pipeline " + $m.id + " >> """ + $log + """ 2>&1")
     Write-Host ("[{0}]   exit {1}" -f (Get-Date -Format "HH:mm:ss"), $LASTEXITCODE)
     $done++
     Start-Sleep -Seconds 30   # laisse respirer YouTube / ffmpeg entre deux séries
