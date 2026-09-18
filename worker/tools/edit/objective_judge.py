@@ -25,9 +25,9 @@ EVENTS = [r"D:\kckills_worker\edit_summer\objectives.jsonl", r"D:\kckills_worker
 OUT = r"D:\kckills_worker\edit_summer\objectives_judged.jsonl"
 CLIPS = r"D:\kckills_worker\edit_summer\obj"
 PY = r"C:\Users\Matter1\Karmine_Stats\worker\.venv\Scripts\python.exe"
-WIN = {"baron": (28, 14), "elder": (28, 14), "soul": (28, 14), "dragon": (26, 12), "kill_burst": (24, 14), "gold_swing": (30, 12),
+WIN = {"multikill": (24, 10), "baron": (28, 14), "elder": (28, 14), "soul": (28, 14), "dragon": (26, 12), "kill_burst": (24, 14), "gold_swing": (30, 12),
        "low_hp_survival": (16, 12), "low_hp_kill": (16, 12)}
-PRIO = {"soul": 5, "elder": 5, "baron": 4, "low_hp_survival": 4, "low_hp_kill": 3, "kill_burst": 3, "gold_swing": 2, "dragon": 1}
+PRIO = {"multikill": 6, "soul": 5, "elder": 5, "baron": 4, "low_hp_survival": 4, "low_hp_kill": 3, "kill_burst": 3, "gold_swing": 2, "dragon": 1}
 MAX_DRIFT = 300     # au-delà : lecture incohérente, sauf si 2 lectures concordantes (offset faux mais constant)
 TOL = 8             # dérive tolérée (s) avant re-découpe
 TIMER_MODEL = "gemini-3.5-flash-lite"
@@ -139,6 +139,18 @@ async def main():
     for path in EVENTS:
         if os.path.exists(path):
             events += [json.loads(l) for l in io.open(path, encoding="utf-8") if l.strip()]
+    # multi-kills confirmés par le feed (multikill_scan.py) : événements de premier rang
+    mk_path = r"D:\kckills_worker\edit_summer\multikills.jsonl"
+    if os.path.exists(mk_path):
+        for l in io.open(mk_path, encoding="utf-8"):
+            if not l.strip():
+                continue
+            m = json.loads(l)
+            if m.get("side") != "kc" or m.get("count", 0) < 4:
+                continue
+            events.append({"t": int(m["t_last"]), "type": "multikill", "side": "kc", "detail": f"{m['count']} kills {m['player']} ({m['champion']})",
+                           "n": m["count"], "actor": m["player"], "match": m["match"], "match_ext": m["match_ext"],
+                           "game_number": m["game_number"], "game_ext": m["game_ext"]})
     only = set(a.match.split(",")) if a.match else None
     types = set(a.types.split(",")) if a.types else None
     keep = []
@@ -147,7 +159,7 @@ async def main():
             continue
         if types and e["type"] not in types:
             continue
-        if e["type"] in ("baron", "elder", "soul", "low_hp_survival", "low_hp_kill"):
+        if e["type"] in ("multikill", "baron", "elder", "soul", "low_hp_survival", "low_hp_kill"):
             keep.append(e)
         elif e["type"] == "gold_swing" and e["n"] >= a.min_swing:
             keep.append(e)
@@ -242,7 +254,7 @@ async def main():
                    "vod_start": start, "drift": drift.get(e["game_ext"], 0), "timer_read": measured, "expected": expected,
                    "game_ext": e["game_ext"], "actor_hint": e.get("actor"),
                    "label": (d.get("actor") or e.get("actor") or "KC").replace("KC ", "").upper(),
-                   "tag": {"steal": "STEAL", "clutch_objective": "CLUTCH", "teamfight_turnaround": "RETOURNEMENT", "ace": "ACE",
+                   "tag": ({5: "PENTAKILL", 4: "QUADRA"}.get(e.get("n"), "MULTI") if e["type"] == "multikill" else None) or {"steal": "STEAL", "clutch_objective": "CLUTCH", "teamfight_turnaround": "RETOURNEMENT", "ace": "ACE",
                            "engage": "ENGAGE", "defense": "DEFENSE", "escape": "ESCAPE", "low_hp_kill": "KILL A 1 HP"}.get(d.get("kind"), "OBJECTIF"),
                    "judge": d}
             out.write(json.dumps(rec, ensure_ascii=False) + "\n")
