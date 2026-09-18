@@ -78,8 +78,10 @@ def load_candidates(a):
             if not d.get("gameplay_visible", False) or not rec.get("clip") or not os.path.exists(rec["clip"]):
                 continue
             sc = float(d.get("spectacle_score") or 0)
+            opp = " ".join((rec.get("match") or "").split(" ")[1:]).replace(" PO", "")
             cands.append({"kind": "objective", "id": rec["id"], "score": sc, "d": d, "src": rec["clip"], "aspect": "16:9",
-                          "label": (rec.get("label") or "KC").replace("KC ", ""), "tag": rec.get("tag", "OBJECTIF"),
+                          "label": (rec.get("label") or "KC").replace("KC ", ""),
+                          "tag": (rec.get("tag", "OBJECTIF") + (f"  vs {opp}" if opp else "")).strip(),
                           "game_ext": rec.get("game_ext") or rec["id"].rsplit("_", 1)[0], "t": rec.get("t"),
                           "matchup": rec.get("match", "")})
     return cands
@@ -96,11 +98,28 @@ def enrich_kills(cands):
         chunk = ",".join('"%s"' % k for k in kill_ids[i:i + 60])
         for r in q(url, hdr, sel + f"&id=in.({chunk})"):
             info[r["id"]] = r
+    # IGN de secours : game_participants (game_id + champion) quand killer_player_id est vide
+    sel2 = "kills?select=id,game_id&id=in.(%s)"
+    gids = {}
+    for i in range(0, len(kill_ids), 60):
+        chunk = ",".join('"%s"' % k for k in kill_ids[i:i + 60])
+        for r in q(url, hdr, sel2 % chunk):
+            gids[r["id"]] = r["game_id"]
+    parts = {}
+    ug = sorted(set(gids.values()))
+    for i in range(0, len(ug), 40):
+        chunk = ",".join('"%s"' % g for g in ug[i:i + 40])
+        for r in q(url, hdr, f"game_participants?select=game_id,champion,players(ign)&game_id=in.({chunk})"):
+            parts[(r["game_id"], (r.get("champion") or "").lower())] = ((r.get("players") or {}).get("ign") or "")
     for c in cands:
         if c["kind"] != "kill":
             continue
         r = info.get(c["id"], {})
         ign = ((r.get("killer") or {}).get("ign") or "").strip()
+        if not ign:
+            ign = (parts.get((gids.get(c["id"]), (r.get("killer_champion") or "").lower())) or "").strip()
+        if not ign:
+            ign = roster_ign(((r.get("games") or {}).get("external_id")), r.get("killer_champion") or "")
         g = r.get("games") or {}
         m = g.get("matches") or {}
         codes = [((m.get("team_blue") or {}).get("code")), ((m.get("team_red") or {}).get("code"))]
@@ -114,6 +133,28 @@ def enrich_kills(cands):
         c["game_ext"] = g.get("external_id")
         c["t"] = r.get("game_time_seconds")
         c["date"] = (m.get("scheduled_at") or "")[:10]
+
+
+_ROSTER = {}
+
+
+def roster_ign(game_ext, champion):
+    """Pseudo depuis le feed livestats (gameMetadata) : champion -> 'KC Canna' -> Canna."""
+    if not game_ext or not champion:
+        return ""
+    if game_ext not in _ROSTER:
+        m = {}
+        try:
+            rq = urllib.request.Request(f"https://feed.lolesports.com/livestats/v1/window/{game_ext}", headers={"User-Agent": "Mozilla/5.0"})
+            meta = json.load(urllib.request.urlopen(rq, timeout=20)).get("gameMetadata") or {}
+            for side in ("blueTeamMetadata", "redTeamMetadata"):
+                for p in (meta.get(side) or {}).get("participantMetadata") or []:
+                    m[str(p.get("championId", "")).lower().replace("'", "").replace(" ", "")] = str(p.get("summonerName", ""))
+        except Exception:
+            pass
+        _ROSTER[game_ext] = m
+    name = _ROSTER[game_ext].get(champion.lower().replace("'", "").replace(" ", ""), "")
+    return name.split(" ", 1)[1] if " " in name else name
 
 
 def same_fight(a, b):
@@ -135,7 +176,7 @@ def make_shot(c, beats, ramp=False, hook=False):
         tin = punch - 2 * BEAT
     tin = max(0.0, tin)
     if ramp:
-        tout = punch - RAMP_EPS + (beats - 2) * BEAT
+        tout = punch + (beats - 2) * BEAT
     else:
         tout = tin + beats * BEAT
     s = {"src": c["src"], "in": round(tin, 3), "out": round(tout, 3), "punch": round(punch, 3), "speed": 1.0,
@@ -182,7 +223,7 @@ def main():
     budget = a.target / BEAT - fixed
     picked, used, labels = [], 0, []
     for c in main_pool:                    # déjà trié par score desc
-        beats = 4 if c["score"] >= 7.5 else 2
+        beats = 4 if c["score"] >= 8.0 else 2
         if used + beats > budget:
             continue
         if labels[-2:] == [c["label"], c["label"]]:

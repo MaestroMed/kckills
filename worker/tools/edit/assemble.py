@@ -54,6 +54,16 @@ def geometry(shot):
     return vf
 
 
+def src_fps(path):
+    r = subprocess.run(["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries", "stream=r_frame_rate", "-of", "csv=p=0", path],
+                       capture_output=True, text=True)
+    try:
+        n, d = r.stdout.strip().split("/")
+        return float(n) / float(d)
+    except Exception:
+        return 30.0
+
+
 def overlays(shot, t0=0.05):
     """pseudo (pop-in alpha + glissement) + tag or."""
     vf = []
@@ -81,12 +91,15 @@ def grade():
 
 
 def encode_segment(src, tin, dur, speed, vf, dst, audio_pitch=False):
+    """`vf` doit déjà contenir la gestion du temps (fps=... en tête, setpts en queue si slow-mo)."""
     af = "anull"
     if speed != 1.0:
         af = f"asetrate=48000*{speed},aresample=48000" if audio_pitch else f"atempo={speed}"
-    cmd = ["ffmpeg", "-y", "-hide_banner", "-loglevel", "error", "-ss", f"{tin:.3f}", "-t", f"{dur:.3f}", "-i", src,
-           "-filter_complex", f"[0:v]setpts=PTS/{speed},{','.join(vf)}[v];[0:a]{af},aresample=48000[a]",
-           "-map", "[v]", "-map", "[a]", "-r", str(FPS)] + ENC + [dst]
+    # -t en option de SORTIE (durée finale = source / vitesse) : en option d'entrée, l'audio
+    # ré-échantillonné (asetrate) sortait 2x trop long.
+    cmd = ["ffmpeg", "-y", "-hide_banner", "-loglevel", "error", "-ss", f"{tin:.3f}", "-t", f"{dur + 0.5:.3f}", "-i", src,
+           "-filter_complex", f"[0:v]{','.join(vf)}[v];[0:a]{af},aresample=48000[a]",
+           "-map", "[v]", "-map", "[a]", "-r", str(FPS), "-t", f"{dur / speed:.3f}"] + ENC + [dst]
     run(cmd)
 
 
@@ -99,14 +112,15 @@ def render_shot(shot, dst_base, beat):
     if shot.get("ramp") and punch is not None and float(punch) - RAMP_EPS - tin > 0.25:
         # segment A : slow-mo jusqu'à RAMP_EPS avant l'impact (pitch des voix baissé = dramatique)
         a_in, a_dur = tin, (float(punch) - RAMP_EPS) - tin
-        vf = geometry(shot) + [f"zoompan=z='1.12':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d=1:s={W}x{H}:fps={FPS}"] + grade() + overlays(shot)
+        pre = ["fps=60"] if src_fps(src) >= 50 else ["fps=30", "minterpolate=fps=60:mi_mode=mci:mc_mode=aobmc:me_mode=bidir:vsbmc=1"]
+        vf = pre + geometry(shot) + [f"crop=iw/1.12:ih/1.12", f"scale={W}:{H}"] + grade() + overlays(shot) + [f"setpts={1/SLOW:.1f}*PTS"]
         pa = dst_base + "_a.mp4"
         encode_segment(src, a_in, a_dur, SLOW, vf, pa, audio_pitch=True)
         out.append(pa)
         # segment B : temps réel, impact à RAMP_EPS
         b_in, b_dur = float(punch) - RAMP_EPS, tout - (float(punch) - RAMP_EPS)
         pf, flash = punch_fx(RAMP_EPS)
-        vf = geometry(shot) + pf + grade() + overlays(shot, t0=-1.0) + [flash]
+        vf = [f"fps={FPS}"] + geometry(shot) + pf + grade() + overlays(shot, t0=-1.0) + [flash]
         pb = dst_base + "_b.mp4"
         encode_segment(src, b_in, max(0.3, b_dur), 1.0, vf, pb)
         out.append(pb)
@@ -115,9 +129,9 @@ def render_shot(shot, dst_base, beat):
     p_rel = None if punch is None else max(0.0, (float(punch) - tin) / speed)
     if p_rel is not None:
         pf, flash = punch_fx(p_rel)
-        vf = geometry(shot) + pf + grade() + overlays(shot) + [flash]
+        vf = [f"fps={FPS}"] + geometry(shot) + pf + grade() + overlays(shot) + [flash]
     else:
-        vf = geometry(shot) + [f"zoompan=z='1.12':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d=1:s={W}x{H}:fps={FPS}"] + grade() + overlays(shot)
+        vf = [f"fps={FPS}"] + geometry(shot) + [f"crop=iw/1.12:ih/1.12", f"scale={W}:{H}"] + grade() + overlays(shot)
     p = dst_base + ".mp4"
     encode_segment(src, tin, dur, speed, vf, p)
     out.append(p)
