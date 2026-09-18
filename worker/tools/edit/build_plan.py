@@ -189,7 +189,7 @@ def true_multikill(game_ext, t):
         return None
     best = None
     for r in _MK.get(game_ext, []):
-        if r["t_first"] - 6 <= t <= r["t_last"] + 6 and (best is None or r["count"] > best["count"]):
+        if r["t_first"] - 12 <= t <= r["t_last"] + 12 and (best is None or r["count"] > best["count"]):   # kills en base alignés sur des frames de 10 s
             best = r
     return best
 
