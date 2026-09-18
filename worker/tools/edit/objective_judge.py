@@ -21,7 +21,7 @@ from scheduler import scheduler  # noqa: E402
 from services import gemini_client  # noqa: E402
 from services.gemini_client import get_client, _wait_for_file_active, handle_gemini_exception  # noqa: E402
 
-EVENTS = [r"D:\kckills_worker\edit_summer\objectives.jsonl", r"D:\kckills_worker\edit_summer\hp_events.jsonl"]
+EVENTS = [r"D:\kckills_worker\edit_summer\objectives.jsonl", r"D:\kckills_worker\edit_summer\hp_events.jsonl", r"D:\kckills_worker\edit_summer\manual_events.jsonl"]
 OUT = r"D:\kckills_worker\edit_summer\objectives_judged.jsonl"
 CLIPS = r"D:\kckills_worker\edit_summer\obj"
 PY = r"C:\Users\Matter1\Karmine_Stats\worker\.venv\Scripts\python.exe"
