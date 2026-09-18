@@ -258,6 +258,32 @@ async def run_for_match(match_external_id: str) -> dict:
                 row["_victim_name_hint"] = k.victim_name
                 inserted_kill_rows.append(row)
 
+        # Reprise (2026-09-18) — les kills DÉJÀ en base pour cette game (run
+        # précédent interrompu -> 23505 à l'insert) qui n'ont pas de clip
+        # repartent dans le circuit clip -> analyse -> OG. Avant, seuls les
+        # kills fraîchement insérés étaient clippés : une chaîne coupée
+        # laissait toute la game 1 en 'raw' pour toujours (MKOI W1 : 41 kills).
+        seen_ids = {r.get("id") for r in inserted_kill_rows}
+        existing_rows = safe_select(
+            "kills",
+            "id, game_id, event_epoch, game_time_seconds, killer_champion, victim_champion, "
+            "assistants, confidence, tracked_team_involvement, is_first_blood, multi_kill, "
+            "shutdown_bounty, data_source, status, clip_url_vertical",
+            game_id=game_db_id,
+        ) or []
+        recovered = 0
+        for r in existing_rows:
+            if r.get("id") in seen_ids or r.get("clip_url_vertical"):
+                continue
+            if (r.get("status") or "") not in ("raw", "enriched", "vod_found", "clip_error"):
+                continue  # needs_review / duplicate / published : pas à nous
+            r["_killer_name_hint"] = None
+            r["_victim_name_hint"] = None
+            inserted_kill_rows.append(r)
+            recovered += 1
+        if recovered:
+            log.info("pipeline_kills_recovered", game=game_ext_id, n=recovered)
+
         safe_update("games", {"kills_extracted": True}, "id", game_db_id)
 
         if not yt_id:
