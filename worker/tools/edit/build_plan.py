@@ -127,15 +127,77 @@ def enrich_kills(cands):
         c["label"] = (ign or r.get("killer_champion") or "KC").upper()
         d = c["d"]
         tag = MULTI_FR.get(r.get("multi_kill") or "", "") or TAG_FR.get(d.get("move_type") or "", "") or ("FIRST BLOOD" if r.get("is_first_blood") else "")
-        c["tag"] = (tag + (f"  vs {opp}" if opp else "")).strip()
+        # multi-kill vu par le détecteur (le harvester rate parfois les pentas) : le clip montre
+        # l'auteur réel -> label = son pseudo (actor = pseudo KC ou champion -> roster livestats)
+        blob = ((d.get("hype_fr") or "") + " " + (d.get("why") or "")).lower()
+        seen_multi = "PENTAKILL" if "penta" in blob else ("QUADRA" if "quadra" in blob else ("TRIPLE" if "triple" in blob else ""))
+        if seen_multi and seen_multi != MULTI_FR.get(r.get("multi_kill") or "", ""):
+            # garde-fou anti-hallucination : les compteurs de kills du feed sont fiables ->
+            # un joueur doit avoir >= N kills dans la même game à +/- 25 s
+            need = {"PENTAKILL": 5, "QUADRA": 4, "TRIPLE": 3}[seen_multi]
+            gid, t = gids.get(c["id"]), r.get("game_time_seconds")
+            best_champ, best_n = None, 0
+            if gid and t is not None:
+                for k in same_game_kills(url, hdr, gid):
+                    if k.get("game_time_seconds") is None or abs(k["game_time_seconds"] - t) > 25:
+                        continue
+                    n = sum(1 for x in same_game_kills(url, hdr, gid) if x.get("killer_champion") == k.get("killer_champion")
+                            and x.get("game_time_seconds") is not None and abs(x["game_time_seconds"] - t) <= 25)
+                    if n > best_n:
+                        best_champ, best_n = k.get("killer_champion"), n
+            if best_n >= need and best_champ:
+                a_ign = roster_ign(((r.get("games") or {}).get("external_id")), best_champ) or best_champ
+                c["label"] = a_ign.upper()
+                tag = seen_multi
+            else:
+                c["score"] = min(c["score"], 7.5)   # claim non confirmé par les stats : on dégonfle
+                c["d"]["hype_fr"] = (d.get("hype_fr") or "") + " [multi non confirmé]"
         c["src"] = os.path.join(V_DIR, c["id"] + "_v.mp4")
         c["url"] = ((r.get("assets_manifest") or {}).get("vertical") or {}).get("url") or r.get("clip_url_vertical")
         c["game_ext"] = g.get("external_id")
         c["t"] = r.get("game_time_seconds")
+        # source de vérité des multi-kills : multikills.jsonl (compteurs du feed, règle des 10 s)
+        mk = true_multikill(c["game_ext"], c["t"])
+        if mk:
+            c["label"] = mk["player"].replace("KC ", "").upper()
+            tag = {5: "PENTAKILL", 4: "QUADRA", 3: "TRIPLE"}.get(min(mk["count"], 5), "MULTI")
+            c["score"] = max(c["score"], {5: 9.3, 4: 8.6, 3: 7.2}.get(min(mk["count"], 5), c["score"]))
+        elif tag in ("PENTAKILL", "QUADRA") and os.path.exists(MK_FILE):
+            tag = "TRIPLE" if tag == "QUADRA" else "QUADRA"   # base non confirmée par le feed : un cran en dessous
+        c["tag"] = (tag + (f"  vs {opp}" if opp else "")).strip()
         c["date"] = (m.get("scheduled_at") or "")[:10]
 
 
 _ROSTER = {}
+_GAME_KILLS = {}
+MK_FILE = r"D:\kckills_worker\edit_summer\multikills.jsonl"
+_MK = None
+
+
+def true_multikill(game_ext, t):
+    """multi-kill KC confirmé par le feed autour de t (±6 s de la fenêtre)."""
+    global _MK
+    if _MK is None:
+        _MK = {}
+        if os.path.exists(MK_FILE):
+            for line in io.open(MK_FILE, encoding="utf-8"):
+                if line.strip():
+                    r = json.loads(line)
+                    if r.get("side") == "kc" and r.get("count", 0) >= 3:
+                        _MK.setdefault(r["game_ext"], []).append(r)
+    if not game_ext or t is None:
+        return None
+    best = None
+    for r in _MK.get(game_ext, []):
+        if r["t_first"] - 6 <= t <= r["t_last"] + 6 and (best is None or r["count"] > best["count"]):
+            best = r
+    return best
+
+
+def same_game_kills(url, hdr, game_id):
+    if game_id not in _GAME_KILLS:
+        _GAME_KILLS[game_id] = q(url, hdr, f"kills?select=killer_champion,game_time_seconds&game_id=eq.{game_id}&tracked_team_involvement=eq.team_killer")
+    return _GAME_KILLS[game_id]
 
 
 def roster_ign(game_ext, champion):
@@ -263,7 +325,7 @@ def main():
     hook = make_shot(best, 2, hook=True)
     plan = {"bpm": BPM, "music": a.music, "music_offset": a.music_offset, "caster_db": -13,
             "logo": r"D:\kckills_worker\edit_summer\assets\kc-logo.png",
-            "hook": hook,
+            "hook": hook, "hook_caption": "LE SUMMER DE LA KC",
             "intro": {"title": "SUMMER 2026", "sub": "KARMINE CORP", "beats": 3},
             "shots": shots, "outro": {"title": "KCKILLS.COM", "sub": "EVERY KILL. RATED.", "beats": 3}}
     json.dump(plan, io.open(a.out, "w", encoding="utf-8"), ensure_ascii=False, indent=1)
