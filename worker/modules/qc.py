@@ -69,6 +69,12 @@ async def validate_clip(
         video_path=local_path,
     )
 
+    # Gemini rend parfois une liste ([{...}]) malgré le schéma demandé -> on
+    # normalise ; tout ce qui n'est pas un dict vaut "pas de lecture".
+    if isinstance(result, list):
+        result = next((x for x in result if isinstance(x, dict)), None)
+    if not isinstance(result, dict):
+        result = None
     is_gameplay = bool(result and result.get("is_gameplay"))
     timer_str = (result or {}).get("timer")
     actual_gt = _parse_timer(timer_str) if timer_str else None

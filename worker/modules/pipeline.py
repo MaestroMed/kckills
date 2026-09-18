@@ -309,12 +309,16 @@ async def run_for_match(match_external_id: str) -> dict:
                     int(valid_kills[i].get("game_time_seconds") or 0)
                     for i in probe_indices
                 ]
-                calibrated_offset = await qc.calibrate_game_offset(
-                    youtube_id=yt_id,
-                    current_offset=vod_offset,
-                    probe_game_times=probe_game_times,
-                    local_vod_path=local_vod_paths.get(yt_id),
-                )
+                try:
+                    calibrated_offset = await qc.calibrate_game_offset(
+                        youtube_id=yt_id,
+                        current_offset=vod_offset,
+                        probe_game_times=probe_game_times,
+                        local_vod_path=local_vod_paths.get(yt_id),
+                    )
+                except Exception as exc:  # 2026-09-18 : TH W2 tué par un AttributeError dans validate_clip
+                    log.warn("pipeline_offset_calibration_failed", game=game_ext_id, error=str(exc)[:200])
+                    calibrated_offset = vod_offset  # on garde l'offset courant, jamais NULL
                 if calibrated_offset != vod_offset:
                     log.info(
                         "pipeline_offset_calibrated",

@@ -33,6 +33,18 @@ $games = Invoke-RestMethod -Headers $hdr -Uri ("{0}/rest/v1/games?select=id,game
 Write-Host ("[{0}] reprise MKOI W1 (game 1 orpheline)" -f (Get-Date -Format "HH:mm:ss"))
 cmd /c ("""$py"" main.py pipeline 115548681803406271 >> ""D:\kckills_worker\logs\pipeline_summer_2026-07-25_MKOI_W1_reprise.log"" 2>&1")
 
+# 0bis. Matchs dont le pipeline est sorti en erreur pendant la chaîne (exit != 0) : on les rejoue
+$chainLog = Get-Content "D:\kckills_worker\logsun_summer_backfill_chain.log"
+$pending = $null; $failed = @()
+foreach ($l in $chainLog) {
+    if ($l -match 'pipeline \S+ \((\d+)\)') { $pending = $Matches[1] }
+    elseif ($l -match '\]\s+exit (\d+)' -and $pending) { if ($Matches[1] -ne "0") { $failed += $pending }; $pending = $null }
+}
+foreach ($f in ($failed | Select-Object -Unique)) {
+    Write-Host ("[{0}] rejeu du match en erreur {1}" -f (Get-Date -Format "HH:mm:ss"), $f)
+    cmd /c ("""$py"" main.py pipeline " + $f + " >> ""D:\kckills_worker\logs\pipeline_summer_rejeu_" + $f + ".log"" 2>&1")
+}
+
 Write-Host ("[{0}] crible sur {1} games Summer" -f (Get-Date -Format "HH:mm:ss"), $games.Count)
 
 foreach ($g in $games) {
