@@ -24,6 +24,7 @@ V_DIR = r"D:\kckills_worker\edit_summer\v"
 TAG_FR = {"outplay": "OUTPLAY", "flash_dodge": "FLASH PREDICT", "1vX": "1 VS TOUS", "teamfight_turnaround": "RETOURNEMENT",
           "tower_dive": "TOWER DIVE", "steal": "STEAL", "escape": "ESCAPE", "combo": "COMBO PARFAIT", "snipe": "SNIPE",
           "clutch": "CLUTCH", "ace": "ACE", "engage": "ENGAGE"}
+KC_IGNS = {"canna", "yike", "kyeahoo", "caliste", "busio"}
 MULTI_FR = {"penta": "PENTAKILL", "quadra": "QUADRA", "triple": "TRIPLE", "double": "DOUBLE"}
 
 
@@ -127,6 +128,14 @@ def enrich_kills(cands):
         c["label"] = (ign or r.get("killer_champion") or "KC").upper()
         d = c["d"]
         tag = MULTI_FR.get(r.get("multi_kill") or "", "") or TAG_FR.get(d.get("move_type") or "", "") or ("FIRST BLOOD" if r.get("is_first_blood") else "")
+        if (d.get("move_type") or "") in ("escape", "steal", "flash_dodge", "1vX"):
+            # le héros du move n'est pas forcément le tueur en base : pseudo KC cité par le détecteur
+            blob = ((d.get("actor") or "") + " " + (d.get("hype_fr") or "")).lower()
+            hero = next((n for n in ("kyeahoo", "caliste", "canna", "busio", "yike") if n in blob), None)
+            if hero:
+                c["label"] = hero.upper()
+        if not opp:
+            opp = roster_opp(g.get("external_id"))
         # multi-kill vu par le détecteur (le harvester rate parfois les pentas) : le clip montre
         # l'auteur réel -> label = son pseudo (actor = pseudo KC ou champion -> roster livestats)
         blob = ((d.get("hype_fr") or "") + " " + (d.get("why") or "")).lower()
@@ -219,6 +228,16 @@ def roster_ign(game_ext, champion):
     return name.split(" ", 1)[1] if " " in name else name
 
 
+def roster_opp(game_ext):
+    """code adverse depuis les pseudos du feed (préfixe le plus fréquent hors KC)."""
+    if not game_ext:
+        return ""
+    roster_ign(game_ext, "x")   # charge le roster
+    from collections import Counter
+    pref = Counter(n.split(" ", 1)[0] for n in _ROSTER.get(game_ext, {}).values() if " " in n and not n.upper().startswith("KC"))
+    return pref.most_common(1)[0][0] if pref else ""
+
+
 def same_fight(a, b):
     return a.get("game_ext") and a.get("game_ext") == b.get("game_ext") and a.get("t") is not None and b.get("t") is not None and abs(a["t"] - b["t"]) < 35
 
@@ -283,10 +302,11 @@ def main():
     rafale_pool = [c for c in uniq if a.rafale_min <= c["score"] < a.min_spectacle]
     fixed = 2 + 3 + 3                      # hook + intro + outro (temps)
     budget = a.target / BEAT - fixed
+    reserve = min(a.rafale, len(rafale_pool))   # temps réservés à la rafale 1 temps
     picked, used, labels = [], 0, []
     for c in main_pool:                    # déjà trié par score desc
-        beats = 4 if c["score"] >= 8.0 else 2
-        if used + beats > budget:
+        beats = 4 if c["score"] >= 8.5 else 2
+        if used + beats > budget - reserve:
             continue
         if labels[-2:] == [c["label"], c["label"]]:
             continue
