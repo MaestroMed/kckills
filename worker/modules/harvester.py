@@ -27,6 +27,7 @@ from datetime import datetime, timedelta
 
 from models.kill_event import KillEvent
 from services import livestats_api
+from modules import feed_clock
 from services.observability import run_logged
 from services.supabase_client import safe_insert, safe_select, safe_update
 
@@ -111,17 +112,17 @@ async def extract_kills_from_game(
         n_participants=len(participants),
     )
 
-    # Seed prev_kda from the anchor snapshot. If the anchor already contains
-    # kills (unlikely but possible on a late poll), we log so they aren't
-    # silently lost.
-    prev_kda = livestats_api.extract_kda(frames[-1])
-    total_kills_seen = sum(v.get("kills", 0) for v in prev_kda.values())
-    if total_kills_seen:
-        log.warn(
-            "harvester_anchor_has_kills",
-            game_id=external_game_id,
-            kills_lost=total_kills_seen,
-        )
+    # ─── Frame-level matcher (2026-09-23) ────────────────────────────────
+    # Chaque frame de chaque fenêtre est comparée à la précédente (~4 Hz) :
+    # un kill = une unité de kill appariée à une unité de mort adverse.
+    # Voir FrameKillMatcher pour le pourquoi (quadras / penta perdus).
+    if kc_side is None:
+        log.warn("harvester_kc_side_unknown", game_id=external_game_id)
+    matcher = FrameKillMatcher(participants, db_game_id, kc_side)
+    for fr in sorted(frames, key=lambda f: f.get("rfc460Timestamp") or ""):
+        kills.extend(matcher.feed(fr))
+    if kills:
+        log.warn("harvester_anchor_has_kills", game_id=external_game_id, kills_in_anchor=len(kills))
 
     # ─── Walk forward in 10-second probes ────────────────────────────────
     step = timedelta(seconds=max(probe_step_seconds, 10))
@@ -130,6 +131,7 @@ async def extract_kills_from_game(
     consecutive_empty = 0
     probes = 0
     hits = 0
+    probes_after_finish = 0
 
     while t < end:
         probes += 1
@@ -152,29 +154,31 @@ async def extract_kills_from_game(
 
         consecutive_empty = 0
         hits += 1
-
-        latest = probe_frames[-1]
-        curr_kda = livestats_api.extract_kda(latest)
-        frame_ts = latest.get("rfc460Timestamp", ts)
-
-        if kc_side is not None:
-            new_kills = _diff_frames(
-                prev_kda,
-                curr_kda,
-                participants,
-                frame_ts,
-                db_game_id,
-                kc_side,
-                total_kills_seen,
-            )
-            for k in new_kills:
-                if k.event_epoch:
-                    k.game_time_seconds = max(0, (k.event_epoch - game_start_epoch_ms) // 1000)
-                kills.append(k)
-            total_kills_seen += len(new_kills)
-
-        prev_kda = curr_kda
+        for fr in sorted(probe_frames, key=lambda f: f.get("rfc460Timestamp") or ""):
+            kills.extend(matcher.feed(fr))
+        # Partie terminée : 3 fenêtres de marge (morts tardives) puis stop —
+        # l'ancien parcours allait jusqu'à 65 min quelle que soit la durée.
+        if matcher.finished:
+            probes_after_finish += 1
+            if probes_after_finish >= 3:
+                break
         t += step
+
+    kills.extend(matcher.flush())
+    for k in kills:
+        if k.event_epoch:
+            k.game_time_seconds = max(0, (k.event_epoch - game_start_epoch_ms) // 1000)
+
+    # Horloge de la game (pauses) : gratuite, le parcours vient de la voir.
+    if matcher.first_epoch:
+        try:
+            feed_clock.save_clock(feed_clock.clock_from_states(
+                external_game_id, matcher.first_epoch, matcher.states, matcher.last_ts,
+            ))
+        except Exception as e:  # jamais bloquant pour le harvest
+            log.warn("harvester_clock_save_failed", game_id=external_game_id, error=str(e)[:120])
+    if matcher.unmatched_kills:
+        log.warn("harvester_unmatched_kills", game_id=external_game_id, n=matcher.unmatched_kills)
 
     log.info(
         "kills_extracted",
@@ -506,6 +510,166 @@ def _diff_frames(
             break
 
     return kills
+
+
+# ─── Frame-level kill matcher (2026-09-23) ──────────────────────────────────
+#
+# Pourquoi : `_diff_frames` compare la DERNIÈRE frame de deux fenêtres de
+# 10 s. En teamfight, chaque tueur n'y était apparié qu'à UNE victime
+# (`break` après le premier match) : +4 kills de Caliste dans la fenêtre
+# donnaient 1 kill en base (quadra vs G2 du 26/07/2026, penta de Canna vs
+# GX du 05/09 réduit à un « quadra » isolé, quadra de Yike vs GX, etc.).
+# Le feed sert ~4 frames/s : frame par frame, chaque kill a SA frame avec
+# tueur, victime et assists exacts. L'horodatage passe de ±10 s à ±0,3 s et
+# les multi-kills suivent la règle LoL (≤ 10 s entre deux kills du même
+# joueur, 30 s pour passer de quadra à penta).
+
+MULTIKILL_GAP_MS = 10_000
+PENTA_GAP_MS = 30_000
+DEATH_MATCH_TOLERANCE_MS = 3_000   # une mort peut tomber 1-2 frames après le kill
+_MULTI_BY_COUNT = {2: "double", 3: "triple", 4: "quadra"}
+
+
+class FrameKillMatcher:
+    """Apparie unités de kill et unités de mort frame par frame.
+
+    L'état (dernière frame, unités en attente, séries multi-kill, total de
+    kills de la game) est conservé entre les fenêtres du feed. Les kills
+    sont émis dans l'ordre chronologique : un kill qui attend sa mort
+    (désynchro d'une frame) retient les suivants, au plus 3 s.
+    """
+
+    def __init__(self, participants: dict[str, dict], db_game_id: str, kc_side: str | None):
+        self.participants = participants
+        self.db_game_id = db_game_id
+        self.kc_side = kc_side
+        self.prev: dict[str, dict] | None = None
+        self.last_ts: int | None = None
+        self.first_epoch: int | None = None
+        self.pending_kills: list[tuple[int, str, list[str], bool]] = []  # (epoch, tueur, assists, frame ambiguë)
+        self.pending_deaths: list[tuple[int, str]] = []                  # (epoch, victime)
+        self.streaks: dict[str, tuple[int, int]] = {}                    # tueur -> (dernier kill, rang)
+        self.total_kills = 0            # tous les kills de la game, KC ou non (first blood)
+        self.states: list[tuple[int, str]] = []                          # changements de gameState
+        self.finished = False
+        self.unmatched_kills = 0
+        self.orphan_deaths = 0          # exécutions (tour, sbires, monstres) : ignorées
+
+    def _side(self, pid: str | None) -> str | None:
+        return (self.participants.get(pid or "") or {}).get("side")
+
+    def feed(self, frame: dict) -> list[KillEvent]:
+        epoch = _parse_epoch_ms(frame.get("rfc460Timestamp") or "")
+        if not epoch or (self.last_ts is not None and epoch <= self.last_ts):
+            return []   # doublon ou frame hors d'ordre entre deux fenêtres
+        self.last_ts = epoch
+        if self.first_epoch is None:
+            self.first_epoch = epoch
+        state = frame.get("gameState") or ""
+        if state and (not self.states or self.states[-1][1] != state):
+            self.states.append((epoch, state))
+        if state == "finished":
+            self.finished = True
+
+        curr = livestats_api.extract_kda(frame)
+        if self.prev is None:
+            self.prev = curr
+            return []
+        killers: list[tuple[str, int]] = []
+        gained_assist: list[str] = []
+        for pid, c in curr.items():
+            p = self.prev.get(pid) or {"kills": 0, "deaths": 0, "assists": 0}
+            dk = int(c.get("kills", 0) or 0) - int(p.get("kills", 0) or 0)
+            dd = int(c.get("deaths", 0) or 0) - int(p.get("deaths", 0) or 0)
+            da = int(c.get("assists", 0) or 0) - int(p.get("assists", 0) or 0)
+            if dk > 0:
+                killers.append((pid, dk))
+            for _ in range(max(0, dd)):
+                self.pending_deaths.append((epoch, pid))
+            if da > 0:
+                gained_assist.append(pid)
+        self.prev = curr
+        n_units = sum(dk for _, dk in killers)
+        for pid, dk in sorted(killers):
+            side = self._side(pid)
+            assists = [a for a in gained_assist if a != pid and self._side(a) == side]
+            for _ in range(dk):
+                self.pending_kills.append((epoch, pid, assists, n_units > 1))
+        return self._match(epoch, final=False)
+
+    def flush(self) -> list[KillEvent]:
+        return self._match(self.last_ts or 0, final=True)
+
+    def _match(self, now: int, final: bool) -> list[KillEvent]:
+        out: list[KillEvent] = []
+        self.pending_kills.sort(key=lambda u: u[0])
+        while self.pending_kills:
+            ke, kpid, assists, frame_ambiguous = self.pending_kills[0]
+            kside = self._side(kpid)
+            cands = [
+                i for i, (de, vpid) in enumerate(self.pending_deaths)
+                if abs(de - ke) <= DEATH_MATCH_TOLERANCE_MS
+                and self._side(vpid) not in (None, kside)
+            ]
+            if cands:
+                i = min(cands, key=lambda j: (abs(self.pending_deaths[j][0] - ke), self.pending_deaths[j][0]))
+                _de, vpid = self.pending_deaths.pop(i)
+                self.pending_kills.pop(0)
+                out.extend(self._emit(ke, kpid, vpid, assists, ambiguous=frame_ambiguous or len(cands) > 1))
+            elif final or now - ke > DEATH_MATCH_TOLERANCE_MS:
+                self.pending_kills.pop(0)
+                self.unmatched_kills += 1
+                out.extend(self._emit(ke, kpid, None, assists, ambiguous=True))
+            else:
+                break   # attend une mort tardive, sans casser l'ordre chronologique
+        horizon = self.pending_kills[0][0] if self.pending_kills else now
+        keep: list[tuple[int, str]] = []
+        for de, vpid in self.pending_deaths:
+            if final or (de < horizon - DEATH_MATCH_TOLERANCE_MS and now - de > 2 * DEATH_MATCH_TOLERANCE_MS):
+                self.orphan_deaths += 1
+            else:
+                keep.append((de, vpid))
+        self.pending_deaths = keep
+        return out
+
+    def _emit(self, ke: int, kpid: str, vpid: str | None, assists: list[str], ambiguous: bool) -> list[KillEvent]:
+        last, rank = self.streaks.get(kpid, (None, 0))
+        gap = PENTA_GAP_MS if rank == 4 else MULTIKILL_GAP_MS
+        rank = rank + 1 if (last is not None and ke - last <= gap) else 1
+        self.streaks[kpid] = (ke, rank)
+        multi = "penta" if rank >= 5 else _MULTI_BY_COUNT.get(rank)
+        first_blood = self.total_kills == 0
+        self.total_kills += 1
+
+        kinfo = self.participants.get(kpid, {}) or {}
+        vinfo = (self.participants.get(vpid, {}) or {}) if vpid else {}
+        if vpid:
+            inv = _get_kc_involvement(kinfo, vinfo, self.kc_side) if self.kc_side else None
+        else:
+            inv = "team_killer" if (self.kc_side and kinfo.get("side") == self.kc_side) else None
+        if not inv:
+            return []
+        return [KillEvent(
+            game_id=self.db_game_id,
+            event_epoch=ke,
+            killer_participant_id=kpid,
+            killer_name=kinfo.get("name"),
+            killer_champion=kinfo.get("champion"),
+            killer_side=kinfo.get("side"),
+            victim_participant_id=vpid,
+            victim_name=vinfo.get("name") if vpid else None,
+            victim_champion=vinfo.get("champion") if vpid else None,
+            victim_side=vinfo.get("side") if vpid else None,
+            assistants=[{
+                "participant_id": a,
+                "name": (self.participants.get(a) or {}).get("name"),
+                "champion": (self.participants.get(a) or {}).get("champion"),
+            } for a in assists],
+            confidence="low" if vpid is None else ("medium" if ambiguous else "high"),
+            tracked_team_involvement=inv,
+            is_first_blood=first_blood,
+            multi_kill=multi,
+        )]
 
 
 def _get_kc_involvement(killer_info: dict, victim_info: dict, kc_side: str) -> str | None:
