@@ -175,7 +175,7 @@ const sentryWebpackPluginOptions = {
   tunnelRoute: "/monitoring",
   hideSourceMaps: true,
   errorHandler: (err: Error) => {
-    // eslint-disable-next-line no-console
+     
     console.warn("[sentry-webpack-plugin] non-fatal:", err.message);
   },
   reactComponentAnnotation: { enabled: false },
