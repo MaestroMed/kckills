@@ -228,9 +228,18 @@ def _patch_boto3(mock_client: MagicMock):
     import services.storage_s3 as mod
 
     fake_module = _FakeBoto3Module(mock_client)
+    # upload_file importe boto3.s3.transfer.TransferConfig (seuil multipart
+    # 64 Mo, audit R2 du 16/07) : le faux module doit exposer ce sous-module,
+    # sinon `import boto3.s3` échoue ("'boto3' is not a package").
+    fake_transfer = MagicMock(TransferConfig=_FakeBotoConfig)
     boto3_patch = patch.dict(
         sys.modules,
-        {"boto3": fake_module, "botocore.config": MagicMock(Config=_FakeBotoConfig)},
+        {
+            "boto3": fake_module,
+            "boto3.s3": MagicMock(transfer=fake_transfer),
+            "boto3.s3.transfer": fake_transfer,
+            "botocore.config": MagicMock(Config=_FakeBotoConfig),
+        },
     )
     return boto3_patch
 
