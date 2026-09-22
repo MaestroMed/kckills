@@ -139,7 +139,14 @@ def _path(game_ext_id: str) -> str:
 
 def save_clock(clock: FeedClock) -> None:
     """Cache disque (une game terminée ne change plus). Silencieux en cas
-    d'échec : l'horloge est reconstructible depuis le feed."""
+    d'échec : l'horloge est reconstructible depuis le feed.
+
+    Une horloge sans fin (game encore en cours : le harvester du démon la
+    voit toutes les 10 min pendant le live) n'est JAMAIS mise en cache : elle
+    figerait l'ancre sans les pauses suivantes ni la fin de partie."""
+    if clock.end_ms is None:
+        log.debug("feed_clock_not_cached_unfinished", game=clock.game_ext_id)
+        return
     try:
         os.makedirs(CLOCK_DIR, exist_ok=True)
         tmp = _path(clock.game_ext_id) + ".tmp"
@@ -151,11 +158,13 @@ def save_clock(clock: FeedClock) -> None:
 
 
 def load_clock(game_ext_id: str) -> FeedClock | None:
+    """Horloge en cache, seulement si elle est complète (fin de partie vue)."""
     try:
         with open(_path(game_ext_id), encoding="utf-8") as f:
-            return FeedClock.from_json(json.load(f))
+            clock = FeedClock.from_json(json.load(f))
     except (OSError, ValueError, KeyError):
         return None
+    return clock if clock.end_ms is not None else None
 
 
 def _epoch_ms(ts: str) -> int:
@@ -218,6 +227,22 @@ async def build_clock(game_ext_id: str, max_minutes: int = 90, step_s: int = 10)
     log.info("feed_clock_built", game=game_ext_id, pauses=len(clock.pauses),
              paused_s=round(clock.total_paused_s), duration_ingame_s=clock.duration_ingame_s)
     return clock
+
+
+async def latest_state(game_ext_id: str) -> str | None:
+    """État actuel de la game dans le feed (in_game / paused / finished), une
+    seule requête. Après la fin, le feed ressert ses dernières frames : une
+    game finie depuis longtemps répond donc 'finished'. None = pas de
+    données (game pas commencée, feed indisponible)."""
+    from services import livestats_api
+
+    t = datetime.now(timezone.utc) - timedelta(seconds=60)
+    t = t.replace(microsecond=0) - timedelta(seconds=t.second % 10)
+    data = await livestats_api.get_window(game_ext_id, t.strftime("%Y-%m-%dT%H:%M:%S.000Z"))
+    frames = (data or {}).get("frames") or []
+    if not frames:
+        return None
+    return max(frames, key=lambda f: f.get("rfc460Timestamp") or "").get("gameState") or None
 
 
 async def get_clock(game_ext_id: str) -> FeedClock | None:

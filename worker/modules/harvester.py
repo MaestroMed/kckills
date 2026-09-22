@@ -918,6 +918,22 @@ async def run() -> int:
                 # Don't gate on unparseable dates — fall through to extract.
                 pass
 
+        # 2026-09-23 — on ne moissonne qu'une game TERMINÉE. Moissonner en
+        # plein live insérait des kills partiels puis passait
+        # kills_extracted=TRUE : la suite de la game n'était jamais lue, et
+        # un « double » en cours de série gardait ce libellé même devenu
+        # triple (le libellé va au DERNIER kill de la série). Une requête au
+        # feed suffit ; la game repasse au cycle suivant (10 min).
+        try:
+            live_state = await feed_clock.latest_state(game["external_id"])
+        except Exception as e:  # feed injoignable : comportement historique
+            live_state = None
+            log.debug("harvester_live_state_failed", game_id=game["id"][:8], error=str(e)[:100])
+        if live_state in ("in_game", "paused"):
+            log.info("harvester_game_live_wait", game_id=game["id"][:8],
+                     external=game["external_id"], state=live_state)
+            continue
+
         kills = await extract_kills_from_game(
             external_game_id=game["external_id"],
             db_game_id=game["id"],

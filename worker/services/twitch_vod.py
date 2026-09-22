@@ -62,6 +62,18 @@ class TwitchVod:
         return epoch_s - self.start_epoch_s
 
 
+LIVE_SLACK_S = 20 * 60      # fin mesurée à moins de 20 min de la mesure = peut-être encore live
+
+
+def _maybe_live(entry: dict, now: int) -> bool:
+    """La VOD était-elle encore en cours d'enregistrement quand on l'a
+    mesurée ? (entrées anciennes sans `measured_at` : figées, jamais live)."""
+    measured = int(entry.get("measured_at") or 0)
+    if not measured or now - measured < 120:
+        return False
+    return int(entry.get("start", 0)) + int(entry.get("duration", 0)) >= measured - LIVE_SLACK_S
+
+
 def _cache_path(channel: str) -> str:
     return os.path.join(CACHE_DIR, f"archives_{channel}.json")
 
@@ -114,8 +126,11 @@ async def list_archives(channel: str = DEFAULT_CHANNEL, limit: int = 80, force: 
                 parts = line.split("\t", 2)
                 if len(parts) == 3 and parts[0].startswith("v"):
                     listed.append(parts)
-            missing = [p for p in listed if p[0] not in cache["vods"]]
-            # heure de début : une requête par VOD, une seule fois dans sa vie
+            now = int(time.time())
+            # heure de début : une requête par VOD, une seule fois dans sa vie…
+            # sauf si elle était encore en cours d'enregistrement quand on l'a
+            # mesurée (live en cours : sa durée grandit jusqu'à la fin du live).
+            missing = [p for p in listed if p[0] not in cache["vods"] or _maybe_live(cache["vods"][p[0]], now)]
             for i in range(0, len(missing), 10):
                 chunk = missing[i:i + 10]
                 rc2, out2, err2 = await _ytdlp(
@@ -128,7 +143,7 @@ async def list_archives(channel: str = DEFAULT_CHANNEL, limit: int = 80, force: 
                     vid, ts, dur = (line.split("\t") + ["", "", ""])[:3]
                     if vid.startswith("v") and ts.isdigit():
                         cache["vods"][vid] = {"start": int(ts), "duration": int(float(dur or 0)),
-                                              "title": titles.get(vid, "")}
+                                              "title": titles.get(vid, ""), "measured_at": now}
                 if rc2 != 0:
                     log.warn("twitch_meta_partial", err=err2[-200:])
             cache["listed_at"] = int(time.time())
@@ -139,15 +154,24 @@ async def list_archives(channel: str = DEFAULT_CHANNEL, limit: int = 80, force: 
     )
 
 
-async def find_vod_for_epoch(epoch_ms: int, channel: str = DEFAULT_CHANNEL) -> TwitchVod | None:
-    """VOD dont le live couvre l'instant `epoch_ms` (±60 s de marge)."""
+async def find_vod_for_epoch(epoch_ms: int, channel: str = DEFAULT_CHANNEL,
+                            until_ms: int | None = None) -> TwitchVod | None:
+    """VOD dont le live couvre l'instant `epoch_ms` (±60 s de marge).
+
+    `until_ms` : exige en plus que la VOD aille jusqu'à cet instant (fin de
+    game + marge) — une game qui vient de finir sur un live encore en cours
+    n'est prise qu'une fois la VOD assez longue (sinon None : réessayer)."""
     epoch_s = epoch_ms / 1000.0
+    until_s = (until_ms / 1000.0) if until_ms else None
     for force in (False, True):
         vods = await list_archives(channel, force=force)
         hits = [v for v in vods if v.start_epoch_s - 60 <= epoch_s <= v.end_epoch_s + 60]
+        if until_s is not None:
+            hits = [v for v in hits if v.end_epoch_s >= until_s]
         if hits:
             return max(hits, key=lambda v: v.duration_s)
-    log.warn("twitch_vod_not_found", channel=channel, epoch_s=int(epoch_s))
+    log.warn("twitch_vod_not_found", channel=channel, epoch_s=int(epoch_s),
+             until_s=int(until_s) if until_s else None)
     return None
 
 
