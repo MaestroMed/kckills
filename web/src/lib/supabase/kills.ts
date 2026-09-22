@@ -1739,3 +1739,100 @@ export const getKillsByEra = cache(async function getKillsByEra(
     return [];
   }
 });
+
+// ─── Sitemap (2026-09-23) ───────────────────────────────────────────────
+// Le sitemap appelait getPublishedKills(5000) : ~40 colonnes + jointures
+// pour n'utiliser que l'id, la date et les champions (4,1 Mo par
+// génération, trop gros pour le cache Next), et il plafonnait à 5 000
+// clips sur 9 867 publiés. Ces deux lectures ne prennent que le
+// nécessaire et couvrent tout le catalogue.
+
+const SITEMAP_PUBLISHED_FILTER =
+  "publication_status.eq.published,and(publication_status.is.null,status.eq.published)";
+
+export interface SitemapKillRow {
+  id: string;
+  killer_champion: string | null;
+  victim_champion: string | null;
+  highlight_score: number | null;
+  created_at: string;
+  updated_at: string | null;
+}
+
+/** Tous les kills publiés et visibles, en pages de 1 000 (max-rows PostgREST). */
+export async function getSitemapKills(cap = 45_000): Promise<SitemapKillRow[]> {
+  const out: SitemapKillRow[] = [];
+  try {
+    const supabase = createCachedAnonSupabase();
+    for (let from = 0; from < cap; from += 1000) {
+      const { data, error } = await supabase
+        .from("kills")
+        .select("id,killer_champion,victim_champion,highlight_score,created_at,updated_at")
+        .or(SITEMAP_PUBLISHED_FILTER)
+        .eq("kill_visible", true)
+        .not("clip_url_vertical", "is", null)
+        .not("thumbnail_url", "is", null)
+        .order("created_at", { ascending: false })
+        .order("id", { ascending: true })
+        .range(from, Math.min(from + 999, cap - 1));
+      if (error) {
+        console.warn("[supabase/kills] getSitemapKills error:", error.message);
+        break;
+      }
+      out.push(...((data ?? []) as SitemapKillRow[]));
+      if (!data || data.length < 1000) break;
+    }
+  } catch (err) {
+    rethrowIfDynamic(err);
+    console.warn("[supabase/kills] getSitemapKills threw:", err);
+  }
+  return out;
+}
+
+export interface SitemapVideoKillRow {
+  id: string;
+  killer_champion: string | null;
+  victim_champion: string | null;
+  multi_kill: string | null;
+  ai_description: string | null;
+  created_at: string;
+  thumbnail_url: string | null;
+  clip_url_horizontal: string | null;
+  assets_manifest: KillAssetsManifest | null;
+  killer: { ign: string | null } | null;
+}
+
+/** Les meilleurs clips, avec ce qu'il faut pour une entrée de sitemap vidéo. */
+export async function getSitemapVideoKills(limit = 2000): Promise<SitemapVideoKillRow[]> {
+  // PostgREST plafonne à 1 000 lignes par requête : pagination par range().
+  const out: SitemapVideoKillRow[] = [];
+  try {
+    const supabase = createCachedAnonSupabase();
+    for (let from = 0; from < limit; from += 1000) {
+      const { data, error } = await supabase
+        .from("kills")
+        .select(
+          "id,killer_champion,victim_champion,multi_kill,ai_description,created_at," +
+            "thumbnail_url,clip_url_horizontal,assets_manifest," +
+            "killer:players!kills_killer_player_id_fkey(ign)",
+        )
+        .or(SITEMAP_PUBLISHED_FILTER)
+        .eq("kill_visible", true)
+        .not("clip_url_vertical", "is", null)
+        .not("thumbnail_url", "is", null)
+        .order("highlight_score", { ascending: false, nullsFirst: false })
+        .order("id", { ascending: true })
+        .range(from, Math.min(from + 999, limit - 1));
+      if (error) {
+        console.warn("[supabase/kills] getSitemapVideoKills error:", error.message);
+        break;
+      }
+      out.push(...((data ?? []) as unknown as SitemapVideoKillRow[]));
+      if (!data || data.length < 1000) break;
+    }
+  } catch (err) {
+    rethrowIfDynamic(err);
+    console.warn("[supabase/kills] getSitemapVideoKills threw:", err);
+  }
+  return out;
+}

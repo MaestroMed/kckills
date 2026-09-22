@@ -133,6 +133,13 @@ async def reconcile_game(game: dict, apply: bool) -> dict:
             patch["multi_kill"] = k.multi_kill
         if bool(o.get("is_first_blood")) != bool(k.is_first_blood):
             patch["is_first_blood"] = bool(k.is_first_blood)
+        # Identités joueurs : le harness pipeline n'écrivait jamais
+        # killer/victim_player_id (tous les kills du Summer sans pseudo sur
+        # le site). Champs hors index unique : sûrs à compléter.
+        if not o.get("killer_player_id") and k.killer_player_id and o.get("killer_champion") == k.killer_champion:
+            patch["killer_player_id"] = k.killer_player_id
+        if not o.get("victim_player_id") and k.victim_player_id and o.get("victim_champion") == k.victim_champion:
+            patch["victim_player_id"] = k.victim_player_id
         if patch:
             patches.append((o["id"], patch))
     inserts = [k for k in sorted(new, key=lambda x: x.event_epoch) if id(k) not in matched_new]
