@@ -18,10 +18,10 @@ $done = 0
 foreach ($m in $matches) {
     if ($Only -gt 0 -and $done -ge $Only) { break }
     $log = Join-Path $logDir ("pipeline_summer_" + $m.label + ".log")
-    ("[{0}] pipeline {1} ({2}) -> {3}" -f (Get-Date -Format "HH:mm:ss"), $m.label, $m.id, $log) | Tee-Object -FilePath $chainLog -Append
+    ("[{0}] pipeline {1} ({2}) -> {3}" -f (Get-Date -Format "HH:mm:ss"), $m.label, $m.id, $log) | ForEach-Object { Write-Host $_; [System.IO.File]::AppendAllText($chainLog, $_ + "`r`n", [System.Text.UTF8Encoding]::new($false)) }
     cmd /c ("""$py"" main.py pipeline " + $m.id + " >> """ + $log + """ 2>&1")
-    ("[{0}]   exit {1}" -f (Get-Date -Format "HH:mm:ss"), $LASTEXITCODE) | Tee-Object -FilePath $chainLog -Append
+    ("[{0}]   exit {1}" -f (Get-Date -Format "HH:mm:ss"), $LASTEXITCODE) | ForEach-Object { Write-Host $_; [System.IO.File]::AppendAllText($chainLog, $_ + "`r`n", [System.Text.UTF8Encoding]::new($false)) }
     $done++
     Start-Sleep -Seconds 30
 }
-("[{0}] Terminé : {1} série(s)." -f (Get-Date -Format "HH:mm:ss"), $done) | Tee-Object -FilePath $chainLog -Append
+("[{0}] Terminé : {1} série(s)." -f (Get-Date -Format "HH:mm:ss"), $done) | ForEach-Object { Write-Host $_; [System.IO.File]::AppendAllText($chainLog, $_ + "`r`n", [System.Text.UTF8Encoding]::new($false)) }

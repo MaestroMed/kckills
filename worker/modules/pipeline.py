@@ -40,30 +40,25 @@ from modules import sentinel  # noqa: F401 — keeps symbol for tests
 log = structlog.get_logger()
 
 
-async def run_for_match(match_external_id: str) -> dict:
-    """Run the full pipeline on one match. Returns a report dict."""
-    report: dict = {
-        "match_id": match_external_id,
-        "games": 0,
-        "kills_detected": 0,
-        "kills_clipped": 0,
-        "kills_analysed": 0,
-        "kills_published": 0,
-        "errors": [],
-    }
+async def upsert_match_and_games(match_external_id: str, report: dict | None = None) -> tuple[str | None, list[dict]]:
+    """Résout le match via getEventDetails et upsert match + games terminées.
 
+    Extrait de run_for_match (2026-09-23) pour être réutilisé par
+    scripts/twitch_backfill.py. Renvoie (match_db_id, game_rows) ; les
+    erreurs vont dans report["errors"] si un report est fourni."""
+    report = report if report is not None else {"errors": []}
     # ─── 1. Resolve match via lolesports getEventDetails ───────────────
     log.info("pipeline_start", match=match_external_id)
     details = await lolesports_api.get_event_details(match_external_id)
     if not details:
         report["errors"].append("getEventDetails returned nothing")
-        return report
+        return None, []
 
     match = details.get("match", {}) or {}
     teams = match.get("teams", []) or []
     if len(teams) < 2:
         report["errors"].append("match has < 2 teams")
-        return report
+        return None, []
 
     # ─── 2. Upsert match row in DB ─────────────────────────────────────
     # We need a scheduled_at — try to pull it from the existing matches table
@@ -86,7 +81,7 @@ async def run_for_match(match_external_id: str) -> dict:
     match_db_id = (match_row or {}).get("id") if match_row else (existing[0]["id"] if existing else None)
     if not match_db_id:
         report["errors"].append("could not upsert match row")
-        return report
+        return None, []
 
     # ─── 3. Upsert games + VODs ────────────────────────────────────────
     games_payload = match.get("games", []) or []
@@ -146,9 +141,27 @@ async def run_for_match(match_external_id: str) -> dict:
         elif existing_game := safe_select("games", "id, external_id, vod_youtube_id, vod_offset_seconds, match_id", external_id=game_ext_id):
             game_db_rows.append(existing_game[0])
 
+
+    return match_db_id, game_db_rows
+
+
+async def run_for_match(match_external_id: str) -> dict:
+    """Run the full pipeline on one match. Returns a report dict."""
+    report: dict = {
+        "match_id": match_external_id,
+        "games": 0,
+        "kills_detected": 0,
+        "kills_clipped": 0,
+        "kills_analysed": 0,
+        "kills_published": 0,
+        "errors": [],
+    }
+
+    match_db_id, game_db_rows = await upsert_match_and_games(match_external_id, report)
+    if not match_db_id:
+        return report
     report["games"] = len(game_db_rows)
     log.info("pipeline_games_resolved", n=len(game_db_rows))
-
     if not game_db_rows:
         report["errors"].append("no completed games with VODs")
         return report
