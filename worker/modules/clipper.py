@@ -1200,6 +1200,12 @@ def _pick_best_thumbnail(candidates: list[str]) -> str | None:
 
 # ─── Daemon loop: pick up kills that need clipping ─────────────────────────
 
+# 2026-09-23 — colonnes nécessaires à une découpe juste : instant exact du
+# feed (source Twitch), libellé multi-kill (fenêtre allongée pour un penta :
+# sans lui, CLIP_TIMING retombait sur la fenêtre d'un kill simple) et
+# champions (bandeau du vertical, comme les clips du rattrapage).
+_KILL_CLIP_COLS = "event_epoch, multi_kill, killer_champion, victim_champion"
+
 MAX_RETRY_COUNT = 3
 
 # Cap how many kills we attempt per pass + worker fan-out.
@@ -1339,7 +1345,7 @@ async def run() -> int:
             continue
         rows = safe_select(
             "kills",
-            "id, game_id, game_time_seconds, status, retry_count",
+            "id, game_id, game_time_seconds, status, retry_count, " + _KILL_CLIP_COLS,
             id=kill_id,
         )
         if not rows:
@@ -1360,7 +1366,7 @@ async def run() -> int:
         # first. Old kills still drain via subsequent cycles.
         fresh_kills = safe_select(
             "kills",
-            "id, game_id, game_time_seconds, status, retry_count",
+            "id, game_id, game_time_seconds, status, retry_count, " + _KILL_CLIP_COLS,
             status="vod_found",
             _order="event_epoch.desc.nullslast",
             _limit=BATCH_SIZE * 2,
@@ -1377,7 +1383,7 @@ async def run() -> int:
                     f"{db.base}/kills",
                     headers=db.headers,
                     params={
-                        "select": "id,game_id,game_time_seconds,status,retry_count",
+                        "select": "id,game_id,game_time_seconds,status,retry_count," + _KILL_CLIP_COLS.replace(" ", ""),
                         "status": "eq.clip_error",
                         "retry_count": f"lt.{MAX_RETRY_COUNT}",
                         "order": "retry_count.asc,updated_at.asc",
@@ -1391,7 +1397,7 @@ async def run() -> int:
             retry_kills = [
                 k for k in (safe_select(
                     "kills",
-                    "id, game_id, game_time_seconds, status, retry_count",
+                    "id, game_id, game_time_seconds, status, retry_count, " + _KILL_CLIP_COLS,
                     status="clip_error",
                 ) or [])
                 if int(k.get("retry_count") or 0) < MAX_RETRY_COUNT
@@ -1441,13 +1447,69 @@ async def run() -> int:
     # the per-kill select that used to live inside _process_one.
     games_by_id: dict[str, dict] = {}
     for gid in {k.get("game_id") for (k, _j) in work if k.get("game_id")}:
-        rows = safe_select("games", "vod_youtube_id, vod_offset_seconds", id=gid)
+        rows = safe_select(
+            "games",
+            "id, external_id, match_id, game_number, vod_youtube_id, vod_offset_seconds",
+            id=gid,
+        )
         if rows:
             games_by_id[gid] = rows[0]
 
+    # ─── 3a. Source Twitch d'abord (2026-09-23) ───────────────────
+    # YouTube bloque l'IP du worker depuis l'été. Une game terminée et
+    # récente se clippe depuis le past broadcast Twitch officiel, calé sur
+    # l'heure réelle du feed (modules/twitch_source) : 1080p60, exact même
+    # après une pause. Section prête -> Twitch ; en attente (VOD du live
+    # encore trop courte, budget de téléchargement épuisé) -> job REPORTÉ
+    # sans consommer de tentative ; indisponible -> chemin YouTube inchangé.
+    twitch_by_game: dict[str, object] = {}
+    twitch_pending: dict[str, str] = {}
+    twitch_kills_by_game: dict[str, list[dict]] = {}
+    try:
+        from modules import twitch_source
+
+        if twitch_source.is_enabled() and games_by_id:
+            downloads = 0
+            # games les plus récentes d'abord (priorité produit : le match du jour)
+            order = sorted(
+                games_by_id.items(),
+                key=lambda kv: -max((int(k.get("event_epoch") or 0) for (k, _j) in work
+                                     if k.get("game_id") == kv[0]), default=0),
+            )
+            for gid, grow in order:
+                decision = await twitch_source.decide(
+                    grow, allow_download=downloads < twitch_source.MAX_NEW_SECTIONS_PER_PASS)
+                if decision.status == twitch_source.READY:
+                    twitch_by_game[gid] = decision.section
+                    twitch_kills_by_game[gid] = await asyncio.to_thread(twitch_source.game_kills, gid)
+                elif decision.status == twitch_source.PENDING:
+                    twitch_pending[gid] = decision.reason
+                if decision.downloaded:
+                    downloads += 1
+    except Exception as e:  # jamais bloquant : chemin YouTube historique
+        log.warn("clipper_twitch_decide_failed", error=str(e)[:200])
+
+    twitch_items: list[tuple[dict, dict | None]] = []
+    yt_work: list[tuple[dict, dict | None]] = []
+    deferred = 0
+    for k, j in work:
+        gid = k.get("game_id") or ""
+        if gid in twitch_by_game and k.get("event_epoch"):
+            twitch_items.append((k, j))
+        elif gid in twitch_pending:
+            # Section Twitch pas encore prête : report sans tentative consommée.
+            if j is not None:
+                await asyncio.to_thread(job_queue.defer, j, 600, f"twitch_{twitch_pending[gid]}")
+            deferred += 1
+        else:
+            yt_work.append((k, j))
+    if twitch_items or deferred:
+        log.info("clipper_twitch_split", twitch=len(twitch_items), deferred=deferred,
+                 youtube=len(yt_work), games_ready=len(twitch_by_game), games_pending=len(twitch_pending))
+
     vod_groups: dict[str, list[tuple[dict, dict | None]]] = {}
     singles: list[tuple[dict, dict | None]] = []
-    for k, j in work:
+    for k, j in yt_work:
         game_row = games_by_id.get(k.get("game_id") or "")
         vid = (game_row or {}).get("vod_youtube_id")
         if vid:
@@ -1473,7 +1535,8 @@ async def run() -> int:
     sem = asyncio.Semaphore(CONCURRENCY)
     counters = {"ok": 0, "fail": 0, "yt_blocked": 0}
 
-    async def _process_one(kill: dict, job: dict | None, local_vod_path: str | None = None):
+    async def _process_one(kill: dict, job: dict | None, local_vod_path: str | None = None,
+                           twitch_section=None):
         # Wave 34 T3.2 — bind kill_id + game_id to the contextvars so every
         # log line emitted from inside this clip pass (including the deep
         # clip_kill() / ffmpeg / r2_client.upload_clip helpers) carries the
@@ -1498,7 +1561,7 @@ async def run() -> int:
                     return
                 yt_id = game.get("vod_youtube_id")
                 offset = int(game.get("vod_offset_seconds") or 0)
-                if not yt_id:
+                if not yt_id and twitch_section is None:
                     # No VOD yet — surface as retry, the vod_offset_finder
                     # will fill it in. 30 min retry lets that module run.
                     if job is not None:
@@ -1514,14 +1577,29 @@ async def run() -> int:
                 await batched_safe_update("kills", {"status": "clipping"}, "id", kill["id"])
 
                 try:
-                    urls = await clip_kill(
-                        kill_id=kill["id"],
-                        youtube_id=yt_id,
-                        vod_offset_seconds=offset,
-                        game_time_seconds=int(kill.get("game_time_seconds") or 0),
-                        local_vod_path=local_vod_path,
-                        game_id=kill.get("game_id") or None,
-                    )
+                    if twitch_section is not None:
+                        from modules import twitch_source
+                        urls = await clip_kill(
+                            kill_id=kill["id"],
+                            game_id=kill.get("game_id") or None,
+                            **twitch_source.clip_args(
+                                kill, twitch_section,
+                                twitch_kills_by_game.get(kill.get("game_id") or "", []),
+                                game.get("game_number"),
+                            ),
+                        )
+                    else:
+                        urls = await clip_kill(
+                            kill_id=kill["id"],
+                            youtube_id=yt_id,
+                            vod_offset_seconds=offset,
+                            game_time_seconds=int(kill.get("game_time_seconds") or 0),
+                            multi_kill=kill.get("multi_kill"),
+                            killer_champion=kill.get("killer_champion"),
+                            victim_champion=kill.get("victim_champion"),
+                            local_vod_path=local_vod_path,
+                            game_id=kill.get("game_id") or None,
+                        )
                 except YouTubeBotBlockedError:
                     # YouTube is anti-bot-blocking the entire process. Don't
                     # bump retry_count (it's not the kill's fault) and DON'T
@@ -1558,7 +1636,7 @@ async def run() -> int:
                             if _frz.verdict == "fail":
                                 qc_local_ok = False
                                 qc_why = f"start_not_frozen: {_frz.detail}"
-                        if qc_local_ok:
+                        if qc_local_ok and twitch_section is None:
                             from modules import timer_ocr
                             if timer_ocr.is_calibrated():
                                 from modules.decryptage import (
@@ -1678,6 +1756,12 @@ async def run() -> int:
         ))
         if local_vod:
             await asyncio.to_thread(_vod_cache_hygiene, local_vod)
+    if twitch_items:
+        results.extend(await asyncio.gather(
+            *(_process_one(k, j, None, twitch_by_game.get(k.get("game_id") or ""))
+              for (k, j) in twitch_items),
+            return_exceptions=True,
+        ))
     if singles:
         results.extend(await asyncio.gather(
             *(_process_one(k, j) for (k, j) in singles),

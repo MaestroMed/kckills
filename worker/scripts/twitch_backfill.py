@@ -52,7 +52,7 @@ log = structlog.get_logger()
 
 from config import config  # noqa: E402
 from models.kill_event import compute_hype_score  # noqa: E402
-from modules import analyzer, clipper, feed_clock, harvester, og_generator, pipeline, twitch_sync  # noqa: E402
+from modules import analyzer, clipper, feed_clock, harvester, og_generator, pipeline, twitch_source, twitch_sync  # noqa: E402
 from modules.clip_qc_v2 import check_media_sanity  # noqa: E402
 from services import r2_client, twitch_vod  # noqa: E402
 from services.local_paths import LocalPaths  # noqa: E402
@@ -180,27 +180,14 @@ def _player_igns() -> dict[str, str]:
 # ─── 5. Clip d'un kill depuis la section Twitch ────────────────────────────
 
 def _sequence_start_ms(kill: dict, game_kills: list[dict]) -> int:
-    """Début de la série multi-kill qui se termine sur `kill` (même tueur,
-    ≤ 10 s entre deux kills, 30 s pour le 5e) — la fenêtre du clip la couvre."""
-    def ep(k: dict) -> int:
-        return int(PRECISE_EPOCH.get(k["id"]) or k.get("event_epoch") or 0)
-
-    same = sorted((k for k in game_kills if k.get("killer_champion") == kill.get("killer_champion")
-                   and ep(k) and ep(k) <= ep(kill)),
-                  key=ep)
-    start = ep(kill)
-    rank = 1
-    for prev in reversed(same[:-1] if same and same[-1]["id"] == kill["id"] else same):
-        gap = PENTA_GAP_MS if rank == 4 else MULTIKILL_GAP_MS
-        if start - ep(prev) > gap:
-            break
-        start = ep(prev)
-        rank += 1
-    return start
+    """Début de la série multi-kill qui se termine sur `kill` (longueur donnée
+    par le libellé du dernier kill) — instants exacts du feed quand connus."""
+    return twitch_source.sequence_start_ms(
+        kill, game_kills, epoch_of=lambda k: int(PRECISE_EPOCH.get(k["id"]) or k.get("event_epoch") or 0))
 
 
 async def clip_one(kill: dict, game: dict, clock: feed_clock.FeedClock, sync: twitch_sync.SectionSync,
-                   vod: twitch_vod.TwitchVod, game_kills: list[dict], apply: bool) -> str:
+                   vod_id: str, game_kills: list[dict], apply: bool) -> str:
     epoch = int(PRECISE_EPOCH.get(kill["id"]) or kill["event_epoch"])
     gt_wall = round((epoch - clock.anchor_ms) / 1000.0)
     ig = int(clock.ingame_seconds(epoch))
@@ -213,7 +200,7 @@ async def clip_one(kill: dict, game: dict, clock: feed_clock.FeedClock, sync: tw
         return "dry"
     urls = await clipper.clip_kill(
         kill_id=kill["id"],
-        youtube_id=f"twitch_{vod.video_id}",
+        youtube_id=f"twitch_{vod_id}",
         vod_offset_seconds=int(round(sync.c or 0)),
         game_time_seconds=int(gt_wall),
         multi_kill=kill.get("multi_kill"),
@@ -323,39 +310,32 @@ async def process_game(game: dict, args, report: dict) -> None:
     grep["targets"] = len(targets)
     if not targets:
         return
-    vod = await twitch_vod.find_vod_for_epoch(clock.anchor_ms, channel=args.channel)
-    if not vod:
-        grep["error"] = "aucune VOD Twitch ne couvre la game"
-        return
-    anchor_pos = vod.position_of(clock.anchor_ms / 1000.0)
     last_epoch = clock.end_ms or max(k["event_epoch"] for k in kills) + 60_000
-    start = max(0.0, anchor_pos - SECTION_MARGIN_S)
-    end = min(float(vod.duration_s), vod.position_of(last_epoch / 1000.0) + SECTION_MARGIN_S)
-    section = os.path.join(LocalPaths.vods_dir(), f"twitch_{vod.video_id}_{gext}.mp4")
-    grep["vod"] = {"id": vod.video_id, "title": vod.title, "section": [round(start), round(end)]}
     if not args.apply and not args.calibrate:
+        vod = await twitch_vod.find_vod_for_epoch(clock.anchor_ms, channel=args.channel)
+        grep["vod"] = {"id": vod.video_id, "title": vod.title} if vod else None
         grep["plan"] = [{"id": k["id"][:8], "status": k["status"], "visible": k.get("kill_visible"),
                          "kill": f"{k.get('killer_champion')}>{k.get('victim_champion')}", "multi": k.get("multi_kill")}
                         for k in targets]
         return
-    if not await twitch_vod.download_section(vod.video_id, start, end, section):
-        grep["error"] = "téléchargement de la section échoué"
+    # Section 1080p60 + calibration, partagées avec le démon et le montage :
+    # une section déjà calée est réutilisée telle quelle (zéro téléchargement).
+    section = await twitch_sync.prepare_game_section(
+        clock, channels=[args.channel], margin_s=SECTION_MARGIN_S, last_epoch_ms=last_epoch,
+        tmp_dir=os.path.join(REPORT_DIR, "tmp"), retry_refused=args.recalibrate)
+    if section is None:
+        grep["error"] = "section Twitch indisponible (VOD absente, téléchargement raté ou calibration refusée)"
         return
-    sync = await twitch_sync.calibrate_section(section, clock, guess_c=anchor_pos - start,
-                                               tmp_dir=os.path.join(REPORT_DIR, "tmp"))
+    sync = section.sync
+    grep["vod"] = {"id": section.vod_id, "title": section.vod_title, "section_start_s": round(section.start_s)}
     grep["sync"] = sync.to_json()
-    with open(section + ".sync.json", "w", encoding="utf-8") as f:
-        json.dump({"vod": vod.__dict__, "section_start_s": start, "clock": clock.to_json(), **sync.to_json()}, f, indent=1)
-    if not sync.ok:
-        grep["error"] = f"calibration refusée : {sync.reason}"
-        return
     if args.calibrate and not args.apply:
         return
     outcomes: dict[str, int] = {}
     t0 = time.time()
     for i, k in enumerate(targets, 1):
         try:
-            res = await clip_one(k, game, clock, sync, vod, kills, apply=args.apply)
+            res = await clip_one(k, game, clock, sync, section.vod_id, kills, apply=args.apply)
         except Exception as e:   # un kill raté ne bloque jamais la game
             log.error("twitch_clip_exception", kill=k["id"][:8], error=str(e)[:200])
             res = "exception"
@@ -376,6 +356,8 @@ async def main() -> None:
     ap.add_argument("--apply", action="store_true", help="écrit en base / R2 (défaut : plan seulement)")
     ap.add_argument("--channel", default=twitch_vod.DEFAULT_CHANNEL)
     ap.add_argument("--force-kills", default="", help="ids (ou préfixes) de kills à re-clipper quoi qu'il arrive")
+    ap.add_argument("--recalibrate", action="store_true",
+                    help="retente une section dont la calibration a été refusée il y a moins de 6 h")
     args = ap.parse_args()
     matches = SUMMER_2026 if args.summer else [m for m in args.match.split(",") if m]
     only_games = {int(x) for x in args.games.split(",") if x}

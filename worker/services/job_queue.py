@@ -349,6 +349,42 @@ def fail(
         return False
 
 
+# ─── defer ─────────────────────────────────────────────────────────────
+
+def defer(job: dict, retry_after_seconds: int, reason: str) -> bool:
+    """Remet un job réclamé en 'pending' SANS consommer de tentative.
+
+    Pour une attente qui n'est pas un échec : la source vidéo n'est pas
+    encore prête (VOD Twitch d'un live qui continue, budget de
+    téléchargement de la passe épuisé). claim() a déjà incrémenté
+    `attempts` : on le rend, sinon trois reports suffiraient à envoyer en
+    dead-letter un kill parfaitement clippable dix minutes plus tard.
+    """
+    db = get_db()
+    if db is None or not job.get("id"):
+        return False
+    body = {
+        "status": "pending",
+        "run_after": _isoformat(_now_utc() + timedelta(seconds=int(retry_after_seconds))),
+        "locked_by": None,
+        "locked_until": None,
+        "attempts": max(0, int(job.get("attempts") or 1) - 1),
+        "last_error": f"deferred: {reason}"[:2000],
+    }
+    try:
+        r = db._get_client().patch(
+            f"{db.base}/pipeline_jobs",
+            json=body,
+            headers={**db.headers, "Prefer": "return=minimal"},
+            params={"id": f"eq.{job['id']}"},
+        )
+        r.raise_for_status()
+        return True
+    except Exception as e:
+        log.warn("job_queue_defer_failed", job_id=job.get("id"), error=str(e)[:200])
+        return False
+
+
 # ─── renew_lease ───────────────────────────────────────────────────────
 
 def renew_lease(job_id: str, additional_seconds: int = 300) -> bool:
