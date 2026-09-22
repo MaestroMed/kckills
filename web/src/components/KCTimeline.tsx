@@ -344,7 +344,10 @@ export function KCTimeline({
           const isHovered = hovered === era.id;
           const anyHovered = hovered !== null;
           const isDimmed = anyHovered && !isHovered;
-          const isLive = era.id === "lec-2026-spring";
+          // Piloté par les données (era.badge) : l'id codé en dur laissait
+          // un badge LIVE sur Spring 2026, terminé depuis le 7 juin.
+          const isLive = era.badge === "live";
+          const isUpcoming = era.badge === "upcoming";
           // Filter-mode selection state. A card is "active" when it IS
           // the selectedEra ; "filter-dimmed" when the timeline is in
           // filter mode AND a different era is active.
@@ -511,6 +514,11 @@ export function KCTimeline({
                     <span className="relative rounded-full h-2 w-2 bg-white" />
                   </span>
                   <span className="text-[10px] font-black text-white tracking-widest">LIVE</span>
+                </div>
+              )}
+              {isUpcoming && (
+                <div className="absolute top-4 right-4 z-10 flex items-center gap-1.5 rounded-full bg-[var(--gold)] px-3 py-1 shadow-xl pointer-events-none">
+                  <span className="text-[10px] font-black text-black tracking-widest">À VENIR</span>
                 </div>
               )}
 

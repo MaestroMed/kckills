@@ -27,6 +27,9 @@ export interface Era {
   links: EraLink[];
   events?: string[];
   clipsQuery?: string;    // YouTube search query for clips from this era
+  /** Badge de la carte : "live" pendant une compétition en cours,
+   *  "upcoming" pour la prochaine (données, plus d'id codé en dur). */
+  badge?: "live" | "upcoming";
 }
 
 export const ERAS: Era[] = [
@@ -769,23 +772,34 @@ export const ERAS: Era[] = [
       },
     ],
   },
+  // \u2500\u2500 2026, suite \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+  // Recherche du 23/09/2026 : scores et tours = API lolesports (getSchedule
+  // LEC / MSI / ewc_lol), placements = Leaguepedia TournamentResults, dates
+  // des Worlds = lolesports.com \u00AB MSI and Worlds Updates \u00BB. Rafra\u00EEchir par
+  // worker/scripts (getSchedule) avant d'\u00E9diter un r\u00E9sultat.
   {
     id: "lec-2026-spring",
     period: "Spring 2026",
     phase: "LEC",
-    label: "En Cours",
-    subtitle: "Objectif MSI",
+    label: "Si Pr\u00E8s",
+    subtitle: "Deuxi\u00E8me finale, deuxi\u00E8me 2-3 face \u00E0 G2",
     color: "#C8AA6E",
-    result: "Spring en cours \uD83D\uDD25",
-    icon: "\uD83D\uDD25",
-    image: "/images/hero-bg.jpg",
-    dateStart: "2026-03-15",
-    dateEnd: "2026-06-30",
+    result: "Finalistes \u00b7 KC 2-3 G2",
+    icon: "\uD83E\uDD48",
+    image: "/images/eras/2026-spring.jpg",
+    dateStart: "2026-03-28",
+    dateEnd: "2026-06-07",
     roster: "Canna (top) \u00b7 Yike (jgl) \u00b7 kyeahoo (mid) \u00b7 Caliste (adc) \u00b7 Busio (sup)",
     coach: "Reapered",
     keyMoment:
-      "KC demarre Spring en force : record 8-3 en regular season, 1re place. Caliste continue d'etre monstrueux (5.1K / 1.1D / 4.9A, 80% WR, 11.3 CS/min). Duree moyenne des games : 33:33. En 267 matchs KC depuis ses debuts LFL en 2021, le club affiche 172 victoires et un winrate carriere de 64.4%. Objectif : MSI 2026.",
-    clipsQuery: "karmine corp lec spring 2026",
+      "Saison r\u00E9guli\u00E8re en 7-2 (2e). En playoffs, KC tombe d'entr\u00E9e face \u00E0 G2 (1-3) puis remonte tout le bracket inf\u00E9rieur : NAVI 3-1, GIANTX 3-0, Movistar KOI 3-0. En finale le 7 juin, G2 s'impose encore 3-2 : deuxi\u00E8me finale de l'ann\u00E9e perdue au cinqui\u00E8me game contre le m\u00EAme adversaire. La place de finaliste qualifie KC pour le MSI 2026.",
+    events: [
+      "Saison r\u00E9guli\u00E8re : 7-2, 2e place",
+      "Playoffs : G2 1-3, puis NAVI 3-1, GIANTX 3-0, MKOI 3-0",
+      "Finale (7 juin) \u2014 KC 2-3 G2",
+      "Qualification pour le MSI 2026 (play-ins)",
+    ],
+    clipsQuery: "karmine corp lec spring 2026 playoffs",
     links: [
       {
         label: "KC vs VIT Highlights \u2014 LEC Spring Week 1 Day 1 (LEC Official)",
@@ -793,19 +807,138 @@ export const ERAS: Era[] = [
         type: "youtube",
       },
       {
-        label: "Caliste highlights Spring 2026 (recherche)",
-        url: "https://www.youtube.com/results?search_query=caliste+karmine+corp+lec+spring+2026",
-        type: "youtube",
-      },
-      {
-        label: "Caliste highlights Spring 2026",
-        url: "https://www.youtube.com/results?search_query=caliste+karmine+corp+lec+spring+2026",
+        label: "Finale Spring 2026 G2 vs KC (recherche)",
+        url: "https://www.youtube.com/results?search_query=G2+vs+KC+LEC+2026+Spring+Final",
         type: "youtube",
       },
       {
         label: "Liquipedia Spring 2026",
         url: "https://liquipedia.net/leagueoflegends/LEC/2026/Spring",
         type: "wiki",
+      },
+    ],
+  },
+  {
+    id: "msi-2026",
+    period: "MSI 2026",
+    phase: "International",
+    label: "Le Mur",
+    subtitle: "Premier MSI, arr\u00EAt en play-ins",
+    color: "#7B8DB5",
+    result: "Play-ins \u00b7 10e",
+    icon: "\uD83C\uDF0D",
+    image: null,
+    dateStart: "2026-06-28",
+    dateEnd: "2026-06-30",
+    roster: "Canna (top) \u00b7 Yike (jgl) \u00b7 kyeahoo (mid) \u00b7 Caliste (adc) \u00b7 Busio (sup)",
+    coach: "Reapered",
+    keyMoment:
+      "Premier MSI de l'histoire du club. KC ouvre les play-ins par un 3-0 sur DCG, puis tombe face \u00E0 T1 (0-3) et TLAW (0-3). Fin de parcours \u00E0 la 10e place : le niveau international se mesure, la le\u00E7on servira trois semaines plus tard.",
+    events: [
+      "Play-ins \u2014 KC 3-0 DCG",
+      "Play-ins \u2014 KC 0-3 T1",
+      "Play-ins \u2014 KC 0-3 TLAW (\u00E9limination, 10e)",
+    ],
+    clipsQuery: "karmine corp msi 2026",
+    links: [
+      {
+        label: "Liquipedia MSI 2026",
+        url: "https://liquipedia.net/leagueoflegends/Mid-Season_Invitational/2026",
+        type: "wiki",
+      },
+    ],
+  },
+  {
+    id: "ewc-2026",
+    period: "EWC 2026",
+    phase: "International",
+    label: "La Revanche",
+    subtitle: "T1 battu en demi-finale",
+    color: "#00C853",
+    result: "Finalistes \u00b7 KC 0-3 DK",
+    icon: "\uD83E\uDD48",
+    image: null,
+    dateStart: "2026-07-15",
+    dateEnd: "2026-07-19",
+    roster: "Canna (top) \u00b7 Yike (jgl) \u00b7 kyeahoo (mid) \u00b7 Caliste (adc) \u00b7 Busio (sup)",
+    coach: "Reapered",
+    keyMoment:
+      "Trois semaines apr\u00E8s le MSI, KC sort des groupes de l'Esports World Cup (d\u00E9faite 0-1 face \u00E0 Gen.G, victoires 2-1 sur TS et 2-0 sur Sentinels), balaie AGAL 2-0 en quart, puis bat T1 2-1 en demi-finale. En finale, Dplus KIA s'impose 3-0 : KC termine deuxième de l'Esports World Cup.",
+    events: [
+      "Groupes \u2014 KC 0-1 Gen.G \u00b7 KC 2-1 TS \u00b7 KC 2-0 SEN",
+      "Quart de finale \u2014 KC 2-0 AGAL",
+      "Demi-finale \u2014 KC 2-1 T1",
+      "Finale \u2014 KC 0-3 DK",
+    ],
+    clipsQuery: "karmine corp t1 esports world cup 2026",
+    links: [
+      {
+        label: "KC vs T1 demi-finale EWC 2026 (recherche)",
+        url: "https://www.youtube.com/results?search_query=KC+vs+T1+Esports+World+Cup+2026+semifinal",
+        type: "youtube",
+      },
+    ],
+  },
+  {
+    id: "lec-2026-summer",
+    period: "Summer 2026",
+    phase: "LEC",
+    label: "L'Invaincue",
+    subtitle: "9-0, puis le billet pour les Worlds",
+    color: "#0AC8B9",
+    result: "3e \u00b7 Qualifi\u00E9s Worlds 2026",
+    icon: "\uD83C\uDF9F\uFE0F",
+    image: null,
+    dateStart: "2026-07-24",
+    dateEnd: "2026-09-19",
+    roster: "Canna (top) \u00b7 Yike (jgl) \u00b7 kyeahoo (mid) \u00b7 Caliste (adc) \u00b7 Busio (sup)",
+    coach: "Reapered",
+    keyMoment:
+      "Saison r\u00E9guli\u00E8re parfaite : 9 victoires, 0 d\u00E9faite, 1re place. En playoffs, KC bat GIANTX 3-1 le 5 septembre (penta de Canna sur Jayce) puis perd face \u00E0 G2 1-3. Le 19 septembre \u00E0 Nice, Movistar KOI la balaie 3-0 en finale du bracket inf\u00E9rieur : 3e place, et la premi\u00E8re qualification aux Worlds de l'histoire du club, via les play-ins.",
+    events: [
+      "Saison r\u00E9guli\u00E8re : 9-0, 1re place",
+      "Playoffs \u2014 KC 3-1 GIANTX (penta de Canna)",
+      "Playoffs \u2014 KC 1-3 G2",
+      "Bracket inf\u00E9rieur (19 sept., Nice) \u2014 KC 0-3 MKOI",
+      "Premi\u00E8re qualification aux Worlds (play-ins)",
+    ],
+    clipsQuery: "karmine corp lec summer 2026",
+    links: [
+      {
+        label: "Liquipedia Summer 2026",
+        url: "https://liquipedia.net/leagueoflegends/LEC/2026/Summer",
+        type: "wiki",
+      },
+    ],
+  },
+  {
+    id: "worlds-2026",
+    period: "Worlds 2026",
+    phase: "International",
+    label: "Le R\u00EAve Mondial",
+    subtitle: "Premiers Worlds du club",
+    color: "#C8AA6E",
+    result: "Play-ins \u00b7 15-18 oct.",
+    icon: "\uD83C\uDFC6",
+    image: null,
+    dateStart: "2026-10-15",
+    dateEnd: "2026-11-14",
+    roster: "Canna (top) \u00b7 Yike (jgl) \u00b7 kyeahoo (mid) \u00b7 Caliste (adc) \u00b7 Busio (sup)",
+    coach: "Reapered",
+    keyMoment:
+      "Pour sa premi\u00E8re participation, KC entre par les play-ins, du 15 au 18 octobre au Riot Games Arena de Los Angeles. La phase suisse et les phases finales se jouent \u00E0 Allen (Texas), la finale le 14 novembre au Barclays Center de New York.",
+    events: [
+      "Play-ins \u2014 15-18 octobre, Los Angeles",
+      "Phase suisse \u2014 23-31 octobre, Allen (Texas)",
+      "Finale \u2014 14 novembre, Barclays Center (New York)",
+    ],
+    badge: "upcoming",
+    clipsQuery: "karmine corp worlds 2026",
+    links: [
+      {
+        label: "Calendrier MSI et Worlds (LoL Esports)",
+        url: "https://lolesports.com/en-US/news/msi-and-worlds-updates",
+        type: "article",
       },
     ],
   },
