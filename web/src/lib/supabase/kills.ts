@@ -1765,6 +1765,11 @@ export const getKillsByEra = cache(async function getKillsByEra(
 const SITEMAP_PUBLISHED_FILTER =
   "publication_status.eq.published,and(publication_status.is.null,status.eq.published)";
 
+// Même durée que `revalidate` de app/sitemap.ts (6 h). Le client en cache
+// vaut 300 s par défaut : un fetch à 300 s abaissait la revalidation de
+// TOUT le sitemap à 5 min (~10 requêtes paginées à chaque régénération).
+const SITEMAP_REVALIDATE_S = 21_600;
+
 export interface SitemapKillRow {
   id: string;
   killer_champion: string | null;
@@ -1778,7 +1783,7 @@ export interface SitemapKillRow {
 export async function getSitemapKills(cap = 45_000): Promise<SitemapKillRow[]> {
   const out: SitemapKillRow[] = [];
   try {
-    const supabase = createCachedAnonSupabase();
+    const supabase = createCachedAnonSupabase(SITEMAP_REVALIDATE_S);
     for (let from = 0; from < cap; from += 1000) {
       const { data, error } = await supabase
         .from("kills")
@@ -1822,7 +1827,7 @@ export async function getSitemapVideoKills(limit = 2000): Promise<SitemapVideoKi
   // PostgREST plafonne à 1 000 lignes par requête : pagination par range().
   const out: SitemapVideoKillRow[] = [];
   try {
-    const supabase = createCachedAnonSupabase();
+    const supabase = createCachedAnonSupabase(SITEMAP_REVALIDATE_S);
     for (let from = 0; from < limit; from += 1000) {
       const { data, error } = await supabase
         .from("kills")
