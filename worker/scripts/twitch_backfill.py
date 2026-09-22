@@ -250,6 +250,9 @@ async def clip_one(kill: dict, game: dict, clock: feed_clock.FeedClock, sync: tw
             })
         else:
             patch["highlight_score"] = round(base, 1)
+            # Analyse ratée : la visibilité de l'ANCIEN clip ne vaut rien pour
+            # le nouveau. Inconnue (NULL) = porte permissive, comme au pipeline.
+            patch["kill_visible"] = None
         og_local = og_generator.generate_og_image(
             kill_id=kill["id"],
             killer_name=row["_killer_name_hint"] or ("KC" if kill.get("tracked_team_involvement") == "team_killer" else "Opponent"),
@@ -264,10 +267,28 @@ async def clip_one(kill: dict, game: dict, clock: feed_clock.FeedClock, sync: tw
         og_url = await r2_client.upload_og(kill["id"], og_local) if og_local else None
         if og_url:
             patch["og_image_url"] = og_url
-        patch["status"] = "published"
+        # Mêmes portes que le pipeline (event_mapper -> is_publishable) : un
+        # clip où le kill n'est pas visible, ou sans description exploitable,
+        # part en revue au lieu d'être publié. publication_status est écrit
+        # EXPLICITEMENT : le trigger fn_sync_kill_status_split ne le recalcule
+        # que quand `status` change, et un kill déjà « published » mais masqué
+        # (ancien clip invisible) restait masqué après un re-clip réussi.
+        visible = patch.get("kill_visible") is not False
+        described = len(str(patch.get("ai_description") or kill.get("ai_description") or "")) >= 50
+        publish = visible and described
+        patch["status"] = "published" if publish else "needs_review"
+        patch["publication_status"] = "published" if publish else "hidden"
         safe_update("kills", patch, "id", kill["id"])
         clipper._best_effort_kill_hashes(kill["id"], c_hash, p_hash)
-        return "published" if patch.get("kill_visible", True) else "published_invisible"
+        # Portes du game_event (s'il existe) alignées sur le nouveau clip :
+        # sinon event_publisher retirerait au prochain cycle du démon un kill
+        # dont l'événement garde « clip absent » ou « invisible » d'avant.
+        # qc_human_approved n'est jamais touché.
+        safe_update("game_events", {"qc_clip_produced": True, "qc_clip_validated": True, "qc_typed": True,
+                                    "qc_described": described, "qc_visible": visible}, "kill_id", kill["id"])
+        if not publish:
+            return "review_invisible" if not visible else "review_undescribed"
+        return "published"
     finally:
         if h_path:
             clipper.cleanup_local_clip(h_path)
