@@ -189,3 +189,57 @@ async def calibrate_section(path: str, clock: FeedClock, guess_c: float, tmp_dir
     log.info("twitch_sync_done", path=os.path.basename(path), c=sync.c, spread=sync.spread_s,
              reads=len(cs), inliers=len(inliers), ok=sync.ok)
     return sync
+
+
+# ─── Section de game prête à l'emploi (backfill, montage) ───────────────────
+
+@dataclass
+class GameSection:
+    """Section 1080p60 d'une game + sa calibration : tout instant réel E du
+    feed tombe à `sync.file_pos(E, clock)` secondes dans `path`."""
+    path: str
+    start_s: float                  # position de la section dans la VOD
+    vod_id: str
+    vod_title: str
+    sync: SectionSync
+    clock: FeedClock
+
+
+async def prepare_game_section(clock: FeedClock, *, channel: str | None = None, margin_s: int = 240,
+                               last_epoch_ms: int | None = None, tmp_dir: str | None = None) -> GameSection | None:
+    """VOD Twitch qui couvre la game -> section téléchargée -> calibration.
+
+    Réutilise la section et son .sync.json s'ils existent déjà (aucun appel
+    Gemini ni téléchargement en double). None si pas de VOD, téléchargement
+    raté ou calibration refusée."""
+    from services import twitch_vod
+    from services.local_paths import LocalPaths
+
+    vod = await twitch_vod.find_vod_for_epoch(clock.anchor_ms, channel=channel or twitch_vod.DEFAULT_CHANNEL)
+    if not vod:
+        return None
+    path = os.path.join(LocalPaths.vods_dir(), f"twitch_{vod.video_id}_{clock.game_ext_id}.mp4")
+    meta_path = path + ".sync.json"
+    if os.path.exists(path) and os.path.exists(meta_path):
+        try:
+            with open(meta_path, encoding="utf-8") as f:
+                meta = json.load(f)
+            if meta.get("ok") and meta.get("c") is not None:
+                sync = SectionSync(path=path, c=float(meta["c"]), reads=meta.get("reads") or [],
+                                   spread_s=meta.get("spread_s"), ok=True)
+                return GameSection(path, float(meta.get("section_start_s") or 0), vod.video_id, vod.title, sync, clock)
+        except (OSError, ValueError, KeyError):
+            pass
+    anchor_pos = vod.position_of(clock.anchor_ms / 1000.0)
+    last = last_epoch_ms or clock.end_ms or (clock.anchor_ms + 60 * 60_000)
+    start = max(0.0, anchor_pos - margin_s)
+    end = min(float(vod.duration_s), vod.position_of(last / 1000.0) + margin_s)
+    if not await twitch_vod.download_section(vod.video_id, start, end, path):
+        return None
+    sync = await calibrate_section(path, clock, guess_c=anchor_pos - start,
+                                   tmp_dir=tmp_dir or os.path.join(os.path.dirname(path), "sync_tmp"))
+    with open(meta_path, "w", encoding="utf-8") as f:
+        json.dump({"vod": {"video_id": vod.video_id, "start_epoch_s": vod.start_epoch_s, "duration_s": vod.duration_s,
+                           "title": vod.title}, "section_start_s": start, "clock": clock.to_json(), **sync.to_json()},
+                  f, indent=1)
+    return GameSection(path, start, vod.video_id, vod.title, sync, clock) if sync.ok else None
