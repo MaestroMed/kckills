@@ -1433,36 +1433,51 @@ export async function getKillsByMatchExternalId(
     // `revalidate = 600` ISR setting).
     const supabase = createCachedAnonSupabase();
 
+    // 23/09/2026 — on résout d'abord les games du match, puis on filtre les
+    // kills par game_id (indexé : idx_kills_game). Le filtre sur la ressource
+    // imbriquée games.matches.external_id forçait un inner join sur tout le
+    // catalogue publié : « canceling statement due to statement timeout »
+    // au build, page match vide.
+    const { data: matchRow } = await supabase
+      .from("matches")
+      .select("id")
+      .eq("external_id", matchExternalId)
+      .maybeSingle();
+    if (!matchRow?.id) return [];
+    const { data: gameRows } = await supabase.from("games").select("id").eq("match_id", matchRow.id);
+    const gameIds = (gameRows ?? []).map((g: { id: string }) => g.id);
+    if (gameIds.length === 0) return [];
+
     const [publishedRes, golggRes, livestatsRes] = await Promise.all([
       supabase
         .from("kills")
-        .select(KILL_SELECT_MATCH_INNER)
+        .select(KILL_SELECT)
         // PR23 split-status fallback (see getPublishedKills).
         .or(
           "publication_status.eq.published," +
             "and(publication_status.is.null,status.eq.published)",
         )
         .eq("kill_visible", true)
-        .eq("games.matches.external_id", matchExternalId)
+        .in("game_id", gameIds)
         .order("game_time_seconds", { ascending: true }),
       supabase
         .from("kills")
-        .select(KILL_SELECT_MATCH_INNER)
+        .select(KILL_SELECT)
         .eq("data_source", "gol_gg")
-        .eq("games.matches.external_id", matchExternalId)
+        .in("game_id", gameIds)
         .order("game_time_seconds", { ascending: true }),
       // Bucket 3 : livestats kills that failed clipping or are pending.
       // PR23 split-status fallback (see getKillsForGrid).
       supabase
         .from("kills")
-        .select(KILL_SELECT_MATCH_INNER)
+        .select(KILL_SELECT)
         .or(
           "pipeline_status.eq.failed," +
             "and(pipeline_status.is.null,status.eq.clip_error)," +
             "and(pipeline_status.is.null,status.eq.analyzed)",
         )
         .eq("data_source", "livestats")
-        .eq("games.matches.external_id", matchExternalId)
+        .in("game_id", gameIds)
         .not("killer_champion", "is", null)
         .order("game_time_seconds", { ascending: true }),
     ]);
