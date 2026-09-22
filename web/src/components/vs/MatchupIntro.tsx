@@ -82,7 +82,6 @@ export function MatchupIntro({
   }, []);
 
   return (
-     
     <div
       className="fixed inset-0 z-[80] cursor-pointer overflow-hidden bg-[#010A13]"
       onClick={() => setSkipped(true)}

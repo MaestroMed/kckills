@@ -155,14 +155,12 @@ export function BgmPlayer() {
             const isDead =
               e.data === 2 || e.data === 5 || e.data === 100 || e.data === 101 || e.data === 150;
             consecutiveErrorsRef.current += 1;
-             
             console.warn("[bgm] YT.Player onError", {
               code: e.data,
               consecutive: consecutiveErrorsRef.current,
             });
             if (!isDead) return;
             if (consecutiveErrorsRef.current >= MAX_CONSECUTIVE_SKIPS) {
-               
               console.warn(
                 `[bgm] ${consecutiveErrorsRef.current} consecutive dead tracks — ` +
                   "pausing auto-skip (circuit breaker). Check playlist IDs / CSP.",

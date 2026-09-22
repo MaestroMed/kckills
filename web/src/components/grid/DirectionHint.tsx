@@ -23,7 +23,6 @@ export function DirectionHint() {
     setVisible(true);
     const timer = window.setTimeout(() => dismiss(), 4000);
     return () => window.clearTimeout(timer);
-     
   }, []);
 
   function dismiss() {

@@ -175,7 +175,6 @@ const sentryWebpackPluginOptions = {
   tunnelRoute: "/monitoring",
   hideSourceMaps: true,
   errorHandler: (err: Error) => {
-     
     console.warn("[sentry-webpack-plugin] non-fatal:", err.message);
   },
   reactComponentAnnotation: { enabled: false },

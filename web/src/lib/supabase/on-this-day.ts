@@ -60,14 +60,12 @@ export const getOnThisDayKills = cache(async (
       });
     if (error) {
       // Don't throw on the homepage RSC — degrade silently.
-       
       console.warn("[on-this-day] rpc error", error.message);
       return [];
     }
     return (data ?? []) as OnThisDayKill[];
   } catch (e) {
     rethrowIfDynamic(e);
-     
     console.warn("[on-this-day] exception", e);
     return [];
   }

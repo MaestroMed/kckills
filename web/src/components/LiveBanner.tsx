@@ -61,7 +61,6 @@ export function LiveBanner() {
       if (intervalId != null) window.clearInterval(intervalId);
       if (currentController) currentController.abort();
     };
-     
   }, [data?.isLive]);
 
   if (!data?.isLive) return null;

@@ -101,7 +101,6 @@ export function useLiveViewerCount(
         });
     } catch (e) {
       // Supabase unavailable, websocket blocked — silent.
-       
       console.warn("[live-viewer-count] init failed", e);
     }
 

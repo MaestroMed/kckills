@@ -179,7 +179,6 @@ function writeLS(key: string, value: string) {
 /** Tiny tagged logger — collapses all wolf-player debug output to one
  *  prefix so the user can filter by `[wolf]` in devtools. */
 function wlog(...args: unknown[]) {
-   
   console.debug("[wolf]", ...args);
 }
 
