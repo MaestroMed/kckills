@@ -13,7 +13,7 @@ export async function GET(req: NextRequest) {
   const limit = Math.min(200, parseInt(sp.get("limit") ?? "50", 10));
 
   const sb = await createServerSupabase();
-  let query = sb
+  const query = sb
     .from("comments")
     .select(
       "id, content, kill_id, user_id, parent_id, moderation_status, " +

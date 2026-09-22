@@ -61,7 +61,7 @@ export function LiveBanner() {
       if (intervalId != null) window.clearInterval(intervalId);
       if (currentController) currentController.abort();
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [data?.isLive]);
 
   if (!data?.isLive) return null;

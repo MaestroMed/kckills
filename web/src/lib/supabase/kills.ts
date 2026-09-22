@@ -1171,7 +1171,7 @@ export const getWeekendBestClips = cache(async function getWeekendBestClips(
       console.warn("[supabase/kills] getWeekendBestClips window error:", error.message);
     }
 
-    let candidates = (windowed ?? []).map((row) =>
+    const candidates = (windowed ?? []).map((row) =>
       normalize(row as unknown as RawKillSelect),
     );
 

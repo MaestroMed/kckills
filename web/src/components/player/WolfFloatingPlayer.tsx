@@ -296,7 +296,7 @@ function whenYTReady(cb: () => void): void {
   (
     window as unknown as { onYouTubeIframeAPIReady?: () => void }
   ).onYouTubeIframeAPIReady = () => {
-    // eslint-disable-next-line no-console
+     
     console.debug("[wolf] onYouTubeIframeAPIReady fired");
     try {
       prevCb?.();
@@ -308,7 +308,7 @@ function whenYTReady(cb: () => void): void {
       try {
         fn?.();
       } catch (err) {
-        // eslint-disable-next-line no-console
+         
         console.debug("[wolf] YT waiter threw", err);
       }
     }
@@ -318,7 +318,7 @@ function whenYTReady(cb: () => void): void {
     `script[src="${YT_API_SRC}"]`,
   );
   if (existing) {
-    // eslint-disable-next-line no-console
+     
     console.debug("[wolf] re-using existing iframe_api script tag");
     return;
   }
@@ -326,14 +326,14 @@ function whenYTReady(cb: () => void): void {
   tag.src = YT_API_SRC;
   tag.async = true;
   tag.onerror = () => {
-    // eslint-disable-next-line no-console
+     
     console.warn(
       "[wolf] iframe_api script failed to load — wolf audio will not work. " +
         "Check CSP script-src includes https://www.youtube.com.",
     );
   };
   document.head.appendChild(tag);
-  // eslint-disable-next-line no-console
+   
   console.debug("[wolf] injected iframe_api script tag");
 }
 
@@ -382,7 +382,7 @@ function HiddenAudioIframe() {
     // et on ne crée aucun player : zéro requête tierce sur / et /scroll.
     if (!isActivated) return;
     if (!currentTrack) {
-      // eslint-disable-next-line no-console
+       
       console.debug("[wolf] no currentTrack — skipping player init");
       return;
     }
@@ -392,7 +392,7 @@ function HiddenAudioIframe() {
     }
 
     let cancelled = false;
-    // eslint-disable-next-line no-console
+     
     console.debug("[wolf] requesting YT API for track", {
       youtubeId: currentTrack.youtubeId,
       title: currentTrack.title,
@@ -402,7 +402,7 @@ function HiddenAudioIframe() {
       if (cancelled) return;
       const yt = getWindowYT();
       if (!yt?.Player) {
-        // eslint-disable-next-line no-console
+         
         console.warn("[wolf] YT.Player still undefined after whenYTReady");
         return;
       }
@@ -427,7 +427,7 @@ function HiddenAudioIframe() {
             }, 100);
           }
         } catch (err) {
-          // eslint-disable-next-line no-console
+           
           console.debug("[wolf] loadVideoById threw", err);
         }
         return;
@@ -437,7 +437,7 @@ function HiddenAudioIframe() {
       // DOM ; otherwise YT.Player silently fails.
       const el = containerRef.current?.querySelector(`#${iframeId}`);
       if (!el) {
-        // eslint-disable-next-line no-console
+         
         console.warn("[wolf] iframe target div missing — aborting init");
         return;
       }
@@ -462,7 +462,7 @@ function HiddenAudioIframe() {
           },
           events: {
             onReady: (e) => {
-              // eslint-disable-next-line no-console
+               
               console.debug("[wolf] YT.Player onReady", {
                 youtubeId: currentTrack.youtubeId,
               });
@@ -481,7 +481,7 @@ function HiddenAudioIframe() {
                 try {
                   e.target.playVideo();
                 } catch (err) {
-                  // eslint-disable-next-line no-console
+                   
                   console.debug("[wolf] onReady playVideo() threw", err);
                 }
               }
@@ -509,7 +509,7 @@ function HiddenAudioIframe() {
               const isDead =
                 code === 2 || code === 5 || code === 100 || code === 101 || code === 150;
               consecutiveErrorsRef.current += 1;
-              // eslint-disable-next-line no-console
+               
               console.warn("[wolf] YT.Player onError", {
                 code,
                 youtubeId: currentTrack?.youtubeId,
@@ -525,7 +525,7 @@ function HiddenAudioIframe() {
                 // Circuit breaker : the whole playlist looks unplayable.
                 // Stop auto-advancing so we don't spin. Manual next/prev
                 // still works and a successful play resets the streak.
-                // eslint-disable-next-line no-console
+                 
                 console.warn(
                   `[wolf] ${consecutiveErrorsRef.current} consecutive dead tracks — ` +
                     "pausing auto-skip (circuit breaker). Check playlist IDs / CSP.",
@@ -535,7 +535,7 @@ function HiddenAudioIframe() {
               try {
                 next();
               } catch (err) {
-                // eslint-disable-next-line no-console
+                 
                 console.warn("[wolf] auto-skip next() threw", err);
               }
             },
@@ -546,7 +546,7 @@ function HiddenAudioIframe() {
         // swap can use the fast path.
         playerRef.current = player;
       } catch (err) {
-        // eslint-disable-next-line no-console
+         
         console.warn("[wolf] new YT.Player() threw", err);
       }
     });

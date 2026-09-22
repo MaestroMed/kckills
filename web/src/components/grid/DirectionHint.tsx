@@ -23,7 +23,7 @@ export function DirectionHint() {
     setVisible(true);
     const timer = window.setTimeout(() => dismiss(), 4000);
     return () => window.clearTimeout(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, []);
 
   function dismiss() {

@@ -177,13 +177,14 @@ export function LiveHotNow() {
     }
   }, [hasSubscription, pushBusy, toast]);
 
+  const liveMatchId = state?.liveMatch?.id;
   const onDismiss = useCallback(() => {
-    if (!state?.liveMatch) return;
+    if (!liveMatchId) return;
     setCollapsed(true);
     try {
-      window.localStorage.setItem(DISMISS_STORAGE_KEY, state.liveMatch.id);
+      window.localStorage.setItem(DISMISS_STORAGE_KEY, liveMatchId);
     } catch { /* noop */ }
-  }, [state?.liveMatch]);
+  }, [liveMatchId]);
 
   const onReopen = useCallback(() => {
     setCollapsed(false);

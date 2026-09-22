@@ -1769,7 +1769,7 @@ function MurAhouAhouRoom({ sessionHashRef, supabaseRef }: RpcRefs) {
             >
               <div className="aspect-[9/16] bg-black overflow-hidden">
                 {openKill.clip_url_vertical ? (
-                  // eslint-disable-next-line jsx-a11y/media-has-caption
+                   
                   <video
                     src={openKill.clip_url_vertical}
                     poster={openKill.thumbnail_url ?? undefined}

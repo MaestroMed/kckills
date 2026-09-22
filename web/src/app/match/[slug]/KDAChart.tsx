@@ -314,7 +314,7 @@ export function KDAChart({
                     fontSize="9"
                     fontFamily="var(--font-jetbrains-mono), monospace"
                   >
-                    {Math.floor(t / 60)}'
+                    {Math.floor(t / 60)}′
                   </text>
                 </g>
               );
