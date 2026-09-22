@@ -11,7 +11,7 @@ import pytest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 from modules.feed_clock import FeedClock, clock_from_states  # noqa: E402
-from modules.harvester import FrameKillMatcher, _detect_kc_side  # noqa: E402
+from modules.harvester import FrameKillMatcher, _detect_kc_side, assign_multikill_labels  # noqa: E402
 from services import livestats_api  # noqa: E402
 
 FIX = os.path.join(os.path.dirname(os.path.dirname(__file__)), "fixtures", "livestats", "multikills")
@@ -27,6 +27,7 @@ def _run(name: str):
     for fr in d["frames"]:
         kills.extend(m.feed(fr))
     kills.extend(m.flush())
+    assign_multikill_labels(kills)
     return kills, m
 
 
@@ -37,8 +38,8 @@ def _series(kills, champion):
 def test_penta_canna_gx_playoffs():
     kills, m = _run("GX_PO_G1_Canna_x5.json")
     assert _series(kills, "Jayce") == [
-        ("Cassiopeia", None), ("Lucian", "double"), ("Skarner", "triple"),
-        ("Milio", "quadra"), ("Yorick", "penta"),
+        ("Cassiopeia", None), ("Lucian", None), ("Skarner", None),
+        ("Milio", None), ("Yorick", "penta"),
     ]
     assert all(k.confidence == "high" for k in kills if k.killer_champion == "Jayce")
     assert m.unmatched_kills == 0
@@ -47,9 +48,9 @@ def test_penta_canna_gx_playoffs():
 def test_quadra_caliste_vs_g2():
     kills, _ = _run("G2_G3_Caliste_x4.json")
     assert _series(kills, "Caitlyn") == [
-        ("Olaf", None), ("Anivia", "double"), ("Taric", "triple"), ("Lucian", "quadra"),
+        ("Olaf", None), ("Anivia", None), ("Taric", None), ("Lucian", "quadra"),
     ]
-    # les deux kills adverses sur KC sont gardés (team_victim), en série eux aussi
+    # les deux kills adverses sur KC sont gardés (team_victim) : un double
     lucian = [k for k in kills if k.killer_champion == "Lucian"]
     assert [k.tracked_team_involvement for k in lucian] == ["team_victim", "team_victim"]
     assert [k.multi_kill for k in lucian] == [None, "double"]
@@ -58,7 +59,7 @@ def test_quadra_caliste_vs_g2():
 def test_quadra_yike_vs_gx_then_caliste_takes_fifth():
     kills, _ = _run("GX_G2_Yike_x4.json")
     assert _series(kills, "Qiyana") == [
-        ("Syndra", None), ("Lucian", "double"), ("Milio", "triple"), ("Poppy", "quadra"),
+        ("Syndra", None), ("Lucian", None), ("Milio", None), ("Poppy", "quadra"),
     ]
     assert _series(kills, "Xayah") == [("MonkeyKing", None)]
 
@@ -67,7 +68,7 @@ def test_caliste_vs_fnc_is_a_triple_not_a_quadra():
     # 1er kill à 11,45 s du 2e : hors fenêtre de 10 s -> la série repart.
     kills, _ = _run("FNC_G2_Caliste_x4.json")
     assert _series(kills, "Kalista") == [
-        ("Ziggs", None), ("Olaf", None), ("Ryze", "double"), ("Shen", "triple"),
+        ("Ziggs", None), ("Olaf", None), ("Ryze", None), ("Shen", "triple"),
     ]
 
 
@@ -136,6 +137,48 @@ def test_unmatched_kill_is_kept_with_low_confidence():
     out += m.feed(_frame("2026-01-01T00:00:09.000Z", {**Z, "1": (1, 0, 0)}))
     assert [(k.killer_champion, k.victim_champion, k.confidence) for k in out] == [("Jayce", None, "low")]
     assert m.unmatched_kills == 1
+
+
+def test_enemy_kill_without_visible_victim_is_kept_as_team_victim():
+    m = FrameKillMatcher(PARTS, "g", "blue")
+    m.feed(_frame("2026-01-01T00:00:00.000Z", Z))
+    out = m.feed(_frame("2026-01-01T00:00:02.000Z", {**Z, "6": (1, 0, 0)}))
+    out += m.flush()
+    assert [(k.killer_champion, k.tracked_team_involvement, k.confidence) for k in out] == [("Milio", "team_victim", "low")]
+
+
+def test_counter_regression_then_catch_up_is_not_double_counted():
+    # observateur en retard : le compteur recule puis revient -> un seul kill
+    m = FrameKillMatcher(PARTS, "g", "blue")
+    out = m.feed(_frame("2026-01-01T00:00:00.000Z", Z))
+    out += m.feed(_frame("2026-01-01T00:00:01.000Z", {**Z, "1": (1, 0, 0), "7": (0, 1, 0)}))
+    out += m.feed(_frame("2026-01-01T00:00:01.500Z", Z))
+    out += m.feed(_frame("2026-01-01T00:00:02.000Z", {**Z, "1": (1, 0, 0), "7": (0, 1, 0)}))
+    out += m.flush()
+    assert len(out) == 1
+
+
+def test_finished_frame_sharing_the_last_millisecond_is_seen():
+    m = FrameKillMatcher(PARTS, "g", "blue")
+    m.feed(_frame("2026-01-01T00:40:39.581Z", Z, "in_game"))
+    m.feed(_frame("2026-01-01T00:40:39.581Z", Z, "finished"))
+    assert m.finished
+
+
+def test_one_label_per_series_on_its_last_kill():
+    # rafale de 3 kills espacés de 4 s, puis un kill isolé 20 s plus tard
+    m = FrameKillMatcher(PARTS, "g", "blue")
+    seq = [("00:00:00", Z)]
+    kda = dict(Z)
+    for i, sec in enumerate((5, 9, 13, 33), 1):
+        kda = {**kda, "1": (i, 0, 0), "7": (0, i, 0)}
+        seq.append((f"00:00:{sec:02d}", dict(kda)))
+    out = []
+    for ts, k in seq:
+        out += m.feed(_frame(f"2026-01-01T{ts}.000Z", k))
+    out += m.flush()
+    assign_multikill_labels(out)
+    assert [k.multi_kill for k in out] == [None, None, "triple", None]
 
 
 def test_pause_and_finish_are_recorded():

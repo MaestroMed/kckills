@@ -174,7 +174,7 @@ async def build_clock(game_ext_id: str, max_minutes: int = 90, step_s: int = 10)
         return None
     anchor_ms = _epoch_ms(frames[0]["rfc460Timestamp"])
     transitions: list[tuple[int, str]] = []
-    seen: set[str] = set()
+    seen: set[tuple[str, str]] = set()
     last_epoch = anchor_ms
 
     def _ingest(frs: list[dict]) -> bool:
@@ -182,12 +182,15 @@ async def build_clock(game_ext_id: str, max_minutes: int = 90, step_s: int = 10)
         finished = False
         for fr in sorted(frs, key=lambda x: x.get("rfc460Timestamp") or ""):
             ts = fr.get("rfc460Timestamp")
-            if not ts or ts in seen:
+            st = fr.get("gameState") or ""
+            # clé (instant, état) : la frame 'finished' partage souvent la
+            # milliseconde de la dernière frame in_game ; après la fin, le feed
+            # ressert ses dernières frames indéfiniment (jamais de 204).
+            if not ts or (ts, st) in seen:
                 continue
-            seen.add(ts)
+            seen.add((ts, st))
             e = _epoch_ms(ts)
             last_epoch = max(last_epoch, e)
-            st = fr.get("gameState") or ""
             if not transitions or transitions[-1][1] != st:
                 transitions.append((e, st))
             finished = finished or st == "finished"
