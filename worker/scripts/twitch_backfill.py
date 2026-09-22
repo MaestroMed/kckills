@@ -126,6 +126,10 @@ async def reconcile_game(game: dict, apply: bool) -> dict:
             continue
         matched_new.add(id(k))
         used.add(o["id"])
+        # L'ancien harvester datait le kill à la fin de sa fenêtre de 10 s :
+        # on garde l'instant exact du feed pour CENTRER le clip, sans toucher
+        # à l'identité de la row en base (event_epoch reste tel quel).
+        PRECISE_EPOCH[o["id"]] = k.event_epoch
         if o.get("victim_champion") != k.victim_champion:
             crossed += 1
         patch: dict = {}
@@ -161,6 +165,8 @@ async def reconcile_game(game: dict, apply: bool) -> dict:
 
 
 _IGN_CACHE: dict[str, str] | None = None
+# row id -> instant exact (ms) du kill selon le harvest frame par frame
+PRECISE_EPOCH: dict[str, int] = {}
 
 
 def _player_igns() -> dict[str, str]:
@@ -176,23 +182,26 @@ def _player_igns() -> dict[str, str]:
 def _sequence_start_ms(kill: dict, game_kills: list[dict]) -> int:
     """Début de la série multi-kill qui se termine sur `kill` (même tueur,
     ≤ 10 s entre deux kills, 30 s pour le 5e) — la fenêtre du clip la couvre."""
+    def ep(k: dict) -> int:
+        return int(PRECISE_EPOCH.get(k["id"]) or k.get("event_epoch") or 0)
+
     same = sorted((k for k in game_kills if k.get("killer_champion") == kill.get("killer_champion")
-                   and k.get("event_epoch") and k["event_epoch"] <= kill["event_epoch"]),
-                  key=lambda k: k["event_epoch"])
-    start = kill["event_epoch"]
+                   and ep(k) and ep(k) <= ep(kill)),
+                  key=ep)
+    start = ep(kill)
     rank = 1
     for prev in reversed(same[:-1] if same and same[-1]["id"] == kill["id"] else same):
         gap = PENTA_GAP_MS if rank == 4 else MULTIKILL_GAP_MS
-        if start - prev["event_epoch"] > gap:
+        if start - ep(prev) > gap:
             break
-        start = prev["event_epoch"]
+        start = ep(prev)
         rank += 1
     return start
 
 
 async def clip_one(kill: dict, game: dict, clock: feed_clock.FeedClock, sync: twitch_sync.SectionSync,
                    vod: twitch_vod.TwitchVod, game_kills: list[dict], apply: bool) -> str:
-    epoch = int(kill["event_epoch"])
+    epoch = int(PRECISE_EPOCH.get(kill["id"]) or kill["event_epoch"])
     gt_wall = round((epoch - clock.anchor_ms) / 1000.0)
     ig = int(clock.ingame_seconds(epoch))
     timing = config.CLIP_TIMING.get(kill.get("multi_kill") or "default", config.CLIP_TIMING["default"])
@@ -279,11 +288,14 @@ async def clip_one(kill: dict, game: dict, clock: feed_clock.FeedClock, sync: tw
 
 # ─── Orchestration par game ─────────────────────────────────────────────────
 
-def _targets(kills: list[dict], scope: set[str]) -> list[dict]:
+def _targets(kills: list[dict], scope: set[str], force: set[str] | None = None) -> list[dict]:
     out = []
     for k in kills:
         st = k.get("status") or ""
         if st == "duplicate" or not k.get("event_epoch"):
+            continue
+        if force and any(k["id"].startswith(f) for f in force):
+            out.append(k)
             continue
         if "missing" in scope and not k.get("clip_url_vertical") and st in MISSING_STATUSES:
             out.append(k)
@@ -307,7 +319,7 @@ async def process_game(game: dict, args, report: dict) -> None:
     grep["pauses_s"] = round(clock.total_paused_s)
     kills = safe_select("kills", KILL_COLS, game_id=game["id"]) or []
     scope = set(args.scope.split(","))
-    targets = _targets(kills, scope)
+    targets = _targets(kills, scope, {x for x in args.force_kills.split(",") if x})
     grep["targets"] = len(targets)
     if not targets:
         return
@@ -363,6 +375,7 @@ async def main() -> None:
     ap.add_argument("--calibrate", action="store_true", help="télécharge + calibre sans clipper")
     ap.add_argument("--apply", action="store_true", help="écrit en base / R2 (défaut : plan seulement)")
     ap.add_argument("--channel", default=twitch_vod.DEFAULT_CHANNEL)
+    ap.add_argument("--force-kills", default="", help="ids (ou préfixes) de kills à re-clipper quoi qu'il arrive")
     args = ap.parse_args()
     matches = SUMMER_2026 if args.summer else [m for m in args.match.split(",") if m]
     only_games = {int(x) for x in args.games.split(",") if x}
