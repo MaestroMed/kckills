@@ -229,6 +229,28 @@ async def build_clock(game_ext_id: str, max_minutes: int = 90, step_s: int = 10)
     return clock
 
 
+_GAME_EXT: dict[str, str | None] = {}
+
+
+def chrono_seconds_for_kill(kill: dict) -> int | None:
+    """Chrono affiché à l'instant du kill, depuis l'horloge du feed EN CACHE
+    (aucun appel au feed). None si l'instant, la game ou l'horloge manque."""
+    epoch, gid = kill.get("event_epoch"), kill.get("game_id")
+    if not epoch or not gid:
+        return None
+    if gid not in _GAME_EXT:
+        try:
+            from services.supabase_client import safe_select
+
+            rows = safe_select("games", "external_id", id=gid) or []
+            _GAME_EXT[gid] = (rows[0] if rows else {}).get("external_id")
+        except Exception:
+            return None
+    ext = _GAME_EXT.get(gid)
+    clock = load_clock(ext) if ext else None
+    return int(clock.ingame_seconds(int(epoch))) if clock else None
+
+
 async def latest_state(game_ext_id: str) -> str | None:
     """État actuel de la game dans le feed (in_game / paused / finished), une
     seule requête. Après la fin, le feed ressert ses dernières frames : une
