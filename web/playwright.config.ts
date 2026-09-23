@@ -17,6 +17,9 @@ export default defineConfig({
   timeout: 60_000,
   expect: { timeout: 15_000 },
   fullyParallel: true,
+  // `next start` à froid sert mal 12 pages lourdes en même temps (délais
+  // dépassés au 1er passage) : 4 workers suffisent (~40 s la suite).
+  workers: 4,
   retries: 0,
   reporter: [["list"]],
   use: {

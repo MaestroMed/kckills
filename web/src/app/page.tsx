@@ -34,7 +34,6 @@ import { HomeRecentClips } from "@/components/HomeRecentClips";
 import { HomeTimelineFeed } from "@/components/timeline/HomeTimelineFeed";
 // QuoteCard import removed — was unused since the QuoteRotator replaced it.
 // HomeQuoteRotator + EraComparisonChart now lazy-loaded via next/dynamic above
-import { AnimatedNumber } from "@/components/AnimatedNumber";
 import { MacronEasterEgg } from "@/components/MacronEasterEgg";
 import { HeroImageCarousel } from "@/components/HeroImageCarousel";
 import { HERO_IMAGES } from "@/lib/hero-images";
@@ -84,10 +83,6 @@ export default async function HomePage() {
       }
     }
   }
-  const heroMorphImages = [...championPickCounts.entries()]
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 6)
-    .map(([name]) => championSplashUrl(name));
   const isEmpty = data.total_matches === 0;
 
   // Wave 13h (2026-05-07) — the four Supabase queries that feed the

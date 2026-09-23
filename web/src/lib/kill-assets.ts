@@ -20,7 +20,6 @@
 import type {
   KillAssetManifestEntry,
   KillAssetsManifest,
-  PublishedKillRow,
 } from "./supabase/kills";
 
 /** Re-export so callers can import everything from one place without

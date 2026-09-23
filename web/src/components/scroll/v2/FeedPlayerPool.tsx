@@ -166,7 +166,6 @@ export function FeedPlayerPool({
   itemHeight,
   muted,
   useLowQuality,
-  quality = "auto",
   isDesktop,
   isWideStage = false,
   cinema = false,

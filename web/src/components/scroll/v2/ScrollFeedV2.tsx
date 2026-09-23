@@ -566,7 +566,6 @@ export function ScrollFeedV2({
     initialIndex,
     onActiveChange: handleActiveChange,
   });
-  const isAtEndOfFeed = activeIndex === visibleItems.length;
 
   // ─── Back button (Vague 4) — popstate → jumpTo ────────────────────
   // Le navigateur a déjà restauré l'URL de l'entrée d'historique ; on

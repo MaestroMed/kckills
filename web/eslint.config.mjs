@@ -17,6 +17,17 @@ export default defineConfig([
       "react-hooks/refs": "warn",
       "react-hooks/purity": "warn",
       "react-hooks/immutability": "warn",
+      // Convention : un paramètre / une variable volontairement inutilisé(e)
+      // (signature d'API, destructuration) commence par « _ ».
+      "@typescript-eslint/no-unused-vars": [
+        "warn",
+        {
+          argsIgnorePattern: "^_",
+          varsIgnorePattern: "^_",
+          caughtErrorsIgnorePattern: "^_",
+          destructuredArrayIgnorePattern: "^_",
+        },
+      ],
     },
   },
   globalIgnores([".next/**", "out/**", "build/**", "next-env.d.ts", "public/**", "docs/**"]),

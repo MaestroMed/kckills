@@ -166,7 +166,7 @@ export function KDAChart({
       durationSeconds ?? 0,
       ...sorted.map((k) => k.game_time_seconds ?? 0),
     );
-    for (const [champion, arr] of points) {
+    for (const [, arr] of points) {
       const final = arr[arr.length - 1];
       if (final && final.t < lastTime) {
         arr.push({ t: lastTime, v: final.v });

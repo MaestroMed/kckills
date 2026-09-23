@@ -800,10 +800,6 @@ export function FeedItemMoment({
   useFeedItemAnalytics({ itemId: item.id, isActive });
   const errState = useFeedItemError(item.id);
   const [shareToast, setShareToast] = useState<string | null>(null);
-  // V3 + V8 — local UI state for the contextual menu + custom share sheet.
-  const [menuOpen, setMenuOpen] = useState(false);
-  const [shareSheetOpen, setShareSheetOpen] = useState(false);
-  const { recordNotInterested } = useNotInterestedStore();
 
   const triggerShare = useCallback(async () => {
     if (typeof window === "undefined") return;

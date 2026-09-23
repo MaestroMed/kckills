@@ -470,25 +470,6 @@ function StatusPill({ status }: { status: string }) {
   );
 }
 
-function StatusPillLarge({ status }: { status: string }) {
-  const palette: Record<string, string> = {
-    pending: "bg-[var(--cyan)]/15 text-[var(--cyan)] border-[var(--cyan)]/40",
-    claimed: "bg-[var(--gold)]/15 text-[var(--gold)] border-[var(--gold)]/40 animate-pulse",
-    succeeded: "bg-[var(--green)]/15 text-[var(--green)] border-[var(--green)]/40",
-    failed: "bg-[var(--red)]/15 text-[var(--red)] border-[var(--red)]/40",
-    cancelled: "bg-[var(--text-muted)]/15 text-[var(--text-muted)] border-[var(--text-muted)]/40",
-  };
-  return (
-    <span
-      className={`rounded-full border px-3 py-1 text-[11px] font-bold uppercase tracking-widest ${
-        palette[status] ?? palette.pending
-      }`}
-    >
-      {status}
-    </span>
-  );
-}
-
 function Timeline({
   createdAt,
   claimedAt,

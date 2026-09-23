@@ -516,7 +516,7 @@ function PickerStep({
   filters,
   setFilters,
   selected,
-  selectedIds,
+  selectedIds: _selectedIds,
   toggle,
   removeAt,
   playerChips,
@@ -775,7 +775,6 @@ function PickerCard({
       <button
         type="button"
         onClick={onClick}
-        aria-pressed={selected}
         role="option"
         aria-selected={selected}
         className={`group relative block aspect-[9/16] w-full overflow-hidden rounded-xl border-2 text-left transition focus:outline-none focus:ring-2 focus:ring-[var(--gold)]/60 ${

@@ -7,7 +7,7 @@ import Link from "next/link";
 import type { Metadata } from "next";
 
 import { loadRealData, getPlayerStats, getCurrentRoster } from "@/lib/real-data";
-import { championSplashUrl, championLoadingUrl, championIconUrl } from "@/lib/constants";
+import { championSplashUrl, championIconUrl } from "@/lib/constants";
 import { PLAYER_PHOTOS } from "@/lib/kc-assets";
 import { ClipReel } from "@/components/ClipReel";
 import { getPlayerByIgn } from "@/lib/supabase/players";

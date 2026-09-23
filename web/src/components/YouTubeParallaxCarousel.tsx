@@ -298,7 +298,7 @@ export function YouTubeParallaxCarousel({ videos }: Props) {
             cursor: dragStateRef.current ? "grabbing" : "grab",
           }}
         >
-          {ribbon.map(({ v, key, i }, idx) => {
+          {ribbon.map(({ v, key }, idx) => {
             const cardWidthCss = `min(${CARD_W_VW}vw, ${CARD_W_MAX}px)`;
             const cardHeightCss = `min(${CARD_W_VW * 0.5625}vw, ${CARD_W_MAX * 0.5625}px)`;
             // Each card is positioned along the track via `left = idx * step`.

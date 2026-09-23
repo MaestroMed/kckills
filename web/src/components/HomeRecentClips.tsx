@@ -1,7 +1,6 @@
 import Link from "next/link";
 import Image from "next/image";
 import { getRecentPublishedKills } from "@/lib/supabase/kills";
-import { TEAM_LOGOS } from "@/lib/kc-assets";
 import { championIconUrl } from "@/lib/constants";
 import { cleanTeamCode } from "@/lib/team-display";
 import { getStaticT } from "@/lib/i18n/server-lang";

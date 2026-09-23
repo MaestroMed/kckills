@@ -71,9 +71,6 @@ export async function GET() {
   const ms2h = 2 * 60 * 60 * 1000;
 
   const t48hAgo = new Date(now - ms48h).toISOString();
-  const t24hAgo = new Date(now - ms24h).toISOString();
-  const t1hAgo = new Date(now - ms1h).toISOString();
-  const t2hAgo = new Date(now - ms2h).toISOString();
 
   // ─── Parallel data pulls ─────────────────────────────────────────
   // We want 48h of "published kills" so we can compute both the
@@ -185,7 +182,6 @@ export async function GET() {
   // Total DLQ count = pending dead-letter rows in the last 48h.
   // (We don't pull resolution_status here — for the headline KPI, we
   // care about volume, not triage state. Detail page handles triage.)
-  const dlqCount = dlqRows.length;
   const dlqPrev24h = dlqTimestamps.filter((ts) => {
     const t = new Date(ts).getTime();
     return !Number.isNaN(t) && now - t >= ms24h && now - t < ms48h;

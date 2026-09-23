@@ -44,7 +44,6 @@ import { useTransition } from "react";
 import { useT } from "@/lib/i18n/use-lang";
 import { m, useReducedMotion } from "motion/react";
 import {
-  Home,
   Users,
   Swords,
   Radio,

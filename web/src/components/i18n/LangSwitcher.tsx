@@ -16,7 +16,7 @@
  */
 
 import { useState, useEffect } from "react";
-import { LANGS, LANG_META, type Lang } from "@/lib/i18n/lang";
+import { LANGS, LANG_META } from "@/lib/i18n/lang";
 import { useLang } from "@/lib/i18n/use-lang";
 import { track } from "@/lib/analytics/track";
 

@@ -53,7 +53,6 @@ function xml(text: string): string {
   return text
     // caractères de contrôle interdits en XML 1.0 (des descriptions IA en
     // base portent des \x03 à la place d'accents : le XML devenait invalide)
-    // eslint-disable-next-line no-control-regex
     .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, "")
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
-import { DEFAULT_PLAYLIST, shufflePlaylist, type BgmTrack } from "@/lib/scroll/bgm-playlist";
+import { DEFAULT_PLAYLIST, shufflePlaylist } from "@/lib/scroll/bgm-playlist";
 import { useT } from "@/lib/i18n/use-lang";
 
 /**

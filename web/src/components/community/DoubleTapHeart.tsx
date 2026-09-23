@@ -61,7 +61,7 @@ export function DoubleTapHeart({
   onDoubleTap,
   onSingleTap,
   onLongPress,
-  isLiked,
+  isLiked: _isLiked,
 }: Props) {
   const [bursts, setBursts] = useState<Burst[]>([]);
   const lastTapRef = useRef<{ time: number; x: number; y: number } | null>(null);

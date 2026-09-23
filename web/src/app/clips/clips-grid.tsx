@@ -8,7 +8,6 @@ import { championIconUrl } from "@/lib/constants";
 import { TEAM_LOGOS } from "@/lib/kc-assets";
 import { Breadcrumb } from "@/components/Breadcrumb";
 import { useCurrentLang, useT } from "@/lib/i18n/use-lang";
-import type { Lang } from "@/lib/i18n/lang";
 
 /**
  * Default poster dimensions for vertical clip thumbnails when the

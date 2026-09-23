@@ -645,7 +645,7 @@ function normalize(row: RawKillSelect): PublishedKillRow {
  */
 export const getPublishedKcKillCount = cache(
   async function getPublishedKcKillCount(
-    opts: { buildTime?: boolean } = {},
+    _opts: { buildTime?: boolean } = {},
   ): Promise<number> {
     try {
       const supabase = createCachedAnonSupabase();
@@ -729,7 +729,7 @@ export async function getPublishedKcKillsPage(
 
 export const getPublishedKills = cache(async function getPublishedKills(
   limit = 50,
-  opts: { buildTime?: boolean } = {},
+  _opts: { buildTime?: boolean } = {},
 ): Promise<PublishedKillRow[]> {
   try {
     const supabase = createCachedAnonSupabase();
@@ -905,7 +905,7 @@ export const getScrollFeedPoolCount = cache(async function getScrollFeedPoolCoun
  */
 export const getCardKills = cache(async function getCardKills(
   limit = 50,
-  opts: { buildTime?: boolean } = {},
+  _opts: { buildTime?: boolean } = {},
 ): Promise<CardKillRow[]> {
   try {
     const supabase = createCachedAnonSupabase();
@@ -954,7 +954,7 @@ export const getCardKills = cache(async function getCardKills(
 export const getRecentPublishedKills = cache(
   async function getRecentPublishedKills(
     limit = 12,
-    opts: { buildTime?: boolean } = {},
+    _opts: { buildTime?: boolean } = {},
   ): Promise<PublishedKillRow[]> {
     try {
       const supabase = createCachedAnonSupabase();
@@ -1382,7 +1382,7 @@ export function isDataOnlyKill(k: PublishedKillRow): boolean {
 /** Get a single published kill by id. */
 export async function getKillById(
   id: string,
-  opts: { buildTime?: boolean } = {},
+  _opts: { buildTime?: boolean } = {},
 ): Promise<PublishedKillRow | null> {
   try {
     // 2026-04-26 cache fix : opt-in cookie-less anon client. Without
@@ -1459,7 +1459,7 @@ export async function getDuplicateKeeperId(id: string): Promise<string | null> {
  */
 export async function getKillsByMatchExternalId(
   matchExternalId: string,
-  opts: { buildTime?: boolean } = {},
+  _opts: { buildTime?: boolean } = {},
 ): Promise<PublishedKillRow[]> {
   try {
     // 2026-04-26 cache fix : opt-in cookie-less anon client. Without

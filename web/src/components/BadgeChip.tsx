@@ -1,4 +1,4 @@
-import { getBadgeDef, type BadgeDef } from "@/lib/badges";
+import { getBadgeDef } from "@/lib/badges";
 
 /**
  * Renders a single badge as a small chip with icon, name, and tooltip.

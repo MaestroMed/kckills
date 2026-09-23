@@ -274,7 +274,7 @@ export default async function MatchupPage({ params }: Props) {
   );
 }
 
-function ChampionPanel({ name, side }: { name: string; side: "left" | "right" }) {
+function ChampionPanel({ name }: { name: string; side: "left" | "right" }) {
   return (
     <Link
       href={`/champion/${encodeURIComponent(name)}`}

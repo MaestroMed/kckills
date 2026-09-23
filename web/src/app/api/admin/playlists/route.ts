@@ -82,7 +82,7 @@ async function loadStored(): Promise<StoredShape> {
   };
 }
 
-export async function GET(request: NextRequest) {
+export async function GET(_request: NextRequest) {
   const admin = await requireAdmin();
   if (!admin.ok) {
     return NextResponse.json({ error: admin.error }, { status: 403 });
