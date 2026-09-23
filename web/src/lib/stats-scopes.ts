@@ -128,6 +128,9 @@ const getTrackedTeamIdAnon = cache(
       .from("teams")
       .select("id")
       .eq("is_tracked", true)
+      // l'équipe suivie la plus ancienne : choix déterministe (KC a eu une
+      // ligne en double ; sans tri, Postgres renvoie un ordre arbitraire)
+      .order("created_at", { ascending: true })
       .limit(1)
       .maybeSingle();
     return (data?.id as string | undefined) ?? null;

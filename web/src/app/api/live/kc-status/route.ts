@@ -59,6 +59,9 @@ async function resolveTrackedTeamId(sb: ReturnType<typeof supabase>): Promise<{ 
     .from("teams")
     .select("id, code")
     .eq("is_tracked", true)
+    // l'équipe suivie la plus ancienne : choix déterministe (KC a eu une
+    // ligne en double ; sans tri, Postgres renvoie un ordre arbitraire)
+    .order("created_at", { ascending: true })
     .limit(1);
   if (error || !data || data.length === 0) return null;
   const row = data[0] as { id?: string; code?: string };
