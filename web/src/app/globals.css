@@ -21,7 +21,10 @@
   --text-primary: #F0E6D2;
   --text-secondary: #A09B8C;
   --text-muted: #7B8DB5;
-  --text-disabled: #3D4A63;
+  /* WCAG AA (spec §2.4 : tous textes >= 4,5:1) — #3D4A63 plafonnait à 2,2:1
+     et sert de texte secondaire dans 74 fichiers. #7586A8 = 4,59:1 sur
+     --bg-elevated (le fond le plus clair), un cran sous --text-muted. */
+  --text-disabled: #7586A8;
   --border-gold: rgba(200, 170, 110, 0.15);
   --border-subtle: rgba(100, 140, 200, 0.1);
   /* ─── Wave 36 — Wide-stage scroll shell tokens ───

@@ -1273,6 +1273,10 @@ export function ScrollFeedV2({
           activeIndex >= Math.max(0, visibleItems.length - 2) && (
             <div
               key="feed-skeleton-tail"
+              // role="feed" n'admet que des articles (axe : aria-required-children)
+              role="article"
+              aria-busy="true"
+              aria-label={t("feed.loading_more")}
               style={{
                 position: "absolute",
                 top: visibleItems.length * itemHeight,
@@ -1289,6 +1293,8 @@ export function ScrollFeedV2({
         {visibleItems.length > 0 && itemHeight > 0 && (
           <div
             key="end-of-feed"
+            role="article"
+            aria-label={t("p_scroll.item_end_eyebrow")}
             style={{
               position: "absolute",
               top:
