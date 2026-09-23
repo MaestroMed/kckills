@@ -166,18 +166,18 @@ async def extract_kills_from_game(
 
     kills.extend(matcher.flush())
     assign_multikill_labels(kills)
-    for k in kills:
-        if k.event_epoch:
-            k.game_time_seconds = max(0, (k.event_epoch - game_start_epoch_ms) // 1000)
 
     # Horloge de la game (pauses) : gratuite, le parcours vient de la voir.
+    clock = None
     if matcher.first_epoch:
         try:
-            feed_clock.save_clock(feed_clock.clock_from_states(
+            clock = feed_clock.clock_from_states(
                 external_game_id, matcher.first_epoch, matcher.states, matcher.last_ts,
-            ))
+            )
+            feed_clock.save_clock(clock)
         except Exception as e:  # jamais bloquant pour le harvest
             log.warn("harvester_clock_save_failed", game_id=external_game_id, error=str(e)[:120])
+    apply_game_time(kills, game_start_epoch_ms, clock)
     if matcher.unmatched_kills:
         log.warn("harvester_unmatched_kills", game_id=external_game_id, n=matcher.unmatched_kills)
 
@@ -677,6 +677,27 @@ class FrameKillMatcher:
             is_first_blood=first_blood,
             multi_kill=None,   # posé par assign_multikill_labels (fin de série connue)
         )]
+
+
+def apply_game_time(kills: list, game_start_epoch_ms: int, clock) -> None:
+    """game_time_seconds = CHRONO affiché en jeu (pauses déduites) quand
+    l'horloge de la game est complète ; sinon temps réel depuis l'ancre
+    (identique en l'absence de pause).
+
+    2026-09-23 : c'était le temps réel. Après une pause de 5 min 30, le site
+    affichait T+40:09 pour un penta à 34:37, et tous les contrôles qui
+    comparent un chrono lu à l'écran à game_time_seconds (QC local du
+    clipper, dérive de l'analyzer, clip_qc, calibrage) se trompaient. La
+    position dans une VOD continue se calcule depuis event_epoch
+    (feed_clock.wall_seconds_for_kill)."""
+    use_clock = clock is not None and clock.end_ms is not None
+    for k in kills:
+        if not k.event_epoch:
+            continue
+        if use_clock:
+            k.game_time_seconds = int(clock.ingame_seconds(int(k.event_epoch)))
+        else:
+            k.game_time_seconds = max(0, (k.event_epoch - game_start_epoch_ms) // 1000)
 
 
 def assign_multikill_labels(kills: list[KillEvent]) -> list[KillEvent]:

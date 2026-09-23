@@ -1589,11 +1589,15 @@ async def run() -> int:
                             ),
                         )
                     else:
+                        # Position dans la VOD = temps RÉEL depuis le début de
+                        # la game (game_time_seconds est le chrono, pauses
+                        # déduites). Sans horloge en cache, les deux coïncident.
+                        from modules.feed_clock import wall_seconds_for_kill
                         urls = await clip_kill(
                             kill_id=kill["id"],
                             youtube_id=yt_id,
                             vod_offset_seconds=offset,
-                            game_time_seconds=int(kill.get("game_time_seconds") or 0),
+                            game_time_seconds=wall_seconds_for_kill(kill) or int(kill.get("game_time_seconds") or 0),
                             multi_kill=kill.get("multi_kill"),
                             killer_champion=kill.get("killer_champion"),
                             victim_champion=kill.get("victim_champion"),

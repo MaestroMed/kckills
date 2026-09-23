@@ -235,8 +235,15 @@ _GAME_EXT: dict[str, str | None] = {}
 def chrono_seconds_for_kill(kill: dict) -> int | None:
     """Chrono affiché à l'instant du kill, depuis l'horloge du feed EN CACHE
     (aucun appel au feed). None si l'instant, la game ou l'horloge manque."""
-    epoch, gid = kill.get("event_epoch"), kill.get("game_id")
-    if not epoch or not gid:
+    epoch = kill.get("event_epoch")
+    clock = clock_for_kill(kill) if epoch else None
+    return int(clock.ingame_seconds(int(epoch))) if clock else None
+
+
+def clock_for_kill(kill: dict) -> FeedClock | None:
+    """Horloge complète en cache de la game du kill (aucun appel au feed)."""
+    gid = kill.get("game_id")
+    if not gid:
         return None
     if gid not in _GAME_EXT:
         try:
@@ -247,8 +254,23 @@ def chrono_seconds_for_kill(kill: dict) -> int | None:
         except Exception:
             return None
     ext = _GAME_EXT.get(gid)
-    clock = load_clock(ext) if ext else None
-    return int(clock.ingame_seconds(int(epoch))) if clock else None
+    return load_clock(ext) if ext else None
+
+
+def wall_seconds_for_kill(kill: dict) -> int | None:
+    """Temps RÉEL depuis la 1re frame du feed à l'instant du kill (pauses
+    comprises). La position dans un live continu (VOD officielle, Twitch) se
+    calcule avec lui, jamais avec le chrono. None sans horloge en cache."""
+    epoch = kill.get("event_epoch")
+    clock = clock_for_kill(kill) if epoch else None
+    return max(0, round((int(epoch) - clock.anchor_ms) / 1000)) if clock else None
+
+
+def paused_before_kill_s(kill: dict) -> float | None:
+    """Durée de pause écoulée avant le kill (None sans horloge en cache)."""
+    epoch = kill.get("event_epoch")
+    clock = clock_for_kill(kill) if epoch else None
+    return clock.paused_before_ms(int(epoch)) / 1000.0 if clock else None
 
 
 async def latest_state(game_ext_id: str) -> str | None:

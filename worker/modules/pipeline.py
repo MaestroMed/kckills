@@ -314,6 +314,13 @@ async def run_for_match(match_external_id: str) -> dict:
                 key=lambda k: int(k.get("game_time_seconds") or 0),
             )
             valid_kills = [k for k in sorted_by_time if int(k.get("game_time_seconds") or 0) > 60]
+            # Le calibrage lit le chrono à « offset + game_time » : juste tant
+            # qu'aucune pause ne précède le kill (sinon position = chrono +
+            # pause). Horloge du feed en cache : sondes avant la 1re pause.
+            from modules.feed_clock import paused_before_kill_s
+            before_pause = [k for k in valid_kills if not (paused_before_kill_s(k) or 0)]
+            if before_pause:
+                valid_kills = before_pause
             if valid_kills:
                 # Pick early, mid, late kills for 3-point calibration
                 n = len(valid_kills)
@@ -356,11 +363,13 @@ async def run_for_match(match_external_id: str) -> dict:
             game_num = game_row.get("game_number", "?")
             overlay_ctx = f"Game {game_num}  {gt_str}"
 
+            from modules.feed_clock import wall_seconds_for_kill
             urls = await clipper.clip_kill(
                 kill_id=kill_row["id"],
                 youtube_id=yt_id,
                 vod_offset_seconds=vod_offset,
-                game_time_seconds=gt,
+                # position = temps réel depuis le début (gt = chrono, pauses déduites)
+                game_time_seconds=wall_seconds_for_kill(kill_row) or gt,
                 multi_kill=kill_row.get("multi_kill"),
                 killer_champion=kill_row.get("killer_champion"),
                 victim_champion=kill_row.get("victim_champion"),
