@@ -246,7 +246,7 @@ export function CompilationBuilder({ pool }: CompilationBuilderProps) {
     } finally {
       setSubmitting(false);
     }
-  }, [submitting, canSubmit, title, description, selected, introText, outroText]);
+  }, [submitting, canSubmit, title, description, selected, introText, outroText, t]);
 
   // ── Status polling ─────────────────────────────────────────────
   const pollTimer = useRef<ReturnType<typeof setInterval> | null>(null);

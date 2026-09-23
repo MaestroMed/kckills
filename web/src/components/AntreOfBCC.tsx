@@ -721,7 +721,7 @@ function ScoutingLabRoom() {
     load();
     const interval = window.setInterval(load, 5 * 60 * 1000);
     return () => { cancelled = true; window.clearInterval(interval); };
-  }, []);
+  }, [t]);
 
   return (
     <RoomFrame

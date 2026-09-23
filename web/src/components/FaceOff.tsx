@@ -576,7 +576,7 @@ function FaceOffResult({
     } catch {
       // Cancelled by user, ignore
     }
-  }, [bundleA, bundleB]);
+  }, [bundleA, bundleB, t]);
 
   return (
     <div className="mx-auto max-w-7xl px-3 md:px-6 pb-16">

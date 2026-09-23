@@ -175,7 +175,7 @@ export function LiveHotNow() {
     } finally {
       setPushBusy(false);
     }
-  }, [hasSubscription, pushBusy, toast]);
+  }, [hasSubscription, pushBusy, toast, t]);
 
   const liveMatchId = state?.liveMatch?.id;
   const onDismiss = useCallback(() => {
