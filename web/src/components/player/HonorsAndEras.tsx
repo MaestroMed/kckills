@@ -71,7 +71,8 @@ export function HonorsAndEras({
                   </h3>
                   <span
                     className="font-data text-[10px] uppercase tracking-[0.2em]"
-                    style={{ color: era.color }}
+                    // couleur d'ère éclaircie : lisible (>= 4,5:1) sur fond sombre
+                    style={{ color: `color-mix(in srgb, ${era.color} 65%, white)` }}
                   >
                     {era.period} · {era.phase}
                   </span>
@@ -85,7 +86,7 @@ export function HonorsAndEras({
                       isTrophy
                         ? "text-[var(--gold)]"
                         : isDrama
-                          ? "text-[var(--red)]"
+                          ? "text-[color-mix(in_srgb,var(--red)_75%,white)]"
                           : "text-white/70"
                     }`}
                     style={{

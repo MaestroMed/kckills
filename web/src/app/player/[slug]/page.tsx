@@ -507,7 +507,7 @@ export default async function PlayerPage({ params }: Props) {
                 )}
               </p>
               {riotStats.linkedAt && (
-                <p className="text-[10px] text-[var(--text-muted)] opacity-70">
+                <p className="text-[10px] text-[var(--text-muted)]">
                   {t("p_player.linked_on")}{" "}
                   {formatDate(lang, riotStats.linkedAt, {
                     day: "numeric",

@@ -6,11 +6,21 @@ import { expect, test } from "@playwright/test";
  * pages publiques clés. Seules les violations « serious » et « critical »
  * font échouer ; le rapport complet s'affiche dans la sortie du test.
  */
-const PAGES = ["/", "/scroll", "/clips", "/matches", "/players"];
+const PAGES = ["/", "/scroll", "/clips", "/matches", "/players", "/player/Caliste", "@kill", "@match"];
+
+// Pages dynamiques : un kill et un match réels, tirés du sitemap.
+async function resolvePath(path: string, request: import("@playwright/test").APIRequestContext): Promise<string> {
+  if (!path.startsWith("@")) return path;
+  const xml = await (await request.get("/sitemap.xml")).text();
+  const re = path === "@kill" ? /<loc>https?:\/\/[^<]+?(\/kill\/[0-9a-f-]{36})<\/loc>/ : /<loc>https?:\/\/[^<]+?(\/match\/[^<]+)<\/loc>/;
+  const m = xml.match(re);
+  expect(m, `${path} introuvable dans le sitemap`).not.toBeNull();
+  return m![1];
+}
 
 for (const path of PAGES) {
-  test(`a11y ${path}`, async ({ page }) => {
-    await page.goto(path);
+  test(`a11y ${path}`, async ({ page, request }) => {
+    await page.goto(await resolvePath(path, request));
     await page.waitForLoadState("domcontentloaded");
     await page.waitForTimeout(1500);
     const results = await new AxeBuilder({ page })
