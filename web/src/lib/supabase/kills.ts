@@ -12,7 +12,7 @@
 
 import "server-only";
 import { cache } from "react";
-import { createCachedAnonSupabase, rethrowIfDynamic } from "./server";
+import { createCachedAnonSupabase, createServiceSupabase, rethrowIfDynamic } from "./server";
 
 export type LanePhase = "early" | "mid" | "late";
 export type FightType =
@@ -1407,6 +1407,41 @@ export async function getKillById(
   } catch (err) {
     rethrowIfDynamic(err);
     console.warn("[supabase/kills] getKillById threw:", err);
+    return null;
+  }
+}
+
+/**
+ * Kill neutralisé comme doublon -> id du kill conservé et publié (3 liens au
+ * plus). 1 611 kills ont été neutralisés le 23/09/2026 (même game importée
+ * par gol.gg ET le feed) : leurs anciennes URL, déjà partagées ou indexées,
+ * redirigent vers le clip conservé au lieu d'afficher « introuvable ».
+ *
+ * La RLS ne laisse lire que les kills publiés : lecture par le client
+ * service (serveur uniquement), limitée à status / is_duplicate_of.
+ */
+export async function getDuplicateKeeperId(id: string): Promise<string | null> {
+  const sb = createServiceSupabase();
+  if (!sb) return null;
+  try {
+    let cur = id;
+    for (let hop = 0; hop <= 3; hop++) {
+      const { data, error } = await sb
+        .from("kills")
+        .select("status, publication_status, is_duplicate_of")
+        .eq("id", cur)
+        .maybeSingle();
+      if (error || !data) return null;
+      const published =
+        data.publication_status === "published" ||
+        (data.publication_status == null && data.status === "published");
+      if (hop > 0 && published) return cur;
+      if (data.status !== "duplicate" || !data.is_duplicate_of) return null;
+      cur = data.is_duplicate_of as string;
+    }
+    return null;
+  } catch (err) {
+    console.warn("[supabase/kills] getDuplicateKeeperId threw:", err);
     return null;
   }
 }

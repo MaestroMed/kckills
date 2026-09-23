@@ -1,10 +1,10 @@
-import { notFound } from "next/navigation";
+import { notFound, permanentRedirect } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
 import { loadRealData, displayRole } from "@/lib/real-data";
 import { championIconUrl } from "@/lib/constants";
 import { computeKillScore } from "@/lib/feed-algorithm";
-import { getKillById, getKillsByMatchExternalId, getPublishedKills } from "@/lib/supabase/kills";
+import { getDuplicateKeeperId, getKillById, getKillsByMatchExternalId, getPublishedKills } from "@/lib/supabase/kills";
 import { createCachedAnonSupabase, rethrowIfDynamic } from "@/lib/supabase/server";
 import { KillInteractions } from "./interactions";
 import { KillCinematicView } from "@/components/kill/KillCinematicView";
@@ -231,6 +231,13 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     }
   }
 
+  // Doublon neutralisé : la redirection part dès les métadonnées (vrai 308
+  // pour les robots qui attendent le <head> avant tout envoi).
+  if (isUuid(id)) {
+    const keeper = await getDuplicateKeeperId(id);
+    if (keeper) permanentRedirect(`/kill/${keeper}`);
+  }
+
   const data = loadRealData();
   const kills = buildLegacyKillIndex(data);
   const kill = kills.find((k) => k.id === id);
@@ -422,6 +429,12 @@ export default async function KillDetailPage({ params }: Props) {
         </>
       );
     }
+  }
+
+  // Doublon neutralisé (même kill importé deux fois) : 308 vers le clip conservé.
+  if (isUuid(id)) {
+    const keeper = await getDuplicateKeeperId(id);
+    if (keeper) permanentRedirect(`/kill/${keeper}`);
   }
 
   const data = loadRealData();
