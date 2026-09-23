@@ -30,6 +30,7 @@ import {
   type LiveKillRow,
 } from "@/lib/supabase/live";
 import { getNextMatch } from "@/lib/next-match";
+import { fetchNextKcMatch } from "@/lib/next-match-server";
 import { getServerT } from "@/lib/i18n/server-lang";
 import { formatDate } from "@/lib/i18n/lang";
 import { LiveScroll } from "./LiveScroll";
@@ -62,7 +63,9 @@ export default async function LivePage() {
     // sorties (scroll / historique). Le jour de match, cette branche
     // n'est jamais atteinte — LiveScroll reste inchangé.
     const { lang, t } = await getServerT();
-    const next = getNextMatch();
+    // Calendrier LoL Esports réel (LEC, Worlds, MSI, First Stand) ; le
+    // registre statique (arrêté en mai 2026) ne sert plus que de repli.
+    const next = (await fetchNextKcMatch()) ?? getNextMatch();
     return (
       <div className="mx-auto max-w-2xl px-4 py-16 text-center">
         <p className="inline-flex items-center gap-2 rounded-full border border-[var(--border-subtle)] bg-[var(--bg-surface)] px-3.5 py-1.5 font-data text-[10px] uppercase tracking-[0.3em] text-[var(--text-muted)]">
