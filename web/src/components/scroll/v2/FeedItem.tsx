@@ -41,6 +41,7 @@ import { LongPressMenu } from "./LongPressMenu";
 import { ShareSheet } from "./ShareSheet";
 import { useNotInterestedStore } from "./hooks/useNotInterestedStore";
 import { useT } from "@/lib/i18n/use-lang";
+import { CANONICAL_ORIGIN } from "@/lib/site-url";
 
 interface SharedFeedItemProps {
   index: number;
@@ -485,7 +486,7 @@ export function FeedItemVideo({
           shareUrl={
             typeof window !== "undefined"
               ? `${window.location.origin}/kill/${item.id}`
-              : `https://kckills.com/kill/${item.id}`
+              : `${CANONICAL_ORIGIN}/kill/${item.id}`
           }
         />
       )}

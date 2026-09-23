@@ -7,6 +7,7 @@ import { ClipReel } from "@/components/ClipReel";
 import { PortraitCubeMorph } from "@/components/PortraitCubeMorph";
 import { getClipsFiltered } from "@/lib/supabase/clips";
 import { getStaticT } from "@/lib/i18n/server-lang";
+import { SITE_URL } from "@/lib/site-url";
 
 /**
  * Safe decode for route params. Next already decodes params once —
@@ -96,7 +97,7 @@ export default async function ChampionPage({ params }: Props) {
     name: `${champ} — Plays Karmine Corp`,
     description: `Tous les kills LEC du champion ${champ} côté KC.`,
     inLanguage: "fr-FR",
-    isPartOf: { "@type": "WebSite", name: "KCKILLS", url: "https://kckills.com" },
+    isPartOf: { "@type": "WebSite", name: "KCKILLS", url: SITE_URL },
     image: championSplashUrl(champ),
     about: {
       "@type": "VideoGame",
@@ -111,7 +112,7 @@ export default async function ChampionPage({ params }: Props) {
         .map((k, i) => ({
           "@type": "ListItem",
           position: i + 1,
-          url: `https://kckills.com/kill/${k.id}`,
+          url: `${SITE_URL}/kill/${k.id}`,
         })),
     },
   };

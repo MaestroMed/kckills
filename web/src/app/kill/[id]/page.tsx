@@ -15,6 +15,7 @@ import { JsonLd, breadcrumbLD } from "@/lib/seo/jsonld";
 import { getServerT } from "@/lib/i18n/server-lang";
 import { cleanTeamCode } from "@/lib/team-display";
 import type { Metadata } from "next";
+import { SITE_URL } from "@/lib/site-url";
 
 // ISR: pre-render the top N clips at build time, regenerate every 10 min
 // so freshly-rated kills bubble up without a deploy.
@@ -274,7 +275,7 @@ export default async function KillDetailPage({ params }: Props) {
       // Prefer the manifest URLs over the legacy columns so freshly-
       // re-encoded clips (worker bumps the version) get indexed
       // immediately on next ISR pass.
-      const canonicalUrl = `https://kckills.com/kill/${id}`;
+      const canonicalUrl = `${SITE_URL}/kill/${id}`;
       const ldHorizontalUrl = pickAssetUrl(kill, "horizontal");
       const ldThumbnailUrl =
         pickAssetUrl(kill, "thumbnail") ?? pickAssetUrl(kill, "og_image") ?? undefined;
@@ -310,10 +311,10 @@ export default async function KillDetailPage({ params }: Props) {
         publisher: {
           "@type": "Organization",
           name: "KCKILLS",
-          url: "https://kckills.com",
+          url: SITE_URL,
           logo: {
             "@type": "ImageObject",
-            url: "https://kckills.com/icons/icon-512x512.png",
+            url: `${SITE_URL}/icons/icon-512x512.png`,
           },
         },
         ...(kill.rating_count > 0 && kill.avg_rating != null

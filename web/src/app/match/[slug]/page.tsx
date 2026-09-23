@@ -22,6 +22,7 @@ import { GameSection } from "@/components/match/GameSection";
 import { FullKillsGrid } from "@/components/match/FullKillsGrid";
 import { RelatedStrip } from "@/components/match/RelatedStrip";
 import { MatchTimeline } from "./MatchTimeline";
+import { SITE_URL } from "@/lib/site-url";
 
 /**
  * /match/[slug] — premium Match Replay Viewer (Wave 30d).
@@ -408,7 +409,7 @@ function buildSportsEventLd({
   oppName: string;
   backdropUrl: string | null;
 }): Record<string, unknown> {
-  const url = `https://kckills.com/match/${match.externalId}`;
+  const url = `${SITE_URL}/match/${match.externalId}`;
   return {
     "@context": "https://schema.org",
     "@type": "SportsEvent",
@@ -430,7 +431,7 @@ function buildSportsEventLd({
     homeTeam: {
       "@type": "SportsTeam",
       name: "Karmine Corp",
-      url: "https://kckills.com",
+      url: SITE_URL,
     },
     awayTeam: {
       "@type": "SportsTeam",

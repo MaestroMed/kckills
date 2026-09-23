@@ -34,6 +34,7 @@ import { HeadToHead } from "@/components/player/HeadToHead";
 import { ERAS, type Era } from "@/lib/eras";
 import { getStaticT } from "@/lib/i18n/server-lang";
 import { formatDate } from "@/lib/i18n/lang";
+import { SITE_URL } from "@/lib/site-url";
 
 /**
  * Safe decode for route params. Next already decodes params once —
@@ -278,18 +279,18 @@ export default async function PlayerPage({ params }: Props) {
   // ─── JSON-LD ──────────────────────────────────────────────────────────
   const personNode = {
     "@type": "Person",
-    "@id": `https://kckills.com/player/${encodeURIComponent(name)}#person`,
+    "@id": `${SITE_URL}/player/${encodeURIComponent(name)}#person`,
     name,
     alternateName: `KC ${name}`,
-    url: `https://kckills.com/player/${encodeURIComponent(name)}`,
-    image: photo ? `https://kckills.com${photo}` : undefined,
+    url: `${SITE_URL}/player/${encodeURIComponent(name)}`,
+    image: photo ? `${SITE_URL}${photo}` : undefined,
     jobTitle: "Pro Player",
     description: `${name} — joueur Karmine Corp en LEC. ${stats.kills} kills, ${stats.deaths} deaths, ${stats.assists} assists sur ${stats.gamesPlayed} games.`,
     memberOf: {
       "@type": "SportsTeam",
       name: "Karmine Corp",
       alternateName: ["KC", "KCorp"],
-      url: "https://kckills.com",
+      url: SITE_URL,
       sport: "League of Legends",
     },
     knowsAbout: stats.champions.slice(0, 5).map((c) => c.name),
@@ -302,7 +303,7 @@ export default async function PlayerPage({ params }: Props) {
             itemListElement: realKills.slice(0, 10).map((k, i) => ({
               "@type": "ListItem",
               position: i + 1,
-              url: `https://kckills.com/kill/${k.id}`,
+              url: `${SITE_URL}/kill/${k.id}`,
             })),
           },
         }
@@ -312,7 +313,7 @@ export default async function PlayerPage({ params }: Props) {
   const playerJsonLd = {
     "@context": "https://schema.org",
     "@type": "ProfilePage",
-    url: `https://kckills.com/player/${encodeURIComponent(name)}`,
+    url: `${SITE_URL}/player/${encodeURIComponent(name)}`,
     name: `${name} — KCKILLS`,
     inLanguage: "fr-FR",
     mainEntity: personNode,

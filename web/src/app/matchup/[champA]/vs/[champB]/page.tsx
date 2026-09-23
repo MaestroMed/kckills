@@ -8,6 +8,7 @@ import { PortraitCubeMorph } from "@/components/PortraitCubeMorph";
 import { getClipsFiltered } from "@/lib/supabase/clips";
 import { Breadcrumb } from "@/components/Breadcrumb";
 import { getStaticT } from "@/lib/i18n/server-lang";
+import { SITE_URL } from "@/lib/site-url";
 
 /**
  * Safe decode for route params. Next already decodes params once —
@@ -110,14 +111,14 @@ export default async function MatchupPage({ params }: Props) {
     name: `${a} vs ${b} — Match-up KC`,
     description: `Tous les clips de la confrontation ${a} contre ${b} côté Karmine Corp.`,
     inLanguage: "fr-FR",
-    isPartOf: { "@type": "WebSite", name: "KCKILLS", url: "https://kckills.com" },
+    isPartOf: { "@type": "WebSite", name: "KCKILLS", url: SITE_URL },
     mainEntity: {
       "@type": "ItemList",
       numberOfItems: allClips.length,
       itemListElement: allClips.slice(0, 12).map((k, i) => ({
         "@type": "ListItem",
         position: i + 1,
-        url: `https://kckills.com/kill/${k.id}`,
+        url: `${SITE_URL}/kill/${k.id}`,
       })),
     },
   };

@@ -18,6 +18,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { deriveActorRole, logAdminAction, requireAdmin } from "@/lib/admin/audit";
+import { CANONICAL_ORIGIN } from "@/lib/site-url";
 
 interface PushBody {
   kill_id?: string;
@@ -86,7 +87,7 @@ export async function POST(request: NextRequest) {
   const embed = {
     title: `★ ${kill.killer_champion} → ${kill.victim_champion}`,
     description: tags ? `${tags}\n\n${desc}` : desc,
-    url: `https://kckills.com/scroll?kill=${kill.id}`,
+    url: `${CANONICAL_ORIGIN}/scroll?kill=${kill.id}`,
     color: 0xC8AA6E,
     fields: [
       { name: "Score", value: `${scoreStr}/10`, inline: true },
