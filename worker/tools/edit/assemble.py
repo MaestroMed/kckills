@@ -33,6 +33,13 @@ SLOW = 0.5               # facteur de la slow-mo
 ENC = ["-c:v", "h264_nvenc", "-preset", "p5", "-cq", "20", "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "160k", "-ar", "48000"]
 
 
+# Sortie finale en 30 i/s CONSTANTS : la concaténation par copie laisse des sauts
+# d'horodatage aux jointures (ffprobe annonçait 240 i/s) — TikTok et certains
+# lecteurs saccadent sur ce VFR. Un réencodage NVENC de 60 s coûte ~5 s.
+CFR_VIDEO = ["-vf", "fps=30", "-fps_mode", "cfr", "-r", "30",
+             "-c:v", "h264_nvenc", "-preset", "p5", "-cq", "19", "-pix_fmt", "yuv420p"]
+
+
 def run(cmd):
     r = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace")
     if r.returncode != 0:
@@ -65,14 +72,19 @@ def src_fps(path):
 
 
 def overlays(shot, t0=0.05):
-    """pseudo (pop-in alpha + glissement) + tag or."""
+    """pseudo (pop-in alpha + glissement) + tag or.
+
+    Zones sûres TikTok (1080x1920) : le bas (~25 %) porte légende + nom du son,
+    la colonne droite (~130 px) les boutons. Pseudo à 60 %, palier à 66,5 % de
+    la hauteur, centrés : lisibles au-dessus de l'interface (V2 : 70-81 %,
+    à moitié masqués par la légende)."""
     vf = []
     if shot.get("label"):
         vf.append(f"drawtext=fontfile='{FONT_OSWALD}':text='{esc(shot['label'])}':fontsize=118:fontcolor=white:borderw=7:bordercolor=black:"
-                  f"x=(w-text_w)/2:y='h*0.70+24*(1-min(1,max(0,(t-{t0})/0.12)))':alpha='min(1,max(0,(t-{t0})/0.08))'")
+                  f"x=(w-text_w)/2:y='h*0.60+24*(1-min(1,max(0,(t-{t0})/0.12)))':alpha='min(1,max(0,(t-{t0})/0.08))'")
     if shot.get("tag"):
         vf.append(f"drawtext=fontfile='{FONT_IMPACT}':text='{esc(shot['tag'])}':fontsize=84:fontcolor={GOLD}:borderw=5:bordercolor=black:"
-                  f"x=(w-text_w)/2:y='h*0.77+24*(1-min(1,max(0,(t-{t0+0.06})/0.12)))':alpha='min(1,max(0,(t-{t0+0.06})/0.08))'")
+                  f"x=(w-text_w)/2:y='h*0.665+24*(1-min(1,max(0,(t-{t0+0.06})/0.12)))':alpha='min(1,max(0,(t-{t0+0.06})/0.08))'")
     return vf
 
 
@@ -186,9 +198,9 @@ def main(plan_path, out_path):
         caster = (f"[0:a]volume={cdb}dB[c];[1:a][c]amix=inputs=2:duration=first:dropout_transition=0,loudnorm=I=-14:TP=-1.5:LRA=9[a]"
                   if cdb is not None else "[1:a]loudnorm=I=-14:TP=-1.5:LRA=9[a]")
         run(["ffmpeg", "-y", "-hide_banner", "-loglevel", "error", "-i", concat, "-ss", f"{off:.3f}", "-i", music,
-             "-filter_complex", caster, "-map", "0:v", "-map", "[a]", "-c:v", "copy", "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart", "-shortest", out_path])
+             "-filter_complex", caster, "-map", "0:v", "-map", "[a]", *CFR_VIDEO, "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart", "-shortest", out_path])
     else:
-        run(["ffmpeg", "-y", "-hide_banner", "-loglevel", "error", "-i", concat, "-af", "loudnorm=I=-14:TP=-1.5:LRA=9", "-c:v", "copy", "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart", out_path])
+        run(["ffmpeg", "-y", "-hide_banner", "-loglevel", "error", "-i", concat, "-af", "loudnorm=I=-14:TP=-1.5:LRA=9", *CFR_VIDEO, "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart", out_path])
     dur = float(subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", out_path], capture_output=True, text=True).stdout.strip() or 0)
     shutil.rmtree(tmp, ignore_errors=True)
     print(f"OK {out_path} — {dur:.1f}s, {len(parts)} segments")
