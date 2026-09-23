@@ -951,3 +951,19 @@ export function getEraById(id: string): Era | undefined {
 export function getErasSortedByDate(): Era[] {
   return [...ERAS].sort((a, b) => a.dateStart.localeCompare(b.dateStart));
 }
+
+/**
+ * Badge d'une ère à l'instant `nowMs`, calculé depuis ses dates : "upcoming"
+ * avant le début, "live" jusqu'au dernier jour inclus, rien ensuite.
+ * `era.badge` (écrit à la main) ne sert plus que de repli pour le rendu
+ * serveur — sinon « À VENIR » restait affiché sur les Worlds pendant le
+ * tournoi, jusqu'à la prochaine édition du fichier + redéploiement.
+ */
+export function eraBadge(era: Era, nowMs: number): "live" | "upcoming" | null {
+  const start = Date.parse(`${era.dateStart}T00:00:00Z`);
+  const end = Date.parse(`${era.dateEnd}T23:59:59Z`);
+  if (Number.isNaN(start) || Number.isNaN(end)) return era.badge ?? null;
+  if (nowMs < start) return "upcoming";
+  if (nowMs <= end) return "live";
+  return null;
+}
