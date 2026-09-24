@@ -3,6 +3,7 @@ import { Buffer } from "node:buffer";
 import { timingSafeEqual } from "node:crypto";
 import { SignJWT } from "jose";
 import { logAdminAction } from "@/lib/admin/audit";
+import { verifyAdminCookie } from "@/lib/admin/session";
 import { rateLimit } from "@/lib/rate-limit";
 
 /**
@@ -128,14 +129,19 @@ export async function POST(request: NextRequest) {
 
 /** DELETE /api/admin/login — logout */
 export async function DELETE(request: NextRequest) {
+  // logAdminAction écrit via le service role : on n'audite que la sortie
+  // d'une vraie session, sinon un DELETE anonyme remplirait admin_actions.
+  const hadSession = await verifyAdminCookie(request.cookies.get("kc_admin")?.value);
   const res = NextResponse.json({ ok: true });
   res.cookies.delete("kc_admin");
-  await logAdminAction({
-    action: "auth.logout",
-    entityType: "auth",
-    actorLabel: "admin",
-    actorRole: "token",
-    request,
-  });
+  if (hadSession) {
+    await logAdminAction({
+      action: "auth.logout",
+      entityType: "auth",
+      actorLabel: "admin",
+      actorRole: "token",
+      request,
+    });
+  }
   return res;
 }
