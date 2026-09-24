@@ -356,15 +356,16 @@ export function Navbar() {
                   <DiscordIcon className="h-4.5 w-4.5" />
                 </Link>
               )}
-              {/* Header 2.0 — LE CTA signature : pas de bouton, juste le mot
-                  « SCROLL » en lettrage varsity collé, gros contours, glow
-                  néon 80s au hover. */}
+              {/* CTA « Scroll » : bouton or standard, le même que le CTA
+                  principal du hero (le lettrage varsity « sticker » d'août
+                  a été retiré le 24/09/2026 à la demande de Mehdi). */}
               <Link
                 href="/scroll"
-                className="scroll-wordmark rounded-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[var(--gold)]"
+                className="inline-flex h-9 items-center gap-2 rounded-lg bg-[var(--gold)] px-4 font-display text-xs font-black uppercase tracking-widest text-[var(--bg-primary)] transition-colors hover:bg-[var(--gold-bright)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--gold)]"
                 aria-label={t("nav.cta_scroll_kills")}
               >
-                <ScrollWordmark label={t("nav.scroll")} />
+                <PlayIcon className="h-3 w-3" />
+                {t("nav.scroll")}
               </Link>
             </div>
 
@@ -481,11 +482,12 @@ export function Navbar() {
                 </Link>
                 <Link
                   href="/scroll"
-                  className="scroll-wordmark flex-1 items-center justify-center py-1"
+                  className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-[var(--gold)] py-2.5 font-display text-sm font-black uppercase tracking-widest text-[var(--bg-primary)]"
                   aria-label={t("nav.cta_scroll_kills")}
                   onClick={() => setMobileOpen(false)}
                 >
-                  <ScrollWordmark label={t("nav.scroll")} />
+                  <PlayIcon className="h-3.5 w-3.5" />
+                  {t("nav.scroll")}
                 </Link>
               </div>
             </div>
@@ -504,41 +506,10 @@ function DiscordIcon({ className = "" }: { className?: string }) {
   );
 }
 
-/**
- * ScrollWordmark — le mot en lettrage varsity, effet sticker : gros
- * contour crème (découpe « collée »), contour navy, lettres or. Trois
- * couches de <text> empilées, paint-order stroke → les contours partent
- * vers l'extérieur, façon lettrage cousu.
- */
-function ScrollWordmark({ label, large = false }: { label: string; large?: boolean }) {
-  const word = label.toUpperCase();
+function PlayIcon({ className = "" }: { className?: string }) {
   return (
-    <svg
-      viewBox="0 0 180 44"
-      className={`scroll-wordmark-svg ${large ? "scroll-wordmark-svg--lg" : ""}`}
-      aria-hidden
-      xmlns="http://www.w3.org/2000/svg"
-    >
-      <defs>
-        <linearGradient id="scroll-wm-gold" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" stopColor="#F5E7C4" />
-          <stop offset="0.45" stopColor="#DcbC7d" />
-          <stop offset="0.55" stopColor="#C8AA6E" />
-          <stop offset="1" stopColor="#96702f" />
-        </linearGradient>
-      </defs>
-      {/* couche 1 — gros contour crème, la découpe sticker */}
-      <text x="90" y="33" textAnchor="middle" className="scroll-wordmark-text" stroke="#F0E6D2" strokeWidth="9" strokeLinejoin="round" fill="none">
-        {word}
-      </text>
-      {/* couche 2 — contour navy épais */}
-      <text x="90" y="33" textAnchor="middle" className="scroll-wordmark-text" stroke="#0A1428" strokeWidth="4.5" strokeLinejoin="round" fill="none">
-        {word}
-      </text>
-      {/* couche 3 — lettres or */}
-      <text x="90" y="33" textAnchor="middle" className="scroll-wordmark-text" fill="url(#scroll-wm-gold)" stroke="#55401d" strokeWidth="0.75">
-        {word}
-      </text>
+    <svg className={className} fill="currentColor" viewBox="0 0 24 24" aria-hidden>
+      <path d="M8 5v14l11-7z" />
     </svg>
   );
 }

@@ -37,13 +37,9 @@ import { HeroImageCarousel } from "@/components/HeroImageCarousel";
 import { HERO_IMAGES } from "@/lib/hero-images";
 import { NextMatchOverlay } from "@/components/NextMatchOverlay";
 import { PageViewTracker } from "@/components/analytics/PageViewTracker";
-// Scroll Vivant grid — resurrected 2026-07-05 (Vague 3 of the
-// award-winning plan) as the homepage marquee feature. Deleted
-// 2026-04-20 as a "dead prototype" because its data dimensions were
-// never populated; migrations 084 (deterministic time buckets) + 087
-// (aligned WHERE) fixed the starvation. Desktop = full 2D engine,
-// mobile = lightweight snap row, <4 cells = renders nothing.
-import { HomeGridSection } from "@/components/home/HomeGridSection";
+// Scroll Vivant (HomeGridSection) retiré de l'accueil le 24/09/2026 :
+// trop de cases vides tant que la grille n'est pas finie (Mehdi). Le
+// composant reste dans components/home/ pour la refonte.
 
 // 2026-08-12 — code mort supprimé : buildHeroClips() + YOUTUBE_HERO_CLIPS.
 // La fonction exécutait loadHeroVideos() + getPublishedKills(5) côté
@@ -246,14 +242,6 @@ export default async function HomePage() {
           <HomeRecentClips />
         </Suspense>
       </HomeTimelineFeed>
-
-      {/* ═══ SCROLL VIVANT — la grille des kills ════════════════════════
-          2026-09-24 (accueil « clips d'abord ») : passe APRÈS la frise et
-          les clips récents. Le « Kill of the week » a quitté cette place :
-          le clip de la semaine ouvre désormais le hero (HeroClip). */}
-      <Suspense fallback={<SectionSkeleton size="lg" label={t("p_grid.heading")} />}>
-        <HomeGridSection />
-      </Suspense>
 
       {/* ═══ DISCOVERY STRIP — 3 curated entry points to go deeper ═════ */}
       <section className="max-w-7xl mx-auto px-4 md:px-6 py-6">

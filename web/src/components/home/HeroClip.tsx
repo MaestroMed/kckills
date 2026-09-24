@@ -73,26 +73,14 @@ export async function HeroClip() {
   return (
     <Link
       href={`/scroll?kill=${kill.id}`}
-      className="group relative flex overflow-hidden rounded-2xl border border-[var(--gold)]/35 bg-black/60 backdrop-blur-md transition-all hover:border-[var(--gold)]/70 md:block"
+      className="group relative flex overflow-hidden rounded-xl border border-[var(--gold)]/20 bg-black/55 backdrop-blur-md transition-colors hover:border-[var(--gold)]/50"
     >
-      <div className="relative aspect-[9/16] w-28 shrink-0 overflow-hidden md:aspect-[4/5] md:w-full">
+      {/* Vignette verticale compacte (24/09 : « plus subtil », la grande
+          carte 4:5 prenait la moitié du hero sur desktop). */}
+      <div className="relative aspect-[9/16] w-24 shrink-0 overflow-hidden">
         <HeroClipPlayer src={kill.clip_url_vertical_low ?? kill.clip_url_vertical} poster={poster} alt={alt} />
-        <div className="absolute inset-x-0 top-0 hidden items-center justify-between p-3 md:flex">
-          {kill.multi_kill ? (
-            <span className="rounded-md bg-[var(--orange)] px-2 py-0.5 font-data text-[10px] font-black uppercase tracking-widest text-black">
-              {kill.multi_kill}
-            </span>
-          ) : (
-            <span />
-          )}
-          {kill.highlight_score != null && (
-            <span className="rounded-md bg-black/70 px-2 py-0.5 font-data text-xs font-black text-[var(--gold)]">
-              {kill.highlight_score.toFixed(1)}
-            </span>
-          )}
-        </div>
         <div className="absolute inset-0 flex items-center justify-center md:hidden">
-          <span className="flex h-10 w-10 items-center justify-center rounded-full border border-[var(--gold)]/60 bg-black/50">
+          <span className="flex h-9 w-9 items-center justify-center rounded-full border border-[var(--gold)]/60 bg-black/50">
             <svg className="h-4 w-4 translate-x-0.5 text-[var(--gold)]" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
               <path d="M8 5v14l11-7z" />
             </svg>
@@ -100,18 +88,23 @@ export async function HeroClip() {
         </div>
       </div>
 
-      <div className="flex min-w-0 flex-1 flex-col justify-center gap-1.5 p-4 md:absolute md:inset-x-0 md:bottom-0 md:bg-gradient-to-t md:from-black md:via-black/80 md:to-transparent md:pt-16">
-        <span className="font-data text-[10px] font-bold uppercase tracking-[0.3em] text-[var(--gold)]">
+      <div className="flex min-w-0 flex-1 flex-col justify-center gap-1 px-4 py-3">
+        <span className="flex items-center gap-2 font-data text-[10px] font-bold uppercase tracking-[0.3em] text-[var(--gold)]">
           {t(pick.labelKey)}
+          {kill.multi_kill && (
+            <span className="rounded bg-[var(--orange)] px-1.5 py-px text-[9px] font-black tracking-widest text-black">
+              {kill.multi_kill}
+            </span>
+          )}
         </span>
-        <p className="font-display text-lg font-black leading-tight text-white md:text-2xl">{title}</p>
+        <p className="font-display text-base font-black leading-tight text-white">{title}</p>
         {isDescriptionClean(kill.ai_description) && (
-          <p className="line-clamp-2 text-xs italic text-white/80 md:text-sm">« {kill.ai_description} »</p>
+          <p className="line-clamp-2 text-xs italic text-white/75">« {kill.ai_description} »</p>
         )}
         <p className="font-data text-[10px] uppercase tracking-widest text-[var(--text-muted)]">
           {[opponent ? `vs ${opponent}` : null, date, `T+${chrono}`].filter(Boolean).join(" · ")}
         </p>
-        <span className="mt-1 inline-flex items-center gap-1.5 font-display text-xs font-bold uppercase tracking-widest text-[var(--gold)] group-hover:text-[var(--gold-bright)]">
+        <span className="inline-flex items-center gap-1.5 font-display text-[11px] font-bold uppercase tracking-widest text-[var(--gold)] group-hover:text-[var(--gold-bright)]">
           {t("p_home.hero_watch_scroll")} →
         </span>
       </div>

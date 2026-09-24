@@ -110,8 +110,8 @@ export async function HeroLiveStats({ allMatches }: HeroLiveStatsProps) {
 }
 
 /**
- * Skeleton — mêmes dimensions que les cartes réelles (clip : 9:16 étroit sur
- * mobile, 4:5 pleine largeur au-delà de md ; dernier match ~60 px) pour
+ * Skeleton — mêmes dimensions que les cartes réelles (clip : vignette 9:16
+ * de 96 px de large, soit ~171 px de haut ; dernier match ~60 px) pour
  * zéro CLS quand les données arrivent.
  */
 export function HeroLiveStatsSkeleton() {
@@ -120,7 +120,7 @@ export function HeroLiveStatsSkeleton() {
       className="md:col-span-5 lg:col-span-6 flex flex-col gap-3 w-full max-w-sm md:ml-auto lg:mr-8"
       aria-hidden="true"
     >
-      <div className="rounded-2xl bg-black/55 border border-[var(--gold)]/20 h-[199px] md:h-auto md:aspect-[4/5] animate-pulse" />
+      <div className="rounded-xl bg-black/55 border border-[var(--gold)]/20 h-[171px] animate-pulse" />
       <div className="rounded-xl bg-black/55 border border-[var(--gold)]/20 h-[60px] animate-pulse" />
     </div>
   );
