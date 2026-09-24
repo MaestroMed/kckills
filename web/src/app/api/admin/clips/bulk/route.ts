@@ -18,6 +18,8 @@ const VALID_ACTIONS = [
  * POST /api/admin/clips/bulk
  *
  * Body: { ids: string[], action: string, payload?: any }
+ * Response: { ok: true, affected } — affected = lignes réellement modifiées
+ * (0 si aucun id ne correspond : l'appelant ne doit rien retirer de l'UI).
  *
  * Actions:
  *   hide           — set kill_visible=false
@@ -85,43 +87,55 @@ export async function POST(req: NextRequest) {
       break;
   }
 
+  // `affected` = lignes réellement modifiées (.select("id")), pas ids.length :
+  // l'UI doit pouvoir repérer un 200 qui n'a rien changé en base.
+  let affected = 0;
+  let writeError: string | null = null;
+
   if (complexUpdate) {
     // Read current tags, merge, write back (per-row)
-    const { data: current } = await sb
+    const { data: current, error: readError } = await sb
       .from("kills")
       .select("id, ai_tags")
       .in("id", ids);
+    if (readError) return NextResponse.json({ error: readError.message }, { status: 500 });
 
-    const updates: Promise<unknown>[] = [];
-    for (const row of current ?? []) {
-      const existing: string[] = Array.isArray(row.ai_tags) ? row.ai_tags : [];
-      let next: string[];
-      if (action === "add_tags") {
-        next = [...new Set([...existing, ...payload.tags])];
-      } else {
-        next = existing.filter((t) => !payload.tags.includes(t));
-      }
-      updates.push(
-        Promise.resolve(
-          sb.from("kills").update({ ai_tags: next, updated_at: new Date().toISOString() }).eq("id", row.id),
-        ),
-      );
+    const results = await Promise.all(
+      (current ?? []).map((row) => {
+        const existing: string[] = Array.isArray(row.ai_tags) ? row.ai_tags : [];
+        const next: string[] =
+          action === "add_tags"
+            ? [...new Set([...existing, ...payload.tags])]
+            : existing.filter((t) => !payload.tags.includes(t));
+        return sb
+          .from("kills")
+          .update({ ai_tags: next, updated_at: new Date().toISOString() })
+          .eq("id", row.id)
+          .select("id");
+      }),
+    );
+    for (const r of results) {
+      affected += r.data?.length ?? 0;
+      writeError ??= r.error?.message ?? null;
     }
-    await Promise.all(updates);
   } else {
     patch.updated_at = new Date().toISOString();
-    const { error } = await sb.from("kills").update(patch).in("id", ids);
+    const { data, error } = await sb.from("kills").update(patch).in("id", ids).select("id");
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    affected = data?.length ?? 0;
   }
 
+  // Journalisé même en échec partiel des tags : les lignes déjà modifiées
+  // doivent rester traçables.
   await logAdminAction({
     action: `kill.bulk_${action}`,
     entityType: "kill",
     entityId: `bulk_${ids.length}`,
-    after: { ids, action, payload },
+    after: { ids, action, payload, affected },
     actorRole: deriveActorRole(admin),
     request: req,
   });
 
-  return NextResponse.json({ ok: true, affected: ids.length });
+  if (writeError) return NextResponse.json({ error: writeError, affected }, { status: 500 });
+  return NextResponse.json({ ok: true, affected });
 }
