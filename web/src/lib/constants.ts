@@ -132,6 +132,24 @@ const DDRAGON_KEY_FIX: Record<string, string> = {
   // la clé moderne "Fiddlesticks" (fallback générique) marche partout.
 };
 
+/**
+ * Nom affichable d'un champion à partir de sa clé Data Dragon, celle que
+ * stocke la base (« JarvanIV » -> « Jarvan IV », « MonkeyKing » -> « Wukong »).
+ * Cas particuliers en table, sinon séparation des mots accolés en CamelCase.
+ */
+const CHAMPION_DISPLAY: Record<string, string> = {
+  MonkeyKing: "Wukong", JarvanIV: "Jarvan IV", KSante: "K'Sante", Kaisa: "Kai'Sa",
+  Khazix: "Kha'Zix", Chogath: "Cho'Gath", Velkoz: "Vel'Koz", Belveth: "Bel'Veth",
+  RekSai: "Rek'Sai", Reksai: "Rek'Sai", KogMaw: "Kog'Maw", Kogmaw: "Kog'Maw",
+  Leblanc: "LeBlanc", LeBlanc: "LeBlanc", DrMundo: "Dr. Mundo", Nunu: "Nunu & Willump",
+  Renata: "Renata Glasc", RenataGlasc: "Renata Glasc", FiddleSticks: "Fiddlesticks",
+};
+
+export function championDisplayName(key: string | null | undefined): string {
+  if (!key) return "?";
+  return CHAMPION_DISPLAY[key] ?? key.replace(/([a-z])([A-Z])/g, "$1 $2");
+}
+
 export function ddragonKey(championName: string): string {
   const stripped = championName.replace(/[^A-Za-z]/g, "");
   const fixed = DDRAGON_KEY_FIX[stripped.toLowerCase()];

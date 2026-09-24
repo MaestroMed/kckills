@@ -49,20 +49,32 @@ export default async function MatchesPage() {
   // span virtually every match that has at least one notable clip).
   // Could be swapped for a HEAD count + group-by RPC later, but trimming
   // saves ~400KB egress per cache miss in the meantime.
-  const [data, allClips, publishedClipsTotal, dbMatchesRes, dbTeamsRes] = await Promise.all([
+  const [data, allClips, publishedClipsTotal, dbMatchesRes, dbTeamsRes, dbGamesRes] = await Promise.all([
     Promise.resolve(loadRealData()),
     getPublishedKills(300),
     getCachedPublishedClipsCount(),
     sb
-      ? sb.from("matches").select("external_id,scheduled_at,stage,format,team_blue_id,team_red_id,winner_team_id")
+      ? sb.from("matches").select("id,external_id,scheduled_at,stage,format,team_blue_id,team_red_id,winner_team_id")
       : Promise.resolve(emptyRes),
     sb ? sb.from("teams").select("id,code,name") : Promise.resolve(emptyRes),
+    // 2026-09-24 : vainqueurs des games -> score des séries hors
+    // kc_matches.json (ils s'affichaient sans score).
+    sb ? sb.from("games").select("match_id,winner_team_id").limit(5000) : Promise.resolve(emptyRes),
   ]);
   const matches = getMatchesSorted(data);
 
   // Build team lookup
   const teams = new Map((dbTeamsRes.data ?? []).map((t) => [t.id, t]));
   const dbMatches = dbMatchesRes.data ?? [];
+
+  // Score d'une série depuis ses games : seulement si TOUTES ont un
+  // vainqueur (une série disputée à moitié connue donnerait un faux 1-0).
+  const gamesByMatch = new Map<string, (string | null)[]>();
+  for (const g of dbGamesRes.data ?? []) {
+    const list = gamesByMatch.get(g.match_id) ?? [];
+    list.push(g.winner_team_id);
+    gamesByMatch.set(g.match_id, list);
+  }
 
   // Merge: matches NOT in static JSON but in DB → add as "DB-only"
   const jsonIds = new Set(matches.map((m) => m.id));
@@ -75,6 +87,10 @@ export default async function MatchesPage() {
     // Normalize "bo1"/"bo3"/"bo5" → numeric best_of so the card renders
     // "Bo1" (not "Bobo1" by prefixing "Bo" onto the raw "bo1" string).
     const bestOfNum = Number.parseInt(String(m.format ?? "").replace(/\D/g, ""), 10);
+    const winners = gamesByMatch.get(m.id) ?? [];
+    const complete = winners.length > 0 && winners.every(Boolean);
+    const kcTeamId = isKcBlue ? m.team_blue_id : m.team_red_id;
+    const kcGames = complete ? winners.filter((w) => w === kcTeamId).length : 0;
     return {
       id: m.external_id,
       date: (m.scheduled_at ?? "").slice(0, 10),
@@ -84,13 +100,34 @@ export default async function MatchesPage() {
       // Unknown winner (no winner_team_id yet) → null = neutral "À venir",
       // NOT a false (which would render a red Loss + skew the W/L tally).
       kc_won: m.winner_team_id ? winner?.code === "KC" : null,
-      kc_score: 0,  // unknown without games detail
-      opp_score: 0,
+      kc_score: kcGames,
+      opp_score: complete ? winners.length - kcGames : 0,
       games: [],
     };
   });
 
-  const allMatches = [...matches, ...dbOnly];
+  // 2026-09-24 : les matchs de la base s'ajoutaient APRÈS ceux du JSON,
+  // donc hors de l'ordre chronologique dans chaque année. Tri global,
+  // plus récent d'abord ; les matchs sans date passent en dernier.
+  //
+  // Les « matchs » gol.gg sont des games isolées (une ligne par game). Dès
+  // qu'ils ont une date, ils doublonnaient la série officielle du même jour
+  // (« KC vs GEN » deux fois le 15/07, TL + TLAW au MSI). Une ligne gol.gg
+  // n'est gardée que si aucun match officiel n'existe à ±1 jour : c'est le
+  // cas des saisons LFL 2021-2023, que seul gol.gg couvre.
+  const dayOf = (d: string) => Math.floor(Date.parse(`${d}T12:00:00Z`) / 86_400_000);
+  const officialDays = new Set<number>();
+  for (const m of [...matches, ...dbOnly]) {
+    if (m.date && !String(m.id).startsWith("golgg_")) officialDays.add(dayOf(m.date));
+  }
+  const coveredByOfficial = (m: { id: string; date: string }) => {
+    if (!String(m.id).startsWith("golgg_") || !m.date) return false;
+    const d = dayOf(m.date);
+    return officialDays.has(d - 1) || officialDays.has(d) || officialDays.has(d + 1);
+  };
+  const allMatches = [...matches, ...dbOnly]
+    .filter((m) => !coveredByOfficial(m))
+    .sort((a, b) => (b.date || "0000").localeCompare(a.date || "0000"));
 
   // Count clips per match
   const clipsByMatch = new Map<string, number>();

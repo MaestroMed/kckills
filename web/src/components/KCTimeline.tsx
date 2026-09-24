@@ -585,7 +585,11 @@ export function KCTimeline({
                     parent server component passed counts; falls back to
                     empty space otherwise (we don't want a flickering
                     "0 kills" while the parent is still loading). */}
-                {killCountByEra && killCountByEra[era.id] !== undefined && (
+                {/* 2026-09-24 : le compteur porte sur les CLIPS jouables
+                    (c'est ce que compte /api/eras/counts) et disparaît à
+                    zéro — « 0 KILLS » sur une ère sans clip indexé laissait
+                    croire que KC n'y avait rien fait. */}
+                {killCountByEra && (killCountByEra[era.id] ?? 0) > 0 && (
                   <m.div
                     className="mt-2 inline-flex items-center gap-1.5 rounded-md px-2 py-1 font-data text-[10px] font-bold uppercase tracking-widest"
                     style={{
@@ -601,7 +605,7 @@ export function KCTimeline({
                     >
                       {killCountByEra[era.id]!.toLocaleString("fr-FR")}
                     </span>
-                    <span>{t("p6_tl.kills")}</span>
+                    <span>{t("p6_tl.clips")}</span>
                   </m.div>
                 )}
 
