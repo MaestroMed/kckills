@@ -81,8 +81,8 @@ export interface Alumni {
   /** Chronological club path — KC step highlighted with isKC flag. */
   careerPath?: AlumniCareerStep[];
   /** Optional pull-quote shown as CITATION TESTAMENTAIRE on the alumni page.
-   *  If absent, the page falls back to a Quote from lib/quotes.ts matched
-   *  on playerSlug. */
+   *  Only with a verifiable source: the 10 original quotes were removed on
+   *  2026-09-24 (none could be found verbatim). */
   testamentaryQuote?: {
     text: string;
     author: string;
@@ -135,12 +135,6 @@ export const ALUMNI: Alumni[] = [
         type: "wiki",
       },
     ],
-    testamentaryQuote: {
-      text: "La Karmine c'est different. La passion des fans, c'est quelque chose que je n'ai jamais vu en 10 ans de pro.",
-      author: "Rekkles",
-      role: "ADC KC (2022)",
-      source: "Interview sheepesports",
-    },
     signatureMoments: [
       {
         title: "Premier pentakill KC",
@@ -212,12 +206,6 @@ export const ALUMNI: Alumni[] = [
         type: "article",
       },
     ],
-    testamentaryQuote: {
-      text: "Personne ne s'attendait a ce qu'on aille aussi loin. Moi non plus, au depart. Et puis la Blue Wall nous a portes.",
-      author: "xMatty",
-      role: "ADC KC (2021)",
-      source: "Interview esports-news.co.uk",
-    },
     signatureMoments: [
       {
         title: "Premier UK champion EU Masters",
@@ -278,12 +266,6 @@ export const ALUMNI: Alumni[] = [
         type: "wiki",
       },
     ],
-    testamentaryQuote: {
-      text: "On m'a dit que KC en LEC c'était une blague. J'ai rien à prouver à personne sauf à mes coéquipiers.",
-      author: "Cabochard",
-      role: "TOP KC (2024)",
-      source: "Interview pre-saison LEC 2024",
-    },
     signatureMoments: [
       {
         title: "Refus du transfert Fnatic",
@@ -349,12 +331,6 @@ export const ALUMNI: Alumni[] = [
         type: "wiki",
       },
     ],
-    testamentaryQuote: {
-      text: "Le jeu en LEC est different du LPL. Plus lent, plus macro. Je n'ai pas eu le temps de m'adapter.",
-      author: "Bo",
-      role: "JGL KC (2024)",
-      source: "Interview post-saison 2024 (traduit)",
-    },
     signatureMoments: [
       {
         title: "Transfert depuis Vitality",
@@ -413,12 +389,6 @@ export const ALUMNI: Alumni[] = [
         type: "wiki",
       },
     ],
-    testamentaryQuote: {
-      text: "On était cinq potes en 2021. On est devenu une institution. C'est pas le titre LEC qui change le plus — c'est tout ce qu'il y a autour.",
-      author: "Targamas",
-      role: "SUP KC (2021-2024)",
-      source: "Interview KC content team",
-    },
     signatureMoments: [
       {
         title: "Roster originel",
@@ -486,12 +456,6 @@ export const ALUMNI: Alumni[] = [
         type: "wiki",
       },
     ],
-    testamentaryQuote: {
-      text: "Saken c'était notre rock. Le mid qui arrive à 100% chaque game, peu importe le contexte.",
-      author: "Striker",
-      role: "Head Coach KC (2021-2024)",
-      source: "Interview retrospective",
-    },
     signatureMoments: [
       {
         title: "Mid de la genèse",
@@ -546,12 +510,6 @@ export const ALUMNI: Alumni[] = [
         type: "wiki",
       },
     ],
-    testamentaryQuote: {
-      text: "On était 5 inconnus en LFL. Cinkrof savait déjà qu'on allait gagner. Sa confiance a porté toute l'équipe.",
-      author: "Targamas",
-      role: "SUP KC (2021)",
-      source: "Interview rétrospective genèse",
-    },
     signatureMoments: [
       {
         title: "Premier titre LFL",
@@ -607,12 +565,6 @@ export const ALUMNI: Alumni[] = [
         type: "wiki",
       },
     ],
-    testamentaryQuote: {
-      text: "Mon pseudo c'est juste un numéro. Mais quand t'arrives en KC, tu sais que tu vas faire partie d'une histoire.",
-      author: "113",
-      role: "TOP KC (2021)",
-      source: "Interview KC content",
-    },
     signatureMoments: [
       {
         title: "Top laner OG",
@@ -667,12 +619,6 @@ export const ALUMNI: Alumni[] = [
         type: "wiki",
       },
     ],
-    testamentaryQuote: {
-      text: "Jouer support de Rekkles c'était l'opportunité de ma vie. Je devais juste pas le décevoir.",
-      author: "Hantera",
-      role: "SUP KC (2022)",
-      source: "Interview LFL",
-    },
     signatureMoments: [
       {
         title: "Support de Rekkles",
@@ -726,12 +672,6 @@ export const ALUMNI: Alumni[] = [
         type: "wiki",
       },
     ],
-    testamentaryQuote: {
-      text: "Quand t'es top laner pour KC, t'as 50 000 personnes derriere toi. T'as pas le droit de jouer petit.",
-      author: "Adam",
-      role: "TOP KC (2022-2023)",
-      source: "Interview LFL post-match",
-    },
     signatureMoments: [
       {
         title: "Le Darius KC",
@@ -786,12 +726,6 @@ export const ALUMNI: Alumni[] = [
         type: "wiki",
       },
     ],
-    testamentaryQuote: {
-      text: "Je suis arrivé en pleine reconstruction. L'objectif c'était pas seulement gagner, c'était réapprendre à gagner.",
-      author: "Closer",
-      role: "JGL KC (2024)",
-      source: "Interview Summer 2024",
-    },
     signatureMoments: [
       {
         title: "Le pari Summer 2024",
@@ -847,12 +781,6 @@ export const ALUMNI: Alumni[] = [
         type: "wiki",
       },
     ],
-    testamentaryQuote: {
-      text: "Quand j'ai signe a KC, on me prenait pour un rookie LFL. J'ai termine MVP de la Grande Finale LEC un an plus tard.",
-      author: "Vladi",
-      role: "MID KC (2025)",
-      source: "Interview post-finale LEC Winter 2025",
-    },
     signatureMoments: [
       {
         title: "Promu depuis KCB",
@@ -919,12 +847,6 @@ export const ALUMNI: Alumni[] = [
         type: "wiki",
       },
     ],
-    testamentaryQuote: {
-      text: "J'ai signé pour porter ce club en LEC. La réalité a été plus cruelle que tout ce que j'imaginais. Ce sont les fans qui m'ont gardé debout.",
-      author: "Upset",
-      role: "ADC KC (2024)",
-      source: "Stream personnel post-saison",
-    },
     signatureMoments: [
       {
         title: "Le transfert Fnatic",
