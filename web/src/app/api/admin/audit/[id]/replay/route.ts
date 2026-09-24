@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createServerSupabase } from "@/lib/supabase/server";
-import { deriveActorRole, logAdminAction, requireAdmin } from "@/lib/admin/audit";
+import { createServiceSupabase } from "@/lib/supabase/server";
+import {
+  adminDbUnavailable,
+  deriveActorRole,
+  logAdminAction,
+  requireAdmin,
+} from "@/lib/admin/audit";
 
 /**
  * POST /api/admin/audit/[id]/replay
@@ -24,7 +29,8 @@ export async function POST(
     return NextResponse.json({ error: admin.error }, { status: 403 });
   }
   const { id } = await params;
-  const sb = await createServerSupabase();
+  const sb = createServiceSupabase();
+  if (!sb) return adminDbUnavailable();
 
   const { data: action, error: fetchErr } = await sb
     .from("admin_actions")
@@ -43,13 +49,21 @@ export async function POST(
   let result: { table: string; affected: number };
   try {
     if (action.action.startsWith("kill.") && action.entity_id) {
-      const { error } = await sb.from("kills").update(after).eq("id", action.entity_id);
+      const { data, error } = await sb
+        .from("kills")
+        .update(after)
+        .eq("id", action.entity_id)
+        .select("id");
       if (error) throw error;
-      result = { table: "kills", affected: 1 };
+      result = { table: "kills", affected: data?.length ?? 0 };
     } else if (action.action.startsWith("player.") && action.entity_id) {
-      const { error } = await sb.from("players").update(after).eq("id", action.entity_id);
+      const { data, error } = await sb
+        .from("players")
+        .update(after)
+        .eq("id", action.entity_id)
+        .select("id");
       if (error) throw error;
-      result = { table: "players", affected: 1 };
+      result = { table: "players", affected: data?.length ?? 0 };
     } else if (action.action === "featured.set" && action.entity_id) {
       const { error } = await sb.from("featured_clips").upsert({
         feature_date: action.entity_id,

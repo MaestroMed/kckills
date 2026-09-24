@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createServerSupabase } from "@/lib/supabase/server";
-import { deriveActorRole, logAdminAction, requireAdmin } from "@/lib/admin/audit";
+import { createServiceSupabase } from "@/lib/supabase/server";
+import {
+  adminDbUnavailable,
+  deriveActorRole,
+  logAdminAction,
+  requireAdmin,
+} from "@/lib/admin/audit";
 
 /**
  * /api/admin/quotes/[id] — Wave 31d caster-quote moderation actions.
@@ -38,7 +43,8 @@ export async function POST(
   };
   const action = body.action;
 
-  const sb = await createServerSupabase();
+  const sb = createServiceSupabase();
+  if (!sb) return adminDbUnavailable();
   const { data: before } = await sb
     .from("kill_quotes")
     .select("id,quote_text,is_hidden,is_memetic,kill_id")

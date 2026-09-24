@@ -16,8 +16,13 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { createServerSupabase } from "@/lib/supabase/server";
-import { deriveActorRole, logAdminAction, requireAdmin } from "@/lib/admin/audit";
+import { createServerSupabase, createServiceSupabase } from "@/lib/supabase/server";
+import {
+  adminDbUnavailable,
+  deriveActorRole,
+  logAdminAction,
+  requireAdmin,
+} from "@/lib/admin/audit";
 import { CANONICAL_ORIGIN } from "@/lib/site-url";
 
 interface PushBody {
@@ -56,6 +61,13 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  // editorial_actions s'écrit via le service role — vérifié AVANT le push
+  // Discord pour ne jamais publier une action qu'on ne pourrait pas tracer.
+  const svc = createServiceSupabase();
+  if (!svc) return adminDbUnavailable();
+
+  // Lecture volontairement via la session : la RLS "Public kills read" garantit
+  // qu'on ne pousse sur Discord qu'un clip publié.
   const sb = await createServerSupabase();
 
   const { data: killRaw, error: killErr } = await sb
@@ -117,7 +129,7 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  await sb.from("editorial_actions").insert({
+  await svc.from("editorial_actions").insert({
     action: "discord.push",
     kill_id,
     performed_by: "admin",

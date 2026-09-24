@@ -16,8 +16,13 @@
  * If any of those layers gets bypassed, the others still hold.
  */
 import { NextResponse } from "next/server";
-import { createServerSupabase } from "@/lib/supabase/server";
-import { logAdminAction, type AdminCheckResult, type AdminActorRole } from "@/lib/admin/audit";
+import { createServiceSupabase } from "@/lib/supabase/server";
+import {
+  type AdminActorRole,
+  type AdminCheckResult,
+  adminDbUnavailable,
+  logAdminAction,
+} from "@/lib/admin/audit";
 
 /** Whitelisted operator scripts the admin UI can trigger. */
 export const ADMIN_RUN_WHITELIST = new Set<string>([
@@ -66,7 +71,8 @@ export async function enqueueAdminRun(params: EnqueueParams): Promise<NextRespon
     );
   }
 
-  const sb = await createServerSupabase();
+  const sb = createServiceSupabase();
+  if (!sb) return adminDbUnavailable();
 
   // Idempotent : the unique partial index on (type, entity_type,
   // entity_id) WHERE status IN ('pending','claimed') uses NULL/NULL

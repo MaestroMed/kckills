@@ -27,8 +27,9 @@
  * before/after diff for the target.
  */
 import { NextResponse } from "next/server";
-import { createServerSupabase } from "@/lib/supabase/server";
+import { createServiceSupabase } from "@/lib/supabase/server";
 import {
+  adminDbUnavailable,
   deriveActorRole,
   logAdminAction,
   requireAdmin,
@@ -70,7 +71,8 @@ export async function POST(request: Request) {
         .slice(0, 200)
     : [];
 
-  const sb = await createServerSupabase();
+  const sb = createServiceSupabase();
+  if (!sb) return adminDbUnavailable();
   const actorRole = deriveActorRole(adminCheck);
 
   // ─── Hide the target ────────────────────────────────────────────────

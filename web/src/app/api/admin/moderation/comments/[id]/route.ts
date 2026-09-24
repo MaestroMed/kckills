@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createServerSupabase } from "@/lib/supabase/server";
-import { deriveActorRole, logAdminAction, requireAdmin } from "@/lib/admin/audit";
+import { createServiceSupabase } from "@/lib/supabase/server";
+import {
+  adminDbUnavailable,
+  deriveActorRole,
+  logAdminAction,
+  requireAdmin,
+} from "@/lib/admin/audit";
 
 /** POST /api/admin/moderation/comments/[id]
  *  Body: { action: 'approve'|'reject'|'delete'|'flag', reason?: string } */
@@ -30,7 +35,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       return NextResponse.json({ error: `Invalid action: ${action}` }, { status: 400 });
   }
 
-  const sb = await createServerSupabase();
+  const sb = createServiceSupabase();
+  if (!sb) return adminDbUnavailable();
   const { data: before } = await sb.from("comments").select("moderation_status,is_deleted,content").eq("id", id).single();
   const { error } = await sb.from("comments").update(patch).eq("id", id);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });

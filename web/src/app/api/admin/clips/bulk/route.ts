@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createServerSupabase } from "@/lib/supabase/server";
-import { deriveActorRole, logAdminAction, requireAdmin } from "@/lib/admin/audit";
+import { createServiceSupabase } from "@/lib/supabase/server";
+import {
+  adminDbUnavailable,
+  deriveActorRole,
+  logAdminAction,
+  requireAdmin,
+} from "@/lib/admin/audit";
 
 const VALID_ACTIONS = [
   "hide", "unhide",
@@ -43,7 +48,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Max 500 ids per bulk op" }, { status: 400 });
   }
 
-  const sb = await createServerSupabase();
+  const sb = createServiceSupabase();
+  if (!sb) return adminDbUnavailable();
 
   let patch: Record<string, unknown> = {};
   let complexUpdate = false;

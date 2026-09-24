@@ -11,8 +11,13 @@
  * Auth + audit follow the same pattern as /api/admin/pipeline/jobs.
  */
 import { NextResponse } from "next/server";
-import { createServerSupabase } from "@/lib/supabase/server";
-import { deriveActorRole, logAdminAction, requireAdmin } from "@/lib/admin/audit";
+import { createServiceSupabase } from "@/lib/supabase/server";
+import {
+  adminDbUnavailable,
+  deriveActorRole,
+  logAdminAction,
+  requireAdmin,
+} from "@/lib/admin/audit";
 
 export async function POST(
   req: Request,
@@ -28,7 +33,8 @@ export async function POST(
     return NextResponse.json({ error: "missing id" }, { status: 400 });
   }
 
-  const sb = await createServerSupabase();
+  const sb = createServiceSupabase();
+  if (!sb) return adminDbUnavailable();
 
   // Fetch the DLQ row first — we need its (type, entity_type,
   // entity_id, payload) to seed the new pipeline_jobs row, AND we

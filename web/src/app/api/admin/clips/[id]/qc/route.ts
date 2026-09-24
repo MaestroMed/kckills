@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { deriveActorRole, logAdminAction, requireAdmin } from "@/lib/admin/audit";
-import { createServerSupabase } from "@/lib/supabase/server";
+import {
+  adminDbUnavailable,
+  deriveActorRole,
+  logAdminAction,
+  requireAdmin,
+} from "@/lib/admin/audit";
+import { createServiceSupabase } from "@/lib/supabase/server";
 
 /**
  * Admin QC endpoint — enqueue a clip_qc.verify job for a single kill.
@@ -28,7 +33,8 @@ export async function POST(
     return NextResponse.json({ error: admin.error }, { status: 403 });
   }
   const { id } = await params;
-  const sb = await createServerSupabase();
+  const sb = createServiceSupabase();
+  if (!sb) return adminDbUnavailable();
   const { data, error } = await sb
     .from("worker_jobs")
     .insert({
@@ -66,7 +72,8 @@ export async function GET(
   if (!jobId) {
     return NextResponse.json({ error: "job_id required" }, { status: 400 });
   }
-  const sb = await createServerSupabase();
+  const sb = createServiceSupabase();
+  if (!sb) return adminDbUnavailable();
   const { data, error } = await sb
     .from("worker_jobs")
     .select("status, result, error")
