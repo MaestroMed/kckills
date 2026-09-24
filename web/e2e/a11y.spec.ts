@@ -6,7 +6,11 @@ import { expect, test } from "@playwright/test";
  * pages publiques clés. Seules les violations « serious » et « critical »
  * font échouer ; le rapport complet s'affiche dans la sortie du test.
  */
-const PAGES = ["/", "/scroll", "/clips", "/matches", "/players", "/player/Caliste", "@kill", "@match"];
+const PAGES = [
+  "/", "/scroll", "/clips", "/matches", "/players", "/player/Caliste", "@kill", "@match",
+  // audit étendu du 24/09/2026
+  "/stats", "/vs", "/quotes", "/face-off", "/compilation", "/settings",
+];
 
 // Pages dynamiques : un kill et un match réels, tirés du sitemap.
 async function resolvePath(path: string, request: import("@playwright/test").APIRequestContext): Promise<string> {
@@ -20,6 +24,9 @@ async function resolvePath(path: string, request: import("@playwright/test").API
 
 for (const path of PAGES) {
   test(`a11y ${path}`, async ({ page, request }) => {
+    // Pages lourdes rendues à froid par 4 workers en parallèle : /matches a déjà
+    // dépassé 60 s au premier passage (10 s seule). Marge dédiée à l'audit.
+    test.setTimeout(120_000);
     await page.goto(await resolvePath(path, request));
     await page.waitForLoadState("domcontentloaded");
     await page.waitForTimeout(1500);

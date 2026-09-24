@@ -771,7 +771,7 @@ function PickerCard({
 }) {
   const t = useT();
   return (
-    <li>
+    <li role="none">
       <button
         type="button"
         onClick={onClick}
