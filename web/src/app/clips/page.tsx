@@ -1,5 +1,10 @@
 import type { Metadata } from "next";
 import { getKillsForGrid, isDataOnlyKill } from "@/lib/supabase/kills";
+// Audit compteurs 2026-08-12 — le header affichait « 1 181 clips publiés »
+// alors que le catalogue réel en compte ~5 224 : le fetch est plafonné à
+// 2000 lignes (top highlight_score). Le total vient désormais du compteur
+// canonique partagé avec /scroll, la home et /matches.
+import { getCachedPublishedClipsCount } from "@/lib/stats-scopes";
 import { loadRealData } from "@/lib/real-data";
 import { JsonLd, clipsCollectionLD } from "@/lib/seo/jsonld";
 import { getAssetMetadata, pickAssetUrl } from "@/lib/kill-assets";
@@ -7,6 +12,7 @@ import { ClipsGrid, type ClipCard, type InitialFilters } from "./clips-grid";
 import { pickDescription } from "@/lib/i18n/server";
 import { getServerLang } from "@/lib/i18n/server-lang";
 import { isDescriptionClean } from "@/lib/scroll/sanitize-description";
+import { cleanTeamCode } from "@/lib/team-display";
 
 // 300s cache — /clips pulls 500 kills and filters client-side. The
 // catalog doesn't churn per-minute; 5-min ISR is plenty.
@@ -54,7 +60,7 @@ export default async function ClipsPage({ searchParams }: { searchParams?: Promi
   };
 
   const lang = await getServerLang();
-  const [kills, data] = await Promise.all([
+  const [kills, data, publishedClipsTotal] = await Promise.all([
     // PR23 — getKillsForGrid pulls BOTH the published-with-clip rows
     // AND the data-only gol.gg historical rows (no clip but verified
     // killer/victim/champions/timestamp). The /scroll feed continues
@@ -62,6 +68,7 @@ export default async function ClipsPage({ searchParams }: { searchParams?: Promi
     // get the full 6-year catalog.
     getKillsForGrid(2000),
     Promise.resolve(loadRealData()),
+    getCachedPublishedClipsCount(),
   ]);
 
   // KC team_killer kills, visible (clip OR data-only). isDataOnlyKill
@@ -105,7 +112,9 @@ export default async function ClipsPage({ searchParams }: { searchParams?: Promi
         gameNumber: k.games?.game_number ?? 1,
         matchStage: k.games?.matches?.stage ?? "LEC",
         matchDate: k.games?.matches?.scheduled_at ?? k.created_at,
-        opponentCode: matchJson?.opponent.code ?? "LEC",
+        // Plus de fallback "LEC" mensonger ni d'id numérique gol.gg :
+        // match non résolu → "" et la carte affiche juste "KC" + la date.
+        opponentCode: cleanTeamCode(matchJson?.opponent.code) ?? "",
         opponentName: matchJson?.opponent.name ?? null,
         kcWon: matchJson?.kc_won ?? null,
         matchScore: matchJson ? `${matchJson.kc_score}-${matchJson.opp_score}` : null,
@@ -134,7 +143,11 @@ export default async function ClipsPage({ searchParams }: { searchParams?: Promi
   return (
     <>
       <JsonLd data={ld} />
-      <ClipsGrid initialCards={cards} initialFilters={initialFilters} />
+      <ClipsGrid
+        initialCards={cards}
+        initialFilters={initialFilters}
+        publishedClipsTotal={publishedClipsTotal}
+      />
     </>
   );
 }

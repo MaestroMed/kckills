@@ -19,8 +19,6 @@ import type {
   Tournament,
   Comment,
   Profile,
-  KillAssist,
-  KillTag,
 } from "@/types";
 
 // ─── Teams ────────────────────────────────────────────────────────────────────

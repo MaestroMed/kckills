@@ -26,6 +26,7 @@ import "server-only";
 import { cache } from "react";
 import { createAnonSupabase, rethrowIfDynamic } from "./server";
 import { getKillsByMatchExternalId, type PublishedKillRow } from "./kills";
+import { cleanTeamCode, httpsLogoUrl } from "@/lib/team-display";
 
 // ─── Types ────────────────────────────────────────────────────────────
 
@@ -198,7 +199,9 @@ function normalizeTeam(row: RawTeamRow | null | undefined): MatchTeam | null {
     name: String(row.name ?? row.code ?? "?"),
     code: String(row.code ?? "?"),
     slug: String(row.slug ?? row.code ?? "?"),
-    logoUrl: row.logo_url ?? null,
+    // http→https : le worker stocke encore des logos lolesports en http,
+    // que next/image (remotePatterns https-only) rejette en 400.
+    logoUrl: httpsLogoUrl(row.logo_url),
     isTracked: Boolean(row.is_tracked),
   };
 }
@@ -681,7 +684,9 @@ async function summariseMatchRow(
     externalId: String(row.external_id ?? row.id ?? ""),
     scheduledAt: row.scheduled_at ?? null,
     stage: row.stage ?? null,
-    opponentCode: opponent.code,
+    // Jamais un id numérique gol.gg ni "LEC" comme tag affiché — on
+    // retombe sur le nom complet, puis sur le neutre "OPP".
+    opponentCode: cleanTeamCode(opponent.code) ?? cleanTeamCode(opponent.name) ?? "OPP",
     opponentName: opponent.name,
     kcWon,
     kcScore: kcGW,

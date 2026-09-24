@@ -72,7 +72,7 @@ export async function POST(
     .maybeSingle();
 
   // Unique index can fire here — that's fine, treat as soft-success.
-  let newJobId: string | null = newJob?.id ?? null;
+  const newJobId: string | null = newJob?.id ?? null;
   if (insertErr) {
     const isUniqueViolation =
       insertErr.code === "23505" ||

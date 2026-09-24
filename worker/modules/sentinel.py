@@ -77,6 +77,51 @@ def _resolve_team_id(team: dict) -> str | None:
     return rows[0]["id"] if rows else None
 
 
+def _record_winners(match_db_id: str, team_a: dict, team_b: dict, blue_id: str | None,
+                    red_id: str | None, detail_match: dict) -> dict:
+    """Vainqueur du match (manches gagnées de l'API) et des games CERTAINES :
+    balayage -> toutes les games jouées ; sinon la dernière game jouée va au
+    vainqueur de la série (les autres restent inconnues). N'écrase jamais une
+    valeur existante (filtre `is.null` côté PostgREST).
+
+    2026-09-23 : le sentinel n'écrivait AUCUN vainqueur — games.winner_team_id
+    était vide sur toute la base, et les matchs du démon n'avaient de
+    vainqueur que via des scripts ponctuels."""
+    from services.supabase_client import get_db
+
+    out = {"match": None, "games": 0}
+    if not match_db_id or not blue_id or not red_id:
+        return out
+
+    def wins_of(team: dict) -> int:
+        try:
+            return int(((team.get("result") or {}).get("gameWins")) or 0)
+        except (TypeError, ValueError):
+            return 0
+
+    det = {(t.get("code") or "").upper(): t for t in (detail_match.get("teams") or [])}
+    wa = wins_of(det.get((team_a.get("code") or "").upper(), team_a))
+    wb = wins_of(det.get((team_b.get("code") or "").upper(), team_b))
+    if wa == wb:
+        return out
+    winner, loser_wins = (blue_id, wb) if wa > wb else (red_id, wa)
+    played = [g for g in (detail_match.get("games") or []) if g.get("state") == "completed" and g.get("id")]
+    targets = played if loser_wins == 0 else played[-1:]
+    db = get_db()
+    if db is None:
+        return out
+    client = db._get_client()
+    headers = {**db.headers, "Prefer": "return=minimal"}
+    r = client.patch(f"{db.base}/matches", params={"id": f"eq.{match_db_id}", "winner_team_id": "is.null"},
+                     json={"winner_team_id": winner}, headers=headers)
+    out["match"] = winner if r.status_code < 400 else None
+    for g in targets:
+        r = client.patch(f"{db.base}/games", params={"external_id": f"eq.{g['id']}", "winner_team_id": "is.null"},
+                         json={"winner_team_id": winner}, headers=headers)
+        out["games"] += r.status_code < 400
+    return out
+
+
 async def _scan_league_schedule(league: league_config.TrackedLeague) -> int:
     """Scan ONE league's schedule. Returns the count of new matches.
 
@@ -321,6 +366,14 @@ async def _scan_league_schedule(league: league_config.TrackedLeague) -> int:
                 game_payload.pop("vod_offset_seconds", None)
                 game_payload.pop("state", None)
             safe_upsert("games", game_payload, on_conflict="external_id")
+
+        if is_completed and match_db_id:
+            try:
+                won = _record_winners(match_db_id, team_a, team_b, blue_id, red_id, detail_match)
+                if won.get("match") or won.get("games"):
+                    log.info("sentinel_winners_recorded", match_id=match_ext_id, games=won["games"])
+            except Exception as e:  # jamais bloquant pour la détection
+                log.warn("sentinel_winners_failed", match_id=match_ext_id, error=str(e)[:160])
 
         if not already_seen:
             new_matches += 1

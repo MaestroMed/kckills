@@ -18,7 +18,6 @@ export default function SettingsPage() {
   const [userBadges, setUserBadges] = useState<string[]>([]);
   const [userName, setUserName] = useState<string | null>(null);
   const [riotProfile, setRiotProfile] = useState<RiotLinkProfile | null>(null);
-  const [riotAvailable, setRiotAvailable] = useState<boolean>(false);
   const [loggedIn, setLoggedIn] = useState<boolean>(false);
   const [callbackState, setCallbackState] = useState<{
     ok?: boolean;
@@ -73,24 +72,11 @@ export default function SettingsPage() {
     })();
   }, []);
 
-  // Detect whether the Riot link flow is configured server-side. We hit
-  // the start route HEAD-style — a 503 means env vars missing, anything
-  // else (302 included) means available.
-  useEffect(() => {
-    (async () => {
-      try {
-        const res = await fetch("/api/auth/riot/start", {
-          method: "GET",
-          redirect: "manual",
-        });
-        // 503 = explicit "not configured". 0 / opaqueredirect = a redirect
-        // Riot would have served, which means the route is wired up.
-        setRiotAvailable(res.status !== 503);
-      } catch {
-        setRiotAvailable(false);
-      }
-    })();
-  }, []);
+  // Bruit API (audit 2026-08-12) : la disponibilité du lien Riot n'est
+  // PLUS sondée au chargement (l'ancien probe GET /api/auth/riot/start
+  // → 503 systématique en console tant que l'OAuth Riot n'est pas
+  // configuré). La RiotLinkCard ne sollicite la route qu'au CLIC sur le
+  // CTA et bascule elle-même en état « indisponible » sur un 503.
 
   const handleExport = useCallback(async () => {
     setExportStatus("loading");
@@ -246,7 +232,6 @@ export default function SettingsPage() {
 
         {/* Riot Link (optional, sub-component card) */}
         <RiotLinkCard
-          available={riotAvailable}
           loggedIn={loggedIn}
           profile={riotProfile}
           callbackState={callbackState}

@@ -58,6 +58,7 @@ export function MatchHistory({ history }: { history: HistoryEntry[] }) {
         <select
           value={champFilter}
           onChange={(e) => setChampFilter(e.target.value)}
+          aria-label={t("p6_playerpg.filter_all_champions")}
           className="rounded-lg border border-[var(--border-gold)] bg-[var(--bg-surface)] px-3 py-1.5 text-xs text-[var(--text-secondary)] outline-none"
         >
           <option value="">{t("p6_playerpg.filter_all_champions")}</option>
@@ -67,6 +68,7 @@ export function MatchHistory({ history }: { history: HistoryEntry[] }) {
         <select
           value={resultFilter}
           onChange={(e) => setResultFilter(e.target.value as "" | "won" | "lost")}
+          aria-label={t("p6_playerpg.filter_wl")}
           className="rounded-lg border border-[var(--border-gold)] bg-[var(--bg-surface)] px-3 py-1.5 text-xs text-[var(--text-secondary)] outline-none"
         >
           <option value="">{t("p6_playerpg.filter_wl")}</option>
@@ -77,6 +79,7 @@ export function MatchHistory({ history }: { history: HistoryEntry[] }) {
         <select
           value={yearFilter}
           onChange={(e) => setYearFilter(e.target.value)}
+          aria-label={t("p6_playerpg.filter_all_seasons")}
           className="rounded-lg border border-[var(--border-gold)] bg-[var(--bg-surface)] px-3 py-1.5 text-xs text-[var(--text-secondary)] outline-none"
         >
           <option value="">{t("p6_playerpg.filter_all_seasons")}</option>

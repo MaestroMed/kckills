@@ -116,7 +116,7 @@ export function SearchResults({ initialRows, initialCursor }: Props) {
     return () => {
       cancelled = true;
     };
-  }, [paramsKey, searchParams]);
+  }, [paramsKey, searchParams, t]);
 
   // Manual + sentinel-driven "load more"
   const loadMore = useCallback(async () => {

@@ -200,7 +200,7 @@ export function FormCalendar({ matches, days = 84 }: Props) {
     if (buckets.length === 0) return cols;
     const firstDate = new Date(buckets[0]!.date + "T00:00:00Z");
     // getUTCDay : 0 Sun → 6 Sat. We want Monday=0 so shift by -1 mod 7.
-    let firstWeekday = (firstDate.getUTCDay() + 6) % 7;
+    const firstWeekday = (firstDate.getUTCDay() + 6) % 7;
     // Pad
     for (let i = 0; i < firstWeekday; i++) {
       current.push({

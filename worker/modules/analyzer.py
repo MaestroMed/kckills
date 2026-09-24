@@ -65,8 +65,11 @@ log = structlog.get_logger()
 # History :
 #   v1 = original 3-rule prompt (pre-PR16)
 #   v2 = added multi-language descriptions (PR14)
-#   v3 = audit Quick Wins 1+2, anchored detail, banned phrases (current)
-ANALYZER_PROMPT_VERSION: str = "v3"
+#   v3 = audit Quick Wins 1+2, anchored detail, banned phrases
+#   v4 = prompt réécrit en français accentué + règle 0 « français correct »
+#        (2026-09-23) : le prompt sans accents faisait écrire Gemini sans
+#        accents ni apostrophes (« l assist », « legendaire ») (current)
+ANALYZER_PROMPT_VERSION: str = "v4"
 
 # Pipeline-level version, logged into ai_annotations.analysis_version.
 # Bumped when the pipeline architecture changes (kill_assets, ai_annotations,
@@ -86,15 +89,15 @@ ROSTER_POOL_HINT = """- Canna = TOP (KSante, Renekton, Jax, Gnar, Ambessa, Rumbl
 - Busio = SUP (Rell, Nautilus, Rakan, Bard, Thresh, Seraphine, Nami, Leona, Alistar, Renata)"""
 
 
-ANALYSIS_PROMPT = """<role>Analyste esport LoL specialise highlights. Tu commentes avec precision factuelle, registre commentateur (Drakos / Trobi / Doigby).</role>
+ANALYSIS_PROMPT = """<role>Analyste esport LoL spécialisé highlights. Tu commentes avec précision factuelle, registre commentateur (Drakos / Trobi / Doigby).</role>
 
-<task>Decris ce kill de match pro LoL en 1 phrase percutante, fr.
-Killer: {killer_champion} ({killer_name})
-Victime: {victim_champion} ({victim_name})
-Donnees factuelles (verite terrain, NE PAS contredire):
+<task>Décris ce kill de match pro LoL en 1 phrase percutante, en français.
+Killer : {killer_champion} ({killer_name})
+Victime : {victim_champion} ({victim_name})
+Données factuelles (vérité terrain, NE PAS contredire) :
 {context}
 
-Reponds UNIQUEMENT en JSON valide.</task>
+Réponds UNIQUEMENT en JSON valide.</task>
 
 <output_format>
 {{
@@ -107,10 +110,10 @@ Reponds UNIQUEMENT en JSON valide.</task>
               "deep_ward","gold_swing","penta_setup","ace_setup",
               "side_swap","support_outplay","jungle_invade","mid_roam",
               "scary_play","clean_finish">],
-    "description_fr": "<max 120 chars, FR, FACTUEL et VARIE>",
+    "description_fr": "<max 120 caractères, FR accentué, FACTUEL et VARIÉ>",
     "description_en": "<max 130 chars, EN, same energy as FR>",
     "description_ko": "<max 80 chars, KR Korean>",
-    "description_es": "<max 130 chars, ES Spanish>",
+    "description_es": "<max 130 chars, ES Spanish, con tildes>",
     "kill_visible_on_screen": true,
     "caster_hype_level": <int 1-5>,
     "best_thumbnail_timestamp_in_clip_sec": <int 0-40, second IN the clip
@@ -122,82 +125,87 @@ Reponds UNIQUEMENT en JSON valide.</task>
     "in_game_timer_at_clip_midpoint": "<MM:SS or NONE if not visible —
                                         read the in-game clock at top center
                                         of the screen at clip midpoint>",
-    "confidence_score": <float 0.0-1.0, ton degre de confiance dans CETTE
+    "confidence_score": <float 0.0-1.0, ton degré de confiance dans CETTE
                           analyse. 1.0 = clip net, kill clairement visible,
-                          champions identifies sans doute. 0.5 = clip flou
-                          ou angle incertain. 0.0 = devine totalement.>
+                          champions identifiés sans doute. 0.5 = clip flou
+                          ou angle incertain. 0.0 = deviné totalement.>
 }}
 </output_format>
 
 <roster_kc_lec_2026>
 {roster_pool_hint}
 
-REGLE: si killer OU victim est joue par un joueur KC, utilise le PSEUDO
+RÈGLE : si killer OU victime est joué par un joueur KC, utilise le PSEUDO
 DU JOUEUR (pas le nom du champion) au moins une fois dans la description.
-Verifie que le champion correspond au pool ci-dessus avant d'attribuer.
+Vérifie que le champion correspond au pool ci-dessus avant d'attribuer.
 </roster_kc_lec_2026>
 
 <rules_dures_priorite_absolue>
 
-1. CREDIT JOUEUR — voir bloc roster ci-dessus.
+0. FRANÇAIS CORRECT : description_fr s'écrit avec TOUS ses accents et ses
+   apostrophes (é, è, ê, à, ù, ç, l', d', s', qu') — « élimine », « l'assist
+   de Caliste », « s'offre », « légendaire ». Jamais de texte désaccentué
+   (« elimine », « l assist ») : il est rejeté.
+
+1. CRÉDIT JOUEUR — voir bloc roster ci-dessus.
 
 2. INTERDICTION ABSOLUE :
-   - Ne mentionne JAMAIS un champion qui n'est ni le killer ni la victim ci-dessus.
-   - Ne mentionne JAMAIS une equipe adverse specifique sauf si elle est
-     EXPLICITEMENT dans les donnees factuelles.
-   - N'invente JAMAIS de noms de sorts ("lance-tolet", "Essence of TF",
-     "Kaleidoscope fantome" — ce sont des hallucinations qu'on a vues).
-   - Pas de formules LaTeX ($, \\text{{}}), pas d'HTML entities (&eacute;,
-     &amp;), pas de caracteres d'echappement : uniquement texte UTF-8 propre.
+   - Ne mentionne JAMAIS un champion qui n'est ni le killer ni la victime ci-dessus.
+   - Ne mentionne JAMAIS une équipe adverse spécifique sauf si elle est
+     EXPLICITEMENT dans les données factuelles.
+   - N'invente JAMAIS de noms de sorts (« lance-tolet », « Essence of TF »,
+     « Kaléidoscope fantôme » — ce sont des hallucinations qu'on a vues).
+   - Pas de formules LaTeX ($, \text{{}}), pas d'entités HTML (&eacute;,
+     &amp;), pas de caractères d'échappement : uniquement du texte UTF-8 propre.
 
 3. ANCRAGE CONCRET OBLIGATOIRE :
-   La description DOIT contenir AU MOINS UN de ces 4 elements :
-   - HP/PV chiffre ("a 134 HP", "20% de vie")
-   - timestamp ("a 11:00", "a 22 minutes", "minute 31")
-   - objectif precis (tour, dragon, Baron, Herald, Atakhan, inhibitor,
-     tri-brush, pit, river, raptor)
-   - sort nomme precisement (R = ultime nomme, ex "Grand Saut" pour
-     Pantheon, "Vault Breaker" pour Vi E)
+   La description DOIT contenir AU MOINS UN de ces 4 éléments :
+   - PV chiffrés (« à 134 PV », « 20 % de vie »)
+   - moment du match (« à 11:00 », « à 22 minutes », « minute 31 »)
+   - objectif précis (tour, dragon, Baron, Herald, Atakhan, inhibiteur,
+     tri-brush, pit, rivière, raptors)
+   - sort nommé précisément (R = ultime nommé, ex. « Grand Saut » pour
+     Pantheon, « Vault Breaker » pour le E de Vi)
 
-4. VARIETE STRUCTURELLE :
-   Ne commence PAS par "[Champion] termine/acheve/surprend [Victim]".
-   Ces 3 verbes sont SURUTILISES (33% de la base). Varie :
-   - parfois commencer par l'action mecanique
+4. VARIÉTÉ STRUCTURELLE :
+   Ne commence PAS par « [Champion] termine/achève/surprend [Victime] ».
+   Ces 3 verbes sont SURUTILISÉS (33 % de la base). Varie :
+   - parfois commencer par l'action mécanique
    - parfois par la position
-   - parfois par l'objectif conteste
+   - parfois par l'objectif contesté
    - parfois par le moment du match
-   Verbes recommandes pour finir un kill : pique, scelle, envoie au sol,
-   close, KO, met a terre, finish, expedie. Pour le sort : lance, pop,
+   Verbes recommandés pour finir un kill : pique, scelle, envoie au sol,
+   close, KO, met à terre, finish, expédie. Pour le sort : lance, pop,
    balance, place, trigger, chain.
 
 5. MULTI-KILL ET FIRST BLOOD :
-   - Si MULTI-KILL (double/triple/quadra/penta) est dans le contexte,
+   - Si un MULTI-KILL (double/triple/quadra/penta) est dans le contexte,
      la description DOIT le mentionner explicitement.
    - Si FIRST BLOOD est dans le contexte, la description DOIT mentionner
-     "first blood" ou "premier sang".
+     « first blood » ou « premier sang ».
    - Sinon, ne pas inventer ces mentions.
 
 6. BANNIS (rejet automatique en post-validation) :
-   - "sans aucune aide", "sans aide", "sans assistance", "zero assist"
-     (redondant avec solo_kill dans les donnees structurees)
-   - "propre", "proprement", "parfait", "parfaite" : max 1 fois par
+   - « sans aucune aide », « sans aide », « sans assistance », « zéro assist »
+     (redondant avec solo_kill dans les données structurées)
+   - « propre », « proprement », « parfait », « parfaite » : max 1 fois par
      description, jamais 2
-   - "utilise son [sort]" : remplacer par "lance", "pop", "balance",
-     "place", "trigger"
-   - "petite mise a mort", "expedie en un clin d'oeil" : trop informel
+   - « utilise son [sort] » : remplacer par « lance », « pop », « balance »,
+     « place », « trigger »
+   - « petite mise à mort », « expédié en un clin d'œil » : trop informel
 
-7. KILL_VISIBLE = FALSE (si dans contexte) :
-   Ne PAS affirmer le kill avec certitude. Utilise "KC force le fight",
-   "le setup mene a un pick", "l'engage retourne le tempo" — JAMAIS
-   "X termine Y" / "X acheve Y".
+7. KILL_VISIBLE = FALSE (si dans le contexte) :
+   Ne PAS affirmer le kill avec certitude. Utilise « KC force le fight »,
+   « le setup mène à un pick », « l'engage retourne le tempo » — JAMAIS
+   « X termine Y » / « X achève Y ».
 
 </rules_dures_priorite_absolue>
 
 <rules_softer>
-- 1-3=routine, 4-6=interessant, 7-8=tres bon, 9-10=exceptionnel
-- description_fr: max 120 chars, percutante, FACTUELLE, VARIEE
-- Si assistants present: mentionne au moins un nom (ex: "avec l'assist de Yike")
-- JSON VALIDE uniquement, pas de texte avant/apres
+- 1-3 = routine, 4-6 = intéressant, 7-8 = très bon, 9-10 = exceptionnel
+- description_fr : max 120 caractères, percutante, FACTUELLE, VARIÉE, accentuée
+- Si des assistants sont présents : mentionne au moins un nom (ex. « avec l'assist de Yike »)
+- JSON VALIDE uniquement, pas de texte avant/après
 </rules_softer>"""
 
 
@@ -568,7 +576,7 @@ async def analyze_kill_row(kill: dict, clip_path: str | None = None) -> dict | N
 
     fight_type = kill.get("fight_type")
     if fight_type:
-        parts.append(f"fight_type = {fight_type} (verite terrain — NE PAS contredire)")
+        parts.append(f"fight_type = {fight_type} (vérité terrain — NE PAS contredire)")
 
     lane = kill.get("matchup_lane")
     if lane:
@@ -612,8 +620,8 @@ async def analyze_kill_row(kill: dict, clip_path: str | None = None) -> dict | N
     kv = kill.get("kill_visible")
     if kv is False:
         parts.append(
-            "kill_visible = FALSE (kill non visible a l'ecran — "
-            "NE PAS affirmer le kill, decrire le setup uniquement)"
+            "kill_visible = FALSE (kill non visible à l'écran — "
+            "NE PAS affirmer le kill, décrire le setup uniquement)"
         )
 
     # Wave 33 — auto-upgrade rule. The cheap default tier (free →
@@ -755,7 +763,7 @@ async def run() -> int:
             "id, killer_champion, victim_champion, is_first_blood, multi_kill, "
             "tracked_team_involvement, fight_type, matchup_lane, lane_phase, "
             "kill_visible, assistants, shutdown_bounty, retry_count, "
-            "clip_url_vertical, clip_url_horizontal, game_time_seconds",
+            "clip_url_vertical, clip_url_horizontal, game_time_seconds, event_epoch, game_id",
             id=kill_id,
         )
         if not rows:
@@ -778,7 +786,7 @@ async def run() -> int:
             "id, killer_champion, victim_champion, is_first_blood, multi_kill, "
             "tracked_team_involvement, fight_type, matchup_lane, lane_phase, "
             "kill_visible, assistants, shutdown_bounty, retry_count, "
-            "clip_url_vertical, clip_url_horizontal, game_time_seconds",
+            "clip_url_vertical, clip_url_horizontal, game_time_seconds, event_epoch, game_id",
             status="clipped",
             _order="event_epoch.desc.nullslast",
             _limit=ANALYZER_BATCH_SIZE,
@@ -944,7 +952,7 @@ async def _process_one(kill: dict, clip_path: str | None,
             # Honest, ≥50 chars so it clears the qc_described gate (50-char
             # threshold). Tells the viewer the AI pass is pending.
             degraded_desc = (
-                f"{killer} elimine {victim} — analyse IA en attente, "
+                f"{killer} élimine {victim} — analyse IA en attente, "
                 f"clip disponible."
             )
             # Décryptage vague 2 (2026-07-14) — ce chemin validait le QC
@@ -1277,7 +1285,13 @@ def _build_analysis_patch(result: dict, kill: dict) -> dict:
         m = re.match(r"(\d+):(\d+)", timer_raw)
         if m:
             qc_timer_sec = int(m.group(1)) * 60 + int(m.group(2))
-            expected = int(kill.get("game_time_seconds") or 0)
+            # 2026-09-23 — le chrono lu à l'écran se compare au CHRONO du kill,
+            # pas au temps réel depuis l'ancre (game_time_seconds) : après une
+            # pause de 5 min, tout kill passait « dérivé de 300 s » ->
+            # needs_reclip (HLS ignoré, remis en analyse). Horloge du feed en
+            # cache quand elle existe, temps réel sinon (identiques sans pause).
+            from modules.feed_clock import chrono_seconds_for_kill
+            expected = chrono_seconds_for_kill(kill) or int(kill.get("game_time_seconds") or 0)
             if expected > 0:
                 # Audit 2.0 : le abs() rendait la correction d'offset
                 # MATHÉMATIQUEMENT impossible — sans le signe, impossible de

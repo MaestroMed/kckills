@@ -4,9 +4,13 @@
     {
       "name": "kckills-web",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev"],
+      "runtimeArgs": [
+        "run",
+        "dev"
+      ],
       "port": 3000,
-      "cwd": "web"
+      "cwd": "web",
+      "autoPort": true
     }
   ]
 }

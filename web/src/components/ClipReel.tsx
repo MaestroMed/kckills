@@ -2,6 +2,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { getClipsFiltered, type ClipFilter, type FilteredClip } from "@/lib/supabase/clips";
 import { isDescriptionClean } from "@/lib/scroll/sanitize-description";
+import { cleanTeamCode } from "@/lib/team-display";
 
 interface ClipReelProps {
   /** Server-side filter — same shape as `ClipFilter` from supabase/clips. */
@@ -151,6 +152,9 @@ function CompactGrid({ clips }: { clips: FilteredClip[] }) {
 function ClipCard({ clip }: { clip: FilteredClip }) {
   const isKcKill = clip.trackedTeamInvolvement === "team_killer";
   const minuteLabel = formatGameTime(clip.gameTimeSeconds);
+  // Garde-fou affichage : jamais d'id numérique gol.gg ni de placeholder
+  // "LEC" en guise d'adversaire — on retombe sur le stage du match.
+  const oppCode = cleanTeamCode(clip.opponentCode);
   return (
     <Link
       href={`/kill/${clip.id}`}
@@ -221,9 +225,13 @@ function ClipCard({ clip }: { clip: FilteredClip }) {
           </p>
         )}
         <p className="mt-2 text-[10px] font-data uppercase tracking-wider text-white/50">
-          {clip.opponentCode ? `vs ${clip.opponentCode}` : clip.matchStage ?? ""}
-          {clip.gameNumber ? ` · G${clip.gameNumber}` : ""}
-          {minuteLabel ? ` · T+${minuteLabel}` : ""}
+          {[
+            oppCode ? `vs ${oppCode}` : (clip.matchStage ?? "").trim() || null,
+            clip.gameNumber ? `G${clip.gameNumber}` : null,
+            minuteLabel ? `T+${minuteLabel}` : null,
+          ]
+            .filter(Boolean)
+            .join(" · ")}
         </p>
       </div>
 

@@ -109,11 +109,14 @@ const _fr = {
   },
   p_stats: {
     title: "Stats d'équipe",
-    subtitle: "La Karmine Corp en chiffres — picks, forme et tendances sur toutes les games trackées.",
-    kpi_games: "Games jouées",
-    kpi_winrate: "Winrate",
-    kpi_kills: "Kills totaux",
-    kpi_matches: "Matchs",
+    // Audit compteurs 12/08 : cette page vit sur le périmètre « log
+    // détaillé » (games avec stats vérifiées), pas la carrière complète
+    // de la home — les libellés le disent désormais.
+    subtitle: "La Karmine Corp en chiffres — picks, forme et tendances sur les games au log détaillé (stats par game vérifiées).",
+    kpi_games: "Games détaillées",
+    kpi_winrate: "Winrate games (est.)",
+    kpi_kills: "Kills KC · games détaillées",
+    kpi_matches: "Matchs · log détaillé",
   },
   p_champions: {
     title: "Champions",
@@ -341,6 +344,8 @@ const _fr = {
     palette_navigate: "naviguer",
     palette_open: "ouvrir",
     palette_close: "fermer",
+    palette_fts: "Recherche complète pour « {query} »",
+    palette_fts_sub: "Tous les clips — recherche plein texte",
     palette_group_pages: "Pages",
     palette_group_eras: "Époques",
     palette_group_players: "Joueurs",
@@ -451,7 +456,10 @@ const _fr = {
     winrate: "{rate}% winrate",
     wins_short: "{n}V",
     losses_short: "{n}D",
+    // Audit compteurs 12/08 — V + D + sans-résultat = total du hero.
+    no_result_short: "{n} sans résultat",
     games_count: "{n} games",
+    games_detail_count: "{n} games détaillées",
     clips_count: "{n} clips",
     filter_placeholder: "Filtrer par adversaire…",
     filter_aria: "Filtrer les matchs par adversaire",
@@ -595,6 +603,12 @@ const _fr = {
     "ended_title": "Match terminé",
     "ended_body": "Le live KC est fini. Retrouve les clips dans le feed.",
     "ended_cta": "Voir le scroll →",
+    "offline_badge": "Hors live",
+    "offline_title": "Aucun match en cours",
+    "offline_body": "Le feed live s'active automatiquement dès qu'un match de la Karmine Corp commence.",
+    "offline_next_label": "Prochain RDV",
+    "offline_cta_scroll": "Voir les derniers clips →",
+    "offline_cta_matches": "Historique des matchs",
     "announce_singular": "Score Karmine Corp {kc}, adversaire {opp}. {count} nouveau kill. {total} au total.",
     "announce_plural": "Score Karmine Corp {kc}, adversaire {opp}. {count} nouveaux kills. {total} au total.",
   },
@@ -768,7 +782,7 @@ const _fr = {
     "defeat": "Défaite",
     "game_n": "Game {n}",
     "ach_starter": "Titulaire",
-    "ach_starter_desc": "{role} · {games} parties",
+    "ach_starter_desc": "{games} parties jouées",
     "ach_top_kills": "Top kills",
     "ach_offensive_machine": "{kills} kills sur {games} parties — la machine offensive",
     "ach_kda_champion": "KDA Champion",
@@ -777,7 +791,7 @@ const _fr = {
     "last_match": "Dernier match",
     "bo_n": "Bo{n}",
     "see_detail": "Voir le détail →",
-    "career_lec": "Carrière LEC",
+    "career_lec": "Carrière · Toutes compétitions",
     "unit_kills": "kills",
     "unit_w": "W",
     "unit_l": "L",
@@ -868,6 +882,9 @@ const _fr = {
   },
   p_kill: {
     "breadcrumb_home": "Accueil",
+    // Fallback breadcrumb quand l'adversaire n'est pas résolu (jamais
+    // de "KC vs LEC" placeholder).
+    "breadcrumb_match": "Match",
     "game_n": "Game {n}",
     "clip_soon": "Clip bientôt disponible",
     "composite_score_note": "Score composite (KDA, kill participation, victoire)",
@@ -920,9 +937,12 @@ const _fr = {
     "breadcrumb_clips": "Clips",
     "hero_title_pre": "Tous les",
     "hero_title_accent": "clips",
-    "count_filtered": "clips filtrés",
-    "count_published": "clips publiés",
-    "count_total": "au total",
+    // Audit compteurs 12/08 : les cartes mêlent clips jouables et kills
+    // data-only → « kills affichés » ; le total = compteur canonique des
+    // clips publiés (stats-scopes), pas la taille du fetch plafonné.
+    "count_filtered": "kills filtrés",
+    "count_published": "kills affichés",
+    "count_total": "clips publiés au total",
     "records_link": "Records Absolus",
     "search_placeholder": "Filtrer par champion ou description...",
     "search_aria": "Filtrer les clips par champion ou description",
@@ -1098,6 +1118,7 @@ const _fr = {
     "act_streak_aria": "Série de {n} jours",
     "act_streak_title": "Tu reviens depuis {n} jours d'affilée",
     "act_day_n": "Jour {n}",
+    "hint_swipe": "Glisse vers le haut",
     "ban_live": "KC EN LIVE",
     "ban_game_n": "Game {n}",
     "ban_in_progress": "EN COURS",
@@ -1140,7 +1161,7 @@ const _fr = {
     "item_loading_next": "Chargement du clip suivant…",
     "item_end_eyebrow": "Fin du feed",
     "item_end_seen_pre": "Tu as vu les",
-    "item_end_seen_post": "clips",
+    "item_end_seen_post": "clips de cette sélection",
     "item_end_body": "La suite du KCKILLS, à toi de choisir le rythme. Ré-explore le même feed dans un autre ordre, ou plonge dans une sélection plus serrée.",
     "item_end_reshuffle": "Mélanger à nouveau",
     "item_end_best": "★ Meilleurs",
@@ -1387,7 +1408,7 @@ const _fr = {
     "fo_new_duel": "Nouveau duel",
     "fo_votes_count": "{n} votes",
     "fo_breadcrumb_current": "Face-Off",
-    "fo_eyebrow_wave": "Player vs Player · Wave 30d",
+    "fo_eyebrow_wave": "Player vs Player · Le duel ultime",
     "fo_hero_subtitle": "Deux joueurs. Tous les chiffres. Top 10 des kills côte à côte. Et c'est la communauté qui tranche.",
   },
   p_antre: {

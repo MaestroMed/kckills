@@ -164,7 +164,10 @@ export function QuotesEncyclopedia({
               </span>
             </blockquote>
             <div className="mt-6 mx-auto max-w-md">
-              <QuoteCard quote={featured} variant="inline" />
+              {/* showQuoteText={false} — le blockquote géant ci-dessus affiche
+                  déjà la phrase ; la carte interne ne garde que la méta
+                  (caster, énergie) + les actions (écoute, clip, vote). */}
+              <QuoteCard quote={featured} variant="inline" showQuoteText={false} />
             </div>
           </div>
         </section>

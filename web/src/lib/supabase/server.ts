@@ -134,7 +134,12 @@ export async function createServerSupabase() {
         getAll() {
           return cookieStore.getAll();
         },
-        setAll(cookiesToSet: { name: string; value: string; options?: Record<string, unknown> }[]) {
+        // @supabase/ssr 0.12 passe aussi des en-têtes anti-cache (2e argument)
+        // pour qu'un CDN ne garde jamais une réponse d'auth. Inutile ici :
+        // ce client ne sert que dans des route handlers / RSC dynamiques, et
+        // Next rend `private` toute réponse qui pose un cookie — Vercel ne met
+        // jamais en cache une réponse avec Set-Cookie.
+        setAll(cookiesToSet) {
           try {
             cookiesToSet.forEach(({ name, value, options }) =>
               cookieStore.set(name, value, options)

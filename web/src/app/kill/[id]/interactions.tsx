@@ -129,7 +129,7 @@ export function KillInteractions({ killId }: { killId: string }) {
       if (!ac.signal.aborted) setLoadingComments(false);
     })();
     return () => ac.abort();
-  }, [killId, isUuid]);
+  }, [killId, isUuid, t]);
 
   // Cleanup timers on unmount
   useEffect(() => () => {

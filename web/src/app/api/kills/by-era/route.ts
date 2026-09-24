@@ -3,7 +3,12 @@ import { z } from "zod";
 import { getKillsByEra } from "@/lib/supabase/kills";
 import { getEraById } from "@/lib/eras";
 
-export const revalidate = 300; // 5 min — same cadence as the homepage RSC
+// La réponse dépend de la query string (eraId, limit) : pas de rendu
+// statique possible. `revalidate` faisait tenter un prerender au build
+// (« Dynamic server usage » à chaque build) sans jamais rien mettre en
+// cache. Le cache réel est celui du CDN, par URL complète, via
+// Cache-Control (s-maxage=300) plus bas.
+export const dynamic = "force-dynamic";
 
 /**
  * GET /api/kills/by-era?eraId=<id>&limit=<n>
@@ -53,7 +58,7 @@ export async function GET(req: Request) {
       { era: { id: era.id, label: era.label, color: era.color }, kills },
       {
         headers: {
-          "Cache-Control": "public, s-maxage=300, stale-while-revalidate=60",
+          "Cache-Control": "public, s-maxage=300, stale-while-revalidate=600",
         },
       },
     );

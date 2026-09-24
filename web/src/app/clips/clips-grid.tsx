@@ -8,7 +8,6 @@ import { championIconUrl } from "@/lib/constants";
 import { TEAM_LOGOS } from "@/lib/kc-assets";
 import { Breadcrumb } from "@/components/Breadcrumb";
 import { useCurrentLang, useT } from "@/lib/i18n/use-lang";
-import type { Lang } from "@/lib/i18n/lang";
 
 /**
  * Default poster dimensions for vertical clip thumbnails when the
@@ -102,7 +101,19 @@ function cardDescription(card: ClipCard): string {
   return card.desc;
 }
 
-export function ClipsGrid({ initialCards, initialFilters }: { initialCards: ClipCard[]; initialFilters?: InitialFilters }) {
+export function ClipsGrid({
+  initialCards,
+  initialFilters,
+  publishedClipsTotal,
+}: {
+  initialCards: ClipCard[];
+  initialFilters?: InitialFilters;
+  /** Audit compteurs 2026-08-12 — total canonique des clips publiés
+   *  (stats-scopes, même chiffre que /scroll, la home et /matches). Le
+   *  fetch de la grille est plafonné (top 2000 par score), donc
+   *  `initialCards.length` sous-compte le catalogue réel. */
+  publishedClipsTotal?: number;
+}) {
   const [sortKey, setSortKey] = useState<SortKey>(initialFilters?.sort ?? "recent");
   const [opponentFilter, setOpponentFilter] = useState<string | null>(initialFilters?.opponent ?? null);
   const [fightTypeFilter, setFightTypeFilter] = useState<string | null>(initialFilters?.fightType ?? null);
@@ -224,8 +235,12 @@ export function ClipsGrid({ initialCards, initialFilters }: { initialCards: Clip
           <h1 className="font-display text-3xl font-black uppercase">
             {t("p_clips.hero_title_pre")} <span className="text-gold-gradient">{t("p_clips.hero_title_accent")}</span>
           </h1>
+          {/* Audit compteurs 12/08 : « X kills affichés · Y clips publiés au
+              total ». Les cartes mêlent clips jouables et kills data-only
+              (gol.gg) → « kills affichés » ; le total canonique vient de
+              stats-scopes (le fetch plafonné à 2000 sous-comptait : 1 181). */}
           <p className="text-sm text-[var(--text-muted)] mt-2">
-            {filtered.length} {hasActiveFilter ? t("p_clips.count_filtered") : t("p_clips.count_published")} · {initialCards.length} {t("p_clips.count_total")}
+            {filtered.length} {hasActiveFilter ? t("p_clips.count_filtered") : t("p_clips.count_published")} · {(publishedClipsTotal ?? initialCards.length).toLocaleString(lang === "fr" ? "fr-FR" : undefined)} {t("p_clips.count_total")}
           </p>
         </div>
         {/* Hall-of-Fame cross-link — discoverability from the main catalog.
@@ -475,15 +490,20 @@ function ClipCardComponent({ card }: { card: ClipCard }) {
           </span>
         )}
 
-        {/* Top overlay: opponent + date */}
+        {/* Top overlay: opponent + date. Adversaire non résolu (code vide) →
+            pill "KC" seul, jamais de "vs LEC" placeholder ni d'id numérique. */}
         <div className="absolute top-1.5 left-1.5 right-1.5 flex items-center justify-between text-[10px] z-10">
           <div className="flex items-center gap-1 rounded-full bg-black/70 backdrop-blur-sm px-2 py-0.5 border border-white/10">
             <span className="font-bold text-[var(--gold)]">KC</span>
-            <span className="text-white/50">vs</span>
-            {oppLogo ? (
-              <Image src={oppLogo} alt="" width={12} height={12} className="h-3 w-3 object-contain" />
+            {card.opponentCode ? (
+              <>
+                <span className="text-white/50">vs</span>
+                {oppLogo ? (
+                  <Image src={oppLogo} alt="" width={12} height={12} className="h-3 w-3 object-contain" />
+                ) : null}
+                <span className="font-bold text-white">{card.opponentCode}</span>
+              </>
             ) : null}
-            <span className="font-bold text-white">{card.opponentCode}</span>
           </div>
           {card.matchScore && card.kcWon !== null && (
             <span className={`rounded-full px-2 py-0.5 text-[9px] font-bold backdrop-blur-sm ${

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, createContext, useContext, useCallback } from "react";
+import { useState, createContext, useContext, useCallback, useRef } from "react";
 
 interface ToastMsg {
   id: number;
@@ -16,10 +16,12 @@ export function useToast() {
 
 export function ToastProvider({ children }: { children: React.ReactNode }) {
   const [toasts, setToasts] = useState<ToastMsg[]>([]);
-  let counter = 0;
+  // Identifiant monotone : Date.now() donnait la même clé à deux toasts
+  // émis dans la même milliseconde (fermer l'un fermait l'autre).
+  const nextId = useRef(0);
 
   const show = useCallback((text: string, type: "success" | "info" | "error" = "success") => {
-    const id = Date.now();
+    const id = ++nextId.current;
     setToasts((prev) => [...prev, { id, text, type }]);
     setTimeout(() => setToasts((prev) => prev.filter((t) => t.id !== id)), 2500);
   }, []);

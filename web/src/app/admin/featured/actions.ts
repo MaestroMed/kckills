@@ -24,6 +24,7 @@ import {
   logAdminAction,
   requireAdmin,
 } from "@/lib/admin/audit";
+import { CANONICAL_ORIGIN } from "@/lib/site-url";
 
 export interface FeaturedActionResult {
   ok: boolean;
@@ -115,7 +116,7 @@ export async function setFeaturedKill(
                 {
                   title: `★ Clip vedette du jour : ${kill.killer_champion} → ${kill.victim_champion}`,
                   description: kill.ai_description ?? "",
-                  url: `https://kckills.com/scroll?kill=${killId}`,
+                  url: `${CANONICAL_ORIGIN}/scroll?kill=${killId}`,
                   color: 0xffd700,
                   thumbnail: kill.thumbnail_url ? { url: kill.thumbnail_url } : undefined,
                   footer: {

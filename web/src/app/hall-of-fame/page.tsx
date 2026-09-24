@@ -93,14 +93,10 @@ export default async function HallOfFamePage() {
         </section>
       )}
 
-      <section>
-        <h2 className="font-display text-2xl font-bold text-[var(--gold)]">
-          {t("p_hof.legendary")}
-        </h2>
-        <div className="mt-5">
-          <HomeRareCards />
-        </div>
-      </section>
+      {/* Audit 2026-08-12 — pas de h2 local : HomeRareCards embarque déjà
+          son propre hero (kicker « Cartes du moment » + titre « CARTES
+          LÉGENDAIRES »), le doubler donnait deux titres à la suite. */}
+      <HomeRareCards />
     </div>
   );
 }

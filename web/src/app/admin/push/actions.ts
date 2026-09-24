@@ -76,7 +76,7 @@ export async function broadcastPush(input: BroadcastInput): Promise<BroadcastRes
   let title = (input.title ?? "").trim();
   let bodyText = (input.body ?? "").trim();
   let url = input.url?.trim() || "/scroll";
-  let iconUrl = input.icon_url?.trim() || undefined;
+  const iconUrl = input.icon_url?.trim() || undefined;
   let imageUrl = input.image_url?.trim() || undefined;
 
   // Auto-fill from kill if title/body not provided.

@@ -23,6 +23,12 @@ import {
   createServerSupabase,
   rethrowIfDynamic,
 } from "@/lib/supabase/server";
+import {
+  fetchDetectedKcKillsCount,
+  fetchGamesAllCompetCount,
+  fetchMatchesAllCompet,
+  fetchPublishedClipsCount,
+} from "@/lib/stats-scopes";
 
 export interface HeroLastMatch {
   matchId: string;
@@ -41,7 +47,10 @@ export interface HeroCareerStats {
   totalGames: number;
   wins: number;
   losses: number;
-  winRate: number; // 0..1
+  /** Matchs terminés sans winner_team_id en base (backfill gol.gg) —
+   *  exclus de `losses` ET du winrate depuis l'audit compteurs 12/08. */
+  unknownResults: number;
+  winRate: number; // 0..1 — sur matchs décidés uniquement (W+L)
   publishedClips: number;
   yearStart: number;
   yearEnd: number;
@@ -66,6 +75,9 @@ async function getTrackedTeamId(buildTime = false): Promise<string | null> {
     .from("teams")
     .select("id")
     .eq("is_tracked", true)
+    // l'équipe suivie la plus ancienne : choix déterministe (KC a eu une
+    // ligne en double ; sans tri, Postgres renvoie un ordre arbitraire)
+    .order("created_at", { ascending: true })
     .limit(1)
     .maybeSingle();
   return (data?.id as string | undefined) ?? null;
@@ -74,6 +86,18 @@ async function getTrackedTeamId(buildTime = false): Promise<string | null> {
 /**
  * Last completed match involving the tracked team.
  * Pulls scores from games (KC's per-game wins).
+ *
+ * 🐛 2026-08-12 fix : les matchs backfillés gol.gg ont `scheduled_at`
+ * NULL et des games sans `winner_team_id`. `ORDER BY scheduled_at DESC`
+ * remontait les NULL en tête (défaut Postgres) → la carte hero affichait
+ * « KC 0 - 0 GX · 1 janv. » (new Date(null) = epoch 1970) alors que la
+ * grande section « DERNIER MATCH » plus bas montrait le bon match. On ne
+ * considère désormais qu'un lot de matchs terminés ET datés, et on garde
+ * le premier avec un VRAI score (au moins une game gagnée par un des deux
+ * camps). Si aucun candidat ne qualifie — cas actuel tant que le worker
+ * n'a pas rempli games.winner_team_id — on renvoie null : HeroLiveStats
+ * retombe alors sur le snapshot statique real-data.ts, la même source que
+ * la section complète → les deux surfaces montrent le même match.
  */
 export const getHeroLastMatch = cache(async function getHeroLastMatch(
   buildTime = false,
@@ -93,11 +117,12 @@ export const getHeroLastMatch = cache(async function getHeroLastMatch(
       )
       .or(`team_blue_id.eq.${teamId},team_red_id.eq.${teamId}`)
       .eq("state", "completed")
-      .order("scheduled_at", { ascending: false })
-      .limit(1);
+      .not("scheduled_at", "is", null)
+      .order("scheduled_at", { ascending: false, nullsFirst: false })
+      .limit(12);
 
     if (!matches || matches.length === 0) return null;
-    const m = matches[0] as {
+    const candidates = matches as Array<{
       id: string;
       external_id: string | null;
       scheduled_at: string;
@@ -107,63 +132,93 @@ export const getHeroLastMatch = cache(async function getHeroLastMatch(
       team_blue_id: string | null;
       team_red_id: string | null;
       winner_team_id: string | null;
-    };
+    }>;
 
-    const opponentId =
-      m.team_blue_id === teamId ? m.team_red_id : m.team_blue_id;
-    if (!opponentId) return null;
-
-    const { data: oppRow } = await sb
-      .from("teams")
-      .select("code, name")
-      .eq("id", opponentId)
-      .maybeSingle();
-
-    // Per-game scoring : count KC wins vs opponent wins
+    // Une seule requête games pour l'ensemble des candidats (12 max).
     const { data: games } = await sb
       .from("games")
-      .select("id, winner_team_id")
-      .eq("match_id", m.id);
-
-    let kcScore = 0;
-    let oppScore = 0;
-    for (const g of (games ?? []) as Array<{ winner_team_id: string | null }>) {
-      if (g.winner_team_id === teamId) kcScore++;
-      else if (g.winner_team_id === opponentId) oppScore++;
+      .select("match_id, winner_team_id")
+      .in(
+        "match_id",
+        candidates.map((c) => c.id),
+      );
+    const gamesByMatch = new Map<
+      string,
+      Array<{ winner_team_id: string | null }>
+    >();
+    for (const g of (games ?? []) as Array<{
+      match_id: string;
+      winner_team_id: string | null;
+    }>) {
+      const bucket = gamesByMatch.get(g.match_id);
+      if (bucket) bucket.push(g);
+      else gamesByMatch.set(g.match_id, [g]);
     }
 
-    const bestOfMatch = (m.format ?? "bo1").match(/(\d)/);
-    const bestOf = bestOfMatch ? parseInt(bestOfMatch[1], 10) : 1;
+    for (const m of candidates) {
+      // Date plausible uniquement (même clamp que getHeroCareerStats) —
+      // écarte les fallbacks epoch/1970 et les années aberrantes.
+      const yr = new Date(m.scheduled_at).getUTCFullYear();
+      if (!Number.isFinite(yr) || yr < 2011 || yr > 2030) continue;
 
-    // 🐛 2026-04-28 fix : `matches.winner_team_id` is occasionally null
-    // for recently-completed matches when the worker hasn't backfilled
-    // that column yet (the games rows always have it, the matches row
-    // is set in a separate write that can race or fail). Derive kcWon
-    // from the per-game tally instead so the hero never flashes "L"
-    // while KC actually won.
-    let kcWon: boolean;
-    if (m.winner_team_id) {
-      kcWon = m.winner_team_id === teamId;
-    } else if (kcScore !== oppScore) {
-      kcWon = kcScore > oppScore;
-    } else {
-      kcWon = false;
+      const opponentId =
+        m.team_blue_id === teamId ? m.team_red_id : m.team_blue_id;
+      if (!opponentId) continue;
+
+      // Per-game scoring : count KC wins vs opponent wins
+      let kcScore = 0;
+      let oppScore = 0;
+      for (const g of gamesByMatch.get(m.id) ?? []) {
+        if (g.winner_team_id === teamId) kcScore++;
+        else if (g.winner_team_id === opponentId) oppScore++;
+      }
+
+      // Un match terminé a forcément au moins une game gagnée : un 0-0
+      // signifie que le worker n'a pas (encore) posé games.winner_team_id
+      // → candidat suivant.
+      if (kcScore + oppScore === 0) continue;
+
+      const { data: oppRow } = await sb
+        .from("teams")
+        .select("code, name")
+        .eq("id", opponentId)
+        .maybeSingle();
+
+      const bestOfMatch = (m.format ?? "bo1").match(/(\d)/);
+      const bestOf = bestOfMatch ? parseInt(bestOfMatch[1], 10) : 1;
+
+      // 🐛 2026-04-28 fix : `matches.winner_team_id` is occasionally null
+      // for recently-completed matches when the worker hasn't backfilled
+      // that column yet (the games rows always have it, the matches row
+      // is set in a separate write that can race or fail). Derive kcWon
+      // from the per-game tally instead so the hero never flashes "L"
+      // while KC actually won.
+      let kcWon: boolean;
+      if (m.winner_team_id) {
+        kcWon = m.winner_team_id === teamId;
+      } else {
+        kcWon = kcScore > oppScore;
+      }
+
+      return {
+        matchId: m.id,
+        externalId: m.external_id,
+        scheduledAt: m.scheduled_at,
+        opponent: {
+          code: (oppRow?.code as string | undefined) ?? "?",
+          name: (oppRow?.name as string | undefined) ?? "Inconnu",
+        },
+        kcScore,
+        oppScore,
+        kcWon,
+        stage: m.stage,
+        bestOf,
+      };
     }
 
-    return {
-      matchId: m.id,
-      externalId: m.external_id,
-      scheduledAt: m.scheduled_at,
-      opponent: {
-        code: (oppRow?.code as string | undefined) ?? "?",
-        name: (oppRow?.name as string | undefined) ?? "Inconnu",
-      },
-      kcScore,
-      oppScore,
-      kcWon,
-      stage: m.stage,
-      bestOf,
-    };
+    // Aucun match daté avec un vrai score → laisse le fallback statique
+    // (real-data.ts) prendre le relai côté composant.
+    return null;
   } catch (err) {
     rethrowIfDynamic(err);
     console.warn("[hero-stats] getHeroLastMatch threw:", err);
@@ -172,99 +227,49 @@ export const getHeroLastMatch = cache(async function getHeroLastMatch(
 });
 
 /**
- * Aggregate career stats for the tracked team across the current
- * pilot window (2024 → today). Counts kills (KC offensive only),
- * wins/losses/games from completed matches.
+ * Aggregate career stats for the tracked team. La requête n'a AUCUN
+ * filtre de ligue ni de date : elle agrège TOUS les matchs terminés de
+ * KC, toutes compétitions confondues (LFL 2021, EU Masters, LEC…) — le
+ * libellé de la carte hero doit donc dire « toutes compétitions », pas
+ * « LEC ».
+ *
+ * ♻️ Audit compteurs 2026-08-12 : cette fonction COMPOSE désormais les
+ * compteurs canoniques de `lib/stats-scopes.ts` au lieu de porter ses
+ * propres requêtes. Deux bugs corrigés au passage :
+ *   * `losses` comptait « pas gagné = perdu » → les 42 matchs backfillés
+ *     sans winner_team_id gonflaient les défaites (305W-232L, WR 56,8 %)
+ *     — ils vivent maintenant dans `unknownResults` (305W-190L, 61,6 %).
+ *   * `publishedClips` comptait TOUTES les lignes status=published (deux
+ *     camps, avec ou sans clip → « 9 276 CLIPS » sur la home) alors que
+ *     /scroll affichait 5 224. C'est maintenant LE compteur « clips »
+ *     canonique (kills KC publiés avec clip jouable).
+ *
+ * Le paramètre `buildTime` est conservé pour compat d'appel mais n'a
+ * plus d'effet : les compteurs canoniques sont anon-only (données
+ * publiques, clé de cache stable cross-request).
  */
 export const getHeroCareerStats = cache(async function getHeroCareerStats(
-  buildTime = false,
+  _buildTime = false,
 ): Promise<HeroCareerStats | null> {
   try {
-    const sb = buildTime
-      ? createAnonSupabase()
-      : await createServerSupabase();
-    const teamId = await getTrackedTeamId(buildTime);
-    if (!teamId) return null;
-
-    // Completed matches involving KC
-    const { data: matches } = await sb
-      .from("matches")
-      .select("id, winner_team_id, team_blue_id, team_red_id, scheduled_at")
-      .or(`team_blue_id.eq.${teamId},team_red_id.eq.${teamId}`)
-      .eq("state", "completed");
-
-    let wins = 0;
-    let losses = 0;
-    const matchIds: string[] = [];
-    let yearMin = 9999;
-    let yearMax = 0;
-    for (const m of (matches ?? []) as Array<{
-      id: string;
-      winner_team_id: string | null;
-      scheduled_at: string | null;
-    }>) {
-      matchIds.push(m.id);
-      if (m.winner_team_id === teamId) wins++;
-      else losses++;
-      // 🐛 2026-04-28 fix : `new Date(null).getUTCFullYear()` returns
-      // 1970 (epoch), which used to pull yearMin all the way down and
-      // make the hero card show "Carrière LEC · 1970 → 2026". Guard
-      // against null/invalid scheduled_at AND clamp to the LoL esports
-      // era so a single mis-dated row can't poison the whole window.
-      if (!m.scheduled_at) continue;
-      const yr = new Date(m.scheduled_at).getUTCFullYear();
-      if (!Number.isFinite(yr) || yr < 2011 || yr > 2030) continue;
-      if (yr < yearMin) yearMin = yr;
-      if (yr > yearMax) yearMax = yr;
-    }
-
-    // Total games + total KC kills (tracked_team_involvement = team_killer)
-    let totalGames = 0;
-    let totalKills = 0;
-    if (matchIds.length > 0) {
-      const { count: gamesCount } = await sb
-        .from("games")
-        .select("id", { count: "exact", head: true })
-        .in("match_id", matchIds);
-      totalGames = gamesCount ?? 0;
-
-      // KC offensive kills count via the tracked_team_involvement filter.
-      // Only counts PUBLISHED kills with kill_visible=true so the displayed
-      // total matches what users see on the scroll feed and avoids inflated
-      // numbers from unpublished raw rows (pipeline in-flight, Gemini
-      // failures, manual_review queue, etc.).
-      //
-      // ⚠️ Bug history (2026-04-26) : without these two filters the counter
-      // returned 124+ "career" kills which the user flagged as suspicious
-      // after only NAVI (yesterday) + SHIFTERS (today) had been processed —
-      // that was raw harvested rows, not the actual visible-on-feed count.
-      const { count: killsCount } = await sb
-        .from("kills")
-        .select("id", { count: "exact", head: true })
-        .eq("tracked_team_involvement", "team_killer")
-        .eq("status", "published")
-        .eq("kill_visible", true);
-      totalKills = killsCount ?? 0;
-    }
-
-    // Total published clips count (separate metric, used in the rail)
-    const { count: clipsCount } = await sb
-      .from("kills")
-      .select("id", { count: "exact", head: true })
-      .eq("status", "published");
-
-    const winRate =
-      wins + losses > 0 ? wins / (wins + losses) : 0;
+    const [tally, totalGames, totalKills, publishedClips] = await Promise.all([
+      fetchMatchesAllCompet(),
+      fetchGamesAllCompetCount(),
+      fetchDetectedKcKillsCount(),
+      fetchPublishedClipsCount(),
+    ]);
+    if (!tally) return null;
 
     return {
       totalKills,
       totalGames,
-      wins,
-      losses,
-      winRate,
-      publishedClips: clipsCount ?? 0,
-      yearStart: yearMin === 9999 ? new Date().getUTCFullYear() : yearMin,
-      yearEnd: yearMax === 0 ? new Date().getUTCFullYear() : yearMax,
+      wins: tally.wins,
+      losses: tally.losses,
+      unknownResults: tally.unknown,
+      winRate: tally.winratePct != null ? tally.winratePct / 100 : 0,
+      publishedClips,
+      yearStart: tally.yearStart,
+      yearEnd: tally.yearEnd,
     };
   } catch (err) {
     rethrowIfDynamic(err);

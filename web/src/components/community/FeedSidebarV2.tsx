@@ -59,8 +59,12 @@ const LONG_PRESS_MS = 500;
 // spec is layered ONLY on `lg:` utilities. Rest = cream-wash over a
 // black scrim + thin gold border ; hover = full gold border + glow +
 // stronger wash (the .gold-glow utility lives in globals.css).
+// Audit 2026-08-12 — lisibilité mobile : les tuiles black/55 + bord
+// white/15 disparaissaient sur le footage sombre (mesuré : rail peint et
+// au-dessus, mais indiscernable sur screenshot). Bord et ombre renforcés,
+// même langage dark-glass.
 const SECONDARY_TILE =
-  "bg-black/55 backdrop-blur-sm border border-white/15 hover:bg-black/75 hover:border-white/25 shadow-[0_4px_18px_rgba(0,0,0,0.5)] " +
+  "bg-black/55 backdrop-blur-sm border border-white/30 hover:bg-black/75 hover:border-white/45 shadow-[0_4px_18px_rgba(0,0,0,0.6),0_0_0_1px_rgba(0,0,0,0.4)] " +
   "lg:bg-[var(--cream-wash)] lg:bg-black/35 lg:backdrop-blur-md lg:border-[var(--gold)]/45 lg:shadow-[0_8px_26px_rgba(0,0,0,0.5)] " +
   "lg:hover:bg-[var(--cream-wash-strong)] lg:hover:border-[var(--gold)] lg:hover:shadow-[0_0_20px_rgba(200,170,110,0.15),0_0_60px_rgba(200,170,110,0.05)] motion-safe:lg:hover:scale-[1.04]";
 
@@ -68,7 +72,8 @@ const SECONDARY_TILE =
 const SECONDARY_TILE_ON =
   "border bg-[var(--gold)] border-[var(--gold)] shadow-[0_8px_26px_rgba(200,170,110,0.4),0_0_30px_rgba(200,170,110,0.25)] motion-safe:lg:hover:scale-[1.04]";
 
-const SECONDARY_GLYPH = "text-white lg:text-[var(--gold)] transition-colors";
+const SECONDARY_GLYPH =
+  "text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)] lg:text-[var(--gold)] lg:drop-shadow-none transition-colors";
 
 // Count / label sits in the gap — font-data, legible over bright frames
 // via a drop-shadow. Mobile keeps its original size; bumps to 13px on lg.
@@ -223,7 +228,10 @@ export function FeedSidebarV2({
   return (
     <>
       <div
-        className={`absolute right-3 md:right-5 lg:right-7 2xl:right-12 bottom-32 md:bottom-40 lg:bottom-48 2xl:bottom-56 z-20 flex flex-col items-center gap-4 md:gap-5 lg:gap-[22px] 2xl:gap-7 transition-all duration-500 delay-150 ${
+        // Vague 4 — gap mobile resserré (gap-3) : le rail passe de 6 à 8
+        // actions (★ noter + enregistrer désormais visibles <lg), on
+        // compense pour qu'il reste centré-bas et n'escalade pas le HUD.
+        className={`absolute right-3 md:right-5 lg:right-7 2xl:right-12 bottom-32 md:bottom-40 lg:bottom-48 2xl:bottom-56 z-20 flex flex-col items-center gap-3 md:gap-5 lg:gap-[22px] 2xl:gap-7 transition-all duration-500 delay-150 ${
           visible ? "opacity-100 translate-x-0" : "opacity-0 translate-x-3 pointer-events-none"
         }`}
       >
@@ -270,6 +278,44 @@ export function FeedSidebarV2({
             setShowRating(true);
           }}
         />
+        {/* ★ Noter — version MOBILE sobre (Vague 4, 2026-08-12). Le cœur
+            du produit est « Rate. React. Share » mais le hero ★ NOTER
+            était hidden <lg : sur mobile la notation 5 étoiles n'avait
+            AUCUNE surface visible. Tuile 40 px semi-transparente dans le
+            même vocabulaire que la tuile emoji — ouvre le MÊME
+            StarRatingPopover (rateKill + InlineAuthPrompt) que le hero.
+            Aucune logique nouvelle. */}
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            setShowRating(true);
+          }}
+          aria-haspopup="dialog"
+          aria-label={t("p_comm.rate_kill_aria")}
+          className="flex lg:hidden flex-col items-center gap-1 group select-none"
+        >
+          <span className="flex h-10 w-10 items-center justify-center rounded-full bg-black/55 backdrop-blur-sm border border-white/30 shadow-[0_4px_18px_rgba(0,0,0,0.6)] transition-all group-hover:bg-black/75 active:scale-90">
+            <svg
+              className="h-5 w-5 text-[var(--gold)]"
+              viewBox="0 0 24 24"
+              fill={(initialAvgRating ?? 0) > 0 ? "currentColor" : "none"}
+              stroke="currentColor"
+              strokeWidth={(initialAvgRating ?? 0) > 0 ? 0 : 1.8}
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M12 2.5l2.81 6.06 6.69.62-5.05 4.44 1.49 6.56L12 17.27l-5.94 3.41 1.49-6.56-5.05-4.44 6.69-.62L12 2.5z"
+              />
+            </svg>
+          </span>
+          <span className="font-data text-[10px] text-white/65 leading-none">
+            {initialAvgRating != null && initialAvgRating > 0
+              ? initialAvgRating.toFixed(1)
+              : t("p_comm.rate_label")}
+          </span>
+        </button>
         {/* Like — primary action, biggest visual presence.
             Variant scales: compact (mobile/tablet) → wide (≥1280px). */}
         <div className="block lg:hidden">
@@ -358,25 +404,26 @@ export function FeedSidebarV2({
           <span className={SECONDARY_LABEL}>{t("p_comm.share")}</span>
         </button>
 
-        {/* Bookmark — SECONDARY save-to-collection. Hidden <lg (the
-            mobile rail's save lives in the long-press menu) and only
-            rendered when the caller wires onBookmark. "On" state tints
-            gold-filled per the active-accent spec. */}
+        {/* Bookmark — SECONDARY save-to-collection. Vague 4 (2026-08-12) :
+            désormais visible AUSSI <lg (avant : caché mobile, le save ne
+            vivait que dans le long-press menu — introuvable). Tuile 40 px
+            sobre sur mobile, tailles lg inchangées. Only rendered when
+            the caller wires onBookmark. "On" state tints gold-filled. */}
         {onBookmark && (
           <button
             type="button"
             onClick={handleBookmark}
             aria-pressed={bookmarked}
             aria-label={bookmarked ? t("p_comm.bookmark_remove") : t("p_comm.bookmark_add")}
-            className="group hidden lg:flex flex-col items-center gap-[5px] select-none"
+            className="group flex flex-col items-center gap-1 lg:gap-[5px] select-none"
           >
             <span
-              className={`flex h-14 w-14 2xl:h-16 2xl:w-16 items-center justify-center rounded-full transition-all active:scale-90 ${
+              className={`flex h-10 w-10 lg:h-14 lg:w-14 2xl:h-16 2xl:w-16 items-center justify-center rounded-full transition-all active:scale-90 ${
                 bookmarked ? SECONDARY_TILE_ON : SECONDARY_TILE
               }`}
             >
               <svg
-                className={`h-7 w-7 2xl:h-8 2xl:w-8 ${bookmarked ? "text-[var(--bg-primary)]" : SECONDARY_GLYPH}`}
+                className={`h-5 w-5 lg:h-7 lg:w-7 2xl:h-8 2xl:w-8 ${bookmarked ? "text-[var(--bg-primary)]" : SECONDARY_GLYPH}`}
                 viewBox="0 0 24 24"
                 fill={bookmarked ? "currentColor" : "none"}
                 stroke="currentColor"

@@ -90,7 +90,7 @@ export function EmojiReactions({ killId, visible }: Props) {
       .then((r) => (r.ok ? r.json() : null))
       .then((body: { counts?: Record<string, number> } | null) => {
         if (cancelled || !body?.counts) return;
-        setCounts((prev) => {
+        setCounts(() => {
           // Server totals win; keep any taps fired while fetching.
           const merged = { ...body.counts } as Record<string, number>;
           for (const [e, n] of Object.entries(pendingRef.current)) {

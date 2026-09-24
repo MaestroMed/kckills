@@ -12,10 +12,13 @@
  *   LINKED      -> shows the summoner name, current rank, top 5
  *                  champions (icon + level), and a "Délier" button.
  *
- * If the env vars aren't configured server-side, the parent server
- * component passes `available={false}` and we render a soft-disabled
- * card explaining the state. Mobile-first : 44px tap targets,
- * full-width on <768px.
+ * Bruit API (audit 2026-08-12) : la disponibilité serveur (env vars
+ * RIOT_CLIENT_ID/SECRET) n'est plus sondée au chargement de /settings —
+ * la route n'est sollicitée qu'au CLIC sur le CTA. Le handler sonde
+ * /api/auth/riot/start (redirect:"manual") : 503 → carte « indisponible »
+ * soft-disabled, sinon navigation réelle vers la route (qui re-mint le
+ * cookie PKCE et redirige vers Riot ou /login). Mobile-first : 44px tap
+ * targets, full-width on <768px.
  *
  * Reads the linked profile slice from props (resolved by the parent
  * server component via /api/me-equivalent) — keeping this component
@@ -44,8 +47,6 @@ export interface RiotLinkProfile {
 }
 
 interface Props {
-  /** Whether the server-side env vars (RIOT_CLIENT_ID/SECRET) are set. */
-  available: boolean;
   /** Current Riot link state (null when not linked). */
   profile: RiotLinkProfile | null;
   /** Whether the visitor is logged in via Discord. */
@@ -69,11 +70,21 @@ const WARN_LABEL_KEYS: Record<string, string> = {
   no_api_key: "p_setcard.riot_warn_no_api_key",
 };
 
-export function RiotLinkCard({ available, profile, loggedIn, callbackState }: Props) {
+export function RiotLinkCard({ profile, loggedIn, callbackState }: Props) {
   const t = useT();
-  const [linkedProfile, setLinkedProfile] = useState<RiotLinkProfile | null>(profile);
+  // Résync prop → affichage (audit 2026-08-12) : le parent résout /api/me
+  // APRÈS le premier render (profile null au mount, puis profil réel). Un
+  // useState(profile) figeait la valeur initiale → CTA « non lié » affiché
+  // à un utilisateur déjà lié. On dérive donc de la prop à chaque render ;
+  // seul le délien local (bouton « Délier ») est un vrai état.
+  const [unlinked, setUnlinked] = useState(false);
+  const linkedProfile = unlinked ? null : profile;
   const [pending, startTransition] = useTransition();
   const [unlinkError, setUnlinkError] = useState<string | null>(null);
+  // Découvert au CLIC (pas de probe au chargement) : passe à true quand
+  // /api/auth/riot/start répond 503 (env vars Riot absentes côté serveur).
+  const [unavailable, setUnavailable] = useState(false);
+  const [linking, setLinking] = useState(false);
 
   // Hydrate the analytics event when arriving back from /api/auth/riot/callback
   // with ?riot_linked=true. Mirror the AuthEventTracker cookie pattern but
@@ -85,11 +96,11 @@ export function RiotLinkCard({ available, profile, loggedIn, callbackState }: Pr
     }
   }, [callbackState?.ok, callbackState?.warn]);
 
-  if (!available) {
+  if (unavailable) {
     return (
       <Card>
         <h2 className="font-display font-semibold">{t("p_setcard.riot_link_title")}</h2>
-        <p className="text-sm text-[var(--text-muted)]">
+        <p className="text-sm text-[var(--text-muted)]" role="status" aria-live="polite">
           {t("p_setcard.riot_unavailable")}
         </p>
       </Card>
@@ -109,6 +120,36 @@ export function RiotLinkCard({ available, profile, loggedIn, callbackState }: Pr
 
   // ── NOT LINKED state ────────────────────────────────────────────────
   if (!linkedProfile || !linkedProfile.summonerName) {
+    const startHref = "/api/auth/riot/start";
+    // Bruit API (audit 2026-08-12) : la route n'est sollicitée qu'ICI, au
+    // clic — jamais au chargement de /settings. On la sonde d'abord sans
+    // suivre la redirection : 503 = OAuth Riot non configuré → carte
+    // « indisponible » ; tout autre statut (0/opaqueredirect = 302 vers
+    // Riot ou /login) = route câblée → navigation réelle.
+    const handleStartLink = (e: React.MouseEvent<HTMLAnchorElement>) => {
+      track("riot.link_started");
+      // Clic modifié (nouvel onglet / autre fenêtre) → lien natif.
+      if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+      e.preventDefault();
+      if (linking) return;
+      setLinking(true);
+      void (async () => {
+        try {
+          const res = await fetch(startHref, { redirect: "manual" });
+          if (res.status === 503) {
+            setUnavailable(true);
+            setLinking(false);
+            return;
+          }
+          window.location.assign(startHref);
+        } catch {
+          // Sonde en échec (réseau HS ?) — retombe sur la navigation
+          // directe, comportement historique du lien.
+          window.location.assign(startHref);
+        }
+      })();
+    };
+
     return (
       <Card>
         <h2 className="font-display font-semibold">{t("p_setcard.riot_link_title")}</h2>
@@ -123,9 +164,10 @@ export function RiotLinkCard({ available, profile, loggedIn, callbackState }: Pr
         )}
 
         <a
-          href="/api/auth/riot/start"
-          onClick={() => track("riot.link_started")}
-          className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-[var(--gold)] px-4 py-3 text-sm font-bold text-black hover:bg-[var(--gold-bright)] transition-colors min-h-[44px] md:w-auto"
+          href={startHref}
+          onClick={handleStartLink}
+          aria-busy={linking}
+          className={`inline-flex w-full items-center justify-center gap-2 rounded-lg bg-[var(--gold)] px-4 py-3 text-sm font-bold text-black hover:bg-[var(--gold-bright)] transition-colors min-h-[44px] md:w-auto ${linking ? "pointer-events-none opacity-60" : ""}`}
         >
           <RiotIcon />
           {t("p_setcard.riot_link_cta")}
@@ -149,7 +191,7 @@ export function RiotLinkCard({ available, profile, loggedIn, callbackState }: Pr
           setUnlinkError(t("p_setcard.riot_unlink_error"));
           return;
         }
-        setLinkedProfile(null);
+        setUnlinked(true);
         track("auth.riot_unlinked");
       } catch {
         setUnlinkError(t("p_setcard.riot_unlink_error_network"));

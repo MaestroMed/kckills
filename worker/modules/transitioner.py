@@ -84,12 +84,27 @@ async def run() -> int:
     # client-side dict filter below stays the source of truth.
     games = safe_select(
         "games",
-        "id, vod_youtube_id, vod_offset_seconds",
+        "id, external_id, vod_youtube_id, vod_offset_seconds",
         _limit=5000,
     ) or []
     games_with_vod = {
         g["id"]: g for g in games if g.get("vod_youtube_id")
     }
+    # 2026-09-23 — source Twitch : une game TERMINÉE dans le feed (horloge
+    # complète en cache) et récente est clippable sans VOD YouTube (IP
+    # bloquée par YouTube depuis l'été ; l'API ne donne pas toujours la VOD
+    # d'un match international). Lecture disque seule, pas d'appel réseau.
+    try:
+        from modules import twitch_source
+
+        if twitch_source.is_enabled():
+            by_id = {g["id"]: g for g in games}
+            for gid in {k.get("game_id") for k in raw_kills} - set(games_with_vod):
+                g = by_id.get(gid)
+                if g and twitch_source.eligible(g.get("external_id")):
+                    games_with_vod[gid] = g
+    except Exception as e:  # jamais bloquant : YouTube seul, comme avant
+        log.warn("transitioner_twitch_gate_failed", error=str(e)[:160])
 
     # ─── Wave 35 #12 — BACKPRESSURE GATE ───────────────────────────────
     # THE fix for the runaway. Before flooding the queue with clip.create

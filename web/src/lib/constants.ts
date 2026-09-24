@@ -86,42 +86,64 @@ export const KILL_TYPE_COLORS: Record<string, string> = {
   regular: "bg-gray-500/20 text-gray-300",
 };
 
-const DDRAGON = "16.7.1";
+// ─── Data Dragon (CDN Riot) ──────────────────────────────────────────────
+// Version épinglée — dernière release vérifiée le 12/08/2026 via
+// https://ddragon.leagueoflegends.com/api/versions.json
+const DDRAGON = "16.16.1";
 
-export function championIconUrl(championName: string): string {
-  return `https://ddragon.leagueoflegends.com/cdn/${DDRAGON}/img/champion/${championName}.png`;
+// Wave 44 (audit roulette), durci audit 12/08/2026 — normalisation des noms
+// champions vers les clés Data Dragon. La DB stocke des graphies variées :
+// broadcast ("Kha'Zix", "Renata Glasc"), concaténée ("KhaZix", "RenataGlasc"),
+// casse libre — mais DDragon exige sa clé interne exacte (Khazix, Renata,
+// MonkeyKing…) sinon le CDN répond 403 et les icônes/splashes sont cassés.
+//
+// Lookup insensible à la casse et à la ponctuation : on strippe tout sauf
+// les lettres puis on passe en minuscules avant de chercher dans la table.
+// Seuls 9 champions (sur 173) ont une clé qui diffère de leur nom strippé —
+// liste vérifiée le 12/08/2026 contre
+// https://ddragon.leagueoflegends.com/cdn/16.16.1/data/en_US/champion.json
+// Les autres entrées préservent la casse interne (KogMaw, LeeSin…) au cas où
+// la source écrit le nom en minuscules.
+const DDRAGON_KEY_FIX: Record<string, string> = {
+  // — clé DDragon ≠ nom strippé (les 9 vrais cas spéciaux) —
+  belveth: "Belveth", // Bel'Veth
+  chogath: "Chogath", // Cho'Gath
+  kaisa: "Kaisa", // Kai'Sa
+  khazix: "Khazix", // Kha'Zix / KhaZix
+  leblanc: "Leblanc", // LeBlanc
+  wukong: "MonkeyKing", // Wukong
+  nunuwillump: "Nunu", // Nunu & Willump
+  renataglasc: "Renata", // Renata Glasc / RenataGlasc
+  velkoz: "Velkoz", // Vel'Koz
+  // — clé = nom strippé, mais casse interne à préserver —
+  aurelionsol: "AurelionSol",
+  drmundo: "DrMundo", // Dr. Mundo
+  jarvaniv: "JarvanIV", // Jarvan IV
+  kogmaw: "KogMaw", // Kog'Maw
+  ksante: "KSante", // K'Sante
+  leesin: "LeeSin",
+  masteryi: "MasterYi",
+  missfortune: "MissFortune",
+  reksai: "RekSai", // Rek'Sai
+  tahmkench: "TahmKench",
+  twistedfate: "TwistedFate",
+  xinzhao: "XinZhao",
+  // NB : l'ancienne clé "FiddleSticks" répond 403 sur l'endpoint versionné —
+  // la clé moderne "Fiddlesticks" (fallback générique) marche partout.
+};
+
+export function ddragonKey(championName: string): string {
+  const stripped = championName.replace(/[^A-Za-z]/g, "");
+  const fixed = DDRAGON_KEY_FIX[stripped.toLowerCase()];
+  if (fixed) return fixed;
+  // Cas générique : retirer espaces/apostrophes/points suffit (Renekton,
+  // Ahri… restent inchangés). On capitalise la 1re lettre pour tolérer une
+  // graphie source en minuscules ("renekton" → "Renekton").
+  return stripped.charAt(0).toUpperCase() + stripped.slice(1);
 }
 
-// Wave 44 (audit roulette) — normalisation des noms champions vers les clés
-// Data Dragon. La DB stocke la graphie broadcast (Wukong, LeBlanc, Renata
-// Glasc…) mais DDragon veut sa clé interne (MonkeyKing, Leblanc, Renata) —
-// sans ça, splash/loading 403 et l'écran VS affiche des images cassées.
-const DDRAGON_NAME_FIX: Record<string, string> = {
-  "Wukong": "MonkeyKing",
-  "LeBlanc": "Leblanc",
-  "Renata Glasc": "Renata",
-  "RenataGlasc": "Renata",
-  "Fiddlesticks": "FiddleSticks",
-  "Cho'Gath": "Chogath",
-  "Kai'Sa": "Kaisa",
-  "Kha'Zix": "Khazix",
-  "Vel'Koz": "Velkoz",
-  "Rek'Sai": "RekSai",
-  "K'Sante": "KSante",
-  "Bel'Veth": "Belveth",
-  "Nunu & Willump": "Nunu",
-  "Dr. Mundo": "DrMundo",
-  "Jarvan IV": "JarvanIV",
-  "Lee Sin": "LeeSin",
-  "Master Yi": "MasterYi",
-  "Miss Fortune": "MissFortune",
-  "Twisted Fate": "TwistedFate",
-  "Xin Zhao": "XinZhao",
-  "Aurelion Sol": "AurelionSol",
-  "Tahm Kench": "TahmKench",
-};
-export function ddragonKey(championName: string): string {
-  return DDRAGON_NAME_FIX[championName] ?? championName.replace(/[^A-Za-z]/g, "");
+export function championIconUrl(championName: string): string {
+  return `https://ddragon.leagueoflegends.com/cdn/${DDRAGON}/img/champion/${ddragonKey(championName)}.png`;
 }
 
 /** Full splash art — used as background in scroll mode */

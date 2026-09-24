@@ -6,7 +6,44 @@ const PROFILE_SELECT = "id, discord_username, discord_avatar_url, badges";
 // the comment_votes recompute trigger (migration 038). It can be negative
 // when downvotes outweigh upvotes. The client uses this for both display
 // and the Wilson "Top" sort.
-const COMMENT_SELECT = `id, content, created_at, parent_id, upvotes, moderation_status, user_id, profile:profiles(${PROFILE_SELECT})`;
+//
+// PAS d'embed `profile:profiles(...)` ici : comments.user_id référence
+// auth.users (pas profiles), donc PostgREST n'a AUCUN FK comments→profiles
+// à suivre et répondait « Could not find a relationship between 'comments'
+// and 'profiles' in the schema cache » → 500 sur chaque GET. Les profils
+// auteurs sont récupérés séparément en un fetch batché (`fetchProfilesById`)
+// et recousus sous la clé `profile` que le client consomme déjà.
+const COMMENT_SELECT =
+  "id, content, created_at, parent_id, upvotes, moderation_status, user_id";
+
+/** Profil public minimal recousu sous `comment.profile`. */
+type ProfileRow = Record<string, unknown> & { id: string };
+
+/**
+ * Fetch batché des profils auteurs — remplace l'embed PostgREST impossible
+ * (aucun FK comments→profiles). RLS "Public profiles" (SELECT true) rend la
+ * lecture anonyme possible. Fail-open : une erreur renvoie une map vide et
+ * les commentaires s'affichent simplement « Anonyme » côté client.
+ */
+async function fetchProfilesById(
+  supabase: Awaited<ReturnType<typeof createServerSupabase>>,
+  userIds: string[],
+): Promise<Map<string, ProfileRow>> {
+  const byId = new Map<string, ProfileRow>();
+  if (userIds.length === 0) return byId;
+  const { data, error } = await supabase
+    .from("profiles")
+    .select(PROFILE_SELECT)
+    .in("id", userIds);
+  if (error) {
+    console.warn("[api/comment] profiles fetch failed:", error.message);
+    return byId;
+  }
+  for (const p of (data ?? []) as ProfileRow[]) {
+    byId.set(String(p.id), p);
+  }
+  return byId;
+}
 
 /**
  * GET — return approved comments for a kill, plus the current user's own
@@ -63,6 +100,7 @@ export async function GET(
   ]);
 
   if (approvedRes.error) {
+    console.error("[api/comment] GET approved query failed:", approvedRes.error.message);
     return NextResponse.json({ error: approvedRes.error.message }, { status: 500 });
   }
 
@@ -73,6 +111,16 @@ export async function GET(
     _pending: true,
   }));
   const merged: CommentRow[] = [...pending, ...((approvedRes.data as CommentRow[] | null) ?? [])];
+
+  // ─── Profils auteurs (fetch batché, cf. note sur COMMENT_SELECT) ──
+  const authorIds = [
+    ...new Set(
+      merged
+        .map((c) => c.user_id)
+        .filter((v): v is string => typeof v === "string" && v.length > 0),
+    ),
+  ];
+  const profileById = await fetchProfilesById(supabase, authorIds);
 
   // ─── Wave 7 vote enrichment ──────────────────────────────────────
   // Two batched queries against comment_votes for the visible ids :
@@ -118,6 +166,10 @@ export async function GET(
     const cid = String(c.id);
     return {
       ...c,
+      profile:
+        typeof c.user_id === "string"
+          ? profileById.get(c.user_id) ?? null
+          : null,
       downvote_count: downvoteCountById.get(cid) ?? 0,
       user_vote: userVoteById.get(cid) ?? 0,
     };
@@ -184,6 +236,13 @@ export async function POST(
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
+  // Recoud le profil auteur (pas d'embed possible, cf. COMMENT_SELECT).
+  const profileById = await fetchProfilesById(supabase, [user.id]);
+
   // Echo the pending flag so the client knows to badge it.
-  return NextResponse.json({ ...data, _pending: true });
+  return NextResponse.json({
+    ...data,
+    profile: profileById.get(user.id) ?? null,
+    _pending: true,
+  });
 }

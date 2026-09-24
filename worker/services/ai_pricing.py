@@ -42,13 +42,22 @@ GEMINI_PRICES: dict[str, tuple[float, float]] = {
     "gemini-3-flash-lite":            (0.10, 0.40),
     "gemini-3-pro-preview":           (3.50, 15.00),
     # Gemini 3.1 family
-    "gemini-3.1-flash-lite":          (0.10, 0.40),
-    "gemini-3.1-pro-preview":         (3.50, 15.00),
+    # 2026-09-17 : la grille officielle affiche 3.1 Flash-Lite à $0.25/$1.50
+    # (était $0.10/$0.40 en mai) — le cap journalier comptait 2,5× trop bas.
+    "gemini-3.1-flash-lite":          (0.25, 1.50),
+    "gemini-3.1-pro-preview":         (2.00, 12.00),
     # Gemini 3.5 family (Wave 33 — GA 2026-05-19)
     # Positionnée comme remplacement de 2.5-pro : qualité Pro à vitesse
     # Flash, beats 3.1 Pro sur les benchmarks agentic. Cached-input
     # $0.15/M tokens (10× moins) — bonus séparé via compute helper.
     "gemini-3.5-flash":               (1.50, 9.00),
+    "gemini-3.5-flash-lite":          (0.30, 2.50),
+    # Gemini 3.6 → 3.8 Flash (refresh 2026-09-17) — $0.75/$3.75 en promo
+    # jusqu'au 31/12/2026, puis $1.50/$7.50 : PENSER À REMONTER ces trois
+    # lignes au 1er janvier 2027 sinon le ledger sous-compte 2×.
+    "gemini-3.6-flash":               (0.75, 3.75),
+    "gemini-3.7-flash":               (0.75, 3.75),
+    "gemini-3.8-flash":               (0.75, 3.75),
     # Décryptage 2026-07-14 — variantes -preview facturées comme leur
     # modèle GA. L'.env pointait sur gemini-3-flash-preview, absent de
     # cette table → DEFAULT_PRICE flash-lite → le cap $10/jour

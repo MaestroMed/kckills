@@ -263,7 +263,7 @@ export default async function PlayersPage() {
                 <Link
                   key={player.name}
                   href={`/player/${encodeURIComponent(player.name)}`}
-                  className="flex items-center gap-4 rounded-xl border border-[var(--border-gold)] bg-[var(--bg-surface)] p-4 grayscale opacity-75 transition-all hover:grayscale-0 hover:opacity-100 hover:border-[var(--gold)]/40"
+                  className="flex items-center gap-4 rounded-xl border border-[var(--border-gold)] bg-[var(--bg-surface)] p-4 grayscale transition-all hover:grayscale-0 hover:border-[var(--gold)]/40"
                 >
                   <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[var(--bg-elevated)] font-bold text-[var(--text-muted)]">
                     {player.name[0]}

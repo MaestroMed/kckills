@@ -22,6 +22,7 @@
 import "server-only";
 import { cache } from "react";
 import { createAnonSupabase, rethrowIfDynamic } from "./supabase/server";
+import { httpsLogoUrl } from "./team-display";
 
 export interface TeamRow {
   /** Unique URL-safe slug — used as the route param for `/team/[slug]`. */
@@ -477,7 +478,9 @@ function normalizeTeams(rows: RawTeamRow[]): TeamRow[] {
         name: (r.name ?? code ?? slug).toString(),
         region: r.region ?? null,
         league: leagues?.slug ?? null,
-        logo_url: r.logo_url ?? null,
+        // http→https : certains logos lolesports sont stockés en http,
+        // que next/image (remotePatterns https-only) rejette en 400.
+        logo_url: httpsLogoUrl(r.logo_url),
         is_tracked: Boolean(r.is_tracked),
       } satisfies TeamRow;
     })

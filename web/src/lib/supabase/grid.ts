@@ -53,7 +53,10 @@ export async function getGridCells(
       {
         p_axis_x: axisX,
         p_axis_y: axisY,
-        p_filters: filters,
+        // En GET, supabase-js met chaque argument dans la query string via
+        // `${value}` : un objet devenait "[object Object]" et Postgres
+        // répondait « invalid input syntax for type json » (grille vide).
+        p_filters: JSON.stringify(filters),
       },
       { get: true },
     );

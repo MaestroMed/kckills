@@ -40,30 +40,25 @@ from modules import sentinel  # noqa: F401 — keeps symbol for tests
 log = structlog.get_logger()
 
 
-async def run_for_match(match_external_id: str) -> dict:
-    """Run the full pipeline on one match. Returns a report dict."""
-    report: dict = {
-        "match_id": match_external_id,
-        "games": 0,
-        "kills_detected": 0,
-        "kills_clipped": 0,
-        "kills_analysed": 0,
-        "kills_published": 0,
-        "errors": [],
-    }
+async def upsert_match_and_games(match_external_id: str, report: dict | None = None) -> tuple[str | None, list[dict]]:
+    """Résout le match via getEventDetails et upsert match + games terminées.
 
+    Extrait de run_for_match (2026-09-23) pour être réutilisé par
+    scripts/twitch_backfill.py. Renvoie (match_db_id, game_rows) ; les
+    erreurs vont dans report["errors"] si un report est fourni."""
+    report = report if report is not None else {"errors": []}
     # ─── 1. Resolve match via lolesports getEventDetails ───────────────
     log.info("pipeline_start", match=match_external_id)
     details = await lolesports_api.get_event_details(match_external_id)
     if not details:
         report["errors"].append("getEventDetails returned nothing")
-        return report
+        return None, []
 
     match = details.get("match", {}) or {}
     teams = match.get("teams", []) or []
     if len(teams) < 2:
         report["errors"].append("match has < 2 teams")
-        return report
+        return None, []
 
     # ─── 2. Upsert match row in DB ─────────────────────────────────────
     # We need a scheduled_at — try to pull it from the existing matches table
@@ -86,7 +81,7 @@ async def run_for_match(match_external_id: str) -> dict:
     match_db_id = (match_row or {}).get("id") if match_row else (existing[0]["id"] if existing else None)
     if not match_db_id:
         report["errors"].append("could not upsert match row")
-        return report
+        return None, []
 
     # ─── 3. Upsert games + VODs ────────────────────────────────────────
     games_payload = match.get("games", []) or []
@@ -146,9 +141,27 @@ async def run_for_match(match_external_id: str) -> dict:
         elif existing_game := safe_select("games", "id, external_id, vod_youtube_id, vod_offset_seconds, match_id", external_id=game_ext_id):
             game_db_rows.append(existing_game[0])
 
+
+    return match_db_id, game_db_rows
+
+
+async def run_for_match(match_external_id: str) -> dict:
+    """Run the full pipeline on one match. Returns a report dict."""
+    report: dict = {
+        "match_id": match_external_id,
+        "games": 0,
+        "kills_detected": 0,
+        "kills_clipped": 0,
+        "kills_analysed": 0,
+        "kills_published": 0,
+        "errors": [],
+    }
+
+    match_db_id, game_db_rows = await upsert_match_and_games(match_external_id, report)
+    if not match_db_id:
+        return report
     report["games"] = len(game_db_rows)
     log.info("pipeline_games_resolved", n=len(game_db_rows))
-
     if not game_db_rows:
         report["errors"].append("no completed games with VODs")
         return report
@@ -258,6 +271,32 @@ async def run_for_match(match_external_id: str) -> dict:
                 row["_victim_name_hint"] = k.victim_name
                 inserted_kill_rows.append(row)
 
+        # Reprise (2026-09-18) — les kills DÉJÀ en base pour cette game (run
+        # précédent interrompu -> 23505 à l'insert) qui n'ont pas de clip
+        # repartent dans le circuit clip -> analyse -> OG. Avant, seuls les
+        # kills fraîchement insérés étaient clippés : une chaîne coupée
+        # laissait toute la game 1 en 'raw' pour toujours (MKOI W1 : 41 kills).
+        seen_ids = {r.get("id") for r in inserted_kill_rows}
+        existing_rows = safe_select(
+            "kills",
+            "id, game_id, event_epoch, game_time_seconds, killer_champion, victim_champion, "
+            "assistants, confidence, tracked_team_involvement, is_first_blood, multi_kill, "
+            "shutdown_bounty, data_source, status, clip_url_vertical",
+            game_id=game_db_id,
+        ) or []
+        recovered = 0
+        for r in existing_rows:
+            if r.get("id") in seen_ids or r.get("clip_url_vertical"):
+                continue
+            if (r.get("status") or "") not in ("raw", "enriched", "vod_found", "clip_error"):
+                continue  # needs_review / duplicate / published : pas à nous
+            r["_killer_name_hint"] = None
+            r["_victim_name_hint"] = None
+            inserted_kill_rows.append(r)
+            recovered += 1
+        if recovered:
+            log.info("pipeline_kills_recovered", game=game_ext_id, n=recovered)
+
         safe_update("games", {"kills_extracted": True}, "id", game_db_id)
 
         if not yt_id:
@@ -275,6 +314,13 @@ async def run_for_match(match_external_id: str) -> dict:
                 key=lambda k: int(k.get("game_time_seconds") or 0),
             )
             valid_kills = [k for k in sorted_by_time if int(k.get("game_time_seconds") or 0) > 60]
+            # Le calibrage lit le chrono à « offset + game_time » : juste tant
+            # qu'aucune pause ne précède le kill (sinon position = chrono +
+            # pause). Horloge du feed en cache : sondes avant la 1re pause.
+            from modules.feed_clock import paused_before_kill_s
+            before_pause = [k for k in valid_kills if not (paused_before_kill_s(k) or 0)]
+            if before_pause:
+                valid_kills = before_pause
             if valid_kills:
                 # Pick early, mid, late kills for 3-point calibration
                 n = len(valid_kills)
@@ -283,12 +329,16 @@ async def run_for_match(match_external_id: str) -> dict:
                     int(valid_kills[i].get("game_time_seconds") or 0)
                     for i in probe_indices
                 ]
-                calibrated_offset = await qc.calibrate_game_offset(
-                    youtube_id=yt_id,
-                    current_offset=vod_offset,
-                    probe_game_times=probe_game_times,
-                    local_vod_path=local_vod_paths.get(yt_id),
-                )
+                try:
+                    calibrated_offset = await qc.calibrate_game_offset(
+                        youtube_id=yt_id,
+                        current_offset=vod_offset,
+                        probe_game_times=probe_game_times,
+                        local_vod_path=local_vod_paths.get(yt_id),
+                    )
+                except Exception as exc:  # 2026-09-18 : TH W2 tué par un AttributeError dans validate_clip
+                    log.warn("pipeline_offset_calibration_failed", game=game_ext_id, error=str(exc)[:200])
+                    calibrated_offset = vod_offset  # on garde l'offset courant, jamais NULL
                 if calibrated_offset != vod_offset:
                     log.info(
                         "pipeline_offset_calibrated",
@@ -313,11 +363,13 @@ async def run_for_match(match_external_id: str) -> dict:
             game_num = game_row.get("game_number", "?")
             overlay_ctx = f"Game {game_num}  {gt_str}"
 
+            from modules.feed_clock import wall_seconds_for_kill
             urls = await clipper.clip_kill(
                 kill_id=kill_row["id"],
                 youtube_id=yt_id,
                 vod_offset_seconds=vod_offset,
-                game_time_seconds=gt,
+                # position = temps réel depuis le début (gt = chrono, pauses déduites)
+                game_time_seconds=wall_seconds_for_kill(kill_row) or gt,
                 multi_kill=kill_row.get("multi_kill"),
                 killer_champion=kill_row.get("killer_champion"),
                 victim_champion=kill_row.get("victim_champion"),

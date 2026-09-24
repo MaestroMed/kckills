@@ -38,6 +38,7 @@ import { SignatureMoments } from "@/components/player/SignatureMoments";
 import { CareerTimeline } from "@/components/player/CareerTimeline";
 import { HonorsAndEras } from "@/components/player/HonorsAndEras";
 import { PrevNextNavCard } from "@/components/player/PrevNextNavCard";
+import { SITE_URL } from "@/lib/site-url";
 
 interface Props {
   params: Promise<{ slug: string }>;
@@ -173,13 +174,13 @@ export default async function AlumniDetailPage({ params }: Props) {
     alternateName: alumni.realName ?? undefined,
     nationality: alumni.nationality,
     description: `${alumni.subtitle}. ${alumni.bio.slice(0, 200).replace(/\s+/g, " ").trim()}…`,
-    url: `https://kckills.com/alumni/${alumni.slug}`,
+    url: `${SITE_URL}/alumni/${alumni.slug}`,
     image: splash,
     jobTitle: ROLE_LABEL[alumni.role] ?? "Pro Player",
     alumniOf: {
       "@type": "SportsTeam",
       name: "Karmine Corp",
-      url: "https://kckills.com",
+      url: SITE_URL,
       sport: "League of Legends",
     },
     knowsAbout: [alumni.signatureChampion],

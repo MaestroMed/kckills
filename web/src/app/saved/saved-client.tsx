@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { readLocalBookmarks, setBookmark } from "@/lib/bookmarks";
+import { hasSupabaseSession, readLocalBookmarks, setBookmark } from "@/lib/bookmarks";
 import { useT } from "@/lib/i18n/use-lang";
 
 interface SavedKill {
@@ -32,11 +32,16 @@ export function SavedClient() {
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch("/api/bookmarks", { credentials: "same-origin" });
-        if (res.ok) {
-          const body = (await res.json()) as { rows?: { kill_id: string }[] };
-          if (!cancelled) setIds((body.rows ?? []).map((r) => r.kill_id));
-          return;
+        // Session locale d'abord (aucun réseau pour un anonyme) — évite
+        // le GET /api/bookmarks → 401 systématique des visiteurs non
+        // connectés (bruit API, audit 2026-08-12).
+        if (await hasSupabaseSession()) {
+          const res = await fetch("/api/bookmarks", { credentials: "same-origin" });
+          if (res.ok) {
+            const body = (await res.json()) as { rows?: { kill_id: string }[] };
+            if (!cancelled) setIds((body.rows ?? []).map((r) => r.kill_id));
+            return;
+          }
         }
       } catch {
         /* offline — fall through to localStorage */

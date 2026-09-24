@@ -575,7 +575,7 @@ export function RecentFormChart({ history }: { history: MatchEntry[] }) {
           />
           {t("p6_playerpg.legend_streak")}
         </span>
-        <span className="font-data opacity-70">{t("p6_playerpg.legend_order")}</span>
+        <span className="font-data text-[var(--text-muted)]">{t("p6_playerpg.legend_order")}</span>
       </div>
     </div>
   );

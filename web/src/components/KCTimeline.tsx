@@ -1,10 +1,10 @@
 "use client";
 
-import { useState, useRef, useEffect, useCallback } from "react";
-import { m, AnimatePresence } from "motion/react";
+import { useState, useRef, useEffect, useCallback, useSyncExternalStore } from "react";
+import { m, AnimatePresence, useReducedMotion } from "motion/react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { ERAS, type Era } from "@/lib/eras";
+import { ERAS, eraBadge, type Era } from "@/lib/eras";
 import { useT } from "@/lib/i18n/use-lang";
 
 /**
@@ -52,6 +52,17 @@ export interface KCTimelineProps {
  *  - prefers-reduced-motion : grayscale + scale transitions snap instantly,
  *    no spring on the cards (the GPU-cheap opacity dim still applies).
  */
+const noopSubscribe = () => () => {};
+const nowHourSnapshot = () => Math.floor(Date.now() / 3_600_000) * 3_600_000;
+const serverNowSnapshot = () => null;
+
+/** Heure courante (arrondie à l'heure) côté client ; null au rendu serveur
+ *  et pendant l'hydratation (getServerSnapshot) : pas d'écart d'hydratation
+ *  même si la page ISR a été rendue avant un changement de badge. */
+function useNowHour(): number | null {
+  return useSyncExternalStore(noopSubscribe, nowHourSnapshot, serverNowSnapshot);
+}
+
 export function KCTimeline({
   mode = "navigate",
   selectedEraId = null,
@@ -61,27 +72,12 @@ export function KCTimeline({
   const router = useRouter();
   const t = useT();
   const [hovered, setHovered] = useState<string | null>(null);
+  const nowHour = useNowHour();
   const [popupEra, setPopupEra] = useState<Era | null>(null);
-  const [reducedMotion, setReducedMotion] = useState(false);
+  // prefers-reduced-motion de l'OS (hook de motion : abonné au media query,
+  // null au rendu serveur) — saute les ressorts / zooms des cartes.
+  const reducedMotion = useReducedMotion() ?? false;
   const containerRef = useRef<HTMLDivElement>(null);
-
-  // Read OS-level prefers-reduced-motion so we can skip the spring/scale
-  // transitions for users who opted out of motion. The mql.matches read
-  // is SSR-safe — useEffect only runs client-side.
-  useEffect(() => {
-    if (typeof window === "undefined" || typeof window.matchMedia !== "function") return;
-    const mql = window.matchMedia("(prefers-reduced-motion: reduce)");
-    setReducedMotion(mql.matches);
-    const onChange = (e: MediaQueryListEvent) => setReducedMotion(e.matches);
-    try {
-      mql.addEventListener("change", onChange);
-      return () => mql.removeEventListener("change", onChange);
-    } catch {
-      // Safari ≤ 13 fallback
-      mql.addListener(onChange);
-      return () => mql.removeListener(onChange);
-    }
-  }, []);
 
   // Drag state lives in a ref so we never re-render during the gesture.
   const drag = useRef({
@@ -344,7 +340,11 @@ export function KCTimeline({
           const isHovered = hovered === era.id;
           const anyHovered = hovered !== null;
           const isDimmed = anyHovered && !isHovered;
-          const isLive = era.id === "lec-2026-spring";
+          // Badge calculé depuis les dates de l'ère (eraBadge) une fois
+          // hydraté ; au rendu serveur, le badge écrit dans les données.
+          const badge = nowHour === null ? (era.badge ?? null) : eraBadge(era, nowHour);
+          const isLive = badge === "live";
+          const isUpcoming = badge === "upcoming";
           // Filter-mode selection state. A card is "active" when it IS
           // the selectedEra ; "filter-dimmed" when the timeline is in
           // filter mode AND a different era is active.
@@ -511,6 +511,11 @@ export function KCTimeline({
                     <span className="relative rounded-full h-2 w-2 bg-white" />
                   </span>
                   <span className="text-[10px] font-black text-white tracking-widest">LIVE</span>
+                </div>
+              )}
+              {isUpcoming && (
+                <div className="absolute top-4 right-4 z-10 flex items-center gap-1.5 rounded-full bg-[var(--gold)] px-3 py-1 shadow-xl pointer-events-none">
+                  <span className="text-[10px] font-black text-black tracking-widest">À VENIR</span>
                 </div>
               )}
 

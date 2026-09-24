@@ -111,6 +111,9 @@ export default function GlobalError({
             >
               {t("errors.try_again")}
             </button>
+            {/* Rechargement complet voulu : après une erreur globale, le shell de
+                l'app peut être cassé, et une navigation client <Link> avec. */}
+            {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
             <a
               href="/"
               style={{

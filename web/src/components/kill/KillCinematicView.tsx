@@ -79,7 +79,10 @@ interface CinematicKillProps {
       } | null;
     } | null;
   };
-  opponent: { code: string; name: string };
+  /** Adversaire résolu depuis kc_matches.json. NULL quand le match n'est
+   *  pas dans le snapshot (backfill gol.gg, EWC…) — le breadcrumb affiche
+   *  alors "Match" et la carte match "KC" seul. Jamais de placeholder. */
+  opponent: { code: string; name: string } | null;
   /** Slot for the InlineAuth + comments + rate components rendered server-side
    *  by the parent page (kept here as `children` so the cinematic shell
    *  stays presentation-only and the parent owns auth wiring).
@@ -118,6 +121,13 @@ export function KillCinematicView({
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [progress, setProgress] = useState(0);
+  // Révélation du disque play/pause pendant la lecture (survol souris /
+  // focus clavier). Piloté en JS + styles inline plutôt que par variantes
+  // `group-*/play:` — constaté en dev : les variantes de groupe nommé ne
+  // compilent pas de façon fiable ici, et l'inline ne dépend d'aucun
+  // pipeline CSS.
+  const [affordanceHover, setAffordanceHover] = useState(false);
+  const [affordanceFocus, setAffordanceFocus] = useState(false);
 
   const isKcKill = kill.tracked_team_involvement === "team_killer";
   const gameTime = kill.game_time_seconds ?? 0;
@@ -125,7 +135,11 @@ export function KillCinematicView({
   const gtSec = gameTime % 60;
   const matchExternalId = kill.games?.matches?.external_id ?? "";
   const matchScheduled = kill.games?.matches?.scheduled_at ?? kill.created_at;
-  const stage = kill.games?.matches?.stage ?? "LEC";
+  // `stage` peut être une chaîne VIDE en base (imports gol.gg) — `??` ne
+  // couvre que null/undefined, ce qui laissait un séparateur "·" orphelin
+  // ("· G1"). Normalisé à null : les consommateurs n'affichent le
+  // séparateur que quand un stage existe vraiment.
+  const stage = (kill.games?.matches?.stage ?? "").trim() || null;
   const gameNumber = kill.games?.game_number ?? 1;
 
   // Manifest-aware source pick (migration 026).
@@ -152,6 +166,34 @@ export function KillCinematicView({
 
   const killerChamp = kill.killer_champion ?? "Aatrox";
   const victimChamp = kill.victim_champion ?? "Aatrox";
+
+  // Pseudos joueurs (IGN) résolus côté serveur par la page parent
+  // (players.ign via les FK killer/victim_player_id). Quand la résolution
+  // échoue, le titre retombe sur le champion — on masque alors le
+  // sous-titre champion pour éviter le doublon "AHRI / AHRI".
+  const killerName = kill.killer_name?.trim() || null;
+  const victimName = kill.victim_name?.trim() || null;
+  const showKillerChampSub =
+    killerName != null && killerName.toLowerCase() !== killerChamp.toLowerCase();
+  const showVictimChampSub =
+    victimName != null && victimName.toLowerCase() !== victimChamp.toLowerCase();
+
+  // Clip vertical (9:16) : rendu pleine largeur dans la carte 16:9 il
+  // devenait soit minuscule soit démesuré. On dimensionne alors le cadre
+  // en 9:16 réel, hauteur plafonnée (~70vh), centré horizontalement.
+  const isVerticalClip =
+    bestPick?.type === "vertical" || bestPick?.type === "vertical_low";
+  // Le poster du worker ({id}_thumb.jpg) est TOUJOURS en 9:16 : affiché
+  // tel quel dans un cadre 16:9 il se letterboxe (image minuscule entre
+  // deux bandes noires). Quand l'orientation du poster ne matche pas
+  // celle du clip affiché, object-cover recadre le poster — sans effet
+  // sur la vidéo elle-même (le ratio du cadre suit déjà le sien).
+  const thumbMeta = getAssetMetadata(kill, "thumbnail");
+  const posterIsVertical =
+    thumbMeta?.width != null && thumbMeta.height != null
+      ? thumbMeta.height > thumbMeta.width
+      : true; // spec worker : thumbnail 9:16 par défaut
+  const posterMismatch = posterUrl != null && posterIsVertical !== isVerticalClip;
 
   // Custom progress tracking — the native <video> controls are visually
   // heavy on a cinematic page; we replace them with a thin gold scrubber.
@@ -277,10 +319,10 @@ export function KillCinematicView({
             <span className="text-[var(--gold)]/40">{"\u25C6"}</span>
             {matchExternalId ? (
               <Link href={`/match/${matchExternalId}`} className="hover:text-[var(--gold)] transition-colors">
-                KC vs {opponent.code}
+                {opponent ? `KC vs ${opponent.code}` : t("p_kill.breadcrumb_match")}
               </Link>
             ) : (
-              <span>KC vs {opponent.code}</span>
+              <span>{opponent ? `KC vs ${opponent.code}` : t("p_kill.breadcrumb_match")}</span>
             )}
             <span className="text-[var(--gold)]/40">{"\u25C6"}</span>
             <span>{t("p_kill.game_n", { n: gameNumber })}</span>
@@ -318,11 +360,13 @@ export function KillCinematicView({
                 </div>
                 <div className="text-center">
                   <p className={`font-display text-base md:text-lg font-black ${isKcKill ? "text-[var(--gold)]" : "text-white"}`}>
-                    {kill.killer_name || killerChamp}
+                    {killerName ?? killerChamp}
                   </p>
-                  <p className="text-[9px] uppercase tracking-widest text-[var(--text-muted)]">
-                    {killerChamp}
-                  </p>
+                  {showKillerChampSub && (
+                    <p className="text-[9px] uppercase tracking-widest text-[var(--text-muted)]">
+                      {killerChamp}
+                    </p>
+                  )}
                 </div>
               </div>
 
@@ -364,11 +408,13 @@ export function KillCinematicView({
                 </div>
                 <div className="text-center">
                   <p className={`font-display text-base md:text-lg font-black ${!isKcKill ? "text-[var(--gold)]" : "text-white"}`}>
-                    {kill.victim_name || victimChamp}
+                    {victimName ?? victimChamp}
                   </p>
-                  <p className="text-[9px] uppercase tracking-widest text-[var(--text-muted)]">
-                    {victimChamp}
-                  </p>
+                  {showVictimChampSub && (
+                    <p className="text-[9px] uppercase tracking-widest text-[var(--text-muted)]">
+                      {victimChamp}
+                    </p>
+                  )}
                 </div>
               </div>
             </div>
@@ -393,63 +439,72 @@ export function KillCinematicView({
 
           {/* ─── Cinematic clip frame ───────────────────────────────── */}
           <div className="mt-10 md:mt-12 relative mx-auto max-w-4xl">
-            {/* Letterbox frame with double border */}
+            {/* Letterbox frame with double border — quand le clip affiché
+                est le vertical (9:16), le cadre épouse ce ratio : hauteur
+                plafonnée ~70vh, centré, au lieu d'une carte 16:9 pleine
+                largeur qui letterboxait la vidéo. */}
             <div
               className="relative rounded-2xl overflow-hidden bg-black"
               style={{
                 boxShadow:
                   "0 0 0 1px rgba(200,170,110,0.4), 0 24px 80px rgba(0,0,0,0.6), 0 0 60px rgba(200,170,110,0.08)",
+                ...(isVerticalClip
+                  ? {
+                      aspectRatio: videoAspectRatio,
+                      height: "min(70vh, 40rem)",
+                      width: "auto",
+                      maxWidth: "100%",
+                      marginInline: "auto",
+                    }
+                  : {}),
               }}
             >
               <video
                 ref={videoRef}
-                className="w-full"
-                style={{ aspectRatio: videoAspectRatio }}
+                className={`${isVerticalClip ? "h-full w-full" : "w-full"}${posterMismatch ? " object-cover" : ""}`}
+                style={isVerticalClip ? undefined : { aspectRatio: videoAspectRatio }}
                 src={clipSrc}
                 poster={posterUrl}
                 playsInline
                 preload="metadata"
-                onClick={togglePlay}
               />
 
-              {/* Large play disc — decorative affordance shown only when
-                  paused. Non-interactive (pointer-events-none): the actual
-                  toggle is the keyboard-reachable button below, plus the
-                  click handler on the <video> for mouse users. */}
-              {!isPlaying && (
-                <div className="absolute inset-0 grid place-items-center pointer-events-none">
-                  <span
-                    className="grid place-items-center h-20 w-20 rounded-full border-2 border-[var(--gold)]/60 bg-black/50 backdrop-blur-sm"
-                    style={{ boxShadow: "0 0 30px rgba(200,170,110,0.4)" }}
-                  >
-                    <svg className="h-7 w-7 text-[var(--gold)] ml-1" fill="currentColor" viewBox="0 0 24 24">
-                      <path d="M8 5v14l11-7z" />
-                    </svg>
-                  </span>
-                </div>
-              )}
-
-              {/* Keyboard-operable play/pause toggle — always rendered so
-                  keyboard / switch users can pause moving content (WCAG
-                  2.1.1) ; aria-label toggles to announce state (4.1.2). */}
+              {/* Affordance play/pause UNIQUE — bouton plein cadre avec
+                  disque central. Clavier-opérable (WCAG 2.1.1) : toujours
+                  dans l'ordre de tab ; en lecture le disque s'efface mais
+                  réapparaît au survol ou au focus clavier. aria-label
+                  bascule pour annoncer l'état (4.1.2). */}
               <button
                 type="button"
                 onClick={togglePlay}
+                onMouseEnter={() => setAffordanceHover(true)}
+                onMouseLeave={() => setAffordanceHover(false)}
+                onFocus={(e) => setAffordanceFocus(e.currentTarget.matches(":focus-visible"))}
+                onBlur={() => setAffordanceFocus(false)}
                 aria-label={isPlaying ? t("p_kill.pause") : t("p_kill.play")}
                 aria-pressed={isPlaying}
-                className="absolute bottom-3 right-3 z-10 grid h-11 w-11 place-items-center rounded-full border border-[var(--gold)]/50 bg-black/60 text-[var(--gold)] backdrop-blur-sm
-                           transition-colors hover:border-[var(--gold)] hover:bg-black/40
-                           focus-visible:outline-none focus-visible:[outline:2px_solid_var(--gold)] focus-visible:outline-offset-2"
+                className="absolute inset-0 z-10 grid cursor-pointer place-items-center focus-visible:outline-none"
               >
-                {isPlaying ? (
-                  <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                    <path d="M6 5h4v14H6zM14 5h4v14h-4z" />
-                  </svg>
-                ) : (
-                  <svg className="h-5 w-5 ml-0.5" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                    <path d="M8 5v14l11-7z" />
-                  </svg>
-                )}
+                <span
+                  className="grid h-20 w-20 place-items-center rounded-full border-2 border-[var(--gold)]/60 bg-black/50 backdrop-blur-sm"
+                  style={{
+                    boxShadow: "0 0 30px rgba(200,170,110,0.4)",
+                    opacity: !isPlaying || affordanceHover || affordanceFocus ? 1 : 0,
+                    transition: "opacity 200ms ease",
+                    outline: affordanceFocus ? "2px solid var(--gold)" : undefined,
+                    outlineOffset: affordanceFocus ? 2 : undefined,
+                  }}
+                >
+                  {isPlaying ? (
+                    <svg className="h-7 w-7 text-[var(--gold)]" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                      <path d="M6 5h4v14H6zM14 5h4v14h-4z" />
+                    </svg>
+                  ) : (
+                    <svg className="h-7 w-7 ml-1 text-[var(--gold)]" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                      <path d="M8 5v14l11-7z" />
+                    </svg>
+                  )}
+                </span>
               </button>
 
               {/* Custom thin scrubber */}
@@ -460,10 +515,11 @@ export function KillCinematicView({
                 />
               </div>
 
-              {/* Top-left context badges */}
+              {/* Top-left context badges — pas de séparateur orphelin
+                  quand le stage est inconnu (chaîne vide en base). */}
               <div className="absolute top-4 left-4 flex items-center gap-2">
                 <span className="font-data text-[10px] uppercase tracking-widest text-white/60 bg-black/60 backdrop-blur px-2.5 py-1 rounded">
-                  {stage} · G{gameNumber}
+                  {stage ? `${stage} · ` : ""}G{gameNumber}
                 </span>
               </div>
             </div>
@@ -497,11 +553,15 @@ export function KillCinematicView({
 
           {kill.ai_tags && kill.ai_tags.length > 0 && (
             <div className="mt-10 flex flex-wrap gap-2 justify-center">
+              {/* className sur UNE ligne : un littéral JSX multi-ligne embarque
+                  les fins de ligne CRLF du fichier dans l'attribut ; le parseur
+                  HTML normalise \r\n → \n côté DOM mais la prop client garde
+                  \r\n → hydration mismatch React 19 ("attributes didn't
+                  match"). Idem pour les deux <Link> plus bas. */}
               {kill.ai_tags.map((tag) => (
                 <span
                   key={tag}
-                  className="rounded-full border border-[var(--gold)]/30 bg-gradient-to-b from-[var(--gold)]/10 to-transparent px-3.5 py-1
-                             text-[11px] font-data font-bold uppercase tracking-widest text-[var(--gold)]"
+                  className="rounded-full border border-[var(--gold)]/30 bg-gradient-to-b from-[var(--gold)]/10 to-transparent px-3.5 py-1 text-[11px] font-data font-bold uppercase tracking-widest text-[var(--gold)]"
                 >
                   #{tag}
                 </span>
@@ -545,10 +605,10 @@ export function KillCinematicView({
       {/* ─── MATCH CONTEXT ────────────────────────────────────────────── */}
       <section className="max-w-5xl mx-auto px-6 py-8">
         {matchExternalId ? (
+          // className mono-ligne — cf. note CRLF/hydration section tags.
           <Link
             href={`/match/${matchExternalId}`}
-            className="group block rounded-2xl border border-[var(--border-gold)] bg-gradient-to-br from-[var(--bg-surface)] to-[var(--bg-elevated)]
-                       p-5 transition-all duration-300 hover:border-[var(--gold)]/60 hover:from-[var(--bg-elevated)] hover:to-[var(--bg-surface)]"
+            className="group block rounded-2xl border border-[var(--border-gold)] bg-gradient-to-br from-[var(--bg-surface)] to-[var(--bg-elevated)] p-5 transition-all duration-300 hover:border-[var(--gold)]/60 hover:from-[var(--bg-elevated)] hover:to-[var(--bg-surface)]"
           >
             <div className="flex items-center justify-between gap-4">
               <div>
@@ -556,15 +616,26 @@ export function KillCinematicView({
                   ▽ {t("p_kill.full_match")}
                 </p>
                 <h2 className="font-display text-xl md:text-2xl font-black text-white">
-                  KC <span className="text-[var(--text-muted)]">vs</span> {opponent.name}
+                  KC
+                  {opponent && (
+                    <>
+                      {" "}
+                      <span className="text-[var(--text-muted)]">vs</span> {opponent.name}
+                    </>
+                  )}
                 </h2>
                 <p className="text-xs text-[var(--text-muted)] mt-1">
-                  {stage} · {t("p_kill.game_n", { n: gameNumber })}
+                  {stage ? `${stage} · ` : ""}{t("p_kill.game_n", { n: gameNumber })}
                   {matchScheduled && (
                     <>
                       {" "}·{" "}
+                      {/* timeZone épinglé : composant client rendu en SSR —
+                          sans lui le jour affiché dépend du fuseau du runtime
+                          (UTC sur Vercel vs navigateur du visiteur) →
+                          hydration mismatch sur le texte autour de minuit. */}
                       {new Date(matchScheduled).toLocaleDateString("fr-FR", {
                         day: "numeric", month: "long", year: "numeric",
+                        timeZone: "Europe/Paris",
                       })}
                     </>
                   )}
@@ -609,11 +680,11 @@ export function KillCinematicView({
           </header>
           <div className="flex gap-4 overflow-x-auto snap-x snap-mandatory pb-4 scrollbar-thin scrollbar-thumb-[var(--gold)]/30">
             {relatedKills.map((rk) => (
+              // className mono-ligne — cf. note CRLF/hydration section tags.
               <Link
                 key={rk.id}
                 href={`/kill/${rk.id}`}
-                className="snap-start shrink-0 w-56 rounded-xl overflow-hidden border border-[var(--border-gold)]
-                           bg-[var(--bg-surface)] hover:border-[var(--gold)]/60 transition-all group"
+                className="snap-start shrink-0 w-56 rounded-xl overflow-hidden border border-[var(--border-gold)] bg-[var(--bg-surface)] hover:border-[var(--gold)]/60 transition-all group"
               >
                 <div className="relative aspect-video w-full bg-black overflow-hidden">
                   {rk.thumbnail_url ? (

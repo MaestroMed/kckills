@@ -247,6 +247,9 @@ function normalize(row: RawSearchRow): PublishedKillRow {
             scheduled_at: matches.scheduled_at ?? null,
             stage: matches.stage ?? null,
             format: matches.format ?? null,
+            // Select de recherche : codes équipes non embarqués (inutiles ici).
+            team_blue_code: null,
+            team_red_code: null,
           }
         : null,
     };

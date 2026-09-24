@@ -8,9 +8,11 @@
  * item via translate3d. The <video> elements never re-mount.
  *
  * What this component renders:
- *   - The poster placeholder (thumbnail) — visible while the pool's
- *     video for this item is loading or hasn't been allocated yet.
- *     The pool video sits on TOP of this when allocated.
+ *   - The poster placeholder (thumbnail) — kept mounted for the
+ *     Next/Image preload + blur pipeline mais rendu opacity-0 : depuis
+ *     le fix rail (2026-08-12) l'item peint AU-DESSUS du pool (zIndex 10
+ *     vs 5) et c'est le poster natif du <video> (même jpg) qui couvre le
+ *     chargement. Un poster visible ici recouvrirait la vidéo.
  *   - All overlays: gradient, badges (KC kill / multi / FB), AI desc,
  *     player tag, match meta.
  *   - Action sidebar (rate / chat / share) — wired to parent state.
@@ -39,6 +41,7 @@ import { LongPressMenu } from "./LongPressMenu";
 import { ShareSheet } from "./ShareSheet";
 import { useNotInterestedStore } from "./hooks/useNotInterestedStore";
 import { useT } from "@/lib/i18n/use-lang";
+import { CANONICAL_ORIGIN } from "@/lib/site-url";
 
 interface SharedFeedItemProps {
   index: number;
@@ -323,12 +326,22 @@ export function FeedItemVideo({
       data-feed-index={index}
       data-feed-id={item.id}
       style={{ height: `${itemHeight}px` }}
-      className="relative w-full overflow-hidden bg-black"
+      // bg-transparent (fix rail 2026-08-12) : le calque items peint désormais
+      // AU-DESSUS du pool vidéo (zIndex 10 vs 5, voir ScrollFeedV2) pour que
+      // rail/badges/description soient visibles quel que soit l'aspect du
+      // clip. L'item est donc une fenêtre transparente : un fond opaque ici
+      // cacherait la vidéo qui joue en dessous. Le sol noir vit sur le
+      // wrapper du stage (ScrollFeedV2) et sur le <video> lui-même (#000).
+      className="relative w-full overflow-hidden bg-transparent"
     >
-      {/* Poster — visible until the pool's video paints over it. We
-          intentionally use Image (Next optimised) for the poster only;
-          the actual video frame is painted by the pool's <video> element
-          on z-index above. */}
+      {/* Poster — opacity-0 (fix rail 2026-08-12) : la vidéo du pool peint
+          maintenant SOUS l'item ; ce poster object-cover, opaque et plein
+          cadre la recouvrirait. On le garde monté (préchargement Next/Image
+          + blurDataURL conservés, profil réseau inchangé) mais invisible.
+          Le <video> du pool porte déjà poster={thumbnail} (même jpg), donc
+          la fenêtre de chargement reste couverte visuellement. Avec
+          VIRTUAL_WINDOW (2) == demi-fenêtre du pool, tout item rendu a un
+          slot vidéo lié en dessous. */}
       {item.thumbnail && (
         <Image
           src={item.thumbnail}
@@ -339,11 +352,7 @@ export function FeedItemVideo({
           priority={isActive}
           placeholder="blur"
           blurDataURL={BLUR_PLACEHOLDER}
-          className="object-cover"
-          // The pool video sits at z-index 0; this poster at z-index 0
-          // too but in a lower DOM order — the video paints OVER once
-          // it has data. When the slot has no video bound (out of range)
-          // the poster stays.
+          className="object-cover opacity-0"
         />
       )}
 
@@ -477,7 +486,7 @@ export function FeedItemVideo({
           shareUrl={
             typeof window !== "undefined"
               ? `${window.location.origin}/kill/${item.id}`
-              : `https://kckills.com/kill/${item.id}`
+              : `${CANONICAL_ORIGIN}/kill/${item.id}`
           }
         />
       )}
@@ -730,11 +739,20 @@ export function FeedItemVideo({
             </ul>
           )}
 
-          {/* Match meta — small line at the bottom */}
+          {/* Match meta — small line at the bottom. Les segments sont
+              joints par " · " uniquement quand ils existent : adversaire
+              non résolu (opponentCode vide) + stage vide ne doivent pas
+              laisser un séparateur orphelin devant "G1". */}
           <p className="font-data text-[10px] md:text-[11px] uppercase tracking-[0.2em] text-white/55">
-            {item.opponentCode ? `vs ${item.opponentCode}` : item.matchStage}
-            {item.gameNumber ? ` · G${item.gameNumber}` : ""}
-            {item.matchScore ? ` · ${item.matchScore}` : ""}
+            {[
+              item.opponentCode
+                ? `vs ${item.opponentCode}`
+                : (item.matchStage ?? "").trim() || null,
+              item.gameNumber ? `G${item.gameNumber}` : null,
+              item.matchScore || null,
+            ]
+              .filter(Boolean)
+              .join(" · ")}
             {item.kcWon != null ? (
               <span className={`ml-2 font-bold ${item.kcWon ? "text-[var(--green)]" : "text-[var(--red)]"}`}>
                 {item.kcWon ? "W" : "L"}
@@ -783,10 +801,6 @@ export function FeedItemMoment({
   useFeedItemAnalytics({ itemId: item.id, isActive });
   const errState = useFeedItemError(item.id);
   const [shareToast, setShareToast] = useState<string | null>(null);
-  // V3 + V8 — local UI state for the contextual menu + custom share sheet.
-  const [menuOpen, setMenuOpen] = useState(false);
-  const [shareSheetOpen, setShareSheetOpen] = useState(false);
-  const { recordNotInterested } = useNotInterestedStore();
 
   const triggerShare = useCallback(async () => {
     if (typeof window === "undefined") return;
@@ -891,7 +905,11 @@ export function FeedItemMoment({
       data-feed-index={index}
       data-feed-id={item.id}
       style={{ height: `${itemHeight}px` }}
-      className="relative w-full overflow-hidden bg-black"
+      // Fenêtre transparente + poster masqué — même contrat que
+      // FeedItemVideo (fix rail 2026-08-12) : les items peignent au-dessus
+      // du pool, la vidéo joue à travers. Voir le commentaire détaillé de
+      // la branche vidéo.
+      className="relative w-full overflow-hidden bg-transparent"
     >
       {item.thumbnail && (
         <Image
@@ -902,7 +920,7 @@ export function FeedItemMoment({
           priority={isActive}
           placeholder="blur"
           blurDataURL={BLUR_PLACEHOLDER}
-          className="object-cover"
+          className="object-cover opacity-0"
         />
       )}
       <div

@@ -20,7 +20,6 @@ interface GridCanvasProps {
 }
 
 const DIAGONAL_SWIPE_THRESHOLD = 70; // px — diagonal distance required to pivot
-const KEY_REPEAT_MS = 60;
 
 /**
  * The Scroll Vivant grid canvas. Renders a 3×3 viewport around the active

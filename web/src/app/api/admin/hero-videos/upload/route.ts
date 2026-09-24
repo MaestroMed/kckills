@@ -157,7 +157,7 @@ export async function POST(request: NextRequest) {
   let videoUrl: string;
   let uploadedSize = 0;
   let uploadedContentType = "";
-  let posterUrl: string | undefined =
+  const posterUrl: string | undefined =
     typeof posterUrlField === "string" && posterUrlField.length > 0
       ? posterUrlField
       : undefined;

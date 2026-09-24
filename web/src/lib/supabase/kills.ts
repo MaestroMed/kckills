@@ -12,7 +12,7 @@
 
 import "server-only";
 import { cache } from "react";
-import { createCachedAnonSupabase, rethrowIfDynamic } from "./server";
+import { createCachedAnonSupabase, createServiceSupabase, rethrowIfDynamic } from "./server";
 
 export type LanePhase = "early" | "mid" | "late";
 export type FightType =
@@ -180,6 +180,9 @@ export interface PublishedKillRow {
       scheduled_at: string | null;
       stage: string | null;
       format: string | null;
+      /** Codes équipes embarqués (résolution d'adversaire hors kc_matches.json). */
+      team_blue_code: string | null;
+      team_red_code: string | null;
     } | null;
   } | null;
 }
@@ -237,10 +240,17 @@ const KILL_SELECT = `
       external_id,
       scheduled_at,
       stage,
-      format
+      format,
+      team_blue:teams!matches_team_blue_id_fkey ( code ),
+      team_red:teams!matches_team_red_id_fkey ( code )
     )
   )
 `.trim();
+// 2026-08-13 — team_blue/team_red (code seul, ~30 octets/kill) : permet de
+// résoudre l'adversaire depuis la DB quand le match n'est pas dans
+// kc_matches.json (backfill gol.gg : LFL 2021-22, EWC…). Avant ça, ~285
+// items du feed n'avaient pas d'adversaire et le filtre
+// ?axis=opponent_team_code était aveugle sur tout ce stock.
 
 // Wave 44 (audit repasse) — variante INNER de KILL_SELECT, à n'utiliser QUE
 // quand on filtre par match. Sans !inner, `.eq("games.matches.external_id")`
@@ -517,6 +527,12 @@ interface RawMatchSelect {
   scheduled_at?: string | null;
   stage?: string | null;
   format?: string | null;
+  team_blue?: RawTeamCodeSelect | RawTeamCodeSelect[] | null;
+  team_red?: RawTeamCodeSelect | RawTeamCodeSelect[] | null;
+}
+
+interface RawTeamCodeSelect {
+  code?: string | null;
 }
 
 function normalize(row: RawKillSelect): PublishedKillRow {
@@ -527,6 +543,10 @@ function normalize(row: RawKillSelect): PublishedKillRow {
   let gamesNormalized: PublishedKillRow["games"] = null;
   if (games) {
     const matches = Array.isArray(games.matches) ? games.matches[0] ?? null : games.matches ?? null;
+    const teamCode = (t: RawTeamCodeSelect | RawTeamCodeSelect[] | null | undefined) => {
+      const row = Array.isArray(t) ? t[0] ?? null : t ?? null;
+      return row?.code ?? null;
+    };
     gamesNormalized = {
       external_id: String(games.external_id ?? ""),
       game_number: Number(games.game_number ?? 1),
@@ -537,6 +557,8 @@ function normalize(row: RawKillSelect): PublishedKillRow {
             scheduled_at: matches.scheduled_at ?? null,
             stage: matches.stage ?? null,
             format: matches.format ?? null,
+            team_blue_code: teamCode(matches.team_blue),
+            team_red_code: teamCode(matches.team_red),
           }
         : null,
     };
@@ -623,7 +645,7 @@ function normalize(row: RawKillSelect): PublishedKillRow {
  */
 export const getPublishedKcKillCount = cache(
   async function getPublishedKcKillCount(
-    opts: { buildTime?: boolean } = {},
+    _opts: { buildTime?: boolean } = {},
   ): Promise<number> {
     try {
       const supabase = createCachedAnonSupabase();
@@ -707,7 +729,7 @@ export async function getPublishedKcKillsPage(
 
 export const getPublishedKills = cache(async function getPublishedKills(
   limit = 50,
-  opts: { buildTime?: boolean } = {},
+  _opts: { buildTime?: boolean } = {},
 ): Promise<PublishedKillRow[]> {
   try {
     const supabase = createCachedAnonSupabase();
@@ -883,7 +905,7 @@ export const getScrollFeedPoolCount = cache(async function getScrollFeedPoolCoun
  */
 export const getCardKills = cache(async function getCardKills(
   limit = 50,
-  opts: { buildTime?: boolean } = {},
+  _opts: { buildTime?: boolean } = {},
 ): Promise<CardKillRow[]> {
   try {
     const supabase = createCachedAnonSupabase();
@@ -932,7 +954,7 @@ export const getCardKills = cache(async function getCardKills(
 export const getRecentPublishedKills = cache(
   async function getRecentPublishedKills(
     limit = 12,
-    opts: { buildTime?: boolean } = {},
+    _opts: { buildTime?: boolean } = {},
   ): Promise<PublishedKillRow[]> {
     try {
       const supabase = createCachedAnonSupabase();
@@ -1149,7 +1171,7 @@ export const getWeekendBestClips = cache(async function getWeekendBestClips(
       console.warn("[supabase/kills] getWeekendBestClips window error:", error.message);
     }
 
-    let candidates = (windowed ?? []).map((row) =>
+    const candidates = (windowed ?? []).map((row) =>
       normalize(row as unknown as RawKillSelect),
     );
 
@@ -1360,7 +1382,7 @@ export function isDataOnlyKill(k: PublishedKillRow): boolean {
 /** Get a single published kill by id. */
 export async function getKillById(
   id: string,
-  opts: { buildTime?: boolean } = {},
+  _opts: { buildTime?: boolean } = {},
 ): Promise<PublishedKillRow | null> {
   try {
     // 2026-04-26 cache fix : opt-in cookie-less anon client. Without
@@ -1390,6 +1412,41 @@ export async function getKillById(
 }
 
 /**
+ * Kill neutralisé comme doublon -> id du kill conservé et publié (3 liens au
+ * plus). 1 611 kills ont été neutralisés le 23/09/2026 (même game importée
+ * par gol.gg ET le feed) : leurs anciennes URL, déjà partagées ou indexées,
+ * redirigent vers le clip conservé au lieu d'afficher « introuvable ».
+ *
+ * La RLS ne laisse lire que les kills publiés : lecture par le client
+ * service (serveur uniquement), limitée à status / is_duplicate_of.
+ */
+export async function getDuplicateKeeperId(id: string): Promise<string | null> {
+  const sb = createServiceSupabase();
+  if (!sb) return null;
+  try {
+    let cur = id;
+    for (let hop = 0; hop <= 3; hop++) {
+      const { data, error } = await sb
+        .from("kills")
+        .select("status, publication_status, is_duplicate_of")
+        .eq("id", cur)
+        .maybeSingle();
+      if (error || !data) return null;
+      const published =
+        data.publication_status === "published" ||
+        (data.publication_status == null && data.status === "published");
+      if (hop > 0 && published) return cur;
+      if (data.status !== "duplicate" || !data.is_duplicate_of) return null;
+      cur = data.is_duplicate_of as string;
+    }
+    return null;
+  } catch (err) {
+    console.warn("[supabase/kills] getDuplicateKeeperId threw:", err);
+    return null;
+  }
+}
+
+/**
  * Get all kills for a given match, INCLUDING data-only gol.gg historical
  * kills. The match page renders both : full clip cards for kills that
  * went through the pipeline, stats-only cards for pre-2024 LFL/EUM kills
@@ -1402,7 +1459,7 @@ export async function getKillById(
  */
 export async function getKillsByMatchExternalId(
   matchExternalId: string,
-  opts: { buildTime?: boolean } = {},
+  _opts: { buildTime?: boolean } = {},
 ): Promise<PublishedKillRow[]> {
   try {
     // 2026-04-26 cache fix : opt-in cookie-less anon client. Without
@@ -1411,36 +1468,51 @@ export async function getKillsByMatchExternalId(
     // `revalidate = 600` ISR setting).
     const supabase = createCachedAnonSupabase();
 
+    // 23/09/2026 — on résout d'abord les games du match, puis on filtre les
+    // kills par game_id (indexé : idx_kills_game). Le filtre sur la ressource
+    // imbriquée games.matches.external_id forçait un inner join sur tout le
+    // catalogue publié : « canceling statement due to statement timeout »
+    // au build, page match vide.
+    const { data: matchRow } = await supabase
+      .from("matches")
+      .select("id")
+      .eq("external_id", matchExternalId)
+      .maybeSingle();
+    if (!matchRow?.id) return [];
+    const { data: gameRows } = await supabase.from("games").select("id").eq("match_id", matchRow.id);
+    const gameIds = (gameRows ?? []).map((g: { id: string }) => g.id);
+    if (gameIds.length === 0) return [];
+
     const [publishedRes, golggRes, livestatsRes] = await Promise.all([
       supabase
         .from("kills")
-        .select(KILL_SELECT_MATCH_INNER)
+        .select(KILL_SELECT)
         // PR23 split-status fallback (see getPublishedKills).
         .or(
           "publication_status.eq.published," +
             "and(publication_status.is.null,status.eq.published)",
         )
         .eq("kill_visible", true)
-        .eq("games.matches.external_id", matchExternalId)
+        .in("game_id", gameIds)
         .order("game_time_seconds", { ascending: true }),
       supabase
         .from("kills")
-        .select(KILL_SELECT_MATCH_INNER)
+        .select(KILL_SELECT)
         .eq("data_source", "gol_gg")
-        .eq("games.matches.external_id", matchExternalId)
+        .in("game_id", gameIds)
         .order("game_time_seconds", { ascending: true }),
       // Bucket 3 : livestats kills that failed clipping or are pending.
       // PR23 split-status fallback (see getKillsForGrid).
       supabase
         .from("kills")
-        .select(KILL_SELECT_MATCH_INNER)
+        .select(KILL_SELECT)
         .or(
           "pipeline_status.eq.failed," +
             "and(pipeline_status.is.null,status.eq.clip_error)," +
             "and(pipeline_status.is.null,status.eq.analyzed)",
         )
         .eq("data_source", "livestats")
-        .eq("games.matches.external_id", matchExternalId)
+        .in("game_id", gameIds)
         .not("killer_champion", "is", null)
         .order("game_time_seconds", { ascending: true }),
     ]);
@@ -1717,3 +1789,105 @@ export const getKillsByEra = cache(async function getKillsByEra(
     return [];
   }
 });
+
+// ─── Sitemap (2026-09-23) ───────────────────────────────────────────────
+// Le sitemap appelait getPublishedKills(5000) : ~40 colonnes + jointures
+// pour n'utiliser que l'id, la date et les champions (4,1 Mo par
+// génération, trop gros pour le cache Next), et il plafonnait à 5 000
+// clips sur 9 867 publiés. Ces deux lectures ne prennent que le
+// nécessaire et couvrent tout le catalogue.
+
+const SITEMAP_PUBLISHED_FILTER =
+  "publication_status.eq.published,and(publication_status.is.null,status.eq.published)";
+
+// Même durée que `revalidate` de app/sitemap.ts (6 h). Le client en cache
+// vaut 300 s par défaut : un fetch à 300 s abaissait la revalidation de
+// TOUT le sitemap à 5 min (~10 requêtes paginées à chaque régénération).
+const SITEMAP_REVALIDATE_S = 21_600;
+
+export interface SitemapKillRow {
+  id: string;
+  killer_champion: string | null;
+  victim_champion: string | null;
+  highlight_score: number | null;
+  created_at: string;
+  updated_at: string | null;
+}
+
+/** Tous les kills publiés et visibles, en pages de 1 000 (max-rows PostgREST). */
+export async function getSitemapKills(cap = 45_000): Promise<SitemapKillRow[]> {
+  const out: SitemapKillRow[] = [];
+  try {
+    const supabase = createCachedAnonSupabase(SITEMAP_REVALIDATE_S);
+    for (let from = 0; from < cap; from += 1000) {
+      const { data, error } = await supabase
+        .from("kills")
+        .select("id,killer_champion,victim_champion,highlight_score,created_at,updated_at")
+        .or(SITEMAP_PUBLISHED_FILTER)
+        .eq("kill_visible", true)
+        .not("clip_url_vertical", "is", null)
+        .not("thumbnail_url", "is", null)
+        .order("created_at", { ascending: false })
+        .order("id", { ascending: true })
+        .range(from, Math.min(from + 999, cap - 1));
+      if (error) {
+        console.warn("[supabase/kills] getSitemapKills error:", error.message);
+        break;
+      }
+      out.push(...((data ?? []) as SitemapKillRow[]));
+      if (!data || data.length < 1000) break;
+    }
+  } catch (err) {
+    rethrowIfDynamic(err);
+    console.warn("[supabase/kills] getSitemapKills threw:", err);
+  }
+  return out;
+}
+
+export interface SitemapVideoKillRow {
+  id: string;
+  killer_champion: string | null;
+  victim_champion: string | null;
+  multi_kill: string | null;
+  ai_description: string | null;
+  created_at: string;
+  thumbnail_url: string | null;
+  clip_url_horizontal: string | null;
+  assets_manifest: KillAssetsManifest | null;
+  killer: { ign: string | null } | null;
+}
+
+/** Les meilleurs clips, avec ce qu'il faut pour une entrée de sitemap vidéo. */
+export async function getSitemapVideoKills(limit = 2000): Promise<SitemapVideoKillRow[]> {
+  // PostgREST plafonne à 1 000 lignes par requête : pagination par range().
+  const out: SitemapVideoKillRow[] = [];
+  try {
+    const supabase = createCachedAnonSupabase(SITEMAP_REVALIDATE_S);
+    for (let from = 0; from < limit; from += 1000) {
+      const { data, error } = await supabase
+        .from("kills")
+        .select(
+          "id,killer_champion,victim_champion,multi_kill,ai_description,created_at," +
+            "thumbnail_url,clip_url_horizontal,assets_manifest," +
+            "killer:players!kills_killer_player_id_fkey(ign)",
+        )
+        .or(SITEMAP_PUBLISHED_FILTER)
+        .eq("kill_visible", true)
+        .not("clip_url_vertical", "is", null)
+        .not("thumbnail_url", "is", null)
+        .order("highlight_score", { ascending: false, nullsFirst: false })
+        .order("id", { ascending: true })
+        .range(from, Math.min(from + 999, limit - 1));
+      if (error) {
+        console.warn("[supabase/kills] getSitemapVideoKills error:", error.message);
+        break;
+      }
+      out.push(...((data ?? []) as unknown as SitemapVideoKillRow[]));
+      if (!data || data.length < 1000) break;
+    }
+  } catch (err) {
+    rethrowIfDynamic(err);
+    console.warn("[supabase/kills] getSitemapVideoKills threw:", err);
+  }
+  return out;
+}

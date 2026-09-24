@@ -55,7 +55,14 @@ from gc_r2_orphans import (  # noqa: E402
     build_reference_set, load_assets, url_to_path, head_ok, CLIP_HOSTS,
 )
 
-PROTECTED_PREFIXES = ("backups/", "og/", "moments/", "moment_thumbs/")
+# hls/ ajouté 2026-08-12 : les segments .ts et playlists de variantes
+# (v0.m3u8, v0_000.ts, ...) ne sont référencés NULLE PART en base — seule
+# l'URL du master.m3u8 vit dans kills.hls_master_url. Sans cette protection,
+# ce GC les classe "morts" et les supprime en laissant des masters qui
+# pointent dans le vide (exactement l'état qui a forcé le hotfix web du
+# 2026-07-13, hlsUrl=null dans FeedPlayerPool). Le nettoyage volontaire du
+# préfixe reste possible via scripts/cleanup_hls_prefix.py (DB d'abord).
+PROTECTED_PREFIXES = ("backups/", "og/", "moments/", "moment_thumbs/", "hls/")
 MIN_AGE_H = 48
 
 

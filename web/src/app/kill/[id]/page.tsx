@@ -1,10 +1,11 @@
-import { notFound } from "next/navigation";
+import { notFound, permanentRedirect } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
 import { loadRealData, displayRole } from "@/lib/real-data";
 import { championIconUrl } from "@/lib/constants";
 import { computeKillScore } from "@/lib/feed-algorithm";
-import { getKillById, getKillsByMatchExternalId, getPublishedKills } from "@/lib/supabase/kills";
+import { getDuplicateKeeperId, getKillById, getKillsByMatchExternalId, getPublishedKills } from "@/lib/supabase/kills";
+import { createCachedAnonSupabase, rethrowIfDynamic } from "@/lib/supabase/server";
 import { KillInteractions } from "./interactions";
 import { KillCinematicView } from "@/components/kill/KillCinematicView";
 import { SimilarClipsCarousel } from "@/components/kill/SimilarClipsCarousel";
@@ -12,7 +13,9 @@ import { KillQuotesPanel } from "@/components/quotes/KillQuotesPanel";
 import { getAssetMetadata, pickAssetUrl } from "@/lib/kill-assets";
 import { JsonLd, breadcrumbLD } from "@/lib/seo/jsonld";
 import { getServerT } from "@/lib/i18n/server-lang";
+import { cleanTeamCode } from "@/lib/team-display";
 import type { Metadata } from "next";
+import { SITE_URL } from "@/lib/site-url";
 
 // ISR: pre-render the top N clips at build time, regenerate every 10 min
 // so freshly-rated kills bubble up without a deploy.
@@ -123,13 +126,57 @@ function buildLegacyKillIndex(data: ReturnType<typeof loadRealData>): LegacyKill
   return kills;
 }
 
+// ─── Résolution des pseudos joueurs (IGN) ──────────────────────────────
+// Le KILL_SELECT partagé ne joint pas `players` (on n'alourdit pas
+// l'egress du feed pour deux champs d'une seule page). On résout donc les
+// IGN killer/victim ici, en UNE requête ciblée (~100 octets), cachée via
+// le Data Cache comme le reste de la page ISR. Les hints `!fkey`
+// désambiguïsent les deux FK kills → players. Fail-open : toute erreur
+// rend {null, null} et le duel header retombe sur les noms de champions
+// (sans sous-titre dupliqué).
+async function getKillPlayerNames(
+  id: string,
+): Promise<{ killer: string | null; victim: string | null }> {
+  const none = { killer: null, victim: null };
+  try {
+    const supabase = createCachedAnonSupabase();
+    const { data, error } = await supabase
+      .from("kills")
+      .select(
+        "killer:players!kills_killer_player_id_fkey(ign)," +
+          "victim:players!kills_victim_player_id_fkey(ign)",
+      )
+      .eq("id", id)
+      .maybeSingle();
+    if (error || !data) return none;
+    // Le parseur de types supabase-js ne sait pas lire les hints `!fkey`
+    // (il rend GenericStringError) — on caste vers la shape réelle.
+    const row = data as unknown as { killer?: unknown; victim?: unknown };
+    // L'embed revient objet ou tableau selon la version supabase-js.
+    const ignOf = (rel: unknown): string | null => {
+      const one = Array.isArray(rel) ? rel[0] : rel;
+      const ign = (one as { ign?: unknown } | null | undefined)?.ign;
+      return typeof ign === "string" && ign.trim() ? ign.trim() : null;
+    };
+    return { killer: ignOf(row.killer), victim: ignOf(row.victim) };
+  } catch (err) {
+    rethrowIfDynamic(err);
+    return none;
+  }
+}
+
 function opponentFromMatchExternalId(
   matchExternalId: string,
   data: ReturnType<typeof loadRealData>
-): { code: string; name: string } {
+): { code: string; name: string } | null {
   const hit = data.matches.find((m) => m.id === matchExternalId);
-  if (hit) return { code: hit.opponent.code, name: hit.opponent.name };
-  return { code: "LEC", name: "LEC" };
+  // cleanTeamCode filtre les codes non affichables (vide, id numérique
+  // gol.gg, placeholder "LEC"). Match non résolu dans kc_matches.json →
+  // null : le breadcrumb affiche "Match" et le JSON-LD omet le "KC vs X",
+  // plus jamais de "KC vs LEC" mensonger.
+  const code = cleanTeamCode(hit?.opponent.code);
+  if (hit && code) return { code, name: hit.opponent.name };
+  return null;
 }
 
 // ─── Metadata ──────────────────────────────────────────────────────────
@@ -185,6 +232,13 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     }
   }
 
+  // Doublon neutralisé : la redirection part dès les métadonnées (vrai 308
+  // pour les robots qui attendent le <head> avant tout envoi).
+  if (isUuid(id)) {
+    const keeper = await getDuplicateKeeperId(id);
+    if (keeper) permanentRedirect(`/kill/${keeper}`);
+  }
+
   const data = loadRealData();
   const kills = buildLegacyKillIndex(data);
   const kill = kills.find((k) => k.id === id);
@@ -212,23 +266,28 @@ export default async function KillDetailPage({ params }: Props) {
         data
       );
 
+      // IGN killer/victim pour le duel header (requête légère, fail-open).
+      const playerNames = await getKillPlayerNames(id);
+
       // JSON-LD VideoObject for SEO — helps Google index clips as videos
       // and surface them in the video search vertical. Schema.org spec:
       // https://schema.org/VideoObject
       // Prefer the manifest URLs over the legacy columns so freshly-
       // re-encoded clips (worker bumps the version) get indexed
       // immediately on next ISR pass.
-      const canonicalUrl = `https://kckills.com/kill/${id}`;
+      const canonicalUrl = `${SITE_URL}/kill/${id}`;
       const ldHorizontalUrl = pickAssetUrl(kill, "horizontal");
       const ldThumbnailUrl =
         pickAssetUrl(kill, "thumbnail") ?? pickAssetUrl(kill, "og_image") ?? undefined;
       const videoJsonLd = ldHorizontalUrl ? {
         "@context": "https://schema.org",
         "@type": "VideoObject",
-        name: `${kill.killer_champion} \u2192 ${kill.victim_champion} \u2014 KC vs ${opponent.code}`,
+        // Adversaire non r\u00e9solu \u2192 on omet le "KC vs X" plut\u00f4t que
+        // d'inventer un placeholder de ligue.
+        name: `${kill.killer_champion} \u2192 ${kill.victim_champion}${opponent ? ` \u2014 KC vs ${opponent.code}` : ""}`,
         description:
           kill.ai_description ??
-          `Kill highlight from KC vs ${opponent.code} \u2014 ${kill.killer_champion} eliminates ${kill.victim_champion}.`,
+          `Kill highlight${opponent ? ` from KC vs ${opponent.code}` : ""} \u2014 ${kill.killer_champion} eliminates ${kill.victim_champion}.`,
         thumbnailUrl: ldThumbnailUrl,
         contentUrl: ldHorizontalUrl,
         embedUrl: canonicalUrl,
@@ -252,10 +311,10 @@ export default async function KillDetailPage({ params }: Props) {
         publisher: {
           "@type": "Organization",
           name: "KCKILLS",
-          url: "https://kckills.com",
+          url: SITE_URL,
           logo: {
             "@type": "ImageObject",
-            url: "https://kckills.com/icons/icon-512x512.png",
+            url: `${SITE_URL}/icons/icon-512x512.png`,
           },
         },
         ...(kill.rating_count > 0 && kill.avg_rating != null
@@ -319,10 +378,11 @@ export default async function KillDetailPage({ params }: Props) {
       // carousel. The match link is included only when we have a
       // resolved external_id so the URL is canonical.
       const matchExtId = kill.games?.matches?.external_id;
+      // Adversaire non résolu → "Match" (jamais "KC vs LEC" mensonger).
       const breadcrumbJsonLd = breadcrumbLD([
         { name: "Accueil", url: "/" },
         ...(matchExtId
-          ? [{ name: `KC vs ${opponent.code}`, url: `/match/${matchExtId}` }]
+          ? [{ name: opponent ? `KC vs ${opponent.code}` : "Match", url: `/match/${matchExtId}` }]
           : []),
         {
           name: `${kill.killer_champion ?? "?"} \u2192 ${kill.victim_champion ?? "?"}`,
@@ -340,7 +400,11 @@ export default async function KillDetailPage({ params }: Props) {
           )}
           <JsonLd data={breadcrumbJsonLd} />
           <KillCinematicView
-            kill={kill}
+            kill={{
+              ...kill,
+              killer_name: playerNames.killer,
+              victim_name: playerNames.victim,
+            }}
             opponent={opponent}
             relatedKills={relatedKills}
             similarSlot={<SimilarClipsCarousel killId={id} />}
@@ -366,6 +430,12 @@ export default async function KillDetailPage({ params }: Props) {
         </>
       );
     }
+  }
+
+  // Doublon neutralisé (même kill importé deux fois) : 308 vers le clip conservé.
+  if (isUuid(id)) {
+    const keeper = await getDuplicateKeeperId(id);
+    if (keeper) permanentRedirect(`/kill/${keeper}`);
   }
 
   const data = loadRealData();

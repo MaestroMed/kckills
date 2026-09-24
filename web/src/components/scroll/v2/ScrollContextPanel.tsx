@@ -156,7 +156,10 @@ const MatchHeader = memo(function MatchHeader({
     });
   }, [matchDate, lang]);
 
-  const opp = opponentCode || "LEC";
+  // Adversaire non résolu (code vide) : on affiche "KC" seul — plus de
+  // placeholder "vs LEC" mensonger. La ligne micro-data en dessous porte
+  // déjà stage · game · date pour situer le clip.
+  const opp = opponentCode.trim();
 
   return (
     <header>
@@ -167,12 +170,16 @@ const MatchHeader = memo(function MatchHeader({
         <span className={isKcKill ? "text-[var(--gold)]" : "text-white/85"}>
           KC
         </span>
-        <span className="font-data text-xs font-normal text-[var(--text-muted)]">
-          {t("p_scroll.rail_vs")}
-        </span>
-        <span className={!isKcKill ? "text-[var(--gold)]" : "text-white/85"}>
-          {opp}
-        </span>
+        {opp && (
+          <>
+            <span className="font-data text-xs font-normal text-[var(--text-muted)]">
+              {t("p_scroll.rail_vs")}
+            </span>
+            <span className={!isKcKill ? "text-[var(--gold)]" : "text-white/85"}>
+              {opp}
+            </span>
+          </>
+        )}
         {kcWon != null && (
           <span
             className={`ml-auto font-data text-[11px] font-bold uppercase tracking-widest ${

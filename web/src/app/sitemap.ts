@@ -2,20 +2,10 @@ import type { MetadataRoute } from "next";
 import { ERAS } from "@/lib/eras";
 import { ALUMNI } from "@/lib/alumni";
 import { loadRealData, getKCRoster } from "@/lib/real-data";
-import { getPublishedKills } from "@/lib/supabase/kills";
+import { getSitemapKills, getSitemapVideoKills } from "@/lib/supabase/kills";
+import { pickAssetUrl } from "@/lib/kill-assets";
+import { SITE_URL } from "@/lib/site-url";
 
-const SITE_URL =
-  process.env.NEXT_PUBLIC_SITE_URL ??
-  // Audit 2.0 : en PRODUCTION on force le domaine canonique. Avant, le
-  // fallback VERCEL_URL renvoyait l'URL de déploiement (kckills-xxx.
-  // vercel.app), qui partait dans les 1978 URLs du sitemap, robots.txt,
-  // canonical et og:url — le site s'auto-désindexait au profit d'un host
-  // jetable. NEXT_PUBLIC_SITE_URL reste prioritaire si elle est définie.
-  (process.env.VERCEL_ENV === "production"
-    ? "https://www.kckills.com"
-    : process.env.VERCEL_URL
-      ? `https://${process.env.VERCEL_URL}`
-      : "http://localhost:3000");
 
 // Cap how many clip URLs we expose in the sitemap so it stays under
 // Google's 50K-entry / 50MB hard limit even at scale, and so the
@@ -24,7 +14,13 @@ const SITE_URL =
 // published clips with growth velocity. Google's per-file cap is 50k
 // so we still have headroom; Vercel ISR builds the file in <2s at
 // 5k since the SELECT is index-backed (idx_kills_published).
-const SITEMAP_MAX_CLIPS = 5000;
+// 23/09/2026 — le cap de 5 000 laissait 4 867 des 9 867 clips publiés hors
+// du sitemap. getSitemapKills pagine tout le catalogue (5 colonnes, ~1 Mo) ;
+// 45 000 garde une marge sous la limite de 50 000 URLs par fichier.
+const SITEMAP_MAX_CLIPS = 45_000;
+// Entrées <video:video> (sitemap vidéo Google) pour les meilleurs clips :
+// titre, vignette, description, fichier MP4.
+const SITEMAP_MAX_VIDEOS = 2000;
 // Limits for the auxiliary entity pages — sized so the per-file URL
 // count comfortably stays under Google's 50K cap once ALL buckets
 // (clips + players + matches + champions + matchups + static)
@@ -36,7 +32,30 @@ const SITEMAP_MAX_MATCHES = 200;
 // Phase 4 SEO spec : fresh enough for newly-published clips to hit
 // the index quickly, slow enough that we don't hammer Supabase on
 // every Googlebot fetch (Vercel caches the response between builds).
-export const revalidate = 3600;
+// 23/09/2026 : 6 h. Un clip publié n'y change plus ; les nouveaux arrivent
+// par match (quelques fois par semaine) et chaque régénération lit Supabase.
+export const revalidate = 21600;
+
+/** Next n'échappe pas le XML des champs vidéo : « & », « < », « > » et les
+ *  guillemets d'un titre ou d'une description casseraient le sitemap. */
+function xml(text: string): string {
+  return text
+    // caractères de contrôle interdits en XML 1.0 (des descriptions IA en
+    // base portent des \x03 à la place d'accents : le XML devenait invalide)
+    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&apos;");
+}
+
+const MULTI_LABEL: Record<string, string> = {
+  penta: "PENTAKILL",
+  quadra: "Quadra kill",
+  triple: "Triple kill",
+  double: "Double kill",
+};
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const now = new Date();
@@ -48,7 +67,11 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   // if Supabase is unreachable at build — the deploy still ships, just
   // without per-clip URLs that build (ISR populates on first hit).
   // buildTime: true so cookies() isn't called from sitemap-build context.
-  const publishedKills = await getPublishedKills(SITEMAP_MAX_CLIPS, { buildTime: true }).catch(() => []);
+  const [publishedKills, videoKills] = await Promise.all([
+    getSitemapKills(SITEMAP_MAX_CLIPS).catch(() => []),
+    getSitemapVideoKills(SITEMAP_MAX_VIDEOS).catch(() => []),
+  ]);
+  const videoById = new Map(videoKills.map((k) => [k.id, k]));
 
   // Only canonical routes here — any path that just redirect()s to
   // another URL (e.g. /best, /top, /recent, /hall-of-fame) is dropped
@@ -294,12 +317,38 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     if (created.getTime() >= ninetyDaysAgo) {
       priority = Math.min(0.9, priority + 0.05);
     }
-    return {
+    // updated_at bouge quand un clip est re-coupé (nouvelle version) :
+    // Google revient alors chercher la bonne vidéo.
+    const modified = k.updated_at ? new Date(k.updated_at) : created;
+    const entry: MetadataRoute.Sitemap[number] = {
       url: `${SITE_URL}/kill/${k.id}`,
-      lastModified: created,
+      lastModified: modified,
       changeFrequency: "monthly" as const,
       priority: Math.round(priority * 100) / 100,
     };
+    const v = videoById.get(k.id);
+    const thumb = v ? pickAssetUrl(v, "thumbnail") : null;
+    const mp4 = v ? pickAssetUrl(v, "horizontal") : null;
+    if (v && thumb && mp4) {
+      const ign = v.killer?.ign?.trim();
+      const killer = ign ? `${ign} (${v.killer_champion ?? "?"})` : (v.killer_champion ?? "KC");
+      const multi = v.multi_kill ? `${MULTI_LABEL[v.multi_kill] ?? v.multi_kill} — ` : "";
+      const title = `${multi}${killer} élimine ${v.victim_champion ?? "?"}`;
+      const description =
+        (v.ai_description ?? "").trim() ||
+        `Clip Karmine Corp : ${v.killer_champion ?? "?"} contre ${v.victim_champion ?? "?"}, noté par la communauté KCKILLS.`;
+      entry.videos = [
+        {
+          title: xml(title.slice(0, 100)),
+          thumbnail_loc: xml(thumb),
+          description: xml(description.slice(0, 2048)),
+          content_loc: xml(mp4),
+          publication_date: new Date(v.created_at).toISOString(),
+          family_friendly: "yes",
+        },
+      ];
+    }
+    return entry;
   });
 
   return [

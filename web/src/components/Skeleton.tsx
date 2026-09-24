@@ -111,7 +111,7 @@ export function SkeletonKillCard() {
 /**
  * Leaderboard row used by /top. Rank badge on the left, stats on the right.
  */
-export function SkeletonRankRow({ rank = 1 }: { rank?: number }) {
+export function SkeletonRankRow({ rank: _rank = 1 }: { rank?: number }) {
   return (
     <div className="flex items-center gap-4 rounded-xl border border-[var(--border-gold)] bg-[var(--bg-surface)] p-4">
       <Box className="h-10 w-10" rounded="rounded-lg" />

@@ -23,6 +23,16 @@ if not exist "%PYTHON%" (
     exit /b 1
 )
 
+REM 2026-09-17 — serveur PO token (YouTube renvoie 403 sans PO token depuis
+REM l'ete 2026). yt-dlp le trouve sur http://127.0.0.1:4416 via le plugin
+REM bgutil-ytdlp-pot-provider. Build : voir D:\kckills_worker\tools.
+set "POT=D:\kckills_worker\tools\bgutil-ytdlp-pot-provider\server\build\main.js"
+if exist "%POT%" (
+    start "kckills-pot-provider" /min node "%POT%" --port 4416
+) else (
+    echo [%date% %time%] WARN: PO token server absent (%POT%) — telechargements YouTube a risque >> logs\daemon.log
+)
+
 :loop
 REM Rotate daemon.log above ~1 GB. NOTE: cmd's IF GTR compares as SIGNED
 REM 32-BIT — a 4.5 GB size overflows and the test silently fails. So we

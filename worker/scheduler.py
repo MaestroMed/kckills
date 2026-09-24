@@ -59,8 +59,11 @@ class LoLTokScheduler:
         # the daemon's poll interval, not per-call delay.
         "lolesports_idle": 2.0,
         "lolesports_live": 10.0,
-        "livestats": 2.0,          # game frames are lightweight and we
-                                    # scan ~15 windows per BO5 game
+        # Le harvester parcourt une fenêtre toutes les 10 s de jeu (~250 par
+        # game, pas ~15) : 2 s d'écart = 8 min par game. Le feed est un CDN
+        # JSON public ; pour un backfill historique KCKILLS_LIVESTATS_DELAY=0.5
+        # suffit (validé sur les scans Summer 2026). Le live garde 2 s.
+        "livestats": float(os.environ.get("KCKILLS_LIVESTATS_DELAY", "2.0")),
         # ffmpeg_cooldown : the original 5s assumed a small CPU. With a
         # 16-core Ryzen the bottleneck is I/O, not heat. 1s gives ffmpeg
         # enough breathing room to flush + close handles between calls

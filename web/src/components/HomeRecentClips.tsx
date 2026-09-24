@@ -1,8 +1,8 @@
 import Link from "next/link";
 import Image from "next/image";
 import { getRecentPublishedKills } from "@/lib/supabase/kills";
-import { TEAM_LOGOS } from "@/lib/kc-assets";
 import { championIconUrl } from "@/lib/constants";
+import { cleanTeamCode } from "@/lib/team-display";
 import { getStaticT } from "@/lib/i18n/server-lang";
 
 /**
@@ -52,7 +52,12 @@ export async function HomeRecentClips() {
       <div className="flex gap-3 overflow-x-auto pb-2 snap-x snap-mandatory md:grid md:grid-cols-4 lg:grid-cols-8 md:overflow-visible -mx-4 px-4 md:mx-0 md:px-0">
         {cards.map((k) => {
           const matchExt = k.games?.matches?.external_id;
-          const opp = matchExt ? matchExt.split("_").pop()?.toUpperCase().slice(0, 4) : "";
+          // cleanTeamCode rejette les ids numériques gol.gg (« 1155 »,
+          // « 77798 » → suffixe d'external_id, pas un code d'équipe) et
+          // les placeholders — badge « KC » seul dans ce cas.
+          const opp = cleanTeamCode(
+            matchExt ? matchExt.split("_").pop()?.toUpperCase().slice(0, 4) : null,
+          );
           return (
             <Link
               key={k.id}
@@ -72,7 +77,7 @@ export async function HomeRecentClips() {
               {/* Top: opponent + score */}
               <div className="absolute top-1.5 left-1.5 right-1.5 flex items-center justify-between gap-1 z-10">
                 <span className="rounded bg-black/70 backdrop-blur-sm px-1.5 py-0.5 text-[8px] font-bold text-white">
-                  KC vs {opp || "?"}
+                  {opp ? `KC vs ${opp}` : "KC"}
                 </span>
                 {k.highlight_score !== null && (
                   <span className="rounded bg-black/70 backdrop-blur-sm px-1.5 py-0.5 text-[8px] font-bold text-[var(--gold)]">

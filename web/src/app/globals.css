@@ -21,7 +21,10 @@
   --text-primary: #F0E6D2;
   --text-secondary: #A09B8C;
   --text-muted: #7B8DB5;
-  --text-disabled: #3D4A63;
+  /* WCAG AA (spec §2.4 : tous textes >= 4,5:1) — #3D4A63 plafonnait à 2,2:1
+     et sert de texte secondaire dans 74 fichiers. #7586A8 = 4,59:1 sur
+     --bg-elevated (le fond le plus clair), un cran sous --text-muted. */
+  --text-disabled: #7586A8;
   --border-gold: rgba(200, 170, 110, 0.15);
   --border-subtle: rgba(100, 140, 200, 0.1);
   /* ─── Wave 36 — Wide-stage scroll shell tokens ───
@@ -316,6 +319,20 @@ button:focus-visible {
 }
 
 /* ─── Progress bar (TikTok-style) ────────────────── */
+/* Vague 4 (2026-08-12) — ravivée pour le feed v2. Le FeedPlayerPool
+   écrit --p (currentTime/duration du slot LIVE) sur le rail
+   .kc-clip-progress via rAF — zéro setState, la barre est pur
+   compositor (transform scaleX). La piste (track) est le conteneur,
+   la barre dorée est l'enfant .scroll-progress-bar. */
+.kc-clip-progress {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: rgba(255, 255, 255, 0.14);
+  pointer-events: none;
+  --p: 0;
+}
 .scroll-progress-bar {
   position: absolute;
   bottom: 0;
@@ -328,6 +345,55 @@ button:focus-visible {
   transform: scaleX(var(--p, 0));
   will-change: transform;
   pointer-events: none;
+}
+
+/* ─── Buffering indicator (slot LIVE, readyState < 3) ── */
+/* Vague 4 — anneau discret par-dessus le poster quand le clip actif
+   met > 300 ms à bufferiser. Toggle imperatif (classList) depuis le
+   FeedPlayerPool, jamais de re-render React. */
+.kc-clip-buffering {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 180ms ease-out;
+}
+.kc-clip-buffering.is-visible {
+  opacity: 1;
+}
+.kc-clip-buffering-ring {
+  width: 42px;
+  height: 42px;
+  border-radius: 9999px;
+  border: 2.5px solid rgba(200, 170, 110, 0.2);
+  border-top-color: var(--gold);
+  background: rgba(0, 0, 0, 0.25);
+  animation: kc-buffer-spin 0.9s linear infinite;
+}
+@keyframes kc-buffer-spin {
+  to { transform: rotate(360deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .kc-clip-buffering-ring {
+    animation: none;
+    border-color: rgba(200, 170, 110, 0.45);
+    border-top-color: var(--gold);
+  }
+}
+
+/* ─── Swipe hint (1re visite) ────────────────────── */
+/* Vague 4 — chevron « glisse vers le haut », 2 cycles puis fin
+   (le composant SwipeHint écoute onAnimationEnd pour se démonter). */
+@keyframes kc-swipe-hint {
+  0%   { opacity: 0; transform: translateY(22px); }
+  25%  { opacity: 0.95; transform: translateY(0); }
+  55%  { opacity: 0.9; transform: translateY(-16px); }
+  100% { opacity: 0; transform: translateY(-26px); }
+}
+.kc-swipe-hint-chevron {
+  animation: kc-swipe-hint 1.4s cubic-bezier(0.22, 1, 0.36, 1) 3 both;
 }
 
 /* Bottom-overlay fade-in: short + opacity-only → cheap on the compositor.
@@ -986,3 +1052,103 @@ button:focus-visible {
 /* No new keyframes are introduced by this block, so there is nothing extra
    to gate for prefers-reduced-motion — the global reduce guard above already
    neutralises any animation/transition these surfaces might inherit. */
+
+/* ─── Header 2.0 — barre flottante + CTA glossy + étendards KC ──────────
+   Demande Mehdi 2026-08-12 : header contenu (plus bord-à-bord), recherche
+   unique, Discord en icône, CTA « Scroll » glossy à gros contours, et
+   étendards KC or accrochés aux coins de la barre. */
+
+/* Le CTA signature — PAS un bouton : le mot « SCROLL » en lettrage
+   varsity (Graduate), collé façon sticker : gros contour crème + contour
+   navy + lettres or, léger tilt, glow néon 80s au hover. */
+.scroll-wordmark {
+  display: inline-flex;
+  align-items: center;
+  transform: rotate(-2deg);
+  transition: transform 0.2s ease, filter 0.25s ease;
+  filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.6))
+    drop-shadow(0 0 10px rgba(200, 170, 110, 0.3));
+}
+.scroll-wordmark:hover {
+  transform: rotate(-2deg) scale(1.06);
+  filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.6))
+    drop-shadow(0 0 14px rgba(200, 170, 110, 0.6))
+    drop-shadow(0 0 28px rgba(10, 200, 185, 0.35));
+}
+.scroll-wordmark:active {
+  transform: rotate(-2deg) scale(0.98);
+}
+.scroll-wordmark-svg {
+  height: 36px;
+  width: auto;
+  overflow: visible;
+}
+.scroll-wordmark-svg--lg {
+  height: 44px;
+}
+.scroll-wordmark-text {
+  font-family: var(--font-varsity), var(--font-oswald), sans-serif;
+  font-size: 27px;
+  letter-spacing: 0.05em;
+  paint-order: stroke fill;
+}
+
+/* Étendards KC — bannières héraldiques accrochées sous les coins de la
+   barre. Le wrap gère position + taille ; dedans, soit le fallback SVG
+   statique (balancement CSS), soit le canvas R3F « vrai tissu ».
+   Décoratif pur : aria-hidden + pointer-events-none, desktop only. */
+.kc-pennant-wrap {
+  pointer-events: none;
+  position: absolute;
+  top: 100%;
+  margin-top: -2px;
+  width: 76px;
+  height: 196px;
+  transform-origin: 50% 0;
+  z-index: 5;
+  transition: transform 0.45s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.35s ease;
+}
+/* Au scroll la barre se condense : les étendards se replient dessous
+   (ils ne chevauchent jamais le contenu en milieu de page) et
+   redescendent en haut de page. */
+nav[data-scrolled="true"] .kc-pennant-wrap {
+  transform: translateY(-70%);
+  opacity: 0;
+}
+.kc-pennant-wrap--left {
+  left: 12px;
+}
+.kc-pennant-wrap--right {
+  right: 12px;
+}
+.kc-pennant-static {
+  width: 100%;
+  height: auto;
+  filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.5));
+  transform-origin: 50% 0;
+  animation: kc-pennant-sway 6s ease-in-out infinite alternate;
+}
+.kc-pennant-wrap--right .kc-pennant-static {
+  animation-delay: -3s;
+}
+.kc-pennant-cloth {
+  width: 100%;
+  height: 100%;
+  filter: drop-shadow(0 5px 8px rgba(0, 0, 0, 0.45));
+}
+@keyframes kc-pennant-sway {
+  from {
+    transform: rotate(-2.5deg);
+  }
+  to {
+    transform: rotate(2.5deg);
+  }
+}
+
+/* Surface de la barre flottante (le .glass historique porte un
+   border-bottom pensé pour la barre bord-à-bord ; la barre flottante
+   gère ses bordures via les classes Tailwind). */
+.glass-bar {
+  backdrop-filter: blur(16px) saturate(180%);
+  background: rgba(10, 20, 40, 0.72);
+}

@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import Link from "next/link";
 
 interface LiveData {
   isLive: boolean;
@@ -61,7 +60,6 @@ export function LiveBanner() {
       if (intervalId != null) window.clearInterval(intervalId);
       if (currentController) currentController.abort();
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data?.isLive]);
 
   if (!data?.isLive) return null;

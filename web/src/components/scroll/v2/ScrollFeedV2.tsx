@@ -62,6 +62,7 @@ import {
   useScrollSettings,
 } from "./ScrollSettingsDrawer";
 import { OnboardingModal } from "./OnboardingModal";
+import { SwipeHint } from "./SwipeHint";
 import { useAffinityStore } from "./hooks/useAffinityStore";
 import { FeedTabBar } from "./FeedTabBar";
 import { useScrollRestore } from "./hooks/useScrollRestore";
@@ -71,6 +72,7 @@ import type {
   VideoFeedItem,
 } from "@/components/scroll/feed-types";
 import type { RecommendedKillRow } from "@/lib/supabase/recommendations";
+import { resolveOpponentFromCodes } from "@/lib/team-display";
 import { rateKill } from "@/components/community/actions";
 import { track } from "@/lib/analytics/track";
 import { useT } from "@/lib/i18n/use-lang";
@@ -162,7 +164,14 @@ function recommendationToFeedItem(row: RecommendedKillRow): VideoFeedItem | null
     matchExternalId: k.games?.matches?.external_id ?? "",
     matchStage: k.games?.matches?.stage ?? "LEC",
     matchDate: k.games?.matches?.scheduled_at ?? k.created_at,
-    opponentCode: "LEC",
+    // Pas de kc_matches.json côté client, mais KILL_SELECT embarque les
+    // codes équipes (2026-08-13) : on résout l'adversaire depuis la DB.
+    // Règle inchangée : jamais un faux code équipe à l'écran ("" sinon).
+    opponentCode:
+      resolveOpponentFromCodes(
+        k.games?.matches?.team_blue_code,
+        k.games?.matches?.team_red_code,
+      ) ?? "",
     kcWon: null,
     matchScore: null,
   };
@@ -410,14 +419,23 @@ export function ScrollFeedV2({
   // at first mount if the container's height is computed via dvh/svh.
   // ResizeObserver catches the value as soon as it's measurable, AND
   // we fall back to window.innerHeight which is always non-zero.
+  //
+  // Perf (2026-08-12) — la mesure est hissée en useCallback pour être
+  // partagée par le listener resize CONSOLIDÉ plus bas (une seule paire
+  // resize/orientationchange pour tout le feed) et par le nudge ciblé
+  // `kc:stage-resize` que StageFrame émet au commit de sa taille (avant :
+  // un window.dispatchEvent(new Event("resize")) global qui réveillait
+  // tous les listeners resize de l'app à chaque commit).
+  const measureStage = useCallback(() => {
+    const el = containerRef.current;
+    const measured = el?.clientHeight ?? 0;
+    // Always use a non-zero value — 0 makes videos invisible (audio-only bug)
+    const h = measured > 0 ? measured : window.innerHeight;
+    setItemHeight((prev) => (prev === h ? prev : h));
+  }, []);
+
   useEffect(() => {
-    const update = () => {
-      const el = containerRef.current;
-      const measured = el?.clientHeight ?? 0;
-      // Always use a non-zero value — 0 makes videos invisible (audio-only bug)
-      const h = measured > 0 ? measured : window.innerHeight;
-      setItemHeight((prev) => (prev === h ? prev : h));
-    };
+    const update = measureStage;
     update();
     // Settle loop — re-measure across several successive frames + a short
     // timeout. Two reasons :
@@ -443,8 +461,10 @@ export function ScrollFeedV2({
     };
     scheduleSettle(6);
     const settleTimeout = window.setTimeout(update, 250);
-    window.addEventListener("resize", update);
-    window.addEventListener("orientationchange", update);
+    // Nudge ciblé du StageFrame (remplace son ancien dispatch global de
+    // `resize`) — émis au commit de la taille de la frame pour gagner la
+    // course first-paint entre le sizing de la frame et la lecture du RO.
+    window.addEventListener("kc:stage-resize", update);
 
     // ResizeObserver catches container height changes (including when
     // dvh/svh values resolve after first paint on mobile, AND when the wide-
@@ -458,11 +478,16 @@ export function ScrollFeedV2({
     return () => {
       rafs.forEach((id) => cancelAnimationFrame(id));
       window.clearTimeout(settleTimeout);
-      window.removeEventListener("resize", update);
-      window.removeEventListener("orientationchange", update);
+      window.removeEventListener("kc:stage-resize", update);
       ro?.disconnect();
     };
-  }, []);
+    // isWideStage / isDesktop switchent l'ARBRE de rendu (framed shell ↔
+    // fixed-inset-0) : containerRef est réassigné à un NOUVEAU nœud. Sans
+    // ces deps, le ResizeObserver restait accroché à l'ancien nœud démonté
+    // et itemHeight gardait la hauteur de l'ancien arbre (bug préexistant,
+    // visible en franchissant 1024px : la vidéo gardait la hauteur de la
+    // frame). Re-exécuter l'effet re-mesure + ré-observe le bon nœud.
+  }, [measureStage, isWideStage, isDesktop]);
 
   // ─── Filter broken items ──────────────────────────────────────────
   const visibleItems = useMemo(
@@ -492,20 +517,40 @@ export function ScrollFeedV2({
   }, [initialKillId, restoreIndex, visibleItems]);
 
   // ─── URL state sync — fired on every snap commit ─────────────────
+  // Vague 4 (2026-08-12) — pattern TikTok web : pushState par changement
+  // de clip (le bouton Retour remonte l'historique de clips au lieu de
+  // sortir du feed), MAIS anti-spam : plusieurs snaps en < 1 s se
+  // coalisent en replaceState (un flick-through de 15 clips = 1 entrée
+  // d'historique, pas 15). Le popstate (plus bas) rejoue jumpTo vers le
+  // clip de l'entrée sans re-push (garde fromPopstate).
+  const historyNavRef = useRef({ lastSnapAt: 0, fromPopstate: false });
   const handleActiveChange = (idx: number) => {
     const item = visibleItems[idx];
     // Always persist the latest position to sessionStorage — even
     // index 0, so a user who scrolled to item 5, scrolled back to 0,
     // then navigated away gets the correct restore on return.
     persistScrollPos(item?.id);
-    if (idx === 0) return; // don't dirty URL on the initial snap
     if (!item || typeof window === "undefined") return;
     try {
       const url = new URL(window.location.href);
-      if (url.searchParams.get("kill") !== item.id) {
-        url.searchParams.set("kill", item.id);
-        window.history.replaceState(window.history.state, "", url.toString());
-      }
+      // Index 0 = état « haut du feed » : URL sans ?kill (comme à
+      // l'arrivée), pour que Back depuis le clip 2 ramène à un état
+      // propre plutôt qu'à un deep-link périmé.
+      if (idx === 0) url.searchParams.delete("kill");
+      else url.searchParams.set("kill", item.id);
+      const next = url.toString();
+      if (next === window.location.href) return;
+      // Snap déclenché par popstate → l'URL est déjà celle de l'entrée
+      // d'historique, ne surtout pas re-pousser par-dessus.
+      if (historyNavRef.current.fromPopstate) return;
+      const now = Date.now();
+      const rapid = now - historyNavRef.current.lastSnapAt < 1000;
+      historyNavRef.current.lastSnapAt = now;
+      // Préserver history.state (Next App Router y range son état
+      // interne — le pushState natif est supporté depuis Next 14.1).
+      const state = window.history.state;
+      if (rapid) window.history.replaceState(state, "", next);
+      else window.history.pushState(state, "", next);
     } catch {
       // sandboxed contexts disallow history mutation — silent
     }
@@ -521,7 +566,42 @@ export function ScrollFeedV2({
     initialIndex,
     onActiveChange: handleActiveChange,
   });
-  const isAtEndOfFeed = activeIndex === visibleItems.length;
+
+  // ─── Back button (Vague 4) — popstate → jumpTo ────────────────────
+  // Le navigateur a déjà restauré l'URL de l'entrée d'historique ; on
+  // se contente de re-snapper le feed sur le clip correspondant via le
+  // jumpTo existant (spring, pas de re-render global au-delà du commit
+  // d'index habituel). fromPopstate empêche handleActiveChange de
+  // re-pousser une entrée par-dessus celle qu'on vient de restaurer.
+  const visibleItemsRef = useRef(visibleItems);
+  useEffect(() => {
+    visibleItemsRef.current = visibleItems;
+  }, [visibleItems]);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const onPop = () => {
+      try {
+        const killId = new URL(window.location.href).searchParams.get("kill");
+        const list = visibleItemsRef.current;
+        const idx = killId ? list.findIndex((it) => it.id === killId) : 0;
+        // Clip absent du feed courant (autre filtre, purge) → laisser
+        // le routeur gérer la navigation sans forcer de snap.
+        if (idx < 0) return;
+        historyNavRef.current.fromPopstate = true;
+        try {
+          jumpTo(idx);
+        } finally {
+          // jumpTo commit l'index (et donc handleActiveChange) de façon
+          // synchrone — on peut relâcher la garde immédiatement.
+          historyNavRef.current.fromPopstate = false;
+        }
+      } catch {
+        /* URL invalide / sandbox — silencieux */
+      }
+    };
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, [jumpTo]);
 
   // ─── MediaSession + Wake Lock (Vague 6) ───────────────────────────
   // Lockscreen metadata + native prev/next for the active clip, and
@@ -572,37 +652,33 @@ export function ScrollFeedV2({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [itemHeight]);
 
-  // ─── Desktop / reduced-motion / network detection ────────────────
+  // ─── Desktop / wide-stage / reduced-motion detection ──────────────
+  // Perf (2026-08-12) — listener resize CONSOLIDÉ. Avant : 3 paires
+  // matchMedia+resize distinctes (viewport sizing, gate 768, gate 1024)
+  // → chaque resize (et chaque nudge du StageFrame) réveillait 3
+  // callbacks séparés. Maintenant : UNE paire resize/orientationchange
+  // qui ré-évalue les trois, plus les événements `change` natifs des MQ
+  // (fiables sur un vrai franchissement de breakpoint, gratuits sinon).
+  //
+  // Gate 768 (isDesktop) : the MQ `change` event only fires on a genuine
+  // breakpoint crossing and is unreliable in some emulated /
+  // programmatic-resize environments — the raw resize re-read keeps the
+  // gate from getting stuck.
+  //
+  // Gate 1024 (Wave 36 wide stage) : switches the WHOLE render tree
+  // (framed ScrollDesktopShell ↔ fixed-inset-0 mobile), so it must never
+  // get stuck either. SSR-safe default = false.
   useEffect(() => {
-    const mq = window.matchMedia("(min-width: 768px)");
-    const apply = () => setIsDesktop(mq.matches);
-    apply();
-    mq.addEventListener("change", apply);
-    // Also re-check on raw resize : the MQ `change` event only fires on a
-    // genuine breakpoint crossing and is unreliable in some emulated /
-    // programmatic-resize environments. A resize listener re-reads
-    // mq.matches on every viewport change, so the gate is never stuck.
-    window.addEventListener("resize", apply);
-    return () => {
-      mq.removeEventListener("change", apply);
-      window.removeEventListener("resize", apply);
-    };
-  }, []);
-
-  // Wave 36 — wide-stage flag (min-width 1024). This gate switches the WHOLE
-  // render tree (framed ScrollDesktopShell ↔ fixed-inset-0 mobile), so it must
-  // never get stuck. We re-read mq.matches on BOTH the MQ `change` event AND
-  // raw `resize` (the change event alone is unreliable across the boundary in
-  // some environments / on tablet rotation). SSR-safe default = false.
-  useEffect(() => {
-    const mq = window.matchMedia("(min-width: 1024px)");
-    const apply = () => {
-      setIsWideStage(mq.matches);
+    const mqDesktop = window.matchMedia("(min-width: 768px)");
+    const mqWide = window.matchMedia("(min-width: 1024px)");
+    const applyDesktop = () => setIsDesktop(mqDesktop.matches);
+    const applyWide = () => {
+      setIsWideStage(mqWide.matches);
       // Wave 44 — desktop ouvre en 16:9 par défaut (Mehdi : « on peut pas
       // l'avoir en Desktop direct ? »). Le mode cinéma démarre ON sur le wide
       // stage, sauf si l'utilisateur l'a explicitement coupé (F) — préférence
       // persistée dans kc_scroll_cinema ("0" = vertical voulu).
-      if (mq.matches) {
+      if (mqWide.matches) {
         try {
           if (localStorage.getItem("kc_scroll_cinema") !== "0") setCinema(true);
         } catch {
@@ -610,14 +686,24 @@ export function ScrollFeedV2({
         }
       }
     };
-    apply();
-    mq.addEventListener("change", apply);
-    window.addEventListener("resize", apply);
-    return () => {
-      mq.removeEventListener("change", apply);
-      window.removeEventListener("resize", apply);
+    const onViewportChange = () => {
+      measureStage();
+      applyDesktop();
+      applyWide();
     };
-  }, []);
+    applyDesktop();
+    applyWide();
+    mqDesktop.addEventListener("change", applyDesktop);
+    mqWide.addEventListener("change", applyWide);
+    window.addEventListener("resize", onViewportChange);
+    window.addEventListener("orientationchange", onViewportChange);
+    return () => {
+      mqDesktop.removeEventListener("change", applyDesktop);
+      mqWide.removeEventListener("change", applyWide);
+      window.removeEventListener("resize", onViewportChange);
+      window.removeEventListener("orientationchange", onViewportChange);
+    };
+  }, [measureStage]);
 
   // Cinema only makes sense on the wide stage — auto-exit if the viewport
   // drops below the wide breakpoint while cinema is on.
@@ -1031,7 +1117,10 @@ export function ScrollFeedV2({
   const feedStage = (
     <div
       ref={containerRef}
-      className="absolute inset-0 overflow-hidden"
+      // bg-black (fix rail 2026-08-12) : le sol noir vit ICI, sous le pool,
+      // depuis que les FeedItem sont transparents (voir zIndex: 10 plus bas).
+      // Mobile l'héritait déjà de la racine fixed ; la StageFrame non.
+      className="absolute inset-0 overflow-hidden bg-black"
       // Touch-action: pan-y so the browser doesn't fight the drag. (Was on
       // the old fixed-inset-0 root ; moved here verbatim so the gesture math
       // is identical and the wide-stage frame gets the same touch contract.)
@@ -1071,10 +1160,23 @@ export function ScrollFeedV2({
 
       {/* Items container — gesture-driven, items absolutely positioned.
           role="feed" + aria-label per WCAG 2.2 feed pattern. The roving
-          tabindex / inert state is applied per-slide below off activeIndex. */}
+          tabindex / inert state is applied per-slide below off activeIndex.
+
+          zIndex: 10 (fix rail 2026-08-12) — ce conteneur porte y + will-change,
+          donc il forme TOUJOURS un stacking context (will-change à l'arrêt,
+          translateY(≠0) dès l'item 1). En z-auto il peignait en étage 6, sous
+          le pool vidéo (zIndex 5, étage 7) : la vidéo live recouvrait TOUS les
+          overlays des items (rail d'actions, badges, matchup, description) —
+          mesuré au débogage : rail invisible sur capture mobile, flagrant sur
+          les clips 16:9 letterboxés (barres noires), masqué par la texture du
+          footage sur les 9:16. On inverse : items AU-DESSUS du pool, et chaque
+          FeedItem laisse une fenêtre transparente (poster masqué, fond
+          transparent — voir FeedItem.tsx) pour que la vidéo reste visible.
+          Le sandwich voulu (fond < vidéo < overlays) est ainsi réalisé sans
+          toucher au pool ni au geste. */}
       <m.div
         className="absolute inset-0"
-        style={{ y, willChange: "transform" }}
+        style={{ y, willChange: "transform", zIndex: 10 }}
         role="feed"
         aria-label={t("p_scroll.sh_feed_aria")}
         aria-busy={isRefreshing}
@@ -1171,6 +1273,10 @@ export function ScrollFeedV2({
           activeIndex >= Math.max(0, visibleItems.length - 2) && (
             <div
               key="feed-skeleton-tail"
+              // role="feed" n'admet que des articles (axe : aria-required-children)
+              role="article"
+              aria-busy="true"
+              aria-label={t("feed.loading_more")}
               style={{
                 position: "absolute",
                 top: visibleItems.length * itemHeight,
@@ -1187,6 +1293,8 @@ export function ScrollFeedV2({
         {visibleItems.length > 0 && itemHeight > 0 && (
           <div
             key="end-of-feed"
+            role="article"
+            aria-label={t("p_scroll.item_end_eyebrow")}
             style={{
               position: "absolute",
               top:
@@ -1455,6 +1563,12 @@ export function ScrollFeedV2({
           containerRef.clientHeight == the viewport exactly as before — the
           gesture / pool math is byte-identical. */}
       {feedStage}
+
+      {/* Vague 4 — hint de swipe 1re visite. Self-gated sur
+          localStorage.kc_swipe_hinted_v1, disparaît au premier swipe
+          ou après 2 cycles d'animation. Mobile/legacy uniquement : le
+          wide stage a le ScrollRail avec ses flèches explicites. */}
+      {visibleItems.length > 1 && <SwipeHint activeIndex={activeIndex} />}
 
       {/* Wave 6 — bottom offline banner. Slides in when navigator.onLine
           flips false, fires feed.offline_entered/exited analytics with

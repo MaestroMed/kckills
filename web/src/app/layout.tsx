@@ -7,6 +7,7 @@ import {
   Playfair_Display,
   Cormorant_Garamond,
   IM_Fell_English,
+  Graduate,
 } from "next/font/google";
 import { Analytics } from "@vercel/analytics/next";
 import { SpeedInsights } from "@vercel/speed-insights/next";
@@ -14,6 +15,7 @@ import "./globals.css";
 import { Providers } from "@/components/Providers";
 import { LayoutChrome } from "@/components/LayoutChrome";
 import { LANG_META } from "@/lib/i18n/lang";
+import { SITE_URL } from "@/lib/site-url";
 
 // Wave 13i (2026-05-07) — self-hosted Google Fonts via next/font/google.
 // Replaces the previous raw <link rel=preload> + async-CSS pattern with:
@@ -86,21 +88,22 @@ const imFellEnglish = IM_Fell_English({
   preload: false,
 });
 
+// Header 2.0 (Mehdi 2026-08-12) — lettrage varsity du wordmark « SCROLL »
+// dans la barre de nav. Graduate = collegiate slab, un seul poids (400),
+// subset latin ≈ 15-20 KB. Il porte le CTA signature présent sur toutes
+// les pages, mais le swap est indolore (le mot est court) → preload:false
+// pour préserver le critical path.
+const graduate = Graduate({
+  subsets: ["latin"],
+  weight: ["400"],
+  variable: "--font-varsity",
+  display: "swap",
+  preload: false,
+});
+
 const UMAMI_SRC = process.env.NEXT_PUBLIC_UMAMI_SRC;
 const UMAMI_WEBSITE_ID = process.env.NEXT_PUBLIC_UMAMI_WEBSITE_ID;
 
-const SITE_URL =
-  process.env.NEXT_PUBLIC_SITE_URL ??
-  // Audit 2.0 : en PRODUCTION on force le domaine canonique. Avant, le
-  // fallback VERCEL_URL renvoyait l'URL de déploiement (kckills-xxx.
-  // vercel.app), qui partait dans les 1978 URLs du sitemap, robots.txt,
-  // canonical et og:url — le site s'auto-désindexait au profit d'un host
-  // jetable. NEXT_PUBLIC_SITE_URL reste prioritaire si elle est définie.
-  (process.env.VERCEL_ENV === "production"
-    ? "https://www.kckills.com"
-    : process.env.VERCEL_URL
-      ? `https://${process.env.VERCEL_URL}`
-      : "http://localhost:3000");
 
 // Service-worker cache-bust token (Wave 36 #33). Changes on every deploy so
 // the SW re-installs and evicts the previous build's cached chunks. On
@@ -282,7 +285,7 @@ export default async function RootLayout({
   return (
     <html
       lang={htmlLang}
-      className={`${oswald.variable} ${interTight.variable} ${jetbrainsMono.variable} ${playfairDisplay.variable} ${cormorantGaramond.variable} ${imFellEnglish.variable}`}
+      className={`${oswald.variable} ${interTight.variable} ${jetbrainsMono.variable} ${playfairDisplay.variable} ${cormorantGaramond.variable} ${imFellEnglish.variable} ${graduate.variable}`}
     >
       <head>
         <link rel="manifest" href="/manifest.json" />

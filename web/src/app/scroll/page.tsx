@@ -17,12 +17,15 @@ import { cookies, headers } from "next/headers";
 import { loadRealData } from "@/lib/real-data";
 import {
   getKillById,
-  getPublishedKcKillCount,
   getPublishedKills,
   getScrollFeedKills,
   getScrollFeedPoolCount,
   getTopScrollKills,
 } from "@/lib/supabase/kills";
+// Audit compteurs 2026-08-12 — le compteur « X clips » du header vient du
+// module canonique stats-scopes (même implémentation que la home, /clips
+// et /matches : kills KC publiés avec clip jouable).
+import { getCachedPublishedClipsCount } from "@/lib/stats-scopes";
 import { getTrackedRoster } from "@/lib/supabase/players";
 import { requireAdmin } from "@/lib/admin/audit";
 import {
@@ -34,6 +37,7 @@ import type { GridAxisId } from "@/lib/grid/axis-config";
 import { JsonLd, breadcrumbLD } from "@/lib/seo/jsonld";
 import { pickAssetUrl } from "@/lib/kill-assets";
 import { getServerT } from "@/lib/i18n/server-lang";
+import { cleanTeamCode, resolveOpponentFromCodes } from "@/lib/team-display";
 
 const SITE_URL =
   process.env.NEXT_PUBLIC_SITE_URL ??
@@ -283,7 +287,7 @@ export default async function ScrollV2Page({ searchParams }: ScrollPageProps) {
   );
   const [poolCount, catalogTotal] = await Promise.all([
     catalogEnabled ? getScrollFeedPoolCount(QUALITY_FLOOR) : Promise.resolve(0),
-    getPublishedKcKillCount(),
+    getCachedPublishedClipsCount(),
   ]);
   const windowOffset =
     catalogEnabled && poolCount > KILLS_LIMIT
@@ -359,7 +363,16 @@ export default async function ScrollV2Page({ searchParams }: ScrollPageProps) {
   const buildVideoItem = (k: (typeof allKills)[number]): VideoFeedItem => {
     const matchMeta = k.games?.matches;
     const matchJson = data.matches.find((m) => m.id === (matchMeta?.external_id ?? ""));
-    const opponentCode = matchJson?.opponent.code ?? "LEC";
+    // Plus de fallback "LEC" mensonger : quand le match n'est pas résolu
+    // dans kc_matches.json (backfill gol.gg, EWC…), on retombe sur les
+    // codes équipes embarqués par KILL_SELECT (2026-08-13) — c'est ce qui
+    // rend le filtre ?axis=opponent_team_code opérant sur le stock
+    // historique (LFL 2021-22 : SOL, VITB…). cleanTeamCode filtre les ids
+    // numériques gol.gg — jamais de "vs 1155" à l'écran.
+    const opponentCode =
+      cleanTeamCode(matchJson?.opponent.code) ??
+      resolveOpponentFromCodes(matchMeta?.team_blue_code, matchMeta?.team_red_code) ??
+      "";
     const kcWon = matchJson?.kc_won ?? null;
     const matchScore = matchJson ? `${matchJson.kc_score}-${matchJson.opp_score}` : null;
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
-import { DEFAULT_PLAYLIST, shufflePlaylist, type BgmTrack } from "@/lib/scroll/bgm-playlist";
+import { DEFAULT_PLAYLIST, shufflePlaylist } from "@/lib/scroll/bgm-playlist";
 import { useT } from "@/lib/i18n/use-lang";
 
 /**
@@ -155,14 +155,12 @@ export function BgmPlayer() {
             const isDead =
               e.data === 2 || e.data === 5 || e.data === 100 || e.data === 101 || e.data === 150;
             consecutiveErrorsRef.current += 1;
-            // eslint-disable-next-line no-console
             console.warn("[bgm] YT.Player onError", {
               code: e.data,
               consecutive: consecutiveErrorsRef.current,
             });
             if (!isDead) return;
             if (consecutiveErrorsRef.current >= MAX_CONSECUTIVE_SKIPS) {
-              // eslint-disable-next-line no-console
               console.warn(
                 `[bgm] ${consecutiveErrorsRef.current} consecutive dead tracks — ` +
                   "pausing auto-skip (circuit breaker). Check playlist IDs / CSP.",

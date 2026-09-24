@@ -46,8 +46,6 @@ import { Description } from "@/components/i18n/Description";
 import { useT } from "@/lib/i18n/use-lang";
 import type { PublishedKillRow } from "@/lib/supabase/kills";
 
-type TFn = (key: string, vars?: Record<string, string | number>) => string;
-
 // ─── Types ────────────────────────────────────────────────────────────
 
 export interface KillSidePanelProps {

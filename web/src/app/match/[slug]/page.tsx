@@ -14,6 +14,7 @@ import {
 import { ERAS, type Era } from "@/lib/eras";
 import { JsonLd, breadcrumbLD } from "@/lib/seo/jsonld";
 import { getStaticT } from "@/lib/i18n/server-lang";
+import { cleanTeamCode } from "@/lib/team-display";
 
 import { ReplayHero } from "@/components/match/ReplayHero";
 import { MatchSummaryCard } from "@/components/match/MatchSummaryCard";
@@ -21,6 +22,7 @@ import { GameSection } from "@/components/match/GameSection";
 import { FullKillsGrid } from "@/components/match/FullKillsGrid";
 import { RelatedStrip } from "@/components/match/RelatedStrip";
 import { MatchTimeline } from "./MatchTimeline";
+import { SITE_URL } from "@/lib/site-url";
 
 /**
  * /match/[slug] — premium Match Replay Viewer (Wave 30d).
@@ -77,7 +79,9 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const match = await getMatchBySlug(slug);
   if (!match) return { title: "Match introuvable" };
 
-  const oppCode = match.opponentTeam?.code ?? "OPP";
+  // cleanTeamCode : jamais un id numérique gol.gg ni un placeholder de
+  // ligue en guise de tag adversaire. "OPP" reste le fallback neutre.
+  const oppCode = cleanTeamCode(match.opponentTeam?.code) ?? "OPP";
   const oppName = match.opponentTeam?.name ?? "Adversaire";
   const stageLabel = match.stage ?? "LEC";
   const title = `KC vs ${oppCode} — ${stageLabel}`;
@@ -198,8 +202,9 @@ export default async function MatchReplayPage({ params }: Props) {
   // Era of this match.
   const era = eraForDate(match.scheduledAt);
 
-  // Opponent display helpers.
-  const oppCode = match.opponentTeam?.code ?? "OPP";
+  // Opponent display helpers. cleanTeamCode filtre les codes non
+  // affichables (id numérique gol.gg, "LEC", vide) — fallback neutre.
+  const oppCode = cleanTeamCode(match.opponentTeam?.code) ?? "OPP";
   const oppName = match.opponentTeam?.name ?? t("p6_matchpg.opponent_fallback");
 
   // Breadcrumb JSON-LD.
@@ -404,7 +409,7 @@ function buildSportsEventLd({
   oppName: string;
   backdropUrl: string | null;
 }): Record<string, unknown> {
-  const url = `https://kckills.com/match/${match.externalId}`;
+  const url = `${SITE_URL}/match/${match.externalId}`;
   return {
     "@context": "https://schema.org",
     "@type": "SportsEvent",
@@ -426,7 +431,7 @@ function buildSportsEventLd({
     homeTeam: {
       "@type": "SportsTeam",
       name: "Karmine Corp",
-      url: "https://kckills.com",
+      url: SITE_URL,
     },
     awayTeam: {
       "@type": "SportsTeam",

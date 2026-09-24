@@ -101,7 +101,7 @@ export const ALUMNI: Alumni[] = [
     nationality: "SE",
     role: "adc",
     period: "2022",
-    subtitle: "L'ADC legendaire qui a porte le triple EU Masters",
+    subtitle: "L'ADC légendaire qui a porté le triple EU Masters",
     tag: "LE TRIPLE EUM",
     signatureChampion: "Jinx",
     eras: ["lfl-2022-spring"],
@@ -145,13 +145,13 @@ export const ALUMNI: Alumni[] = [
       {
         title: "Premier pentakill KC",
         date: "Mars 2022",
-        description: "Jinx vs GameWard en LFL. La premiere fois qu'un joueur KC realise un penta en officiel \u2014 le public exploiose, Kameto en larmes en cast.",
+        description: "Jinx vs GameWard en LFL. La première fois qu'un joueur KC réalise un penta en officiel \u2014 le public exploiose, Kameto en larmes en cast.",
         champion: "Jinx",
       },
       {
         title: "Reverse sweep vs Vitality.Bee",
         date: "Avril 2022",
-        description: "Demi-finale EU Masters Spring 2022. Menes 0-2, KC remonte 3-2 dans une serie sous tension. Rekkles porte le late-game game apres game.",
+        description: "Demi-finale EU Masters Spring 2022. Menés 0-2, KC remonte 3-2 dans une série sous tension. Rekkles porte le late-game game après game.",
         champion: "Aphelios",
       },
       {
@@ -163,7 +163,7 @@ export const ALUMNI: Alumni[] = [
       {
         title: "Triple EU Masters consecutifs",
         date: "Mai 2022",
-        description: "Avec ce trophee, KC devient la premiere equipe de l'histoire a remporter trois EU Masters d'affilee \u2014 une dynastie ecrite avec un seul split de Rekkles.",
+        description: "Avec ce trophée, KC devient la première équipe de l'histoire à remporter trois EU Masters d'affilée \u2014 une dynastie écrite avec un seul split de Rekkles.",
         champion: "Sivir",
       },
     ],
@@ -184,7 +184,7 @@ export const ALUMNI: Alumni[] = [
     nationality: "UK",
     role: "adc",
     period: "2021",
-    subtitle: "Premier UK champion EU Masters \u2014 l'ADC de la Genese",
+    subtitle: "Premier UK champion EU Masters \u2014 l'ADC de la Genèse",
     tag: "THE GENESIS ADC",
     signatureChampion: "Aphelios",
     eras: ["lfl-2021-spring", "lfl-2021-summer"],
@@ -222,25 +222,25 @@ export const ALUMNI: Alumni[] = [
       {
         title: "Premier UK champion EU Masters",
         date: "2 mai 2021",
-        description: "xMatty devient le premier joueur anglais de l'histoire a remporter les EU Masters. Finale KC 3-1 BT Excel devant 377K viewers, un record ERL.",
+        description: "xMatty devient le premier joueur anglais de l'histoire à remporter les EU Masters. Finale KC 3-1 BT Excel devant 377K viewers, un record ERL.",
         champion: "Aphelios",
       },
       {
         title: "Back-to-back EU Masters",
         date: "Septembre 2021",
-        description: "Avec Cabochard fraichement arrive, KC remporte les EU Masters Summer en battant Fnatic Rising 3-2. Premiere equipe a realiser le back-to-back.",
+        description: "Avec Cabochard fraîchement arrivé, KC remporte les EU Masters Summer en battant Fnatic Rising 3-2. Première équipe à réaliser le back-to-back.",
         champion: "Jhin",
       },
       {
         title: "KCX1 — Palais des Congres",
         date: "26 juillet 2021",
-        description: "Premier evenement physique de la KC Army. 3700 places vendues au Palais des Congres de Paris — la fanbase prend forme, xMatty devient une icone communautaire.",
+        description: "Premier événement physique de la KC Army. 3700 places vendues au Palais des Congrès de Paris — la fanbase prend forme, xMatty devient une icône communautaire.",
         champion: "Caitlyn",
       },
     ],
     careerPath: [
       { club: "Excel Esports Academy", role: "ADC", period: "2019-2020" },
-      { club: "Karmine Corp", role: "ADC", period: "Spring 2021", isKC: true, note: "La genese" },
+      { club: "Karmine Corp", role: "ADC", period: "Spring 2021", isKC: true, note: "La genèse" },
       { club: "Karmine Corp", role: "ADC", period: "Summer 2021", isKC: true, note: "Back-to-back EUM" },
       { club: "Fnatic Rising", role: "ADC", period: "2022" },
       { club: "Karmine Corp Blue", role: "ADC", period: "2023" },
@@ -255,7 +255,7 @@ export const ALUMNI: Alumni[] = [
     nationality: "FR",
     role: "top",
     period: "2022-2024",
-    subtitle: "Le veteran top laner francais \u2014 porte-drapeau de 2022 a 2024",
+    subtitle: "Le vétéran top laner français \u2014 porte-drapeau de 2022 à 2024",
     tag: "LE VETERAN",
     signatureChampion: "Aatrox",
     eras: ["lfl-2022-spring", "lfl-2023-summer", "lec-2024-winter", "lec-2024-spring"],
@@ -267,7 +267,7 @@ export const ALUMNI: Alumni[] = [
     ].join("\n\n"),
     stats: [
       { label: "Trophees", value: "1", hint: "EU Masters Spring 2022" },
-      { label: "Periode", value: "2022-24", hint: "3 ans avec KC" },
+      { label: "Période", value: "2022-24", hint: "3 ans avec KC" },
       { label: "Splits LEC", value: "2", hint: "Winter + Spring 2024" },
       { label: "Pourcentage KC", value: "Pionnier LEC", hint: "Premier top laner LEC" },
     ],
@@ -279,7 +279,7 @@ export const ALUMNI: Alumni[] = [
       },
     ],
     testamentaryQuote: {
-      text: "On m'a dit que KC en LEC c'etait une blague. J'ai rien a prouver a personne sauf a mes coequipiers.",
+      text: "On m'a dit que KC en LEC c'était une blague. J'ai rien à prouver à personne sauf à mes coéquipiers.",
       author: "Cabochard",
       role: "TOP KC (2024)",
       source: "Interview pre-saison LEC 2024",
@@ -288,7 +288,7 @@ export const ALUMNI: Alumni[] = [
       {
         title: "Refus du transfert Fnatic",
         date: "Juin 2021",
-        description: "Apres 5 ans a Vitality, Cabochard refuse une offre de Fnatic pour rejoindre KC en LFL \u2014 un signal fort que le projet KC depasse deja le simple ERL.",
+        description: "Après 5 ans à Vitality, Cabochard refuse une offre de Fnatic pour rejoindre KC en LFL \u2014 un signal fort que le projet KC dépasse déjà le simple ERL.",
         champion: "Sett",
       },
       {
@@ -298,9 +298,9 @@ export const ALUMNI: Alumni[] = [
         champion: "Gnar",
       },
       {
-        title: "Premiere game LEC KC",
+        title: "Première game LEC KC",
         date: "Janvier 2024",
-        description: "Premier match LEC de l'histoire du club. Cabochard est le top laner choisi pour porter le club dans l'elite \u2014 un veteran francais qui ouvre la voie.",
+        description: "Premier match LEC de l'histoire du club. Cabochard est le top laner choisi pour porter le club dans l'élite \u2014 un vétéran français qui ouvre la voie.",
         champion: "Aatrox",
       },
       {
@@ -358,7 +358,7 @@ export const ALUMNI: Alumni[] = [
     signatureMoments: [
       {
         title: "Transfert depuis Vitality",
-        date: "Decembre 2023",
+        date: "Décembre 2023",
         description: "KC mise sur la mecanique solo-queue top-tier du jungler chinois pour son entree en LEC. Un pari individualiste qui ne paie pas a Berlin.",
         champion: "Viego",
       },
@@ -402,8 +402,8 @@ export const ALUMNI: Alumni[] = [
     ].join("\n\n"),
     stats: [
       { label: "Trophees", value: "4+", hint: "2 LFL + 2 EUM 2021 + EUM 2023" },
-      { label: "Periode totale", value: "2021-24", hint: "4 ans" },
-      { label: "Origine", value: "Belge", hint: "Support de la genese" },
+      { label: "Période totale", value: "2021-24", hint: "4 ans" },
+      { label: "Origine", value: "Belge", hint: "Support de la genèse" },
       { label: "Successeur", value: "Busio", hint: "Cede la place en 2025" },
     ],
     links: [
@@ -414,7 +414,7 @@ export const ALUMNI: Alumni[] = [
       },
     ],
     testamentaryQuote: {
-      text: "On etait cinq potes en 2021. On est devenu une institution. C'est pas le titre LEC qui change le plus \u2014 c'est tout ce qu'il y a autour.",
+      text: "On était cinq potes en 2021. On est devenu une institution. C'est pas le titre LEC qui change le plus — c'est tout ce qu'il y a autour.",
       author: "Targamas",
       role: "SUP KC (2021-2024)",
       source: "Interview KC content team",
@@ -423,7 +423,7 @@ export const ALUMNI: Alumni[] = [
       {
         title: "Roster originel",
         date: "Janvier 2021",
-        description: "Adam, Cinkrof, Saken, xMatty, Targamas. Cinq joueurs qui ne savent pas encore qu'ils vont creer la plus grosse fanbase europeenne.",
+        description: "Adam, Cinkrof, Saken, xMatty, Targamas. Cinq joueurs qui ne savent pas encore qu'ils vont créer la plus grosse fanbase européenne.",
         champion: "Rakan",
       },
       {
@@ -435,7 +435,7 @@ export const ALUMNI: Alumni[] = [
       {
         title: "Le retour 2023",
         date: "Summer 2023",
-        description: "Targamas revient en LFL apres une saison G2. KC remporte le titre, rachete le slot Astralis, et il monte avec eux en LEC pour 2024.",
+        description: "Targamas revient en LFL après une saison G2. KC remporte le titre, rachète le slot Astralis, et il monte avec eux en LEC pour 2024.",
         champion: "Nautilus",
       },
       {
@@ -447,7 +447,7 @@ export const ALUMNI: Alumni[] = [
       {
         title: "Le Sacre LEC 2025",
         date: "2 mars 2025",
-        description: "Avec Vladi, Yike, Canna et Caliste, Targamas remporte le premier titre LEC de l'histoire du club. 3-0 SEC vs G2. Cloture en beaute.",
+        description: "Avec Vladi, Yike, Canna et Caliste, Targamas remporte le premier titre LEC de l'histoire du club. 3-0 SEC vs G2. Clôture en beauté.",
         champion: "Thresh",
       },
     ],
@@ -472,12 +472,12 @@ export const ALUMNI: Alumni[] = [
     signatureChampion: "Akali",
     eras: ["lfl-2021-spring", "lfl-2021-summer", "lfl-2021-showmatch", "lfl-2022-spring"],
     accentColor: "#2196F3",
-    bio: "Saken est la dans le roster d'origine de la Karmine Corp en LFL, le mid laner qui a pose les bases du style agressif KC. Pilier du premier titre LFL et des EU Masters 2021, il evolue aux cotes de Rekkles lors de la saison mythique 2022. Son style est marque par une presence en lane dominante et une capacite a creer des avantages en solo. Il quitte KC apres la saison 2022 pour poursuivre en LFL avec d'autres equipes.",
+    bio: "Saken est là dans le roster d'origine de la Karmine Corp en LFL, le mid laner qui a posé les bases du style agressif KC. Pilier du premier titre LFL et des EU Masters 2021, il évolue aux côtés de Rekkles lors de la saison mythique 2022. Son style est marqué par une présence en lane dominante et une capacité à créer des avantages en solo. Il quitte KC après la saison 2022 pour poursuivre en LFL avec d'autres équipes.",
     stats: [
       { label: "Role", value: "MID", hint: "Mid laner" },
-      { label: "Periode", value: "2021-22", hint: "2 saisons" },
+      { label: "Période", value: "2021-22", hint: "2 saisons" },
       { label: "Titres", value: "2 LFL", hint: "+ 2 EU Masters" },
-      { label: "Origine", value: "FR", hint: "Mid francais OG" },
+      { label: "Origine", value: "FR", hint: "Mid français OG" },
     ],
     links: [
       {
@@ -487,14 +487,14 @@ export const ALUMNI: Alumni[] = [
       },
     ],
     testamentaryQuote: {
-      text: "Saken c'etait notre rock. Le mid qui arrive a 100% chaque game, peu importe le contexte.",
+      text: "Saken c'était notre rock. Le mid qui arrive à 100% chaque game, peu importe le contexte.",
       author: "Striker",
       role: "Head Coach KC (2021-2024)",
       source: "Interview retrospective",
     },
     signatureMoments: [
       {
-        title: "Mid de la genese",
+        title: "Mid de la genèse",
         date: "Janvier 2021",
         description: "Premier mid laner de l'histoire KC. Pose les bases du style agressif KC en lane avec un Akali signature et un pool meta-prouf.",
         champion: "Akali",
@@ -506,9 +506,9 @@ export const ALUMNI: Alumni[] = [
         champion: "Sylas",
       },
       {
-        title: "L'annee Rekkles",
+        title: "L'année Rekkles",
         date: "2022",
-        description: "Saken reste pendant l'ere Rekkles, complete avec un mid solide. Triple EU Masters au compteur, mais ce sera sa derniere saison KC.",
+        description: "Saken reste pendant l'ère Rekkles, complète avec un mid solide. Triple EU Masters au compteur, mais ce sera sa dernière saison KC.",
         champion: "Akali",
       },
     ],
@@ -532,10 +532,10 @@ export const ALUMNI: Alumni[] = [
     signatureChampion: "LeeSin",
     eras: ["lfl-2021-spring", "lfl-2021-summer", "lfl-2021-showmatch"],
     accentColor: "#4CAF50",
-    bio: "Cinkrof est le jungler de la toute premiere equipe Karmine Corp en League of Legends, celle qui a conquis la LFL et les EU Masters en 2021. Joueur polonais experimente, il apporte du leadership et une lecture de jeu mature a un roster jeune et fougueux. Sa coordination avec Saken en mid et la botlane est la base du style KC early-game agressif qui deviendra la marque de fabrique de l'equipe. Il quitte KC fin 2021 pour laisser place a la rotation de l'ere Rekkles.",
+    bio: "Cinkrof est le jungler de la toute première équipe Karmine Corp en League of Legends, celle qui a conquis la LFL et les EU Masters en 2021. Joueur polonais expérimenté, il apporte du leadership et une lecture de jeu mature à un roster jeune et fougueux. Sa coordination avec Saken en mid et la botlane est la base du style KC early-game agressif qui deviendra la marque de fabrique de l'équipe. Il quitte KC fin 2021 pour laisser place à la rotation de l'ère Rekkles.",
     stats: [
       { label: "Role", value: "JGL", hint: "Jungler" },
-      { label: "Periode", value: "2021", hint: "1 saison fondatrice" },
+      { label: "Période", value: "2021", hint: "1 saison fondatrice" },
       { label: "Titres", value: "2 LFL", hint: "+ 2 EU Masters" },
       { label: "Origine", value: "PL", hint: "Experience d'Eastern EU" },
     ],
@@ -547,16 +547,16 @@ export const ALUMNI: Alumni[] = [
       },
     ],
     testamentaryQuote: {
-      text: "On etait 5 inconnus en LFL. Cinkrof savait deja qu'on allait gagner. Sa confiance a porte toute l'equipe.",
+      text: "On était 5 inconnus en LFL. Cinkrof savait déjà qu'on allait gagner. Sa confiance a porté toute l'équipe.",
       author: "Targamas",
       role: "SUP KC (2021)",
-      source: "Interview retrospective genese",
+      source: "Interview rétrospective genèse",
     },
     signatureMoments: [
       {
         title: "Premier titre LFL",
         date: "Mai 2021",
-        description: "Cinkrof dicte le tempo en early-game et installe KC en tete de la LFL des le premier split. La marque de fabrique KC nait avec lui.",
+        description: "Cinkrof dicte le tempo en early-game et installe KC en tête de la LFL dès le premier split. La marque de fabrique KC naît avec lui.",
         champion: "Lee Sin",
       },
       {
@@ -568,7 +568,7 @@ export const ALUMNI: Alumni[] = [
       {
         title: "Back-to-back EUM",
         date: "Septembre 2021",
-        description: "KC devient la premiere equipe a remporter deux EU Masters consecutifs. Cinkrof part en fin d'annee, laissant place a l'ere Rekkles.",
+        description: "KC devient la première équipe à remporter deux EU Masters consécutifs. Cinkrof part en fin d'année, laissant place à l'ère Rekkles.",
         champion: "Viego",
       },
     ],
@@ -588,17 +588,17 @@ export const ALUMNI: Alumni[] = [
     nationality: "FR",
     role: "top",
     period: "2021",
-    subtitle: "Le top laner de la genese, double champion LFL",
-    tag: "TOP LANER GENESE",
+    subtitle: "Le top laner de la genèse, double champion LFL",
+    tag: "TOP LANER GENÈSE",
     signatureChampion: "Renekton",
     eras: ["lfl-2021-spring", "lfl-2021-summer", "lfl-2021-showmatch"],
     accentColor: "#FF5722",
-    bio: "113 est le top laner du roster original de KC en LFL 2021, celui qui a tout lance. Francais, combattif, il forme avec Cinkrof, Saken, xMatty et Targamas la premiere equipe qui mettra la Karmine Corp sur la carte du LoL competitif. Double champion LFL, double EU Masters, 113 incarne le spirit combatif de la Blue Wall premiere generation. Son nom de scene numerique est devenu culte dans la communaute KC.",
+    bio: "113 est le top laner du roster original de KC en LFL 2021, celui qui a tout lancé. Français, combattif, il forme avec Cinkrof, Saken, xMatty et Targamas la première équipe qui mettra la Karmine Corp sur la carte du LoL compétitif. Double champion LFL, double EU Masters, 113 incarne le spirit combatif de la Blue Wall première génération. Son nom de scène numérique est devenu culte dans la communauté KC.",
     stats: [
       { label: "Role", value: "TOP", hint: "Top laner" },
-      { label: "Periode", value: "2021", hint: "La genese" },
+      { label: "Période", value: "2021", hint: "La genèse" },
       { label: "Titres", value: "2 LFL", hint: "+ 2 EU Masters" },
-      { label: "Origine", value: "FR", hint: "Top francais OG" },
+      { label: "Origine", value: "FR", hint: "Top français OG" },
     ],
     links: [
       {
@@ -608,7 +608,7 @@ export const ALUMNI: Alumni[] = [
       },
     ],
     testamentaryQuote: {
-      text: "Mon pseudo c'est juste un numero. Mais quand t'arrives en KC, tu sais que tu vas faire partie d'une histoire.",
+      text: "Mon pseudo c'est juste un numéro. Mais quand t'arrives en KC, tu sais que tu vas faire partie d'une histoire.",
       author: "113",
       role: "TOP KC (2021)",
       source: "Interview KC content",
@@ -629,7 +629,7 @@ export const ALUMNI: Alumni[] = [
       {
         title: "Back-to-back EU Masters",
         date: "Septembre 2021",
-        description: "Deux EU Masters consecutifs, deux LFL. 113 transmet le flambeau a Cabochard en fin d'annee et part chez Fnatic.",
+        description: "Deux EU Masters consécutifs, deux LFL. 113 transmet le flambeau à Cabochard en fin d'année et part chez Fnatic.",
         champion: "Aatrox",
       },
     ],
@@ -648,15 +648,15 @@ export const ALUMNI: Alumni[] = [
     nationality: "FR",
     role: "support",
     period: "2022",
-    subtitle: "Le support francais de l'ere Rekkles",
+    subtitle: "Le support français de l'ère Rekkles",
     tag: "SUPPORT LFL",
     signatureChampion: "Nautilus",
     eras: ["lfl-2022-spring"],
     accentColor: "#00BCD4",
-    bio: "Hantera rejoint KC en 2022 comme support aux cotes de Rekkles en botlane. Joueur francais forme en LFL, il apporte une vision de jeu aggressive et une communication native avec le roster francophone. Sa synergie avec Rekkles en lane est l'une des forces du roster qui decroche le triple EU Masters. Il quitte KC a la fin de la saison 2022 quand le club prepare sa transition vers la LEC.",
+    bio: "Hantera rejoint KC en 2022 comme support aux côtés de Rekkles en botlane. Joueur français formé en LFL, il apporte une vision de jeu aggressive et une communication native avec le roster francophone. Sa synergie avec Rekkles en lane est l'une des forces du roster qui décroche le triple EU Masters. Il quitte KC à la fin de la saison 2022 quand le club prépare sa transition vers la LEC.",
     stats: [
       { label: "Role", value: "SUP", hint: "Support" },
-      { label: "Periode", value: "2022", hint: "Ere Rekkles" },
+      { label: "Période", value: "2022", hint: "Ere Rekkles" },
       { label: "Titres", value: "3 EUM", hint: "Triple EU Masters" },
       { label: "Origine", value: "FR", hint: "Forme en LFL" },
     ],
@@ -668,7 +668,7 @@ export const ALUMNI: Alumni[] = [
       },
     ],
     testamentaryQuote: {
-      text: "Jouer support de Rekkles c'etait l'opportunite de ma vie. Je devais juste pas le decevoir.",
+      text: "Jouer support de Rekkles c'était l'opportunité de ma vie. Je devais juste pas le décevoir.",
       author: "Hantera",
       role: "SUP KC (2022)",
       source: "Interview LFL",
@@ -677,7 +677,7 @@ export const ALUMNI: Alumni[] = [
       {
         title: "Support de Rekkles",
         date: "Janvier 2022",
-        description: "Hantera est choisi pour completer la botlane avec Rekkles. Communication francaise native, lecture de jeu solide, peel maximale.",
+        description: "Hantera est choisi pour compléter la botlane avec Rekkles. Communication française native, lecture de jeu solide, peel maximale.",
         champion: "Nautilus",
       },
       {
@@ -707,17 +707,17 @@ export const ALUMNI: Alumni[] = [
     nationality: "FR",
     role: "top",
     period: "2022-2023",
-    subtitle: "Le top laner francais, ex-Fnatic, showman de la LFL",
+    subtitle: "Le top laner français, ex-Fnatic, showman de la LFL",
     tag: "TOP LANE SHOWMAN",
     signatureChampion: "Darius",
     eras: ["lfl-2022-spring", "lfl-2023-summer"],
     accentColor: "#FF5722",
-    bio: "Adam rejoint KC en 2022 apres son passage eclaire chez Fnatic en LEC. Joueur francais au style ultra-agressif, il est connu pour ses picks non-meta en top lane (Darius, Olaf) qui electrisent le public de la LFL. Sa personnalite forte et son style de jeu spectaculaire en font un favori de la Blue Wall. Il participe a la transition vers la LEC avec KC avant de quitter le club en 2023.",
+    bio: "Adam rejoint KC en 2022 après son passage éclairé chez Fnatic en LEC. Joueur français au style ultra-agressif, il est connu pour ses picks non-meta en top lane (Darius, Olaf) qui électrisent le public de la LFL. Sa personnalité forte et son style de jeu spectaculaire en font un favori de la Blue Wall. Il participe à la transition vers la LEC avec KC avant de quitter le club en 2023.",
     stats: [
       { label: "Role", value: "TOP", hint: "Top laner" },
-      { label: "Periode", value: "2022-23", hint: "LFL puis transition LEC" },
+      { label: "Période", value: "2022-23", hint: "LFL puis transition LEC" },
       { label: "Avant KC", value: "Fnatic", hint: "LEC Summer 2021" },
-      { label: "Origine", value: "FR", hint: "Top francais agressif" },
+      { label: "Origine", value: "FR", hint: "Top français agressif" },
     ],
     links: [
       {
@@ -748,7 +748,7 @@ export const ALUMNI: Alumni[] = [
       {
         title: "Transition LEC",
         date: "2023",
-        description: "Adam participe au split LFL 2023 qui prepare la transition LEC. Il quitte KC en fin d'annee avant le rachat Astralis.",
+        description: "Adam participe au split LFL 2023 qui prépare la transition LEC. Il quitte KC en fin d'année avant le rachat Astralis.",
         champion: "Olaf",
       },
     ],
@@ -772,10 +772,10 @@ export const ALUMNI: Alumni[] = [
     signatureChampion: "Viego",
     eras: ["lec-2024-summer"],
     accentColor: "#9C27B0",
-    bio: "Closer rejoint KC a l'ete 2024 dans le cadre de la reconstruction post-ere sombre. Jungler turc experimente, il apporte son experience de la LCS (100 Thieves) et du circuit international. Son style proactif en early-game et sa communication en anglais aident KC a sortir de la spirale negative. Bien que les resultats restent modestes (pas de playoffs), son professionnalisme pose les bases de la future reconstruction avec Canna et Yike.",
+    bio: "Closer rejoint KC à l'été 2024 dans le cadre de la reconstruction post-ère sombre. Jungler turc expérimenté, il apporte son expérience de la LCS (100 Thieves) et du circuit international. Son style proactif en early-game et sa communication en anglais aident KC à sortir de la spirale négative. Bien que les résultats restent modestes (pas de playoffs), son professionnalisme pose les bases de la future reconstruction avec Canna et Yike.",
     stats: [
       { label: "Role", value: "JGL", hint: "Jungler" },
-      { label: "Periode", value: "2024 Su", hint: "Ete 2024" },
+      { label: "Période", value: "2024 Su", hint: "Été 2024" },
       { label: "Avant KC", value: "100T", hint: "LCS, Worlds" },
       { label: "Origine", value: "TR", hint: "Veteran international" },
     ],
@@ -787,7 +787,7 @@ export const ALUMNI: Alumni[] = [
       },
     ],
     testamentaryQuote: {
-      text: "Je suis arrive en pleine reconstruction. L'objectif c'etait pas seulement gagner, c'etait reapprendre a gagner.",
+      text: "Je suis arrivé en pleine reconstruction. L'objectif c'était pas seulement gagner, c'était réapprendre à gagner.",
       author: "Closer",
       role: "JGL KC (2024)",
       source: "Interview Summer 2024",
@@ -802,13 +802,13 @@ export const ALUMNI: Alumni[] = [
       {
         title: "4e place LEC",
         date: "Septembre 2024",
-        description: "Avec Canna et Vladi, KC passe de dernier a 4e en un seul split. Premier playoff LEC gagne dans l'histoire du club.",
+        description: "Avec Canna et Vladi, KC passe de dernier à 4e en un seul split. Premier playoff LEC gagné dans l'histoire du club.",
         champion: "Sejuani",
       },
       {
         title: "Cession a Yike",
-        date: "Decembre 2024",
-        description: "Closer quitte KC en fin de saison. Le club prepare le Sacre 2025 et recrute Yike pour devenir le jungler du titre LEC.",
+        date: "Décembre 2024",
+        description: "Closer quitte KC en fin de saison. Le club prépare le Sacre 2025 et recrute Yike pour devenir le jungler du titre LEC.",
         champion: "JarvanIV",
       },
     ],
@@ -833,10 +833,10 @@ export const ALUMNI: Alumni[] = [
     signatureChampion: "Viktor",
     eras: ["lec-2025-winter", "lec-2025-spring", "lec-2025-summer"],
     accentColor: "#C8AA6E",
-    bio: "Vladi est le mid laner qui a accompli le reve KC : gagner un titre LEC. Joueur bulgare recrute pour le roster 2025, il forme avec Canna et Caliste le trio offensif qui defonce la LEC Winter 2025. Son Viktor 10/1/7 en Game 3 de la Grande Finale 3-0 contre G2 est l'un des moments les plus emblematiques de l'histoire KC. Son jeu en teamfight, sa gestion des waves et sa capacite a carry les fins de game tardives font de lui un joueur complet. Il quitte KC a la fin de la saison 2025 quand le club recrute kyeahoo et Busio pour construire la generation suivante.",
+    bio: "Vladi est le mid laner qui a accompli le rêve KC : gagner un titre LEC. Joueur bulgare recruté pour le roster 2025, il forme avec Canna et Caliste le trio offensif qui défonce la LEC Winter 2025. Son Viktor 10/1/7 en Game 3 de la Grande Finale 3-0 contre G2 est l'un des moments les plus emblématiques de l'histoire KC. Son jeu en teamfight, sa gestion des waves et sa capacité à carry les fins de game tardives font de lui un joueur complet. Il quitte KC à la fin de la saison 2025 quand le club recrute kyeahoo et Busio pour construire la génération suivante.",
     stats: [
       { label: "Role", value: "MID", hint: "Mid laner" },
-      { label: "Periode", value: "2025", hint: "L'annee du Sacre" },
+      { label: "Période", value: "2025", hint: "L'année du Sacre" },
       { label: "Titre", value: "LEC Winter", hint: "3-0 vs G2 en finale" },
       { label: "Moment cle", value: "Viktor 10/1/7", hint: "Game 3 Grande Finale" },
     ],
@@ -857,13 +857,13 @@ export const ALUMNI: Alumni[] = [
       {
         title: "Promu depuis KCB",
         date: "Juin 2024",
-        description: "Apres avoir remporte la LFL Spring avec KCB, Vladi est promu au roster principal pour le Summer LEC. Premier import bulgare en LEC.",
+        description: "Après avoir remporté la LFL Spring avec KCB, Vladi est promu au roster principal pour le Summer LEC. Premier import bulgare en LEC.",
         champion: "Viktor",
       },
       {
         title: "First Stand Seoul",
         date: "Mars 2025",
-        description: "Premiere apparition internationale. Vladi tient son mid contre des stars LPL/LCK et porte KC jusqu'a la finale. KC 1-3 HLE.",
+        description: "Première apparition internationale. Vladi tient son mid contre des stars LPL/LCK et porte KC jusqu'à la finale. KC 1-3 HLE.",
         champion: "Azir",
       },
       {
@@ -876,13 +876,13 @@ export const ALUMNI: Alumni[] = [
       {
         title: "LEC Rookie Champion",
         date: "2 mars 2025",
-        description: "Avec Caliste, Vladi devient l'un des plus jeunes mid champions LEC. Premiere equipe francaise titree, premiere mid laner BG sacre.",
+        description: "Avec Caliste, Vladi devient l'un des plus jeunes mid champions LEC. Première équipe française titrée, première mid laner BG sacré.",
         champion: "Sylas",
       },
       {
         title: "Transfert Fnatic",
-        date: "Decembre 2025",
-        description: "Apres une saison historique, Vladi part chez Fnatic pour 2026. KC le remplace par Kyeahoo (ex-DRX) pour entamer un nouveau cycle.",
+        date: "Décembre 2025",
+        description: "Après une saison historique, Vladi part chez Fnatic pour 2026. KC le remplace par Kyeahoo (ex-DRX) pour entamer un nouveau cycle.",
         champion: "LeBlanc",
       },
     ],
@@ -905,10 +905,10 @@ export const ALUMNI: Alumni[] = [
     signatureChampion: "Aphelios",
     eras: ["lec-2024-winter", "lec-2024-spring"],
     accentColor: "#FF9800",
-    bio: "Upset rejoint KC en janvier 2024 pour la premiere saison LEC du club. ADC allemand de classe mondiale, multiple fois aux Worlds avec Fnatic, il represente le plus gros investissement KC en termes de pedigree international. Sa lane avec Targamas en support est censee etre le moteur de l'equipe. Mais la realite du premier split est cruelle : 10e LEC Winter, 10e LEC Spring, deux derniers rangs consecutifs. Le reverse sweep G2 au Game 5 du Spring restera le moment le plus douloureux. Upset quitte KC a la fin de la saison 2024 quand la reconstruction totale est annoncee par Kameto.",
+    bio: "Upset rejoint KC en janvier 2024 pour la première saison LEC du club. ADC allemand de classe mondiale, multiple fois aux Worlds avec Fnatic, il représente le plus gros investissement KC en termes de pedigree international. Sa lane avec Targamas en support est censée être le moteur de l'équipe. Mais la réalité du premier split est cruelle : 10e LEC Winter, 10e LEC Spring, deux derniers rangs consécutifs. Le reverse sweep G2 au Game 5 du Spring restera le moment le plus douloureux. Upset quitte KC à la fin de la saison 2024 quand la reconstruction totale est annoncée par Kameto.",
     stats: [
       { label: "Role", value: "ADC", hint: "AD Carry" },
-      { label: "Periode", value: "2024", hint: "L'ere sombre LEC" },
+      { label: "Période", value: "2024", hint: "L'ere sombre LEC" },
       { label: "Avant KC", value: "Fnatic", hint: "Multiple Worlds" },
       { label: "Resultat", value: "10e x2", hint: "Deux derniers rangs consecutifs" },
     ],
@@ -920,7 +920,7 @@ export const ALUMNI: Alumni[] = [
       },
     ],
     testamentaryQuote: {
-      text: "J'ai signe pour porter ce club en LEC. La realite a ete plus cruelle que tout ce que j'imaginais. Ce sont les fans qui m'ont garde debout.",
+      text: "J'ai signé pour porter ce club en LEC. La réalité a été plus cruelle que tout ce que j'imaginais. Ce sont les fans qui m'ont gardé debout.",
       author: "Upset",
       role: "ADC KC (2024)",
       source: "Stream personnel post-saison",
@@ -928,14 +928,14 @@ export const ALUMNI: Alumni[] = [
     signatureMoments: [
       {
         title: "Le transfert Fnatic",
-        date: "Decembre 2023",
+        date: "Décembre 2023",
         description: "Multi-Worlds avec Fnatic, Upset est le plus gros pedigree international jamais signe par KC pour son entree LEC. Le pari est total.",
         champion: "Aphelios",
       },
       {
         title: "Premier match LEC KC",
         date: "Janvier 2024",
-        description: "Premiere apparition LEC de Karmine Corp. Upset porte les attentes du Blue Wall mais le collectif ne fonctionne pas — 10e Winter.",
+        description: "Première apparition LEC de Karmine Corp. Upset porte les attentes du Blue Wall mais le collectif ne fonctionne pas — 10e Winter.",
         champion: "Zeri",
       },
       {
@@ -947,7 +947,7 @@ export const ALUMNI: Alumni[] = [
       {
         title: "Retraite courte",
         date: "Mai 2024",
-        description: "Apres le bench KC, Upset annonce une pause carriere puis un retour ESL ProLeague en 2025. Trace cruelle pour un ADC top-tier.",
+        description: "Après le bench KC, Upset annonce une pause carrière puis un retour ESL ProLeague en 2025. Trace cruelle pour un ADC top-tier.",
         champion: "Aphelios",
       },
     ],

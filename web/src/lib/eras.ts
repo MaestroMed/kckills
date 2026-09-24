@@ -12,7 +12,7 @@ export interface Era {
   id: string;
   period: string;         // "Spring 2021", "Winter 2025", etc.
   phase: string;          // "LFL" | "EU Masters" | "LEC" | "International" | "Community"
-  label: string;          // "La Genese"
+  label: string;          // "La Genèse"
   subtitle: string;       // Short tagline
   color: string;
   result: string;
@@ -27,6 +27,9 @@ export interface Era {
   links: EraLink[];
   events?: string[];
   clipsQuery?: string;    // YouTube search query for clips from this era
+  /** Badge de la carte : "live" pendant une compétition en cours,
+   *  "upcoming" pour la prochaine (données, plus d'id codé en dur). */
+  badge?: "live" | "upcoming";
 }
 
 export const ERAS: Era[] = [
@@ -34,7 +37,7 @@ export const ERAS: Era[] = [
     id: "lfl-2021-spring",
     period: "Spring 2021",
     phase: "LFL",
-    label: "La Genese",
+    label: "La Genèse",
     subtitle: "Le tout premier split",
     color: "#00C853",
     result: "\uD83C\uDFC6 LFL + \uD83C\uDFC6 EU Masters",
@@ -45,7 +48,7 @@ export const ERAS: Era[] = [
     roster: "Adam (top) \u00b7 Cinkrof (jgl) \u00b7 Saken (mid) \u00b7 xMatty (adc) \u00b7 Targamas (sup)",
     coach: "Striker",
     keyMoment:
-      "Pour leur tout premier split competitif, les cinq membres originaux de la Karmine Corp dominent la LFL et remportent le trophee. Aux EU Masters, ils perdent le Game 1 vs BT Excel apres un combat de 40+ minutes, puis enchainent 3 victoires pour s'imposer 3-1 en finale. xMatty devient le premier joueur anglais a remporter les EU Masters. Pic de 377 000 viewers sur la finale \u2014 record de l'epoque pour un tournoi ERL.",
+      "Pour leur tout premier split compétitif, les cinq membres originaux de la Karmine Corp dominent la LFL et remportent le trophée. Aux EU Masters, ils perdent le Game 1 vs BT Excel après un combat de 40+ minutes, puis enchaînent 3 victoires pour s'imposer 3-1 en finale. xMatty devient le premier joueur anglais à remporter les EU Masters. Pic de 377 000 viewers sur la finale \u2014 record de l'époque pour un tournoi ERL.",
     viewership: "377K peak viewers \u2014 Finale EU Masters",
     events: [
       "LFL Spring 2021 \u2014 Champions (1\u00e8re place regular season)",
@@ -81,7 +84,7 @@ export const ERAS: Era[] = [
     period: "Summer 2021",
     phase: "LFL",
     label: "Back to Back",
-    subtitle: "L'arrivee de Cabochard",
+    subtitle: "L'arrivée de Cabochard",
     color: "#FFD700",
     result: "\uD83C\uDFC6 LFL + \uD83C\uDFC6 EU Masters",
     icon: "\uD83C\uDFC6",
@@ -91,11 +94,11 @@ export const ERAS: Era[] = [
     roster: "Cabochard (top) \u00b7 Cinkrof (jgl) \u00b7 Saken (mid) \u00b7 xMatty (adc) \u00b7 Hantera (sup)",
     coach: "Striker",
     keyMoment:
-      "Adam part a Fnatic LEC, Cabochard arrive de Vitality apres 5 ans la-bas \u2014 il refuse une offre de Fnatic pour rester. KC remporte un second titre LFL consecutif puis s'attaque aux EU Masters. En finale vs Fnatic Rising, KC prend 2-0, Fnatic revient 2-2, puis KC stomp le Game 5 en 21 minutes grace a un Cinkrof Jarvan IV qui dicte le tempo. Premiere equipe de l'histoire a remporter deux EU Masters consecutifs.",
+      "Adam part à Fnatic LEC, Cabochard arrive de Vitality après 5 ans là-bas \u2014 il refuse une offre de Fnatic pour rester. KC remporte un second titre LFL consécutif puis s'attaque aux EU Masters. En finale vs Fnatic Rising, KC prend 2-0, Fnatic revient 2-2, puis KC stomp le Game 5 en 21 minutes grâce à un Cinkrof Jarvan IV qui dicte le tempo. Première équipe de l'histoire à remporter deux EU Masters consécutifs.",
     events: [
       "LFL Summer 2021 \u2014 Champions",
       "EU Masters Summer 2021 \u2014 KC 3-2 Fnatic Rising (Game 5 en 21 minutes)",
-      "Premiere equipe \u00e0 realiser le back-to-back EU Masters",
+      "Première équipe \u00e0 réaliser le back-to-back EU Masters",
       "KCX1 \u2014 Palais des Congres Paris, 26 juillet 2021, 3700 places",
     ],
     clipsQuery: "karmine corp eu masters summer 2021 fnatic rising",
@@ -116,7 +119,7 @@ export const ERAS: Era[] = [
         type: "youtube",
       },
       {
-        label: "OTP VODs \u2014 Finale complete",
+        label: "OTP VODs \u2014 Finale complète",
         url: "https://www.youtube.com/watch?v=3bTnsLX3euw",
         type: "youtube",
       },
@@ -137,7 +140,7 @@ export const ERAS: Era[] = [
     period: "December 2021",
     phase: "Community",
     label: "KC vs KOI",
-    subtitle: "Showmatch legendaire \u2014 477K",
+    subtitle: "Showmatch légendaire \u2014 477K",
     color: "#FF6B00",
     result: "KOI 2-1 KC \u2014 Show historique",
     icon: "\uD83D\uDD25",
@@ -146,14 +149,14 @@ export const ERAS: Era[] = [
     dateEnd: "2021-12-31",
     coach: "Striker",
     keyMoment:
-      "Showmatch historique organise entre Kameto et Ibai au Palau Sant Jordi de Barcelone le 15 decembre 2021. KOI (Ibai + Pique + amis) gagne 2-1 devant 15 000 fans espagnols \u2014 mais 257 fans du Blue Wall ont fait le voyage en terre hostile et couvrent le stade en chants KC. Le show atteint 477 000 viewers simultanes sur Twitch, depassant la finale LCS Summer 2021 (364K). Match retour le 8 janvier 2022 au Carrousel du Louvre a Paris. Naissance de la rivalite KC vs KOI et preuve que les showmatchs Streamer Legend pouvaient rivaliser avec le plus haut niveau competitif.",
+      "Showmatch historique organisé entre Kameto et Ibai au Palau Sant Jordi de Barcelone le 15 décembre 2021. KOI (Ibai + Pique + amis) gagne 2-1 devant 15 000 fans espagnols \u2014 mais 257 fans du Blue Wall ont fait le voyage en terre hostile et couvrent le stade en chants KC. Le show atteint 477 000 viewers simultanés sur Twitch, dépassant la finale LCS Summer 2021 (364K). Match retour le 8 janvier 2022 au Carrousel du Louvre à Paris. Naissance de la rivalité KC vs KOI et preuve que les showmatchs Streamer Legend pouvaient rivaliser avec le plus haut niveau compétitif.",
     viewership: "477K peak viewers Twitch \u00b7 257 Blue Wall en terre hostile",
     events: [
       "15 dec 2021 \u2014 Palau Sant Jordi, Barcelone (15 000 places)",
       "257 Blue Wall en terre hostile \u2014 les legendes du voyage",
       "477K peak viewers Twitch \u2014 plus que la finale LCS Summer 2021 (364K)",
       "Match retour 8 jan 2022 \u2014 Carrousel du Louvre, Paris",
-      "Naissance de la rivalite KC vs KOI",
+      "Naissance de la rivalité KC vs KOI",
     ],
     clipsQuery: "karmine corp vs koi showmatch barcelona 2021 ibai",
     links: [
@@ -184,7 +187,7 @@ export const ERAS: Era[] = [
     roster: "Cabochard (top) \u00b7 113 (jgl) \u00b7 Saken (mid) \u00b7 Rekkles (adc) \u00b7 Hantera (sup)",
     coach: "Striker",
     keyMoment:
-      "Rekkles, legende de Fnatic, rejoint la LFL \u2014 le plus gros transfert ERL de l'histoire. En LFL, playoffs decevants (3e, elimines en lower bracket par BDS Academy). Premier pentakill de KC par Rekkles sur Jinx vs GameWard. Aux EU Masters, reverse sweep en demi-finale vs Vitality.Bee (0-2 a 3-2), puis Rekkles sort un 16/1/25 sur toute la finale vs LDLC OL \u2014 UNE SEULE MORT en 4 games. KC devient la premiere equipe a remporter 3 EU Masters consecutifs.",
+      "Rekkles, légende de Fnatic, rejoint la LFL \u2014 le plus gros transfert ERL de l'histoire. En LFL, playoffs décevants (3e, éliminés en lower bracket par BDS Academy). Premier pentakill de KC par Rekkles sur Jinx vs GameWard. Aux EU Masters, reverse sweep en demi-finale vs Vitality.Bee (0-2 à 3-2), puis Rekkles sort un 16/1/25 sur toute la finale vs LDLC OL \u2014 UNE SEULE MORT en 4 games. KC devient la première équipe à remporter 3 EU Masters consécutifs.",
     events: [
       "Transfert historique de Rekkles (ex-Fnatic)",
       "Premier pentakill KC \u2014 Rekkles Jinx vs GameWard",
@@ -252,7 +255,7 @@ export const ERAS: Era[] = [
     roster: "Cabochard (top) \u00b7 113 (jgl) \u00b7 Saken (mid) \u00b7 Rekkles (adc) \u00b7 Hantera (sup)",
     coach: "Striker",
     keyMoment:
-      "Apres le sommet du 3-peat EU Masters, KC ne parvient pas a se qualifier pour la finale EU Masters Summer 2022. Premier coup de froid pour le cycle LFL. La KC Army commence a reclamer une place en LEC \u2014 et Kameto commence a discuter en coulisses du rachat d'un slot.",
+      "Après le sommet du 3-peat EU Masters, KC ne parvient pas à se qualifier pour la finale EU Masters Summer 2022. Premier coup de froid pour le cycle LFL. La KC Army commence à réclamer une place en LEC \u2014 et Kameto commence à discuter en coulisses du rachat d'un slot.",
     clipsQuery: "karmine corp lfl summer 2022",
     links: [
       {
@@ -266,7 +269,7 @@ export const ERAS: Era[] = [
     id: "lfl-2023-spring",
     period: "Spring 2023",
     phase: "LFL",
-    label: "Le Split Oublie",
+    label: "Le Split Oublié",
     subtitle: "KC LEONA, Whiteinn, et la fin d'un monde",
     color: "#5B6A8A",
     result: "\uD83D\uDC94 Hors playoffs \u00b7 lore community",
@@ -277,13 +280,13 @@ export const ERAS: Era[] = [
     roster: "Cabochard (top) \u00b7 Skeanz (jgl) \u00b7 Saken (mid) \u00b7 Kaori (adc) \u00b7 WhiteInn (sup)",
     coach: "Striker",
     keyMoment:
-      "Le split que tout le monde veut oublier mais que la KC Army a transforme en legende. Pour la premiere fois de son histoire, la Karmine Corp rate les playoffs LFL. Depart de Rekkles, 113 et Hantera. Alchimie inexistante. Fond de classement. Le meme WhiteInn Leona devient immortel — un support enferme dans un seul champion pool, la com' qui crie \u00ab KC LEONA \u00bb apres chaque pick, les highlights improbables qui tournent sur Twitter. La KC Army detourne la douleur en meme. C'est le point le plus bas du club, et paradoxalement une des periodes les plus memorables pour la base de fans. Quelques mois plus tard, KC reviendra avec Caliste en LFL Summer puis rachetera le slot LEC d'Astralis.",
-    viewership: "Le meme KC LEONA vit encore en 2026",
+      "Le split que tout le monde veut oublier mais que la KC Army a transformé en légende. Pour la première fois de son histoire, la Karmine Corp rate les playoffs LFL. Départ de Rekkles, 113 et Hantera. Alchimie inexistante. Fond de classement. Le mème WhiteInn Leona devient immortel — un support enfermé dans un seul champion pool, la com' qui crie \u00ab KC LEONA \u00bb après chaque pick, les highlights improbables qui tournent sur Twitter. La KC Army détourne la douleur en mème. C'est le point le plus bas du club, et paradoxalement une des périodes les plus mémorables pour la base de fans. Quelques mois plus tard, KC reviendra avec Caliste en LFL Summer puis rachètera le slot LEC d'Astralis.",
+    viewership: "Le mème KC LEONA vit encore en 2026",
     events: [
-      "Premiere elimination sans playoffs LFL de l'histoire de KC",
-      "Whiteinn \u00ab KC LEONA \u00bb \u2014 naissance du meme community",
+      "Première élimination sans playoffs LFL de l'histoire de KC",
+      "Whiteinn \u00ab KC LEONA \u00bb \u2014 naissance du mème community",
       "Saken solo au mid, Cabochard sous-utilise",
-      "La KC Army transforme le drame en legende",
+      "La KC Army transforme le drame en légende",
     ],
     clipsQuery: "karmine corp whiteinn leona lfl spring 2023",
     links: [
@@ -293,7 +296,7 @@ export const ERAS: Era[] = [
         type: "youtube",
       },
       {
-        label: "\u00ab KC LEONA \u00bb \u2014 meme compilation",
+        label: "\u00ab KC LEONA \u00bb \u2014 mème compilation",
         url: "https://www.youtube.com/results?search_query=KC+Leona+Whiteinn+compilation",
         type: "youtube",
       },
@@ -314,10 +317,10 @@ export const ERAS: Era[] = [
     roster: "Cabochard (top) \u00b7 Cinkrof (jgl) \u00b7 Saken (mid) \u00b7 Caliste (adc) \u00b7 Targamas (sup)",
     coach: "Striker",
     keyMoment:
-      "Retour de Cinkrof et Targamas, debut en pro du rookie Caliste (18 ans \u2014 futur ROY). KC sort une serie de 7 victoires d'affilee, termine 1er en regular season, et balaie BK ROG 3-0 en finale LFL. Le 18 octobre 2023, l'annonce tombe : KC rachete 66,67% du slot LEC d'Astralis pour 129M DKK (~15M\u20ac). Kameto : \u00ab On vise le Championnat du Monde dans 5 a 10 ans. \u00bb Le meme week-end, KCX3 explose le record europeen d'affluence esport avec 28 000 fans a Paris La Defense Arena.",
+      "Retour de Cinkrof et Targamas, début en pro du rookie Caliste (18 ans \u2014 futur ROY). KC sort une série de 7 victoires d'affilée, termine 1er en regular season, et balaie BK ROG 3-0 en finale LFL. Le 18 octobre 2023, l'annonce tombe : KC rachète 66,67% du slot LEC d'Astralis pour 129M DKK (~15M\u20ac). Kameto : \u00ab On vise le Championnat du Monde dans 5 à 10 ans. \u00bb Le même week-end, KCX3 explose le record européen d'affluence esport avec 28 000 fans à Paris La Defense Arena.",
     events: [
       "LFL Summer 2023 \u2014 KC 3-0 BK ROG",
-      "Debut de Caliste en pro (18 ans)",
+      "Début de Caliste en pro (18 ans)",
       "Rachat slot LEC Astralis \u2014 18 octobre 2023",
       "KCX3 Paris La Defense Arena \u2014 28 000 fans (record EU esport)",
     ],
@@ -360,7 +363,7 @@ export const ERAS: Era[] = [
     roster: "Cabochard (top) \u00b7 Bo (jgl) \u00b7 Saken (mid) \u00b7 Upset (adc) \u00b7 Targamas (sup)",
     coach: "Striker",
     keyMoment:
-      "Premier split LEC de l'histoire de KC \u2014 et debut de l'ere sombre. Porte par la plus grosse fanbase d'Europe apres le rachat du slot Astralis, le club arrive a Berlin avec des attentes ecrasantes : le Blue Wall s'attend a voir KC se battre pour les playoffs des le premier split. Roster renforce : Bo (ex-Vitality, ex-BLG, reputation mechanique top-tier) et Upset (ex-Fnatic, Worlds multiple). Caliste, deja dans le pipeline, ne peut pas jouer \u2014 la LEC exige 18 ans, il en a 17. Il va dominer la LFL sur KCB en attendant son heure. Sur la scene LEC pourtant, tout s'ecroule : 10e et dernier. Aucun playoff, aucun momentum, les casts francais parlent de \u00ab choc culturel \u00bb. L'apprentissage est brutal et la scene de Berlin, sans pitie.",
+      "Premier split LEC de l'histoire de KC — et début de l'ère sombre. Porté par la plus grosse fanbase d'Europe après le rachat du slot Astralis, le club arrive à Berlin avec des attentes écrasantes : le Blue Wall s'attend à voir KC se battre pour les playoffs dès le premier split. Roster renforcé : Bo (ex-Vitality, ex-BLG, réputation mechanique top-tier) et Upset (ex-Fnatic, Worlds multiple). Caliste, déjà dans le pipeline, ne peut pas jouer — la LEC exige 18 ans, il en a 17. Il va dominer la LFL sur KCB en attendant son heure. Sur la scène LEC pourtant, tout s'écroule : 10e et dernier. Aucun playoff, aucun momentum, les casts français parlent de « choc culturel ». L'apprentissage est brutal et la scène de Berlin, sans pitié.",
     events: [
       "Premier match LEC de l'histoire de KC",
       "Bo & Upset recrutes depuis Vitality et Fnatic",
@@ -396,7 +399,7 @@ export const ERAS: Era[] = [
     roster: "Cabochard (top) \u00b7 Bo (jgl) \u00b7 Saken (mid) \u00b7 Upset (adc) \u00b7 Targamas (sup)",
     coach: "Striker",
     keyMoment:
-      "Deuxieme split LEC, meme resultat : 10e et dernier \u2014 deux derniers rangs consecutifs, une premiere pour un club de cette taille. La lueur d'espoir arrive en playoffs : KC bat GIANTX et accroche G2 en BO5. Menes 0-2, KC sort de ses tripes, remonte 2-2 dans une ambiance electrique... puis s'effondre au Game 5. Le reverse sweep reverse \u2014 une cruaute rare, diffusee en prime-time. Kameto, en larmes a la fin du match, publie un message aux fans reconnaissant la profondeur de l'echec. Ce soir-la, tout le monde comprend que le statu quo est fini : la reconstruction doit etre totale, immediate, impitoyable. Cabochard, Bo et Saken seront benches des fins mai.",
+      "Deuxième split LEC, même résultat : 10e et dernier \u2014 deux derniers rangs consécutifs, une première pour un club de cette taille. La lueur d'espoir arrive en playoffs : KC bat GIANTX et accroche G2 en BO5. Menés 0-2, KC sort de ses tripes, remonte 2-2 dans une ambiance électrique... puis s'effondre au Game 5. Le reverse sweep reverse \u2014 une cruauté rare, diffusée en prime-time. Kameto, en larmes à la fin du match, publie un message aux fans reconnaissant la profondeur de l'échec. Ce soir-là, tout le monde comprend que le statu quo est fini : la reconstruction doit être totale, immédiate, impitoyable. Cabochard, Bo et Saken seront benchés dès fins mai.",
     events: [
       "\uD83D\uDC94 2 derniers rangs LEC consecutifs (record negatif du club)",
       "BO5 G2 \u2014 KC remonte 0-2 a 2-2 puis perd Game 5",
@@ -426,9 +429,9 @@ export const ERAS: Era[] = [
     roster: "Canna (top) \u00b7 Closer (jgl) \u00b7 Vladi (mid) \u00b7 Upset (adc) \u00b7 Targamas (sup)",
     coach: "Striker",
     keyMoment:
-      "Le 2 mai 2024, KC annonce un remaniement massif qui met un terme a l'ere sombre : Cabochard, Bo et Saken sont benches. Canna (ex-T1, ex-Dplus KIA, champion du monde 2020) arrive \u2014 premier import LCK majeur de l'histoire du club et l'un des plus gros transferts LEC jamais signes par une equipe francaise. Closer (ex-100 Thieves) prend la jungle. Vladi est promu depuis l'academie KCB ou il vient de remporter le LFL Spring. Le resultat est spectaculaire : de dernier a 4e en un seul split. Premier playoff LEC gagne dans l'histoire du club. L'ombre de 2024 n'est pas tout a fait dissipee, mais le renouveau est la \u2014 et il porte deja les graines du Sacre de 2025.",
+      "Le 2 mai 2024, KC annonce un remaniement massif qui met un terme à l'ère sombre : Cabochard, Bo et Saken sont benchés. Canna (ex-T1, ex-Dplus KIA, champion du monde 2020) arrive \u2014 premier import LCK majeur de l'histoire du club et l'un des plus gros transferts LEC jamais signés par une équipe française. Closer (ex-100 Thieves) prend la jungle. Vladi est promu depuis l'académie KCB où il vient de remporter le LFL Spring. Le résultat est spectaculaire : de dernier à 4e en un seul split. Premier playoff LEC gagné dans l'histoire du club. L'ombre de 2024 n'est pas tout à fait dissipée, mais le renouveau est là \u2014 et il porte déjà les graines du Sacre de 2025.",
     events: [
-      "Arrivee de Canna (ex-T1)",
+      "Arrivée de Canna (ex-T1)",
       "Closer recrute depuis 100 Thieves",
       "Vladi promu depuis la KCB academie",
       "4e place LEC Summer \u2014 de dernier a 4e en un split",
@@ -468,18 +471,18 @@ export const ERAS: Era[] = [
     roster: "Canna (top) \u00b7 Yike (jgl) \u00b7 Vladi (mid) \u00b7 Caliste (adc) \u00b7 Targamas (sup)",
     coach: "Striker",
     keyMoment:
-      "Le moment le plus important de l'histoire de KC. Moins d'un an apres un split a la 10e place (dernier), KC realise la redemption la plus folle de l'histoire de la LEC. Caliste, enfin majeur, rejoint le roster principal. Yike arrive depuis l'ecosysteme G2/MAD. Parcours en bracket : victoire contre Fnatic, puis effondrement en upper bracket final \u2014 G2 stomp KC 3-1. La KC Army tremble. Lower bracket : KC bat Vitality, puis Movistar KOI dans une serie de folie. Retour en Grand Final pour affronter G2 une TROISIEME fois. Puis l'impensable : 3-0 SEC a la Riot Games Arena de Berlin. Vladi est MVP avec un Game 3 Viktor a 10/1/7 \u2014 il demonte Caps en ligne. Yike tue Caps (son ex-coequipier) match apres match. Canna immovable top side. A 18 ans, Caliste devient le plus jeune champion LEC de l'histoire (Royal Roader \u2014 trophee en rookie split). Premiere equipe francaise a remporter la LEC. Premier trophee LEC de l'histoire du club. Emmanuel Macron congratulait KC en 2021 pour les EU Masters \u2014 cette fois, c'est le president qui devrait s'incliner. 801 369 pics de viewers (dont 233 351 sur le co-stream de Kameto).",
+      "Le moment le plus important de l'histoire de KC. Moins d'un an après un split à la 10e place (dernier), KC réalise la rédemption la plus folle de l'histoire de la LEC. Caliste, enfin majeur, rejoint le roster principal. Yike arrive depuis l'écosystème G2/MAD. Parcours en bracket : victoire contre Fnatic, puis effondrement en upper bracket final \u2014 G2 stomp KC 3-1. La KC Army tremble. Lower bracket : KC bat Vitality, puis Movistar KOI dans une série de folie. Retour en Grand Final pour affronter G2 une TROISIÈME fois. Puis l'impensable : 3-0 SEC à la Riot Games Arena de Berlin. Vladi est MVP avec un Game 3 Viktor à 10/1/7 \u2014 il démonte Caps en ligne. Yike tue Caps (son ex-coéquipier) match après match. Canna immovable top side. À 18 ans, Caliste devient le plus jeune champion LEC de l'histoire (Royal Roader \u2014 trophée en rookie split). Première équipe française à remporter la LEC. Premier trophée LEC de l'histoire du club. Emmanuel Macron congratulait KC en 2021 pour les EU Masters \u2014 cette fois, c'est le président qui devrait s'incliner. 801 369 pics de viewers (dont 233 351 sur le co-stream de Kameto).",
     viewership: "801 369 peak \u00b7 Kameto co-stream 233K \u00b7 Record LEC",
     events: [
       "LEC Winter 2025 Finals Berlin \u2014 2 mars 2025",
       "Lower bracket run : FNC \u2192 VIT \u2192 MKOI",
       "Upper bracket final : KC 1-3 G2 (l'effondrement)",
-      "Grand Final : KC 3-0 G2 (la redemption absolue)",
+      "Grand Final : KC 3-0 G2 (la rédemption absolue)",
       "Vladi MVP \u2014 Game 3 Viktor 10/1/7",
       "Caliste : plus jeune champion LEC de l'histoire (18 ans, Royal Roader)",
       "Premier titre LEC de l'histoire de KC",
-      "Premiere equipe francaise championne LEC",
-      "De 10e en 2024 a champions en 2025 \u2014 la redemption arc",
+      "Première équipe française championne LEC",
+      "De 10e en 2024 à champions en 2025 \u2014 la rédemption arc",
     ],
     clipsQuery: "karmine corp g2 lec winter 2025 grand finals",
     links: [
@@ -504,7 +507,7 @@ export const ERAS: Era[] = [
         type: "youtube",
       },
       {
-        label: "Le discours de Kameto apres la finale",
+        label: "Le discours de Kameto après la finale",
         url: "https://www.youtube.com/watch?v=VXdc0Q2HdCg",
         type: "youtube",
       },
@@ -560,13 +563,13 @@ export const ERAS: Era[] = [
     roster: "Canna (top) \u00b7 Yike (jgl) \u00b7 Vladi (mid) \u00b7 Caliste (adc) \u00b7 Targamas (sup)",
     coach: "Striker",
     keyMoment:
-      "Premier tournoi international de l'histoire du roster LoL de KC. Au LoL Park de Seoul, KC cree l'exploit en battant Top Esports en groupes. En demi-finale vs CTBC Flying Oyster, comeback legendaire de 0-2 a 3-2. En finale, defaite 1-3 vs Hanwha Life Esports. Meilleur resultat international d'une equipe francaise depuis la course aux Worlds de H2K. Prize money : 225 000 $.",
+      "Premier tournoi international de l'histoire du roster LoL de KC. Au LoL Park de Séoul, KC crée l'exploit en battant Top Esports en groupes. En demi-finale vs CTBC Flying Oyster, comeback légendaire de 0-2 à 3-2. En finale, défaite 1-3 vs Hanwha Life Esports. Meilleur résultat international d'une équipe française depuis la course aux Worlds de H2K. Prize money : 225 000 $.",
     events: [
       "First Stand 2025 \u2014 LoL Park Seoul",
       "Upset KC vs Top Esports en groupes",
       "Comeback 0-2 a 3-2 vs CTBC Flying Oyster (demi)",
       "Finale KC 1-3 HLE",
-      "Meilleur resultat international d'une equipe FR depuis H2K",
+      "Meilleur résultat international d'une équipe FR depuis H2K",
     ],
     clipsQuery: "karmine corp first stand 2025 seoul hle",
     links: [
@@ -576,12 +579,12 @@ export const ERAS: Era[] = [
         type: "youtube",
       },
       {
-        label: "KC vs CFO \u2014 Demi-finale complete (KC Replay)",
+        label: "KC vs CFO \u2014 Demi-finale complète (KC Replay)",
         url: "https://www.youtube.com/watch?v=yuXlKZyJEfo",
         type: "youtube",
       },
       {
-        label: "OTP VODs \u2014 KC vs CFO un match dans la legende",
+        label: "OTP VODs \u2014 KC vs CFO un match dans la légende",
         url: "https://www.youtube.com/watch?v=8AJP6HleZh8",
         type: "youtube",
       },
@@ -622,7 +625,7 @@ export const ERAS: Era[] = [
     roster: "Canna (top) \u00b7 Yike (jgl) \u00b7 Vladi (mid) \u00b7 Caliste (adc) \u00b7 Targamas (sup)",
     coach: "Striker",
     keyMoment:
-      "Saison regular de domination absolue : 8-1. Caliste signe une statistique historique : #1 de la LEC en CS/min, en gold/min ET en damage/min \u2014 aucun ADC n'avait realise ce triple depuis Rekkles en 2021. Il rafle la plupart des MVPs de semaine. En playoffs, defaite cruelle 2-3 vs Movistar KOI en lower bracket final. 3e place malgre tout.",
+      "Saison regular de domination absolue : 8-1. Caliste signe une statistique historique : #1 de la LEC en CS/min, en gold/min ET en damage/min \u2014 aucun ADC n'avait réalisé ce triple depuis Rekkles en 2021. Il rafle la plupart des MVPs de semaine. En playoffs, défaite cruelle 2-3 vs Movistar KOI en lower bracket final. 3e place malgré tout.",
     events: [
       "Regular season 8-1 \u2014 1er",
       "Caliste #1 en CS/min, gold/min, damage/min (comme Rekkles 2021)",
@@ -657,10 +660,10 @@ export const ERAS: Era[] = [
     roster: "Canna (top) \u00b7 Yike (jgl) \u00b7 Vladi (mid) \u00b7 Caliste (adc) \u00b7 Targamas (sup)",
     coach: "Striker",
     keyMoment:
-      "En playoffs, KC bat Vitality 3-1. Perd vs G2 en upper bracket. Dans le lower bracket, la rencontre fatidique : FNATIC 3-1 KC. Oscarinin detruit Canna en top lane sur les 4 games. La foule de Madrid assiste a l'elimination. PAS DE WORLDS pour les champions d'hiver. Seule consolation : Caliste est nomme LEC Rookie of the Year 2025 (28/38 votes, 60,6% WR, 5.4 KDA, 9.8 CS/min, 739.5 damage/min).",
+      "En playoffs, KC bat Vitality 3-1. Perd vs G2 en upper bracket. Dans le lower bracket, la rencontre fatidique : FNATIC 3-1 KC. Oscarinin détruit Canna en top lane sur les 4 games. La foule de Madrid assiste à l'élimination. PAS DE WORLDS pour les champions d'hiver. Seule consolation : Caliste est nommé LEC Rookie of the Year 2025 (28/38 votes, 60,6% WR, 5.4 KDA, 9.8 CS/min, 739.5 damage/min).",
     events: [
       "KC 3-1 Vitality (playoffs)",
-      "Fnatic 3-1 KC \u2014 elimination Worlds",
+      "Fnatic 3-1 KC \u2014 élimination Worlds",
       "PAS DE WORLDS 2025",
       "Caliste : LEC Rookie of the Year 2025",
     ],
@@ -677,12 +680,12 @@ export const ERAS: Era[] = [
         type: "youtube",
       },
       {
-        label: "FNC 3-1 KC \u2014 recherche elimination",
+        label: "FNC 3-1 KC \u2014 recherche élimination",
         url: "https://www.youtube.com/results?search_query=LEC+Summer+2025+Fnatic+Karmine+Corp+playoffs+Oscarinin",
         type: "youtube",
       },
       {
-        label: "Kameto reaction elimination",
+        label: "Kameto réaction élimination",
         url: "https://www.youtube.com/results?search_query=kameto+reaction+karmine+corp+fnatic+worlds+2025",
         type: "youtube",
       },
@@ -708,7 +711,7 @@ export const ERAS: Era[] = [
     roster: "Canna (top) \u00b7 Yike (jgl) \u00b7 kyeahoo (mid) \u00b7 Caliste (adc) \u00b7 Busio (sup)",
     coach: "Reapered (Bok Han-gyu)",
     keyMoment:
-      "Gros remaniement intersaison : Vladi rejoint Fnatic, kyeahoo (ex-DRX Challengers, KR) arrive au mid. Targamas part vers French Flair, remplace par Busio (ex-FlyQuest, vet Worlds 2024-2025, US/PL). Nouveau coach : Reapered (ex-C9, ex-100T), premiere experience EMEA, contrat jusqu'au lendemain de Worlds 2027. Parcours : perte UB vs G2 1-3, victoire 2-1 vs Vitality, sweep GIANTX 3-0, victoire 3-2 vs MKOI en lower bracket final (epique), defaite 2-3 vs G2 en grande finale a Barcelone. Caps MVP.",
+      "Gros remaniement intersaison : Vladi rejoint Fnatic, kyeahoo (ex-DRX Challengers, KR) arrive au mid. Targamas part vers French Flair, remplacé par Busio (ex-FlyQuest, vet Worlds 2024-2025, US/PL). Nouveau coach : Reapered (ex-C9, ex-100T), première expérience EMEA, contrat jusqu'au lendemain de Worlds 2027. Parcours : perte UB vs G2 1-3, victoire 2-1 vs Vitality, sweep GIANTX 3-0, victoire 3-2 vs MKOI en lower bracket final (épique), défaite 2-3 vs G2 en grande finale à Barcelone. Caps MVP.",
     events: [
       "Intersaison 2025-26 : Vladi \u2192 FNC, kyeahoo (KR) \u2192 mid",
       "Targamas \u2192 French Flair, Busio (ex-FlyQuest) \u2192 support",
@@ -769,23 +772,34 @@ export const ERAS: Era[] = [
       },
     ],
   },
+  // \u2500\u2500 2026, suite \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+  // Recherche du 23/09/2026 : scores et tours = API lolesports (getSchedule
+  // LEC / MSI / ewc_lol), placements = Leaguepedia TournamentResults, dates
+  // des Worlds = lolesports.com \u00AB MSI and Worlds Updates \u00BB. Rafra\u00EEchir par
+  // worker/scripts (getSchedule) avant d'\u00E9diter un r\u00E9sultat.
   {
     id: "lec-2026-spring",
     period: "Spring 2026",
     phase: "LEC",
-    label: "En Cours",
-    subtitle: "Objectif MSI",
+    label: "Si Pr\u00E8s",
+    subtitle: "Deuxi\u00E8me finale, deuxi\u00E8me 2-3 face \u00E0 G2",
     color: "#C8AA6E",
-    result: "Spring en cours \uD83D\uDD25",
-    icon: "\uD83D\uDD25",
-    image: "/images/hero-bg.jpg",
-    dateStart: "2026-03-15",
-    dateEnd: "2026-06-30",
+    result: "Finalistes \u00b7 KC 2-3 G2",
+    icon: "\uD83E\uDD48",
+    image: "/images/eras/2026-spring.jpg",
+    dateStart: "2026-03-28",
+    dateEnd: "2026-06-07",
     roster: "Canna (top) \u00b7 Yike (jgl) \u00b7 kyeahoo (mid) \u00b7 Caliste (adc) \u00b7 Busio (sup)",
     coach: "Reapered",
     keyMoment:
-      "KC demarre Spring en force : record 8-3 en regular season, 1re place. Caliste continue d'etre monstrueux (5.1K / 1.1D / 4.9A, 80% WR, 11.3 CS/min). Duree moyenne des games : 33:33. En 267 matchs KC depuis ses debuts LFL en 2021, le club affiche 172 victoires et un winrate carriere de 64.4%. Objectif : MSI 2026.",
-    clipsQuery: "karmine corp lec spring 2026",
+      "Saison r\u00E9guli\u00E8re en 7-2 (2e). En playoffs, KC tombe d'entr\u00E9e face \u00E0 G2 (1-3) puis remonte tout le bracket inf\u00E9rieur : NAVI 3-1, GIANTX 3-0, Movistar KOI 3-0. En finale le 7 juin, G2 s'impose encore 3-2 : deuxi\u00E8me finale de l'ann\u00E9e perdue au cinqui\u00E8me game contre le m\u00EAme adversaire. La place de finaliste qualifie KC pour le MSI 2026.",
+    events: [
+      "Saison r\u00E9guli\u00E8re : 7-2, 2e place",
+      "Playoffs : G2 1-3, puis NAVI 3-1, GIANTX 3-0, MKOI 3-0",
+      "Finale (7 juin) \u2014 KC 2-3 G2",
+      "Qualification pour le MSI 2026 (play-ins)",
+    ],
+    clipsQuery: "karmine corp lec spring 2026 playoffs",
     links: [
       {
         label: "KC vs VIT Highlights \u2014 LEC Spring Week 1 Day 1 (LEC Official)",
@@ -793,19 +807,138 @@ export const ERAS: Era[] = [
         type: "youtube",
       },
       {
-        label: "Caliste highlights Spring 2026 (recherche)",
-        url: "https://www.youtube.com/results?search_query=caliste+karmine+corp+lec+spring+2026",
-        type: "youtube",
-      },
-      {
-        label: "Caliste highlights Spring 2026",
-        url: "https://www.youtube.com/results?search_query=caliste+karmine+corp+lec+spring+2026",
+        label: "Finale Spring 2026 G2 vs KC (recherche)",
+        url: "https://www.youtube.com/results?search_query=G2+vs+KC+LEC+2026+Spring+Final",
         type: "youtube",
       },
       {
         label: "Liquipedia Spring 2026",
         url: "https://liquipedia.net/leagueoflegends/LEC/2026/Spring",
         type: "wiki",
+      },
+    ],
+  },
+  {
+    id: "msi-2026",
+    period: "MSI 2026",
+    phase: "International",
+    label: "Le Mur",
+    subtitle: "Premier MSI, arr\u00EAt en play-ins",
+    color: "#7B8DB5",
+    result: "Play-ins \u00b7 10e",
+    icon: "\uD83C\uDF0D",
+    image: null,
+    dateStart: "2026-06-28",
+    dateEnd: "2026-06-30",
+    roster: "Canna (top) \u00b7 Yike (jgl) \u00b7 kyeahoo (mid) \u00b7 Caliste (adc) \u00b7 Busio (sup)",
+    coach: "Reapered",
+    keyMoment:
+      "Premier MSI de l'histoire du club. KC ouvre les play-ins par un 3-0 sur DCG, puis tombe face \u00E0 T1 (0-3) et TLAW (0-3). Fin de parcours \u00E0 la 10e place : le niveau international se mesure, la le\u00E7on servira trois semaines plus tard.",
+    events: [
+      "Play-ins \u2014 KC 3-0 DCG",
+      "Play-ins \u2014 KC 0-3 T1",
+      "Play-ins \u2014 KC 0-3 TLAW (\u00E9limination, 10e)",
+    ],
+    clipsQuery: "karmine corp msi 2026",
+    links: [
+      {
+        label: "Liquipedia MSI 2026",
+        url: "https://liquipedia.net/leagueoflegends/Mid-Season_Invitational/2026",
+        type: "wiki",
+      },
+    ],
+  },
+  {
+    id: "ewc-2026",
+    period: "EWC 2026",
+    phase: "International",
+    label: "La Revanche",
+    subtitle: "T1 battu en demi-finale",
+    color: "#00C853",
+    result: "Finalistes \u00b7 KC 0-3 DK",
+    icon: "\uD83E\uDD48",
+    image: null,
+    dateStart: "2026-07-15",
+    dateEnd: "2026-07-19",
+    roster: "Canna (top) \u00b7 Yike (jgl) \u00b7 kyeahoo (mid) \u00b7 Caliste (adc) \u00b7 Busio (sup)",
+    coach: "Reapered",
+    keyMoment:
+      "Trois semaines apr\u00E8s le MSI, KC sort des groupes de l'Esports World Cup (d\u00E9faite 0-1 face \u00E0 Gen.G, victoires 2-1 sur TS et 2-0 sur Sentinels), balaie AGAL 2-0 en quart, puis bat T1 2-1 en demi-finale. En finale, Dplus KIA s'impose 3-0 : KC termine deuxième de l'Esports World Cup.",
+    events: [
+      "Groupes \u2014 KC 0-1 Gen.G \u00b7 KC 2-1 TS \u00b7 KC 2-0 SEN",
+      "Quart de finale \u2014 KC 2-0 AGAL",
+      "Demi-finale \u2014 KC 2-1 T1",
+      "Finale \u2014 KC 0-3 DK",
+    ],
+    clipsQuery: "karmine corp t1 esports world cup 2026",
+    links: [
+      {
+        label: "KC vs T1 demi-finale EWC 2026 (recherche)",
+        url: "https://www.youtube.com/results?search_query=KC+vs+T1+Esports+World+Cup+2026+semifinal",
+        type: "youtube",
+      },
+    ],
+  },
+  {
+    id: "lec-2026-summer",
+    period: "Summer 2026",
+    phase: "LEC",
+    label: "L'Invaincue",
+    subtitle: "9-0, puis le billet pour les Worlds",
+    color: "#0AC8B9",
+    result: "3e \u00b7 Qualifi\u00E9s Worlds 2026",
+    icon: "\uD83C\uDF9F\uFE0F",
+    image: null,
+    dateStart: "2026-07-24",
+    dateEnd: "2026-09-19",
+    roster: "Canna (top) \u00b7 Yike (jgl) \u00b7 kyeahoo (mid) \u00b7 Caliste (adc) \u00b7 Busio (sup)",
+    coach: "Reapered",
+    keyMoment:
+      "Saison r\u00E9guli\u00E8re parfaite : 9 victoires, 0 d\u00E9faite, 1re place. En playoffs, KC bat GIANTX 3-1 le 5 septembre (penta de Canna sur Jayce) puis perd face \u00E0 G2 1-3. Le 19 septembre \u00E0 Nice, Movistar KOI la balaie 3-0 en finale du bracket inf\u00E9rieur : 3e place, et la premi\u00E8re qualification aux Worlds de l'histoire du club, via les play-ins.",
+    events: [
+      "Saison r\u00E9guli\u00E8re : 9-0, 1re place",
+      "Playoffs \u2014 KC 3-1 GIANTX (penta de Canna)",
+      "Playoffs \u2014 KC 1-3 G2",
+      "Bracket inf\u00E9rieur (19 sept., Nice) \u2014 KC 0-3 MKOI",
+      "Premi\u00E8re qualification aux Worlds (play-ins)",
+    ],
+    clipsQuery: "karmine corp lec summer 2026",
+    links: [
+      {
+        label: "Liquipedia Summer 2026",
+        url: "https://liquipedia.net/leagueoflegends/LEC/2026/Summer",
+        type: "wiki",
+      },
+    ],
+  },
+  {
+    id: "worlds-2026",
+    period: "Worlds 2026",
+    phase: "International",
+    label: "Le R\u00EAve Mondial",
+    subtitle: "Premiers Worlds du club",
+    color: "#C8AA6E",
+    result: "Play-ins \u00b7 15-18 oct.",
+    icon: "\uD83C\uDFC6",
+    image: null,
+    dateStart: "2026-10-15",
+    dateEnd: "2026-11-14",
+    roster: "Canna (top) \u00b7 Yike (jgl) \u00b7 kyeahoo (mid) \u00b7 Caliste (adc) \u00b7 Busio (sup)",
+    coach: "Reapered",
+    keyMoment:
+      "Pour sa premi\u00E8re participation, KC entre par les play-ins, du 15 au 18 octobre au Riot Games Arena de Los Angeles. La phase suisse et les phases finales se jouent \u00E0 Allen (Texas), la finale le 14 novembre au Barclays Center de New York.",
+    events: [
+      "Play-ins \u2014 15-18 octobre, Los Angeles",
+      "Phase suisse \u2014 23-31 octobre, Allen (Texas)",
+      "Finale \u2014 14 novembre, Barclays Center (New York)",
+    ],
+    badge: "upcoming",
+    clipsQuery: "karmine corp worlds 2026",
+    links: [
+      {
+        label: "Calendrier MSI et Worlds (LoL Esports)",
+        url: "https://lolesports.com/en-US/news/msi-and-worlds-updates",
+        type: "article",
       },
     ],
   },
@@ -817,4 +950,20 @@ export function getEraById(id: string): Era | undefined {
 
 export function getErasSortedByDate(): Era[] {
   return [...ERAS].sort((a, b) => a.dateStart.localeCompare(b.dateStart));
+}
+
+/**
+ * Badge d'une ère à l'instant `nowMs`, calculé depuis ses dates : "upcoming"
+ * avant le début, "live" jusqu'au dernier jour inclus, rien ensuite.
+ * `era.badge` (écrit à la main) ne sert plus que de repli pour le rendu
+ * serveur — sinon « À VENIR » restait affiché sur les Worlds pendant le
+ * tournoi, jusqu'à la prochaine édition du fichier + redéploiement.
+ */
+export function eraBadge(era: Era, nowMs: number): "live" | "upcoming" | null {
+  const start = Date.parse(`${era.dateStart}T00:00:00Z`);
+  const end = Date.parse(`${era.dateEnd}T23:59:59Z`);
+  if (Number.isNaN(start) || Number.isNaN(end)) return era.badge ?? null;
+  if (nowMs < start) return "upcoming";
+  if (nowMs <= end) return "live";
+  return null;
 }

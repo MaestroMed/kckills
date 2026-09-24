@@ -64,10 +64,14 @@ export async function generateMetadata({ searchParams }: PageProps): Promise<Met
   const a = (sp.a ?? "").trim();
   const b = (sp.b ?? "").trim();
 
+  // Le layout applique déjà le template "%s — KCKILLS" au <title> — pas
+  // de suffixe ici (sinon doublon). OG/Twitter n'héritent pas du template
+  // → suffixe explicite, pattern player/[slug].
   const title =
     a && b
       ? `${capitalize(a)} vs ${capitalize(b)} — Face-Off KC`
-      : "Player vs Player Face-Off — KCKILLS";
+      : "Player vs Player Face-Off";
+  const ogTitle = a && b ? title : `${title} — KCKILLS`;
   const description =
     a && b
       ? `Comparaison complète : stats, top 10 kills, vote communauté. Qui est le meilleur entre ${capitalize(a)} et ${capitalize(b)} chez la Karmine Corp ?`
@@ -79,7 +83,7 @@ export async function generateMetadata({ searchParams }: PageProps): Promise<Met
     description,
     alternates: { canonical: path },
     openGraph: {
-      title,
+      title: ogTitle,
       description,
       type: "website",
       url: path,
@@ -88,7 +92,7 @@ export async function generateMetadata({ searchParams }: PageProps): Promise<Met
     },
     twitter: {
       card: "summary_large_image",
-      title,
+      title: ogTitle,
       description,
     },
   };

@@ -33,7 +33,6 @@ export const metadata: Metadata = {
 
 const WINTER = getEraById("lec-2024-winter");
 const SPRING = getEraById("lec-2024-spring");
-const SUMMER = getEraById("lec-2024-summer");
 const SACRE = getEraById("lec-2025-winter");
 
 export default async function DarknessPage() {

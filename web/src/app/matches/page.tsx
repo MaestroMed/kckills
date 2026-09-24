@@ -1,6 +1,11 @@
 import type { Metadata } from "next";
 import { loadRealData, getMatchesSorted } from "@/lib/real-data";
 import { getPublishedKills } from "@/lib/supabase/kills";
+// Audit compteurs 2026-08-12 — la chip « clips » affichait
+// `allClips.length` = le CAP de fetch (300), pas un total. Elle affiche
+// désormais le compteur canonique partagé (kills KC publiés avec clip
+// jouable — même chiffre que /scroll, /clips et la home).
+import { getCachedPublishedClipsCount } from "@/lib/stats-scopes";
 import { createAnonSupabase } from "@/lib/supabase/server";
 import { Breadcrumb } from "@/components/Breadcrumb";
 import { getStaticT } from "@/lib/i18n/getServerLang";
@@ -44,9 +49,10 @@ export default async function MatchesPage() {
   // span virtually every match that has at least one notable clip).
   // Could be swapped for a HEAD count + group-by RPC later, but trimming
   // saves ~400KB egress per cache miss in the meantime.
-  const [data, allClips, dbMatchesRes, dbTeamsRes] = await Promise.all([
+  const [data, allClips, publishedClipsTotal, dbMatchesRes, dbTeamsRes] = await Promise.all([
     Promise.resolve(loadRealData()),
     getPublishedKills(300),
+    getCachedPublishedClipsCount(),
     sb
       ? sb.from("matches").select("external_id,scheduled_at,stage,format,team_blue_id,team_red_id,winner_team_id")
       : Promise.resolve(emptyRes),
@@ -125,8 +131,12 @@ export default async function MatchesPage() {
 
   // Overall W/L tally for the hero eyebrow. Mirrors the accordion's logic:
   // null winner (upcoming / unresolved) is excluded from both counters.
+  // Audit compteurs 12/08 : le reliquat (matchs sans résultat connu) est
+  // affiché en chip pour que V + D + sans-résultat = total listé (avant :
+  // « 592 matchs » vs « 336V · 219D » qui ne sommaient pas).
   const totalWins = allMatches.filter((m) => m.kc_won === true).length;
   const totalLosses = allMatches.filter((m) => m.kc_won === false).length;
+  const totalNoResult = allMatches.length - totalWins - totalLosses;
   const winRate =
     totalWins + totalLosses > 0
       ? Math.round((totalWins / (totalWins + totalLosses)) * 100)
@@ -218,7 +228,9 @@ export default async function MatchesPage() {
               {t("p_matches.subtitle")}
             </p>
 
-            {/* Tally chips */}
+            {/* Tally chips — V + D + sans-résultat = total du hero, games
+                libellées « détaillées » (log statique), clips = compteur
+                canonique (audit compteurs 12/08). */}
             <div className="mt-7 flex items-center justify-center gap-2.5 flex-wrap font-data text-[11px] uppercase tracking-widest">
               <span className="rounded-lg border border-[var(--green)]/30 bg-[var(--green)]/10 px-3 py-1.5 font-bold text-[var(--green)]">
                 {t("p_matches.wins_short", { n: totalWins })}
@@ -226,12 +238,17 @@ export default async function MatchesPage() {
               <span className="rounded-lg border border-[var(--red)]/30 bg-[var(--red)]/10 px-3 py-1.5 font-bold text-[var(--red)]">
                 {t("p_matches.losses_short", { n: totalLosses })}
               </span>
+              {totalNoResult > 0 && (
+                <span className="rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)] px-3 py-1.5 text-[var(--text-muted)]">
+                  {t("p_matches.no_result_short", { n: totalNoResult })}
+                </span>
+              )}
               <span className="rounded-lg border border-[var(--border-gold)] bg-[var(--bg-surface)] px-3 py-1.5 text-[var(--text-muted)]">
-                {t("p_matches.games_count", { n: data.total_games })}
+                {t("p_matches.games_detail_count", { n: data.total_games })}
               </span>
-              {allClips.length > 0 && (
+              {publishedClipsTotal > 0 && (
                 <span className="badge-glass rounded-lg px-3 py-1.5 font-bold text-[var(--gold)]">
-                  {t("p_matches.clips_count", { n: allClips.length })}
+                  {t("p_matches.clips_count", { n: publishedClipsTotal })}
                 </span>
               )}
             </div>
