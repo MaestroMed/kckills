@@ -740,7 +740,7 @@ export const en: FrDict = {
     "cta_scroll_kills": "Scroll the kills",
     "cta_matches": "Matches",
     "cta_all_clips": "All clips",
-    "roster_spring_2026": "Spring 2026 roster",
+    "roster_spring_2026": "2026 roster",
     "loading_on_this_day": "Loading today's memories",
     "loading_weekend_best": "Loading the weekend's best clips",
     "loading_kill_of_week": "Loading the kill of the week",

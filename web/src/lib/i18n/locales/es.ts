@@ -744,7 +744,7 @@ export const es: FrDict = {
     "cta_scroll_kills": "Desliza los kills",
     "cta_matches": "Partidos",
     "cta_all_clips": "Todos los clips",
-    "roster_spring_2026": "Roster Spring 2026",
+    "roster_spring_2026": "Roster 2026",
     "loading_on_this_day": "Cargando recuerdos del día",
     "loading_weekend_best": "Cargando los mejores clips del fin de semana",
     "loading_kill_of_week": "Cargando el kill de la semana",

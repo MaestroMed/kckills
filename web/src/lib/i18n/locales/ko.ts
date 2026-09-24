@@ -751,7 +751,7 @@ export const ko: FrDict = {
     "cta_scroll_kills": "킬 스크롤하기",
     "cta_matches": "경기",
     "cta_all_clips": "모든 클립",
-    "roster_spring_2026": "2026 스프링 로스터",
+    "roster_spring_2026": "2026 로스터",
     "loading_on_this_day": "오늘의 추억 불러오는 중",
     "loading_weekend_best": "주말 베스트 클립 불러오는 중",
     "loading_kill_of_week": "이주의 킬 불러오는 중",

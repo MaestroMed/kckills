@@ -763,7 +763,7 @@ const _fr = {
     "cta_scroll_kills": "Scroll les kills",
     "cta_matches": "Matchs",
     "cta_all_clips": "Tous les clips",
-    "roster_spring_2026": "Roster Spring 2026",
+    "roster_spring_2026": "Roster 2026",
     "loading_on_this_day": "Souvenirs du jour en cours de chargement",
     "loading_weekend_best": "Meilleurs clips du week-end en cours de chargement",
     "loading_kill_of_week": "Kill de la semaine en cours de chargement",
