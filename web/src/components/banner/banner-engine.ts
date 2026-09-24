@@ -41,6 +41,7 @@ import {
   pow,
   renderOutput,
   saturate,
+  screenUV,
   select,
   sin,
   smoothstep,
@@ -428,8 +429,17 @@ export async function mountBanner(canvas: HTMLCanvasElement, opts: BannerOptions
   pipeline.outputColorTransform = false;
   const scenePass = pass(scene, camera, { samples: 4 });
   const col = scenePass.getTextureNode("output");
-  const glow = bloom(col, 0.45, 0.3, 0.9);
-  const ldr = renderOutput(vec4(col.rgb.add(glow.rgb), col.a), THREE.NeutralToneMapping, THREE.SRGBColorSpace);
+  // Le halo s'éteint en douceur avant les bords du canvas : sinon le cadre le
+  // tranche net au passage d'un rayon (effet « bug »). Plus discret en petit.
+  const glow = bloom(col, opts.variant === "header" ? 0.22 : 0.4, 0.22, 0.92);
+  const edgeFade = smoothstep(0, 0.16, min(screenUV.x, screenUV.x.oneMinus())).mul(
+    smoothstep(0, 0.1, min(screenUV.y, screenUV.y.oneMinus())),
+  );
+  const ldr = renderOutput(
+    vec4(col.rgb.add(glow.rgb.mul(edgeFade)), col.a),
+    THREE.NeutralToneMapping,
+    THREE.SRGBColorSpace,
+  );
   pipeline.outputNode = vec4(ldr.rgb, max(ldr.a, max(ldr.r, max(ldr.g, ldr.b))));
 
   // ── passages de lumière ──
