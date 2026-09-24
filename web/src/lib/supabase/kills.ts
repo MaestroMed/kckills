@@ -1678,6 +1678,14 @@ export interface KillsByEraOpts {
  * partial index `idx_kills_event_epoch_published` (see migration 071,
  * Wave 34 T1.3) — no join needed.
  */
+/** Bornes ISO d'une ère (jours civils inclus), ou null si dates invalides. */
+function eraRange(opts: { startDate: string; endDate: string }): { start: string; end: string } | null {
+  const start = `${opts.startDate}T00:00:00Z`;
+  const end = `${opts.endDate}T23:59:59Z`;
+  if (!Number.isFinite(Date.parse(start)) || !Number.isFinite(Date.parse(end))) return null;
+  return { start, end };
+}
+
 export const countKillsByEra = cache(async function countKillsByEra(
   opts: {
     startDate: string;
@@ -1685,31 +1693,29 @@ export const countKillsByEra = cache(async function countKillsByEra(
     buildTime?: boolean;
   },
 ): Promise<number> {
-  // Build the [start, end] window in milliseconds since epoch — matches
-  // the BIGINT shape of kills.event_epoch directly.
-  const startMs = Date.parse(`${opts.startDate}T00:00:00Z`);
-  const endMs = Date.parse(`${opts.endDate}T23:59:59Z`);
-  if (!Number.isFinite(startMs) || !Number.isFinite(endMs)) return 0;
+  const range = eraRange(opts);
+  if (!range) return 0;
   try {
     const supabase = createCachedAnonSupabase();
     // count=exact rather than count=planned — Postgres' planner badly
-    // underestimates row counts with a multi-column AND chain (status +
-    // kill_visible + event_epoch range + clip_url_vertical NOT NULL),
-    // returning single-digit estimates when the real count is 200+.
-    // event_epoch is backed by `idx_kills_event_epoch_published` (partial
-    // index on status='published' AND kill_visible=true — migration 071,
-    // Wave 34 T1.3) so the exact scan is still ~150ms.
+    // underestimates row counts with a multi-column AND chain, returning
+    // single-digit estimates when the real count is 200+.
+    //
+    // 2026-09-24 : fenêtre sur la DATE DU MATCH et non plus sur
+    // kills.event_epoch. Les kills importés de gol.gg n'ont pas d'horodatage
+    // live (event_epoch = 0) : 4 461 clips visibles (la moitié du catalogue)
+    // n'entraient dans aucune ère, d'où « 0 KILLS » de 2021 à Winter 2025.
     const { count, error } = await supabase
       .from("kills")
-      .select("id", { count: "exact", head: true })
+      .select("id, games!inner(matches!inner(scheduled_at))", { count: "exact", head: true })
       .or(
         "publication_status.eq.published," +
           "and(publication_status.is.null,status.eq.published)",
       )
       .eq("kill_visible", true)
       .not("clip_url_vertical", "is", null)
-      .gte("event_epoch", startMs)
-      .lte("event_epoch", endMs);
+      .gte("games.matches.scheduled_at", range.start)
+      .lte("games.matches.scheduled_at", range.end);
     if (error) {
       console.warn("[supabase/kills] countKillsByEra error:", error.message);
       return 0;
@@ -1725,18 +1731,13 @@ export const countKillsByEra = cache(async function countKillsByEra(
 /**
  * Get published kill clips that happened during the given KC era.
  *
- * Filters by `kills.event_epoch` — the millisecond UTC stamp of the
- * actual kill on the Riot stage, NOT when our worker imported the row.
- * Without this, freshly-backfilled gol.gg historical kills (scraped in
- * 2026) would always slot into the 2026 eras.
- *
- * Wave 34 T1.3 fix : previously filtered on the nested
- * `games.matches.scheduled_at` without an `!inner` join, so the
- * predicate was silently dropped to a LEFT JOIN and the function
- * returned kills from outside the era. event_epoch lives directly on
- * the kills row and is backed by the partial index
- * `idx_kills_event_epoch_published` (migration 071) — same approach
- * countKillsByEra has used since Wave 32.
+ * Filtre sur la date du match (`matches.scheduled_at`, jointures INNER) —
+ * jamais sur la date d'import. 2026-09-24 : on filtrait sur
+ * kills.event_epoch, que les kills gol.gg n'ont pas (0) ; la moitié du
+ * catalogue manquait aux ères. Les 472 matchs gol.gg ont reçu leur date
+ * (scripts/backfill_golgg_dates.py). Le filtre imbriqué exige bien
+ * `!inner` (sans lui, Wave 34 T1.3, PostgREST vidait l'embed sans
+ * exclure la ligne).
  *
  * Same selection criteria as getPublishedKills :
  *   * publication_status='published' (with PR23 legacy fallback on `status`)
@@ -1754,16 +1755,15 @@ export const getKillsByEra = cache(async function getKillsByEra(
   opts: KillsByEraOpts,
 ): Promise<PublishedKillRow[]> {
   const limit = opts.limit ?? 60;
-  // Build a half-open millisecond range from the era's calendar-day
-  // window. Matches the BIGINT shape of kills.event_epoch directly.
-  const startMs = Date.parse(`${opts.startDate}T00:00:00Z`);
-  const endMs = Date.parse(`${opts.endDate}T23:59:59Z`);
-  if (!Number.isFinite(startMs) || !Number.isFinite(endMs)) return [];
+  const range = eraRange(opts);
+  if (!range) return [];
   try {
     const supabase = createCachedAnonSupabase();
     const { data, error } = await supabase
       .from("kills")
-      .select(KILL_SELECT)
+      // Jointures INNER : le filtre porte sur la date du match (voir
+      // countKillsByEra) et doit exclure les lignes, pas vider l'embed.
+      .select(KILL_SELECT_MATCH_INNER)
       // PR23 split-status fallback (see getPublishedKills).
       .or(
         "publication_status.eq.published," +
@@ -1772,9 +1772,8 @@ export const getKillsByEra = cache(async function getKillsByEra(
       .eq("kill_visible", true)
       .not("clip_url_vertical", "is", null)
       .not("thumbnail_url", "is", null)
-      // Filter on event_epoch directly — see comment above.
-      .gte("event_epoch", startMs)
-      .lte("event_epoch", endMs)
+      .gte("games.matches.scheduled_at", range.start)
+      .lte("games.matches.scheduled_at", range.end)
       .order("highlight_score", { ascending: false, nullsFirst: false })
       .order("created_at", { ascending: false })
       .limit(limit);
@@ -1787,6 +1786,49 @@ export const getKillsByEra = cache(async function getKillsByEra(
     rethrowIfDynamic(err);
     console.warn("[supabase/kills] getKillsByEra threw:", err);
     return [];
+  }
+});
+
+/**
+ * Meilleur kill KC (tueur KC, clip jouable) parmi les matchs des `days`
+ * derniers jours — le « clip de la semaine » de l'accueil. Même critères de
+ * publication que getKillsByEra ; null si aucun match récent n'a de clip.
+ *
+ * 2026-09-24 : l'ancien « Kill of the week » prenait le meilleur score de
+ * TOUT le catalogue (un penta de Week 1 d'une autre saison), et parfois un
+ * kill adverse.
+ */
+export const getTopRecentKcKill = cache(async function getTopRecentKcKill(
+  days: number,
+): Promise<PublishedKillRow | null> {
+  const since = new Date(Date.now() - days * 86_400_000).toISOString();
+  try {
+    const supabase = createCachedAnonSupabase();
+    const { data, error } = await supabase
+      .from("kills")
+      .select(KILL_SELECT_MATCH_INNER)
+      .or(
+        "publication_status.eq.published," +
+          "and(publication_status.is.null,status.eq.published)",
+      )
+      .eq("kill_visible", true)
+      .eq("tracked_team_involvement", "team_killer")
+      .not("clip_url_vertical", "is", null)
+      .not("thumbnail_url", "is", null)
+      .gte("games.matches.scheduled_at", since)
+      .order("highlight_score", { ascending: false, nullsFirst: false })
+      .order("created_at", { ascending: false })
+      .limit(1);
+    if (error) {
+      console.warn("[supabase/kills] getTopRecentKcKill error:", error.message);
+      return null;
+    }
+    const row = (data ?? [])[0];
+    return row ? normalize(row as unknown as RawKillSelect) : null;
+  } catch (err) {
+    rethrowIfDynamic(err);
+    console.warn("[supabase/kills] getTopRecentKcKill threw:", err);
+    return null;
   }
 });
 
