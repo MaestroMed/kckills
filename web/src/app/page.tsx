@@ -1,9 +1,8 @@
 import Link from "next/link";
 import Image from "next/image";
 import { Suspense } from "react";
-import { loadRealData, getCurrentRoster, getTeamStats, getMatchesSorted, displayRole } from "@/lib/real-data";
-import { championIconUrl, championSplashUrl } from "@/lib/constants";
-import { PLAYER_PHOTOS, TEAM_LOGOS, KC_LOGO } from "@/lib/kc-assets";
+import { loadRealData, getCurrentRoster, getMatchesSorted } from "@/lib/real-data";
+import { PLAYER_PHOTOS } from "@/lib/kc-assets";
 import { getStaticT } from "@/lib/i18n/server-lang";
 // 🔴 2026-04-28 — heavy desktop-only sections live in a client wrapper
 // file (`homepage-desktop-sections.tsx`) because Next.js 15 forbids
@@ -27,7 +26,6 @@ import { SectionSkeleton } from "@/components/home/SectionSkeleton";
 // the new wolf-shaped UI + dual playlist (homepage / scroll).
 // import { AudioPlayer } from "@/components/AudioPlayer";
 // HomeFilteredContent removed — was a duplicate of /matches page
-import { KillOfTheWeek } from "@/components/KillOfTheWeek";
 import { HomeRecentClips } from "@/components/HomeRecentClips";
 // Wave 28 (2026-05-11) — "Ce jour-là dans l'histoire KC". Nostalgia
 // banner that surfaces past-year kills played on today's calendar date.
@@ -68,36 +66,13 @@ export default async function HomePage() {
   const { t } = getStaticT();
   const data = loadRealData();
   const roster = getCurrentRoster(data);
-  const stats = getTeamStats(data);
   const allMatches = getMatchesSorted(data);
 
-  // Vague 6 — mobile hero cube-morph feed: the 6 most-picked KC
-  // champions across every tracked game, as DDragon splash URLs.
-  const championPickCounts = new Map<string, number>();
-  for (const m of allMatches) {
-    for (const g of m.games) {
-      for (const p of g.kc_players) {
-        if (p.champion) {
-          championPickCounts.set(p.champion, (championPickCounts.get(p.champion) ?? 0) + 1);
-        }
-      }
-    }
-  }
-  const isEmpty = data.total_matches === 0;
 
-  // Wave 13h (2026-05-07) — the four Supabase queries that feed the
-  // hero RIGHT column (clip count, last match, career stats, top
-  // scorer) used to live here as a top-level Promise.all. That blocked
-  // the entire page render — including the static hero LEFT (title +
-  // CTAs + roster pills) — on the slowest of the four queries. Now
-  // they live inside `<HeroLiveStats>`, which renders inside a
-  // <Suspense> boundary below : the static shell streams immediately,
-  // the right column paints a fixed-dimension skeleton, and the live
-  // cards swap in as soon as the queries resolve. Zero CLS via
-  // matched skeleton heights.
-  //
-  // Champion splash background (later in the page) uses the static
-  // `roster` only — no live query needed.
+  // Les requêtes de la colonne droite du hero (clip de la semaine, dernier
+  // match, nombre de clips) vivent dans <HeroLiveStats>, sous <Suspense> :
+  // le titre et les CTA partent tout de suite, le squelette a les mêmes
+  // dimensions que les cartes (zéro CLS).
 
   return (
     <div
@@ -145,7 +120,7 @@ export default async function HomePage() {
             de tags démarrent SOUS la carte flottante « PROCHAIN RDV »
             (absolue, top 5.5rem + ~70px de haut) au lieu d'être
             recouverts. md:py-0 inchangé → placement desktop intact. */}
-        <div className="relative z-10 min-h-[100vh] md:min-h-[92vh] max-w-[1920px] mx-auto px-6 md:px-10 lg:px-16 pt-44 pb-24 md:py-0 flex flex-col md:grid md:grid-cols-12 md:items-center gap-8">
+        <div className="relative z-10 min-h-[100vh] md:min-h-[92vh] max-w-[1920px] lg:max-w-7xl mx-auto px-6 md:px-10 lg:px-16 pt-44 pb-24 md:py-0 flex flex-col md:grid md:grid-cols-12 md:items-center gap-8">
 
           {/* ─── LEFT : title + tagline + CTAs ─── */}
           <div className="md:col-span-7 lg:col-span-6 flex flex-col items-center md:items-start text-center md:text-left">
@@ -239,12 +214,7 @@ export default async function HomePage() {
               HeroLiveStats. The static hero LEFT (title + CTAs +
               roster pills) renders to the client without waiting. */}
           <Suspense fallback={<HeroLiveStatsSkeleton />}>
-            <HeroLiveStats
-              roster={roster}
-              isEmpty={isEmpty}
-              stats={stats}
-              allMatches={allMatches}
-            />
+            <HeroLiveStats allMatches={allMatches} />
           </Suspense>
         </div>
 
@@ -264,37 +234,6 @@ export default async function HomePage() {
         </p>
       </section>
 
-      {/* ═══ MEILLEURS CLIPS DU WEEK-END ═══════════════════════════════
-          Section bien haut sous le hero, avant le Kill of the Week.
-          Surface les clips publiés sur la fenêtre vendredi-dimanche
-          en cours (ou le dernier week-end joué si on est en milieu
-          de semaine). Re-ranke par score IA + boost multi-kill +
-          boost communauté. Ne s'affiche pas si zéro clip dans le
-          système (fresh deploy / worker pas encore tourné). */}
-      {/* ═══ SCROLL VIVANT — the kill grid (marquee, Vague 3) ═══════════
-          The "second screen": full-bleed 2D navigable grid right under
-          the hero — this is what defines the site's identity after the
-          title. Desktop gets the full engine (keyboard/wheel/diagonal
-          pivots), mobile a snap row. Renders nothing when the RPC has
-          fewer than 4 populated cells (pre-migration-087 fallback). */}
-      <Suspense fallback={<SectionSkeleton size="lg" label={t("p_grid.heading")} />}>
-        <HomeGridSection />
-      </Suspense>
-
-      {/* ═══ KILL OF THE WEEK — surface the featured clip first ═════════ */}
-      <Suspense fallback={<SectionSkeleton size="md" label={t("p_home.loading_kill_of_week")} />}>
-        <KillOfTheWeek />
-      </Suspense>
-
-      {/* Wave 43 — homepage declutter (Mehdi : « alléger la homepage »).
-          17 sections empilées → 7. Coupées : OnThisDay, WeekendBestClips
-          (doublon de KOTW), ViShowcase, PlayerSpotlight, FormCalendar,
-          ChampionLadders, RosterEraCarousel, QuoteRotator, RareCards,
-          YouTubeShowcase, EraComparisonCharts. Le vrai gain : ces sections
-          client sérialisaient TOUT l'historique de matchs dans le payload
-          RSC (HTML 1.78 MB). Elles vivent encore dans le repo — /stats,
-          /records et /matches restent leurs foyers naturels. */}
-
       {/* ═══ KC TIMELINE + DEFAULT FEED ════════════════════════════════
           Per CLAUDE.md §6.2 : the timeline is a horizontal era strip
           that filters the kills feed below it. When NO era is selected
@@ -307,6 +246,14 @@ export default async function HomePage() {
           <HomeRecentClips />
         </Suspense>
       </HomeTimelineFeed>
+
+      {/* ═══ SCROLL VIVANT — la grille des kills ════════════════════════
+          2026-09-24 (accueil « clips d'abord ») : passe APRÈS la frise et
+          les clips récents. Le « Kill of the week » a quitté cette place :
+          le clip de la semaine ouvre désormais le hero (HeroClip). */}
+      <Suspense fallback={<SectionSkeleton size="lg" label={t("p_grid.heading")} />}>
+        <HomeGridSection />
+      </Suspense>
 
       {/* ═══ DISCOVERY STRIP — 3 curated entry points to go deeper ═════ */}
       <section className="max-w-7xl mx-auto px-4 md:px-6 py-6">
@@ -365,76 +312,9 @@ export default async function HomePage() {
         </div>
       </section>
 
-      {/* HomeFilteredContent removed — duplicate of /matches page */}
-
-      {/* ═══ LAST MATCH — Full section ══════════════════════════════════ */}
-      {allMatches.length > 0 && allMatches[0].games.length > 0 && (() => {
-        const match = allMatches[0];
-        const oppLogo = TEAM_LOGOS[match.opponent.code];
-        const bgChamp = match.games[0]?.kc_players?.find(p => p.name.startsWith("KC "))?.champion ?? "Jhin";
-        return (
-          <section className="relative overflow-hidden py-8">
-            <Image
-              src={championSplashUrl(bgChamp)}
-              alt=""
-              fill
-              sizes="100vw"
-              className="object-cover opacity-[0.04]"
-            />
-            <div className="relative z-10 px-4 max-w-7xl mx-auto space-y-4">
-              <h2 className="font-display text-xl font-bold">
-                {t("p_home.last_match_pre")} <span className="text-gold-gradient">{t("p_home.last_match_accent")}</span>
-              </h2>
-
-              <Link href={`/match/${match.id}`} className="flex items-center gap-4 rounded-xl border border-[var(--border-gold)] bg-[var(--bg-surface)]/80 backdrop-blur-sm p-5 hover:border-[var(--gold)]/40 transition-colors">
-                <Image src={KC_LOGO} alt="KC" width={48} height={48} className="rounded-xl" />
-                <span className="text-2xl font-bold text-[var(--text-disabled)]">vs</span>
-                {oppLogo ? <Image src={oppLogo} alt={match.opponent.code} width={48} height={48} className="rounded-xl" /> : <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-[var(--bg-elevated)] font-bold">{match.opponent.code}</div>}
-                <div className="flex-1">
-                  <p className="font-display text-lg font-bold">
-                    KC vs {match.opponent.code}
-                    <span className={`ml-2 ${match.kc_won ? "text-[var(--green)]" : "text-[var(--red)]"}`}>
-                      {match.kc_won ? t("p_home.victory") : t("p_home.defeat")} {match.kc_score}-{match.opp_score}
-                    </span>
-                  </p>
-                  <p className="text-xs text-[var(--text-muted)]">{match.stage}</p>
-                </div>
-              </Link>
-
-              {match.games.map((game) => (
-                <div key={game.id} className="rounded-xl border border-[var(--border-gold)] bg-[var(--bg-surface)]/80 backdrop-blur-sm overflow-hidden">
-                  <div className="flex items-center justify-between border-b border-[var(--border-gold)] px-5 py-3 bg-[var(--bg-primary)]/60">
-                    <p className="font-display font-semibold">{t("p_home.game_n", { n: game.number })}</p>
-                    <p className="font-data text-sm">
-                      <span className="text-[var(--green)] font-bold">{game.kc_kills}</span>
-                      <span className="text-[var(--text-disabled)]"> - </span>
-                      <span className="text-[var(--red)] font-bold">{game.opp_kills}</span>
-                    </p>
-                  </div>
-                  <div className="p-4 grid gap-1.5">
-                    {game.kc_players.filter((p) => p.name.startsWith("KC ")).map((p) => {
-                      const photo = PLAYER_PHOTOS[p.name.replace("KC ", "")];
-                      return (
-                        <Link key={p.name} href={`/player/${encodeURIComponent(p.name.replace("KC ", ""))}`}
-                          className="flex items-center gap-3 rounded-lg bg-[var(--bg-primary)]/60 p-2.5 transition-all hover:bg-[var(--bg-elevated)] hover:pl-4">
-                          {photo ? <Image src={photo} alt={p.name} width={34} height={34} className="rounded-full border border-[var(--gold)]/20 object-cover" /> : <Image src={championIconUrl(p.champion)} alt={p.champion} width={34} height={34} className="rounded-full border border-[var(--gold)]/20" />}
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm font-semibold text-[var(--gold)]">{p.name.replace("KC ", "")}</p>
-                            <p className="text-[10px] text-[var(--text-muted)]">{p.champion} &middot; {displayRole(p.role)}</p>
-                          </div>
-                          <p className="font-data text-sm font-semibold">
-                            <span className="text-[var(--green)]">{p.kills}</span>/<span className="text-[var(--red)]">{p.deaths}</span>/<span className="text-[var(--text-secondary)]">{p.assists}</span>
-                          </p>
-                        </Link>
-                      );
-                    })}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </section>
-        );
-      })()}
+      {/* 2026-09-24 : le bloc « Dernier match » lu dans kc_matches.json
+          (figé sur KC-VIT, Week 1) est retiré ; le hero affiche le vrai
+          dernier match depuis la base. */}
     </div>
   );
 }

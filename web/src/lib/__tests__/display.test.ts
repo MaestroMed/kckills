@@ -1,6 +1,19 @@
 import { describe, expect, it } from "vitest";
 import { cleanTeamCode, httpsLogoUrl, resolveOpponentFromCodes } from "@/lib/team-display";
-import { ddragonKey, formatGameTime } from "@/lib/constants";
+import { championDisplayName, ddragonKey, formatGameTime } from "@/lib/constants";
+
+describe("noms affichables des champions", () => {
+  it.each([
+    ["JarvanIV", "Jarvan IV"],
+    ["MonkeyKing", "Wukong"],
+    ["KSante", "K'Sante"],
+    ["XinZhao", "Xin Zhao"],
+    ["Caitlyn", "Caitlyn"],
+    [null, "?"],
+  ])("%s -> %s", (key, name) => {
+    expect(championDisplayName(key)).toBe(name);
+  });
+});
 
 describe("affichage des équipes", () => {
   it("passe les logos lolesports en https (next/image refuse le http)", () => {

@@ -30,10 +30,15 @@ export async function HomeGridSection() {
   // la page hôte du pré-rendu. Il n'a rien à faire dans un Promise.all de
   // requêtes DB — ce n'est pas une lecture asynchrone.
   const { t } = getStaticT();
-  const [cells, roster] = await Promise.all([
+  const [allCells, roster] = await Promise.all([
     getGridCells(AXIS_X, AXIS_Y),
     getTrackedRoster(),
   ]);
+  // 2026-09-24 : la grille remontait aussi les kills ADVERSES (tueur =
+  // joueur adverse, victime KC) ; hors roster KC, leur libellé retombait sur
+  // l'UUID brut (« F5081506-… VS MSFP »). « Qui tue qui » = les tueurs KC.
+  const rosterIds = new Set(roster.map((p) => p.id));
+  const cells = allCells.filter((c) => rosterIds.has(c.cell_x));
 
   if (cells.length < MIN_CELLS || roster.length === 0) {
     return null;

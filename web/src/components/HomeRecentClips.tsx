@@ -2,7 +2,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { getRecentPublishedKills } from "@/lib/supabase/kills";
 import { championIconUrl } from "@/lib/constants";
-import { cleanTeamCode } from "@/lib/team-display";
+import { resolveOpponentFromCodes } from "@/lib/team-display";
 import { getStaticT } from "@/lib/i18n/server-lang";
 
 /**
@@ -51,12 +51,12 @@ export async function HomeRecentClips() {
       {/* Horizontal scroll on mobile, grid on desktop */}
       <div className="flex gap-3 overflow-x-auto pb-2 snap-x snap-mandatory md:grid md:grid-cols-4 lg:grid-cols-8 md:overflow-visible -mx-4 px-4 md:mx-0 md:px-0">
         {cards.map((k) => {
-          const matchExt = k.games?.matches?.external_id;
-          // cleanTeamCode rejette les ids numériques gol.gg (« 1155 »,
-          // « 77798 » → suffixe d'external_id, pas un code d'équipe) et
-          // les placeholders — badge « KC » seul dans ce cas.
-          const opp = cleanTeamCode(
-            matchExt ? matchExt.split("_").pop()?.toUpperCase().slice(0, 4) : null,
+          // 2026-09-24 : l'adversaire se déduisait de l'id du match (numérique
+          // pour lolesports et gol.gg -> badge « KC » seul sur chaque carte).
+          // Il vient maintenant des équipes du match.
+          const opp = resolveOpponentFromCodes(
+            k.games?.matches?.team_blue_code,
+            k.games?.matches?.team_red_code,
           );
           return (
             <Link
