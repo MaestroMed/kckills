@@ -176,9 +176,16 @@ async def main() -> None:
     ap.add_argument("--limit", type=int, default=0)
     ap.add_argument("--max-usd", type=float, default=6.0)
     ap.add_argument("--dry-run", action="store_true")
+    ap.add_argument("--ids", default="", help="kills précis (ids séparés par des virgules), quelle que soit la cible")
     args = ap.parse_args()
     db = get_db()
-    targets = fetch_targets(db, set(args.targets.split(",")))
+    if args.ids:
+        ids = [i.strip() for i in args.ids.split(",") if i.strip()]
+        r = db._get_client().get(f"{db.base}/kills", params={"select": COLS, "id": f"in.({','.join(ids)})"})
+        r.raise_for_status()
+        targets = r.json() or []
+    else:
+        targets = fetch_targets(db, set(args.targets.split(",")))
     if args.limit:
         targets = targets[:args.limit]
     print(f"{len(targets)} kills à réanalyser", flush=True)
