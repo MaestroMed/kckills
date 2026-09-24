@@ -91,4 +91,6 @@ COMMENT ON VIEW public.v_kc_stats_scopes IS
   'clips = kills KC publiés avec clip jouable ; kills = événements KC '
   'publiés/visibles ; matches_unknown = terminés sans winner_team_id.';
 
-GRANT SELECT ON public.v_kc_stats_scopes TO anon, authenticated;
+-- Supabase, 30/10/2026 : les nouveaux objets de `public` ne reçoivent plus
+-- de GRANT automatique, service_role compris : on les pose tous ici.
+GRANT SELECT ON public.v_kc_stats_scopes TO anon, authenticated, service_role;

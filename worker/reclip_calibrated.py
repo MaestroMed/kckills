@@ -51,7 +51,7 @@ async def read_timer_from_frame(vod_path: str, vod_pos: int) -> tuple[int | None
     """
     # Wave 13f migration — moved off `google.generativeai`
     # (deprecated) onto `google.genai`.
-    from services.gemini_client import get_client, _wait_for_file_active
+    from services.gemini_client import get_client, inline_part
     from google.genai import types
     client = get_client()
     if client is None:
@@ -73,15 +73,10 @@ async def read_timer_from_frame(vod_path: str, vod_pos: int) -> tuple[int | None
             if not can_call:
                 return None, False
 
-            model_name = os.environ.get("GEMINI_MODEL", "gemini-3.1-flash-lite")
+            model_name = os.environ.get("GEMINI_MODEL", "gemini-3.5-flash-lite")
             # Wave 27.14 — Wave 27.1 regression fix.
-            img = await asyncio.to_thread(
-                client.files.upload,
-                file=frame_path,
-                config=types.UploadFileConfig(mime_type="image/jpeg"),
-            )
-            if not await _wait_for_file_active(client, img, timeout=30):
-                continue
+            # Image inline : plus d'upload Files API (jamais supprimé, stockage plein le 23/09).
+            img = await inline_part(frame_path, "image/jpeg")
 
             response = await asyncio.to_thread(
                 client.models.generate_content,

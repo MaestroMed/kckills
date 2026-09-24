@@ -14,6 +14,8 @@ import asyncio
 import json
 import os
 import time
+from pathlib import Path
+
 import structlog
 from config import config
 from scheduler import scheduler
@@ -99,6 +101,58 @@ async def _wait_for_file_active(client, file_ref, timeout: int = 60) -> bool:
     return False
 
 
+# ─── Médias : octets inline d'abord, Files API en dernier recours ──────
+# 24/09/2026 : chaque clip partait par client.files.upload et n'était
+# jamais supprimé (Google le garde 48 h). Rattrapage + juge + réanalyse ont
+# rempli les 20 Go du projet (quotaId FileStorageBytesPerProject) : 429 sur
+# tous les appels vidéo pendant deux jours. Depuis le 08/01/2026 une
+# requête accepte 100 Mo de données inline
+# (https://ai.google.dev/gemini-api/docs/file-input-methods) : nos clips et
+# nos images passent donc dans la requête, sans stockage ni attente ACTIVE.
+# Au-delà du seuil (le base64 ajoute 33 %), upload puis suppression par
+# l'appelant (release_media dans un finally).
+INLINE_MAX_BYTES = int(float(os.environ.get("KCKILLS_GEMINI_INLINE_MAX_MB", "64")) * 1024 * 1024)
+
+
+async def media_part(client, path: str, mime_type: str, *, timeout: int = 60):
+    """Retourne (part, uploaded) : `part` va dans `contents` ; `uploaded`
+    est le fichier Files API à rendre avec release_media() (None en inline).
+    (None, None) si l'upload n'est jamais devenu ACTIVE (déjà nettoyé)."""
+    from google.genai import types  # type: ignore
+    if os.path.getsize(path) <= INLINE_MAX_BYTES:
+        data = await asyncio.to_thread(Path(path).read_bytes)
+        return types.Part.from_bytes(data=data, mime_type=mime_type), None
+    uploaded = await asyncio.to_thread(
+        client.files.upload,
+        file=path,
+        config=types.UploadFileConfig(mime_type=mime_type, display_name=f"kckills:{Path(path).name}"[:120]),
+    )
+    if not await _wait_for_file_active(client, uploaded, timeout=timeout):
+        await release_media(client, uploaded)
+        return None, None
+    return uploaded, uploaded
+
+
+async def inline_part(path: str, mime_type: str):
+    """Octets inline sans condition de taille, pour les IMAGES : une frame
+    JPEG/PNG pèse moins de 1 Mo, loin de la limite de 100 Mo par requête.
+    Aucun upload, donc rien à nettoyer."""
+    from google.genai import types  # type: ignore
+    data = await asyncio.to_thread(Path(path).read_bytes)
+    return types.Part.from_bytes(data=data, mime_type=mime_type)
+
+
+async def release_media(client, uploaded) -> None:
+    """Supprime un fichier Files API ; sans effet sur None. Ne lève jamais."""
+    name = getattr(uploaded, "name", None)
+    if not name or client is None:
+        return
+    try:
+        await asyncio.to_thread(client.files.delete, name=name)
+    except Exception as e:
+        log.warn("gemini_file_delete_failed", name=name, error=str(e)[:120])
+
+
 def _build_thinking_config(types_mod, model_name: str, budget: str | None):
     """Build a ThinkingConfig if the model + SDK support it. Returns None
     otherwise so the caller skips the kwarg entirely.
@@ -129,11 +183,21 @@ def _build_thinking_config(types_mod, model_name: str, budget: str | None):
     ThinkingConfig = getattr(types_mod, "ThinkingConfig", None)
     if ThinkingConfig is None:
         return None
-    # 1) Try the new string-enum API.
-    try:
-        return ThinkingConfig(thinking_budget=budget)
-    except Exception:
-        pass
+    # 1) API Gemini 3 : `thinking_level` (MINIMAL | LOW | MEDIUM | HIGH).
+    #    2026-09-24 : `thinking_budget` n'accepte qu'un entier dans le SDK
+    #    2.x ; la forme chaîne levait une ValidationError et chaque appel
+    #    retombait sur le budget entier hérité. 3.7/3.8 Flash refusent
+    #    MINIMAL (https://ai.google.dev/gemini-api/docs/generate-content/thinking) :
+    #    on le remonte à LOW.
+    ThinkingLevel = getattr(types_mod, "ThinkingLevel", None)
+    level = (budget or "").strip().upper()
+    if level == "MINIMAL" and model_name.startswith(("gemini-3.7-flash", "gemini-3.8-flash")):
+        level = "LOW"
+    if ThinkingLevel is not None and level in getattr(ThinkingLevel, "__members__", {}):
+        try:
+            return ThinkingConfig(thinking_level=ThinkingLevel[level])
+        except Exception:
+            pass
     # 2) Fall back to the legacy int budget. Map the four levels onto
     #    sensible token counts ; values picked from Google's pre-3.5
     #    "dynamic" recommendations.
@@ -195,6 +259,7 @@ async def analyze(
     if client is None:
         return None
 
+    uploaded = None
     try:
         from google.genai import types  # type: ignore
         # Wave 33 — explicit `model` kwarg wins over the legacy env var
@@ -204,23 +269,16 @@ async def analyze(
         model_name = (
             model
             or os.environ.get("GEMINI_MODEL")
-            or "gemini-3.1-flash-lite"
+            or "gemini-3.5-flash-lite"
         )
 
         if video_path:
-            # Wave 13f migration — `client.files.upload(file=...)` instead
-            # of `genai.upload_file(path=...)`. Pass the mime type via
-            # the typed config so the API picks the right decoder.
-            video_file = await asyncio.to_thread(
-                client.files.upload,
-                file=video_path,
-                config=types.UploadFileConfig(mime_type="video/mp4"),
-            )
-            # Wait for the file to become ACTIVE — Gemini processes uploads
-            # asynchronously and returns 400 if we query before it's ready.
-            if not await _wait_for_file_active(client, video_file):
+            # Octets inline (ou upload nettoyé au-delà du seuil) : voir
+            # media_part().
+            part, uploaded = await media_part(client, video_path, "video/mp4")
+            if part is None:
                 return None
-            contents = [prompt, video_file]
+            contents = [prompt, part]
         else:
             contents = prompt
 
@@ -234,7 +292,9 @@ async def analyze(
         if thinking_cfg is not None:
             gen_config_kwargs["thinking_config"] = thinking_cfg
 
-        response = client.models.generate_content(
+        # Client async : l'appel synchrone bloquait la boucle asyncio le
+        # temps de l'analyse (jusqu'à ~20 s par vidéo).
+        response = await client.aio.models.generate_content(
             model=model_name,
             contents=contents,
             config=types.GenerateContentConfig(**gen_config_kwargs),
@@ -315,6 +375,8 @@ async def analyze(
         log.warn("gemini_invalid_json")
     except Exception as e:
         handle_gemini_exception(e, where="analyze")
+    finally:
+        await release_media(client, uploaded)
 
     return None
 
@@ -339,8 +401,16 @@ _QUOTA_MARKERS = (
 
 
 def classify_gemini_error(e: Exception) -> str:
-    """'quota' (stop jusqu'au reset) | 'transient' (retry raisonnable)."""
+    """'quota' (stop jusqu'au reset) | 'storage' | 'transient' (retry raisonnable).
+
+    'storage' = stockage Files API du projet plein (quotaId
+    FileStorageBytesPerProject, 20 Go). Ce n'est PAS un quota journalier :
+    il se vide seul sous 48 h et les appels inline passent toujours. Couper
+    Gemini jusqu'au lendemain (ce que faisait le disjoncteur le 23/09)
+    bloquait aussi les appels qui n'utilisent pas ce stockage."""
     msg = f"{type(e).__name__}: {e}".lower()
+    if "filestoragebytes" in msg or "file_storage_bytes" in msg:
+        return "storage"
     if any(m.lower() in msg for m in _QUOTA_MARKERS):
         return "quota"
     return "transient"
@@ -358,6 +428,8 @@ def handle_gemini_exception(e: Exception, where: str = "") -> str:
             pass
         log.error("gemini_quota_error_breaker_tripped",
                   where=where, error=str(e)[:200])
+    elif kind == "storage":
+        log.error("gemini_file_storage_full", where=where, error=str(e)[:200])
     else:
         log.error("gemini_error", where=where, error=str(e)[:200])
     return kind

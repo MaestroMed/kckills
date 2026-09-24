@@ -55,7 +55,10 @@ def _resolve_team_id(team: dict) -> str | None:
         if rows:
             return rows[0]["id"]
     if code:
-        rows = safe_select("teams", "id", code=code)
+        # Ordre déterministe : la table a gardé un doublon KC non suivi
+        # (external_id 'team_kc') ; sans tri, PostgREST pouvait le renvoyer
+        # en premier et rattacher un match au mauvais KC.
+        rows = safe_select("teams", "id", code=code, _order="is_tracked.desc,created_at.asc")
         if rows:
             return rows[0]["id"]
 

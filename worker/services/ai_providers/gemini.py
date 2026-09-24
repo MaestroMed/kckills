@@ -53,7 +53,7 @@ class GeminiProvider:
     # Default is overridden at __init__ from config. Kept as class attr
     # so tests / introspection that read GeminiProvider.model_name before
     # instantiation still see a value.
-    model_name: str = "gemini-3.1-flash-lite"
+    model_name: str = "gemini-3.5-flash-lite"
     # USD per 1M tokens — see ai_pricing.GEMINI_PRICES (single source of truth).
     cost_per_m_input: float = 0.10
     cost_per_m_output: float = 0.40

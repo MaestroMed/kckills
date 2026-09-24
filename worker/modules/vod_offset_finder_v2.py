@@ -190,7 +190,7 @@ async def _read_timer_at(youtube_id: str, vod_seconds: int) -> Optional[int]:
 
         # Wave 13f migration — moved off the deprecated
         # `google.generativeai` SDK onto `google.genai`.
-        from services.gemini_client import get_client, _wait_for_file_active
+        from services.gemini_client import get_client, inline_part
         from google.genai import types  # type: ignore
         client = get_client()
         if client is None:
@@ -199,14 +199,8 @@ async def _read_timer_at(youtube_id: str, vod_seconds: int) -> Optional[int]:
         # file_active async. Both call sites in this function were
         # missing the await/offload, causing Gemini's FAILED_PRECONDITION
         # on every timer-read attempt. Fixed alongside analyzer.py:399.
-        img = await asyncio.to_thread(
-            client.files.upload,
-            file=frame_path,
-            config=types.UploadFileConfig(mime_type="image/jpeg"),
-        )
-        if not await _wait_for_file_active(client, img, timeout=30):
-            log.warn("vof2_gemini_file_not_active", yt=youtube_id)
-            return None
+        # Image inline : plus d'upload Files API (jamais supprimé, stockage plein le 23/09).
+        img = await inline_part(frame_path, "image/jpeg")
         resp = await asyncio.to_thread(
             client.models.generate_content,
             model=config.GEMINI_MODEL_OFFSET,

@@ -381,7 +381,7 @@ export default async function FaceOffPage({ searchParams }: PageProps) {
       {/* ─── Riot disclaimer — required on every public page ───── */}
       <p
         aria-label="Riot Games disclaimer"
-        className="px-4 pb-6 text-center text-[9px] uppercase tracking-widest text-white/30"
+        className="px-4 pb-6 text-center text-[9px] uppercase tracking-widest text-[var(--text-muted)]"
       >
         Not endorsed by Riot Games. League of Legends © Riot Games.
       </p>

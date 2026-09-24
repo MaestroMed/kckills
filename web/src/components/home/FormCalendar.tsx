@@ -322,7 +322,7 @@ export function FormCalendar({ matches, days = 84 }: Props) {
             {/* Weeks (columns) */}
             <div className="flex gap-1.5">
               {weeks.map((week, wi) => (
-                <div key={wi} className="flex flex-col gap-1.5">
+                <div key={wi} role="row" className="flex flex-col gap-1.5">
                   {week.map((b, di) => {
                     const empty = b.date === "";
                     const { bg, border } = cellColor(b);

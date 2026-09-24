@@ -9,7 +9,6 @@ import {
   IM_Fell_English,
   Graduate,
 } from "next/font/google";
-import { Analytics } from "@vercel/analytics/next";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import "./globals.css";
 import { Providers } from "@/components/Providers";
@@ -368,12 +367,11 @@ export default async function RootLayout({
             defer
           />
         ) : null}
-        {/* 📊 Vercel Analytics + Speed Insights (Wave 13d, 2026-04-28).
-            Free, edge-level tracking that captures EVERY page load
-            without depending on the JS tracker (which adblockers
-            kill ~94 % of the time per the 2026-04-28 Cloudflare audit).
-            Privacy-first by default — no cookies, no PII, GDPR-clean. */}
-        <Analytics />
+        {/* 📊 Vercel Speed Insights (Wave 13d, 2026-04-28) : Core Web
+            Vitals réels, sans cookie. Web Analytics retiré le 24/09/2026 :
+            jamais activé sur le projet Vercel, son script renvoyait une
+            404 (erreur console sur chaque page) ; l'audience passe déjà
+            par /api/track, le pixel noscript et Umami. */}
         <SpeedInsights />
         {/* 🖼 Server-side noscript pixel fallback. Fires for visitors
             who block our /api/track POST (uBlock + privacy lists) but

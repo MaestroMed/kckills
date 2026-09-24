@@ -501,7 +501,7 @@ function FiltersAccordion({
             {t("p_vsgame.filters")}
           </span>
         </div>
-        <span className="text-[11px] uppercase tracking-widest text-white/40 md:hidden">
+        <span className="text-[11px] uppercase tracking-widest text-[var(--text-muted)] md:hidden">
           {open ? t("p_vsgame.collapse") : t("p_vsgame.expand")}
         </span>
       </button>
@@ -571,7 +571,7 @@ function FilterColumn({
         <button
           type="button"
           onClick={() => onChange({})}
-          className="text-[10px] uppercase tracking-widest text-white/40 hover:text-white/80 transition-colors"
+          className="text-[10px] uppercase tracking-widest text-[var(--text-muted)] hover:text-white/80 transition-colors"
           aria-label={t("p_vsgame.reset_side_aria", { side: sideLabel })}
         >
           {t("p_vsgame.reset")}
@@ -711,7 +711,7 @@ function FilterColumn({
           </span>
         </label>
         <div className="text-right">
-          <p className="font-data text-[9px] uppercase tracking-[0.25em] text-white/40">
+          <p className="font-data text-[9px] uppercase tracking-[0.25em] text-[var(--text-muted)]">
             {t("p_vsgame.ai_score_min")} · {(value.min_highlight_score ?? 0).toFixed(1)}
           </p>
           <input
@@ -777,7 +777,7 @@ function Field({
 }) {
   return (
     <label className="block">
-      <span className="font-data text-[9px] uppercase tracking-[0.3em] text-white/45 mb-1 block">
+      <span className="font-data text-[9px] uppercase tracking-[0.3em] text-[var(--text-muted)] mb-1 block">
         {label}
       </span>
       {children}
@@ -1072,7 +1072,7 @@ function IdlePlaceholder({
         <p className="font-display text-2xl md:text-3xl font-black tracking-tight text-[var(--gold)]">
           VS
         </p>
-        <p className="font-data text-[10px] uppercase tracking-[0.3em] text-white/45 max-w-[140px] text-center">
+        <p className="font-data text-[10px] uppercase tracking-[0.3em] text-[var(--text-muted)] max-w-[140px] text-center">
           {prefersReducedMotion
             ? t("p_vsgame.idle_press_spin")
             : t("p_vsgame.idle_launch")}
@@ -1110,7 +1110,7 @@ function IdleStack({
       <div className="absolute inset-0 flex items-center justify-center">
         {thumbnails.length === 0 ? (
           <div
-            className="font-data text-[10px] uppercase tracking-widest text-white/30"
+            className="font-data text-[10px] uppercase tracking-widest text-[var(--text-muted)]"
             aria-hidden
           >
             {t("p_vsgame.no_clip")}
@@ -1402,7 +1402,7 @@ function ClipPanel({
           aria-label={t("p_vsgame.clip_of_aria", { name: kill.killer_name ?? kill.killer_champion ?? "?" })}
         />
       ) : (
-        <div className="absolute inset-0 flex items-center justify-center text-xs text-white/40">
+        <div className="absolute inset-0 flex items-center justify-center text-xs text-[var(--text-muted)]">
           {t("p_vsgame.clip_unavailable")}
         </div>
       )}
@@ -1440,7 +1440,7 @@ function ClipPanel({
           </p>
           <p className="text-[11px] text-white/65 mt-0.5">
             → {kill.victim_name ?? kill.victim_champion ?? "?"}{" "}
-            <span className="text-white/35">({kill.victim_champion})</span>
+            <span className="text-[var(--text-muted)]">({kill.victim_champion})</span>
           </p>
           <Description
             kill={kill}
@@ -1597,7 +1597,7 @@ function VoteRow({
       </m.button>
       </div>
       <p
-        className="hidden md:block text-center font-data text-[9px] uppercase tracking-[0.3em] text-white/30"
+        className="hidden md:block text-center font-data text-[9px] uppercase tracking-[0.3em] text-[var(--text-muted)]"
         aria-hidden
       >
         {t("p_vsgame.keyboard_hint")}
@@ -1852,7 +1852,7 @@ function Stat({
 }) {
   return (
     <div className="rounded-lg bg-black/30 px-2 py-2 text-center">
-      <p className="font-data text-[8.5px] uppercase tracking-[0.25em] text-white/45">
+      <p className="font-data text-[8.5px] uppercase tracking-[0.25em] text-[var(--text-muted)]">
         {label}
       </p>
       <p className="font-display text-base font-black text-white">{value}</p>

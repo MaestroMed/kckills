@@ -277,7 +277,7 @@ export function RiotLinkCard({ profile, loggedIn, callbackState }: Props) {
       <button
         onClick={handleUnlink}
         disabled={pending}
-        className="inline-flex items-center justify-center min-h-[44px] w-full md:w-auto rounded-lg border border-[var(--red)]/30 bg-[var(--red)]/10 px-4 py-2 text-sm text-[var(--red)] hover:bg-[var(--red)]/20 disabled:opacity-50 transition-colors"
+        className="inline-flex items-center justify-center min-h-[44px] w-full md:w-auto rounded-lg border border-[var(--red)]/30 bg-[var(--red)]/10 px-4 py-2 text-sm text-[color-mix(in_srgb,var(--red)_75%,white)] hover:bg-[var(--red)]/20 disabled:opacity-50 transition-colors"
       >
         {pending ? t("p_setcard.riot_unlinking") : t("p_setcard.riot_unlink_cta")}
       </button>

@@ -377,7 +377,7 @@ async def analyze_kill(
     # The schema makes the JSON-fence-stripping defensive layer obsolete :
     # Google guarantees `response.text` is parseable JSON matching the
     # schema (or surfaces the failure on the call).
-    from services.gemini_client import get_client, _wait_for_file_active
+    from services.gemini_client import get_client, media_part, release_media
     client = get_client()
     if client is None:
         log.warn("gemini_sdk_not_installed")
@@ -390,6 +390,7 @@ async def analyze_kill(
 
     text = ""
     started_at = time.monotonic()
+    uploaded = None
     try:
         # PR13 — allow per-call model override (used by lab generator
         # to A/B-test different models on the same clip). Defaults to
@@ -420,35 +421,21 @@ async def analyze_kill(
             pass
         gen_config = types.GenerateContentConfig(**gen_config_kwargs)
 
+        # 2026-09-24 : le clip part en octets inline (media_part), plus par
+        # un upload jamais supprimé qui remplissait le stockage du projet ;
+        # et l'appel passe par le client async (client.aio) : l'appel
+        # synchrone gelait la boucle asyncio ~18 s par clip, téléchargements
+        # et heartbeat compris.
+        contents: object = prompt
         if clip_path and os.path.exists(clip_path):
-            # Wave 27.1 made client.files.upload + _wait_for_file_active
-            # async (offloaded to a thread + exp-backoff polling). The
-            # upload here is still a sync SDK call ; offload it the same
-            # way so it doesn't freeze the event loop. The await on
-            # _wait_for_file_active was missing — without it the call
-            # returned a coroutine (truthy), the `not` check was always
-            # False, and the unawaited file ended up used pre-ACTIVE,
-            # triggering Gemini's FAILED_PRECONDITION.
-            video_file = await asyncio.to_thread(
-                client.files.upload,
-                file=clip_path,
-                config=types.UploadFileConfig(mime_type="video/mp4"),
-            )
-            if not await _wait_for_file_active(client, video_file):
+            part, uploaded = await media_part(client, clip_path, "video/mp4")
+            if part is None:
                 log.warn("gemini_file_not_active", clip=clip_path)
-                response = client.models.generate_content(
-                    model=model_name, contents=prompt, config=gen_config,
-                )
             else:
-                response = client.models.generate_content(
-                    model=model_name,
-                    contents=[prompt, video_file],
-                    config=gen_config,
-                )
-        else:
-            response = client.models.generate_content(
-                model=model_name, contents=prompt, config=gen_config,
-            )
+                contents = [prompt, part]
+        response = await client.aio.models.generate_content(
+            model=model_name, contents=contents, config=gen_config,
+        )
 
         text = (response.text or "").strip()
         # Wave 13f : structured-output guarantees parseable JSON, so we
@@ -547,8 +534,13 @@ async def analyze_kill(
         )
         return None
     except Exception as e:
-        log.error("gemini_error", error=str(e))
+        # Classification partagée : un vrai quota journalier coupe Gemini
+        # pour tous les process, un stockage plein ou une erreur passagère non.
+        from services.gemini_client import handle_gemini_exception
+        handle_gemini_exception(e, where="analyzer")
         return None
+    finally:
+        await release_media(client, uploaded)
 
 
 # Wave 13f migration : `_strip_code_fence` removed. The new SDK returns

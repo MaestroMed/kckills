@@ -49,7 +49,7 @@ function EnergyFlames({ level }: { level: number | null }) {
   if (safe === 0) {
     return (
       <span className="text-[10px] uppercase tracking-widest text-[var(--text-muted)]">
-        Energie ?
+        Énergie ?
       </span>
     );
   }
@@ -59,8 +59,9 @@ function EnergyFlames({ level }: { level: number | null }) {
   return (
     <span
       className="inline-flex items-center gap-0.5"
-      aria-label={`Energie ${safe} sur 5`}
-      title={`Energie ${safe}/5`}
+      role="img"
+      aria-label={`Énergie ${safe} sur 5`}
+      title={`Énergie ${safe}/5`}
     >
       {Array.from({ length: 5 }).map((_, i) => (
         <FlameIcon key={i} on={i < safe} />

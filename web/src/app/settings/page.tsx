@@ -283,7 +283,7 @@ export default function SettingsPage() {
                 <button
                   onClick={handleDelete}
                   disabled={deleteStatus === "deleting"}
-                  className="rounded-lg bg-[var(--red)]/10 border border-[var(--red)]/30 px-4 py-2 text-sm text-[var(--red)] hover:bg-[var(--red)]/20 disabled:opacity-50 transition-colors"
+                  className="rounded-lg bg-[var(--red)]/10 border border-[var(--red)]/30 px-4 py-2 text-sm text-[color-mix(in_srgb,var(--red)_75%,white)] hover:bg-[var(--red)]/20 disabled:opacity-50 transition-colors"
                 >
                   {deleteStatus === "confirming" ? t("p_settings.delete_confirm") :
                    deleteStatus === "deleting" ? t("p_settings.delete_deleting") :

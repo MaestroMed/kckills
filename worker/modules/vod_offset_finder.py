@@ -251,20 +251,14 @@ async def _read_timer_at(youtube_id: str, vod_seconds: int) -> int | None:
 
         # Wave 13f migration — moved from deprecated `google.generativeai`
         # to `google.genai` (see services/gemini_client.get_client).
-        from services.gemini_client import get_client, _wait_for_file_active
+        from services.gemini_client import get_client, inline_part
         from google.genai import types  # type: ignore
         client = get_client()
         if client is None:
             return None
         # Wave 27.14 — Wave 27.1 regression fix (await + offload).
-        img = await asyncio.to_thread(
-            client.files.upload,
-            file=frame_path,
-            config=types.UploadFileConfig(mime_type="image/jpeg"),
-        )
-        if not await _wait_for_file_active(client, img, timeout=30):
-            log.warn("vof_gemini_file_not_active", yt=youtube_id)
-            return None
+        # Image inline : plus d'upload Files API (jamais supprimé, stockage plein le 23/09).
+        img = await inline_part(frame_path, "image/jpeg")
         resp = await asyncio.to_thread(
             client.models.generate_content,
             model=config.GEMINI_MODEL_OFFSET,

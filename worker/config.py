@@ -122,16 +122,22 @@ class Config:
         #   * Gemini 3.8 Flash ($0.75/$3.75 promo jusqu'au 31/12/2026, puis
         #     $1.50/$7.50) est 2× moins cher que 3.5 Flash ($1.50/$9) et trois
         #     générations plus récent → nouveau premium (+ auto-upgrade).
-        "balanced": {  # 3.5 Flash-Lite pour descriptions/quotes, 3.1 Lite pour QC/OCR
+        # Refresh SOTA 2026-09-24 (ai.google.dev/gemini-api/docs/deprecations
+        # et /models) : 3.1 Flash-Lite est sur la voie du retrait (au plus tôt
+        # le 07/05/2027, remplaçant désigné 3.5 Flash-Lite) et Google
+        # recommande 3.5 Flash-Lite ou 3.8 Flash pour tout nouveau travail.
+        # QC et lecture du chrono passent donc en 3.5 Flash-Lite (+0,05 $/M
+        # en entrée, négligeable sur des images de HUD).
+        "balanced": {  # 3.5 Flash-Lite partout
             "analyzer": "gemini-3.5-flash-lite",
-            "qc":       "gemini-3.1-flash-lite",
-            "offset":   "gemini-3.1-flash-lite",
+            "qc":       "gemini-3.5-flash-lite",
+            "offset":   "gemini-3.5-flash-lite",
             "quotes":   "gemini-3.5-flash-lite",
         },
         "premium": {  # 3.8 Flash pour l'analyzer (et l'auto-upgrade penta/quadra/FB)
             "analyzer": "gemini-3.8-flash",
-            "qc":       "gemini-3.1-flash-lite",
-            "offset":   "gemini-3.1-flash-lite",
+            "qc":       "gemini-3.5-flash-lite",
+            "offset":   "gemini-3.5-flash-lite",
             "quotes":   "gemini-3.5-flash-lite",
         },
         "pro-legacy": {  # Kept for budgeted one-shots that pre-budgeted 2.5-pro

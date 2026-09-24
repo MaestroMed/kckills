@@ -112,22 +112,21 @@ async def analyze_and_qc(kill: dict, kill_type: str, cluster_size: int,
     if not can_call:
         return {"error": "gemini_quota"}
 
+    client = None
+    uploaded = None
     try:
         # Wave 13f migration — moved off `google.generativeai`
         # (deprecated) onto `google.genai`.
-        from services.gemini_client import get_client, _wait_for_file_active
+        from services.gemini_client import get_client, media_part
         from google.genai import types
         client = get_client()
         if client is None:
             return {"error": "gemini_sdk_missing"}
 
-        # Wave 27.14 — Wave 27.1 regression fix.
-        video_file = await asyncio.to_thread(
-            client.files.upload,
-            file=local_path,
-            config=types.UploadFileConfig(mime_type="video/mp4"),
-        )
-        if not await _wait_for_file_active(client, video_file, timeout=60):
+        # Vidéo inline jusqu'à 64 Mo, sinon upload supprimé dans le finally
+        # (les uploads jamais supprimés ont rempli le stockage du projet le 23/09).
+        video_file, uploaded = await media_part(client, local_path, "video/mp4", timeout=60)
+        if video_file is None:
             return {"error": "gemini_file_not_active"}
 
         killer = kill.get("killer_champion", "?")
@@ -212,6 +211,8 @@ REGLES CRITIQUES:
     except Exception as e:
         return {"error": str(e)[:80]}
     finally:
+        from services.gemini_client import release_media
+        await release_media(client, uploaded)
         if os.path.exists(local_path):
             os.remove(local_path)
 
