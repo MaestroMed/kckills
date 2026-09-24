@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerSupabase } from "@/lib/supabase/server";
-import { requireAdmin } from "@/lib/admin/audit";
+import { ADMIN_DB_UNAVAILABLE, requireAdmin } from "@/lib/admin/audit";
 import { enqueueJob } from "@/app/admin/pipeline/trigger/actions";
 
 /** GET /api/admin/pipeline/jobs?status=&kind=&limit= */
@@ -43,7 +43,9 @@ export async function POST(req: NextRequest) {
   }
   const result = await enqueueJob({ kind: body.kind, payload: body.payload });
   if (!result.ok) {
-    const status = result.error?.includes("Forbidden") ? 403 : 400;
+    const status = result.error === ADMIN_DB_UNAVAILABLE
+      ? 500
+      : result.error?.includes("Forbidden") ? 403 : 400;
     return NextResponse.json({ error: result.error }, { status });
   }
   return NextResponse.json({ ok: true, job: result.job });

@@ -11,8 +11,9 @@
  */
 import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
-import { createServerSupabase } from "@/lib/supabase/server";
+import { createServiceSupabase } from "@/lib/supabase/server";
 import {
+  ADMIN_DB_UNAVAILABLE,
   deriveActorRole,
   logAdminAction,
   requireAdmin,
@@ -89,7 +90,8 @@ export async function patchPlayer(
     return { ok: false, error: "Nothing to update" };
   }
 
-  const sb = await createServerSupabase();
+  const sb = createServiceSupabase();
+  if (!sb) return { ok: false, error: ADMIN_DB_UNAVAILABLE };
   const { data: before } = await sb.from("players").select("*").eq("id", id).maybeSingle();
   const { error } = await sb.from("players").update(patch).eq("id", id);
   if (error) return { ok: false, error: error.message };

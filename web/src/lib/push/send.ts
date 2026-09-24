@@ -17,10 +17,15 @@
  *
  * Both modes write to push_notifications first so the audit trail
  * is identical regardless of which path was chosen.
+ *
+ * Service role : push_notifications / push_deliveries n'ont aucune policy
+ * RLS et l'envoi doit voir TOUS les abonnés (la policy "Own push subs" ne
+ * montre à la session que les siens). À n'appeler qu'après requireAdmin().
  */
 
 import "server-only";
-import { createServerSupabase } from "@/lib/supabase/server";
+import { ADMIN_DB_UNAVAILABLE } from "@/lib/admin/audit";
+import { createServiceSupabase } from "@/lib/supabase/server";
 
 export type PushKind =
   | "kill"
@@ -59,7 +64,8 @@ export interface EnqueueResult {
  * successful no-op and return { deduped: true }.
  */
 export async function enqueuePush(params: EnqueuePushParams): Promise<EnqueueResult> {
-  const sb = await createServerSupabase();
+  const sb = createServiceSupabase();
+  if (!sb) return { ok: false, error: ADMIN_DB_UNAVAILABLE };
 
   const row = {
     kind: params.kind,
@@ -153,7 +159,8 @@ export async function sendNow(params: EnqueuePushParams): Promise<SendNowResult>
 
   webpush.setVapidDetails(vapidSubject, vapidPublic, vapidPrivate);
 
-  const sb = await createServerSupabase();
+  const sb = createServiceSupabase();
+  if (!sb) return { ok: false, error: ADMIN_DB_UNAVAILABLE };
   const { data: subs } = await sb
     .from("push_subscriptions")
     .select("id,subscription_json,preferences")

@@ -14,8 +14,9 @@
  */
 import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
-import { createServerSupabase } from "@/lib/supabase/server";
+import { createServiceSupabase } from "@/lib/supabase/server";
 import {
+  ADMIN_DB_UNAVAILABLE,
   deriveActorRole,
   logAdminAction,
   requireAdmin,
@@ -87,7 +88,8 @@ export async function pinFeature(input: FeaturePinInput): Promise<FeaturePinResu
     };
   }
 
-  const sb = await createServerSupabase();
+  const sb = createServiceSupabase();
+  if (!sb) return { ok: false, error: ADMIN_DB_UNAVAILABLE };
 
   const { data: kill, error: killErr } = await sb
     .from("kills")
@@ -154,7 +156,8 @@ export async function toggleKillHide(input: HideInput): Promise<HideResult> {
     return { ok: false, error: "kill_id and hide (boolean) required" };
   }
 
-  const sb = await createServerSupabase();
+  const sb = createServiceSupabase();
+  if (!sb) return { ok: false, error: ADMIN_DB_UNAVAILABLE };
 
   const { data: before, error: beforeErr } = await sb
     .from("kills")

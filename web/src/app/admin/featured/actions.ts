@@ -18,8 +18,9 @@
  */
 import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
-import { createServerSupabase } from "@/lib/supabase/server";
+import { createServerSupabase, createServiceSupabase } from "@/lib/supabase/server";
 import {
+  ADMIN_DB_UNAVAILABLE,
   deriveActorRole,
   logAdminAction,
   requireAdmin,
@@ -64,7 +65,8 @@ export async function setFeaturedKill(
     return { ok: false, error: "kill_id required" };
   }
 
-  const sb = await createServerSupabase();
+  const sb = createServiceSupabase();
+  if (!sb) return { ok: false, error: ADMIN_DB_UNAVAILABLE };
 
   const { data: before } = await sb
     .from("featured_clips")
@@ -101,7 +103,10 @@ export async function setFeaturedKill(
   if (date === today) {
     const webhook = process.env.DISCORD_WEBHOOK_URL;
     if (webhook) {
-      const { data: kill } = await sb
+      // Lecture via la session : la RLS "Public kills read" garantit qu'on
+      // ne pousse sur Discord qu'un clip publié.
+      const pub = await createServerSupabase();
+      const { data: kill } = await pub
         .from("kills")
         .select("killer_champion,victim_champion,ai_description,thumbnail_url,highlight_score")
         .eq("id", killId)
@@ -147,7 +152,8 @@ export async function removeFeaturedKill(date: string): Promise<FeaturedActionRe
     return { ok: false, error: "Invalid date format (YYYY-MM-DD)" };
   }
 
-  const sb = await createServerSupabase();
+  const sb = createServiceSupabase();
+  if (!sb) return { ok: false, error: ADMIN_DB_UNAVAILABLE };
 
   const { data: before } = await sb
     .from("featured_clips")

@@ -12,8 +12,9 @@
  */
 import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
-import { createServerSupabase } from "@/lib/supabase/server";
+import { createServiceSupabase } from "@/lib/supabase/server";
 import {
+  ADMIN_DB_UNAVAILABLE,
   deriveActorRole,
   logAdminAction,
   requireAdmin,
@@ -62,7 +63,8 @@ export async function enqueueJob(input: EnqueueJobInput): Promise<EnqueueJobResu
     return { ok: false, error: `Invalid kind: ${kind}` };
   }
 
-  const sb = await createServerSupabase();
+  const sb = createServiceSupabase();
+  if (!sb) return { ok: false, error: ADMIN_DB_UNAVAILABLE };
   const { data, error } = await sb
     .from("worker_jobs")
     .insert({
