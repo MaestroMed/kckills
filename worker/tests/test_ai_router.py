@@ -348,13 +348,15 @@ def test_estimate_cost_usd_clamps_negative_inputs():
 def test_gemini_provider_cost_constants():
     """The Gemini stub carries the rate-card prices the router uses for
     selection BEFORE the real call is wired."""
+    from config import config as _cfg
+    from services.ai_pricing import GEMINI_PRICES
     p = GeminiProvider(api_key="fake")
     assert p.name == "gemini"
-    assert p.model_name == "gemini-3.1-flash-lite"
-    # Refresh 2026-09-17 : grille officielle 3.1 Flash-Lite = $0.25 / $1.50
-    # (le routeur lit ai_pricing.GEMINI_PRICES — une seule source de vérité).
-    assert p.cost_per_m_input == 0.25
-    assert p.cost_per_m_output == 1.50
+    # Le modèle suit le preset du tier (GEMINI_MODEL_QC) et le prix vient
+    # de ai_pricing.GEMINI_PRICES : une seule source de vérité pour les
+    # deux (le test figeait 3.1 Flash-Lite, remplacé le 24/09/2026).
+    assert p.model_name == _cfg.GEMINI_MODEL_QC
+    assert (p.cost_per_m_input, p.cost_per_m_output) == GEMINI_PRICES[p.model_name]
     assert p.supports_vision is True
 
 

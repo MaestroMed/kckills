@@ -74,23 +74,14 @@ async def verify_clip_timing(
 
         # Wave 13f migration — moved off `google.generativeai`
         # (deprecated) onto `google.genai`. See gemini_client.get_client().
-        from services.gemini_client import get_client, _wait_for_file_active
+        from services.gemini_client import get_client, inline_part
         from google.genai import types
         client = get_client()
         if client is None:
             return False, 0
 
-        # Wave 27.14 — Wave 27.1 regression. _wait_for_file_active is now
-        # async ; the upload SDK is sync and was blocking the event loop.
-        # Both wrapped to match the canonical pattern.
-        img = await asyncio.to_thread(
-            client.files.upload,
-            file=frame_path,
-            config=types.UploadFileConfig(mime_type="image/jpeg"),
-        )
-        if not await _wait_for_file_active(client, img, timeout=30):
-            log.warn("clip_qc_gemini_file_not_active")
-            return False, 0
+        # Image inline : plus d'upload Files API (jamais supprimé, stockage du projet plein le 23/09).
+        img = await inline_part(frame_path, "image/jpeg")
 
         response = await asyncio.to_thread(
             client.models.generate_content,

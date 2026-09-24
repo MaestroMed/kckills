@@ -84,20 +84,18 @@ async def qc_one_clip(clip_url: str, kill_info: dict) -> dict:
         if local_path.exists(): local_path.unlink()
         return {"id": kid, "error": "gemini_quota"}
 
+    client = None
+    uploaded = None
     try:
-        from services.gemini_client import get_client, _wait_for_file_active
+        from services.gemini_client import get_client, media_part
         from google.genai import types
         client = get_client()
         if client is None:
             return {"id": kid, "error": "gemini_sdk_missing"}
 
-        # Wave 27.14 fix path
-        video_file = await asyncio.to_thread(
-            client.files.upload,
-            file=str(local_path),
-            config=types.UploadFileConfig(mime_type="video/mp4"),
-        )
-        if not await _wait_for_file_active(client, video_file, timeout=60):
+        # Vidéo inline jusqu'à 64 Mo, sinon upload supprimé dans le finally.
+        video_file, uploaded = await media_part(client, str(local_path), "video/mp4", timeout=60)
+        if video_file is None:
             return {"id": kid, "error": "gemini_file_not_active"}
 
         killer = kill_info.get("killer_champion") or "?"
@@ -174,6 +172,8 @@ Criteres :
     except Exception as e:
         return {"id": kid, "error": str(e)[:120]}
     finally:
+        from services.gemini_client import release_media
+        await release_media(client, uploaded)
         if local_path.exists():
             try:
                 local_path.unlink()

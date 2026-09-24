@@ -208,19 +208,15 @@ async def _vision_audit_frame(frame_path: str) -> Optional[dict]:
     if not await scheduler.wait_for("gemini"):
         return None
     from services.gemini_client import (
-        get_client, _wait_for_file_active, handle_gemini_exception,
+        get_client, handle_gemini_exception, inline_part,
     )
     try:
         from google.genai import types  # type: ignore
         client = get_client()
         if client is None:
             return None
-        img = await asyncio.to_thread(
-            client.files.upload, file=frame_path,
-            config=types.UploadFileConfig(mime_type="image/jpeg"),
-        )
-        if not await _wait_for_file_active(client, img, timeout=30):
-            return None
+        # Image inline : plus d'upload Files API (jamais supprimé, stockage du projet plein le 23/09).
+        img = await inline_part(frame_path, "image/jpeg")
         resp = await asyncio.to_thread(
             client.models.generate_content,
             model=config.GEMINI_MODEL_QC,

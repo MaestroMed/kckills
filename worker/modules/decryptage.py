@@ -299,19 +299,14 @@ async def _read_timer_gemini(frame_path: str) -> Optional[int]:
     tokens que qc.py::validate_clip qui uploadait le clip entier)."""
     if not await scheduler.wait_for("gemini"):
         return None
-    from services.gemini_client import get_client, _wait_for_file_active, handle_gemini_exception
+    from services.gemini_client import get_client, handle_gemini_exception, inline_part
     try:
         from google.genai import types  # type: ignore
         client = get_client()
         if client is None:
             return None
-        img = await asyncio.to_thread(
-            client.files.upload,
-            file=frame_path,
-            config=types.UploadFileConfig(mime_type="image/jpeg"),
-        )
-        if not await _wait_for_file_active(client, img, timeout=30):
-            return None
+        # Image inline : plus d'upload Files API (jamais supprimé, stockage du projet plein le 23/09).
+        img = await inline_part(frame_path, "image/jpeg")
         resp = await asyncio.to_thread(
             client.models.generate_content,
             model=config.GEMINI_MODEL_OFFSET,
@@ -389,22 +384,15 @@ async def _read_timers_gemini_batch(frame_paths: list[str]) -> list[Optional[int
     if not await scheduler.wait_for("gemini"):
         return [None] * len(frame_paths)
     from services.gemini_client import (
-        get_client, _wait_for_file_active, handle_gemini_exception,
+        get_client, handle_gemini_exception, inline_part,
     )
     try:
         from google.genai import types  # type: ignore
         client = get_client()
         if client is None:
             return [None] * len(frame_paths)
-        imgs = []
-        for p in frame_paths:
-            img = await asyncio.to_thread(
-                client.files.upload, file=p,
-                config=types.UploadFileConfig(mime_type="image/jpeg"),
-            )
-            if not await _wait_for_file_active(client, img, timeout=30):
-                img = None
-            imgs.append(img)
+        # Image inline : plus d'upload Files API (jamais supprimé, stockage du projet plein le 23/09).
+        imgs = [await inline_part(p, "image/jpeg") for p in frame_paths]
         prompt = (
             f"You receive {len(frame_paths)} frames from a League of Legends "
             "esports VOD, in order. For EACH frame, read the in-game match "

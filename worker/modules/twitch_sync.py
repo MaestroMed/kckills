@@ -101,17 +101,15 @@ async def read_timer_at(path: str, pos: float, tmp_dir: str) -> int | None:
     if not await scheduler.wait_for("gemini"):
         log.warn("twitch_sync_gemini_quota")
         return None
-    from services.gemini_client import _wait_for_file_active, get_client, handle_gemini_exception
+    from services.gemini_client import get_client, handle_gemini_exception, inline_part
     try:
         from google.genai import types  # type: ignore
 
         client = get_client()
         if client is None:
             return None
-        img = await asyncio.to_thread(
-            client.files.upload, file=crop, config=types.UploadFileConfig(mime_type="image/png"))
-        if not await _wait_for_file_active(client, img, timeout=30):
-            return None
+        # Image inline : plus d'upload Files API (jamais supprimé, stockage du projet plein le 23/09).
+        img = await inline_part(crop, "image/png")
         resp = await asyncio.to_thread(
             client.models.generate_content, model=TIMER_MODEL, contents=[TIMER_PROMPT, img],
             config=types.GenerateContentConfig(response_mime_type="application/json"),

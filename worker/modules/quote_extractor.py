@@ -280,7 +280,7 @@ async def _extract_with_gemini(kill: dict, clip_path: str) -> list[dict] | None:
         return None
 
     try:
-        from services.gemini_client import get_client, _wait_for_file_active
+        from services.gemini_client import get_client, media_part, release_media
         from google.genai import types  # type: ignore
     except ImportError:
         log.warn("quote_extractor_sdk_missing")
@@ -298,18 +298,17 @@ async def _extract_with_gemini(kill: dict, clip_path: str) -> list[dict] | None:
     model_name = (
         getattr(config, "GEMINI_MODEL_QUOTES", None)
         or getattr(config, "GEMINI_MODEL_QC", None)
-        or os.environ.get("GEMINI_MODEL", "gemini-3.1-flash-lite")
+        or os.environ.get("GEMINI_MODEL", "gemini-3.5-flash-lite")
     )
 
     started_at = time.monotonic()
     text = ""
+    uploaded = None
     try:
-        video_file = await asyncio.to_thread(
-            client.files.upload,
-            file=clip_path,
-            config=types.UploadFileConfig(mime_type="video/mp4"),
-        )
-        if not await _wait_for_file_active(client, video_file, timeout=60):
+        # Vidéo inline jusqu'à 64 Mo, sinon upload supprimé dans le finally
+        # (les uploads jamais supprimés ont rempli le stockage du projet le 23/09).
+        video_file, uploaded = await media_part(client, clip_path, "video/mp4", timeout=60)
+        if video_file is None:
             log.warn("quote_extractor_file_not_active", kill_id=kill["id"][:8])
             return None
 
@@ -378,6 +377,8 @@ async def _extract_with_gemini(kill: dict, clip_path: str) -> list[dict] | None:
             error=str(e)[:200],
         )
         return None
+    finally:
+        await release_media(client, uploaded)
 
 
 # ─── Quote sanitation ──────────────────────────────────────────────────

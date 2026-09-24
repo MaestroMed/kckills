@@ -401,18 +401,26 @@ def test_thinking_config_returns_none_when_budget_empty():
     assert cfg is None
 
 
-def test_thinking_config_passes_string_budget_to_3_5_flash():
+def test_thinking_config_uses_thinking_level_on_gemini_3():
+    """SDK 2.x : `thinking_budget` n'accepte qu'un entier ; le niveau passe
+    par `thinking_level` (MINIMAL | LOW | MEDIUM | HIGH)."""
+    import enum
+
     from services.gemini_client import _build_thinking_config
 
     class FakeTypes:
+        class ThinkingLevel(enum.Enum):
+            MINIMAL = "MINIMAL"
+            LOW = "LOW"
+            MEDIUM = "MEDIUM"
+            HIGH = "HIGH"
+
         class ThinkingConfig:
             def __init__(self, **kwargs):
-                # New SDK accepts string enum
                 self.kwargs = kwargs
 
     cfg = _build_thinking_config(FakeTypes, "gemini-3.5-flash", "high")
-    assert cfg is not None
-    assert cfg.kwargs == {"thinking_budget": "high"}
+    assert cfg.kwargs == {"thinking_level": FakeTypes.ThinkingLevel.HIGH}
 
 
 def test_thinking_config_falls_back_to_int_on_old_sdk():
