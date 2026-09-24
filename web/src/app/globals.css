@@ -1096,10 +1096,21 @@ nav[data-scrolled="true"] .kc-pennant-wrap {
 .kc-pennant-wrap--right .kc-pennant-static {
   animation-delay: -3s;
 }
-.kc-pennant-cloth {
-  width: 100%;
-  height: 100%;
-  filter: drop-shadow(0 5px 8px rgba(0, 0, 0, 0.45));
+/* Étendard 3D : canvas plus large que l'emplacement (le tissu ondule, les
+   pans flottent, le bloom déborde) ; 95 px par mètre = 76 px de large, comme
+   le SVG statique. La tringle tombe au même endroit (marge haute 14 px). */
+.kc-pennant-canvas {
+  position: absolute;
+  left: 50%;
+  top: -12px;
+  width: 140px;
+  height: 262px;
+  transform: translateX(-50%);
+  filter: drop-shadow(0 6px 10px rgba(0, 0, 0, 0.5));
+}
+.kc-pennant-fallback {
+  width: 76px;
+  margin-top: 12px;
 }
 @keyframes kc-pennant-sway {
   from {

@@ -22,11 +22,12 @@ import { useT } from "@/lib/i18n/use-lang";
 // flip on the LoLTok multi-team navigation.
 const LOLTOK_PUBLIC = process.env.NEXT_PUBLIC_LOLTOK_PUBLIC === "true";
 
-// Header 2.0 — étendards « vrai tissu » : petit canvas R3F chargé en lazy,
-// desktop uniquement, après idle, si WebGL dispo et hors reduced-motion.
-// Le fallback SVG statique s'affiche instantanément et reste la version
-// mobile / reduced-motion / no-WebGL.
-const KCPennantCloth = dynamic(() => import("./KCPennantCloth"), {
+// Étendards KC (24/09/2026) : tissu simulé dans un worker, rendu WebGPU/TSL
+// (repli WebGL2), broderie or qui s'embrase au passage des rayons. Chargés
+// en lazy, desktop uniquement, après idle, hors reduced-motion. Le SVG
+// statique s'affiche instantanément et reste la version mobile /
+// reduced-motion / sans GPU.
+const KCBanner = dynamic(() => import("./banner/KCBanner"), {
   ssr: false,
 });
 
@@ -95,8 +96,8 @@ export function Navbar() {
   // d'Ariane. Ils ne s'affichent donc que sur la home, dont le hero
   // plein-écran est le seul décor conçu pour les accueillir.
   const showPennants = pathname === "/";
-  // Header 2.0 — passe à true quand on peut monter les étendards en tissu
-  // 3D (desktop, WebGL, pas de reduced-motion, après idle).
+  // Passe à true quand on peut monter les étendards en tissu 3D (desktop,
+  // GPU dispo, pas de reduced-motion, après idle).
   const [clothReady, setClothReady] = useState(false);
   useEffect(() => {
     if (window.innerWidth < 1024) return;
@@ -203,24 +204,26 @@ export function Navbar() {
             Home uniquement (voir showPennants). */}
         {showPennants && (
           <>
-            <div aria-hidden className="kc-pennant-wrap kc-pennant-wrap--left hidden lg:block">
-              {clothReady ? (
-                <div className="kc-pennant-cloth">
-                  <KCPennantCloth side="left" />
-                </div>
-              ) : (
-                <KCPennantStatic side="left" />
-              )}
-            </div>
-            <div aria-hidden className="kc-pennant-wrap kc-pennant-wrap--right hidden lg:block">
-              {clothReady ? (
-                <div className="kc-pennant-cloth">
-                  <KCPennantCloth side="right" />
-                </div>
-              ) : (
-                <KCPennantStatic side="right" />
-              )}
-            </div>
+            {(["left", "right"] as const).map((side) => (
+              <div key={side} aria-hidden className={`kc-pennant-wrap kc-pennant-wrap--${side} hidden lg:block`}>
+                {clothReady ? (
+                  <KCBanner
+                    side={side}
+                    variant="header"
+                    pxPerMeter={95}
+                    paused={scrolled}
+                    className="kc-pennant-canvas"
+                    fallback={
+                      <div className="kc-pennant-fallback">
+                        <KCPennantStatic side={side} />
+                      </div>
+                    }
+                  />
+                ) : (
+                  <KCPennantStatic side={side} />
+                )}
+              </div>
+            ))}
           </>
         )}
 
