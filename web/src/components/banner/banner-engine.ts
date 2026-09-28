@@ -139,7 +139,7 @@ function subscribeSweep(f: (e: SweepEvent) => void): () => void {
 }
 
 // ─── environnement « arène » pour les reflets de l'or ────────────────────────
-function buildStageEnvironment(renderer: THREE.WebGPURenderer): THREE.Texture {
+export function buildStageEnvironment(renderer: THREE.WebGPURenderer): THREE.Texture {
   const env = new THREE.Scene();
   const domeMat = new THREE.MeshBasicNodeMaterial({ side: THREE.BackSide });
   const dirY = normalize(positionLocal).y;
