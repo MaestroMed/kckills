@@ -131,7 +131,9 @@ export function emitSweep(strength = 1): void {
 }
 function subscribeSweep(f: (e: SweepEvent) => void): () => void {
   sweepSubs.add(f);
-  if (sweepSubs.size === 1) scheduleSweep(true);
+  // ?nosweep : pas de rayon automatique (capture de l'image de repli des étendards)
+  const noSweep = typeof location !== "undefined" && new URLSearchParams(location.search).has("nosweep");
+  if (sweepSubs.size === 1 && !noSweep) scheduleSweep(true);
   return () => {
     sweepSubs.delete(f);
     if (sweepSubs.size === 0) window.clearTimeout(sweepTimer);
@@ -154,7 +156,7 @@ export function buildStageEnvironment(renderer: THREE.WebGPURenderer): THREE.Tex
     env.add(mesh);
   };
   panel(6, 1.6, 0xffdcaa, 9, [0, 6, 4]); // softbox chaud au-dessus, devant
-  panel(1.2, 5, 0x28d2ff, 5, [7, 1, -1]); // bande cyan à droite
+  panel(1.2, 5, 0xc4e4ff, 3.5, [7, 1, -1]); // bande froide à droite (peu saturée : l’or reflété ne vire pas au vert)
   panel(1.4, 5, 0x8a3dff, 3.5, [-7, 1.5, 1]); // lavis violet à gauche
   panel(3, 0.35, 0xffffff, 14, [-2, 5, 6]); // barres de projecteurs (éclats)
   panel(3, 0.35, 0xffffff, 12, [3, 4.5, 5.5]);
@@ -187,7 +189,7 @@ export async function mountBanner(canvas: HTMLCanvasElement, opts: BannerOptions
 
   const key = new THREE.DirectionalLight(0xffe4c0, 2.3);
   key.position.set(-1.3, 1.2, 2.4);
-  const rim = new THREE.DirectionalLight(0x7fe3ff, 1.2);
+  const rim = new THREE.DirectionalLight(0xd6ecff, 1.0); // contre-jour froid mais peu saturé : l’or ne vire pas au vert
   rim.position.set(1.8, 0.2, -1.6);
   const fill = new THREE.DirectionalLight(0x8f5cff, 0.55);
   fill.position.set(-2.2, -1, 1);
@@ -371,7 +373,7 @@ export async function mountBanner(canvas: HTMLCanvasElement, opts: BannerOptions
   const wind: WindState = {
     // en miroir : les deux étendards du header ondulent symétriquement
     dir: [opts.side === "left" ? 0.4 : -0.4, 0, -1],
-    speed: 1.2,
+    speed: 2.3,
     turbulence: 0.8,
     offsetX: opts.side === "left" ? -6.5 : 6.5,
   };
@@ -432,11 +434,13 @@ export async function mountBanner(canvas: HTMLCanvasElement, opts: BannerOptions
   // Le halo s'éteint en douceur avant les bords du canvas : sinon le cadre le
   // tranche net au passage d'un rayon (effet « bug »). Plus discret en petit.
   const glow = bloom(col, opts.variant === "header" ? 0.22 : 0.4, 0.22, 0.92);
+  // la lueur ne sort pas de l'étendard : masquée par sa propre silhouette
+  const insideCloth = smoothstep(0.05, 0.6, col.a);
   const edgeFade = smoothstep(0, 0.16, min(screenUV.x, screenUV.x.oneMinus())).mul(
     smoothstep(0, 0.1, min(screenUV.y, screenUV.y.oneMinus())),
   );
   const ldr = renderOutput(
-    vec4(col.rgb.add(glow.rgb.mul(edgeFade)), col.a),
+    vec4(col.rgb.add(glow.rgb.mul(edgeFade).mul(insideCloth)), col.a),
     THREE.NeutralToneMapping,
     THREE.SRGBColorSpace,
   );
@@ -479,7 +483,8 @@ export async function mountBanner(canvas: HTMLCanvasElement, opts: BannerOptions
       }
     const eased = k < 0.5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2;
     uSweepC.value = lo - 0.35 + (hi - lo + 0.7) * eased;
-    uSweepOn.value = sweep.strength;
+    // enveloppe en cloche : la lumière monte et retombe en douceur
+    uSweepOn.value = sweep.strength * Math.pow(Math.sin(Math.PI * k), 0.8);
   };
 
   // ── boucle ──

@@ -1086,19 +1086,10 @@ nav[data-scrolled="true"] .kc-pennant-wrap {
 .kc-pennant-wrap--right {
   right: 12px;
 }
-.kc-pennant-static {
-  width: 100%;
-  height: auto;
-  filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.5));
-  transform-origin: 50% 0;
-  animation: kc-pennant-sway 6s ease-in-out infinite alternate;
-}
-.kc-pennant-wrap--right .kc-pennant-static {
-  animation-delay: -3s;
-}
 /* Étendard 3D : canvas plus large que l'emplacement (le tissu ondule, les
-   pans flottent, le bloom déborde) ; 95 px par mètre = 76 px de large, comme
-   le SVG statique. La tringle tombe au même endroit (marge haute 14 px). */
+   pans flottent) ; 95 px par mètre = 76 px de large. Même boîte pour l'image
+   de repli (public/images/etendards) : le fondu vers le tissu animé est
+   invisible. La tringle tombe sous la barre (marge haute 14 px). */
 .kc-pennant-canvas {
   position: absolute;
   left: 50%;
@@ -1107,18 +1098,6 @@ nav[data-scrolled="true"] .kc-pennant-wrap {
   height: 262px;
   transform: translateX(-50%);
   filter: drop-shadow(0 6px 10px rgba(0, 0, 0, 0.5));
-}
-.kc-pennant-fallback {
-  width: 76px;
-  margin-top: 12px;
-}
-@keyframes kc-pennant-sway {
-  from {
-    transform: rotate(-2.5deg);
-  }
-  to {
-    transform: rotate(2.5deg);
-  }
 }
 
 /* Surface de la barre flottante (le .glass historique porte un

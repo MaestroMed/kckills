@@ -13,7 +13,7 @@ async function sweep() {
 }
 
 export function LabClient() {
-  const [wind, setWind] = useState(1.2);
+  const [wind, setWind] = useState(2.3);
   const [big, setBig] = useState<BannerHandle | null>(null);
 
   return (
