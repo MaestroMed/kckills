@@ -11,6 +11,7 @@ import { SearchBar } from "./search/SearchBar";
 import { LeagueNav } from "./league/LeagueNav";
 import { HeaderAura } from "./HeaderAura";
 import { useT } from "@/lib/i18n/use-lang";
+import { useMoodWeather } from "@/lib/mood/use-mood-weather";
 
 // PR-loltok BC : env-gated multi-league chip strip.
 // `NEXT_PUBLIC_LOLTOK_PUBLIC` is exposed to the client bundle via the
@@ -101,6 +102,10 @@ export function Navbar() {
   const [clothReady, setClothReady] = useState(false);
   // Étendard dont le tissu 3D a peint sa première image (l'image de repli s'efface).
   const [liveBanners, setLiveBanners] = useState<{ left?: boolean; right?: boolean }>({});
+  // Météo (forme de la KC, lib/mood) : les étendards 3D attendent de la
+  // connaître pour naître directement dans le bon temps (l'image de repli
+  // couvre l'attente).
+  const weather = useMoodWeather(showPennants);
   useEffect(() => {
     if (window.innerWidth < 1024) return;
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
@@ -232,12 +237,13 @@ export function Navbar() {
                   >
                     {poster}
                   </div>
-                  {clothReady && (
+                  {clothReady && weather && (
                     <KCBanner
                       side={side}
                       variant="header"
                       pxPerMeter={95}
                       paused={scrolled}
+                      weather={weather}
                       className="kc-pennant-canvas"
                       onReady={() => setLiveBanners((v) => ({ ...v, [side]: true }))}
                     />

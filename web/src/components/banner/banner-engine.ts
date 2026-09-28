@@ -13,6 +13,11 @@
  *   bloom fait briller les éclats.
  * - Éclairage de scène : environnement « arène » généré (PMREM), clé chaude,
  *   contre-jour cyan, remplissage violet — les lumières du hero.
+ * - Météo (lib/mood) : vent, rafales, lumière, cadence des rayons, éclairs et
+ *   usure du drap suivent la forme de la KC. L'usure (0..1) effiloche les
+ *   bords (surtout les pointes de la queue d'aronde), perce des trous aux
+ *   lèvres brûlées, encrasse le bas, fait passer la teinture et ternit l'or
+ *   par plaques ; tout est procédural, piloté par un seul uniforme.
  */
 import * as THREE from "three/webgpu";
 import {
@@ -55,6 +60,16 @@ import {
   vec4,
 } from "three/tsl";
 import { bloom } from "three/addons/tsl/display/BloomNode.js";
+import { WEATHER, type WeatherSettings } from "@/lib/mood/presets";
+import {
+  setSky,
+  strikeEnvelope,
+  subscribeStrike,
+  subscribeSweep,
+  SWEEP_MS,
+  type StrikeEvent,
+  type SweepEvent,
+} from "@/lib/mood/sky";
 import { loadLogo, paintBanner, type BannerArt } from "./banner-art";
 import type { ClothSpec, WindState } from "./cloth-sim";
 
@@ -74,6 +89,8 @@ export interface BannerOptions {
   pxPerMeter?: number;
   /** Marge au-dessus de la tringle, en px CSS. */
   topMarginPx?: number;
+  /** Météo au montage (appliquée d'emblée, sans transition). */
+  weather?: WeatherSettings;
   onReady?: () => void;
 }
 
@@ -82,6 +99,8 @@ export interface BannerHandle {
   setPaused(paused: boolean): void;
   setWind(speed: number): void;
   gust(strength?: number): void;
+  /** Change de temps : lumière, usure et vent glissent vers les nouvelles valeurs. */
+  setWeather(w: WeatherSettings): void;
 }
 
 // ─── dessin partagé (une texture par résolution, peinte une seule fois) ─────
@@ -107,37 +126,6 @@ function getWorker(): Worker {
     simWorker.onmessage = (e: MessageEvent<WorkerMsg>) => simListeners.get(e.data.id)?.(e.data);
   }
   return simWorker;
-}
-
-// ─── rayons de lumière : un bus partagé, déclenché au hasard ─────────────────
-export interface SweepEvent {
-  at: number;
-  angle: number;
-  strength: number;
-}
-const sweepSubs = new Set<(e: SweepEvent) => void>();
-let sweepTimer = 0;
-function scheduleSweep(first = false) {
-  const delay = first ? 2200 + Math.random() * 1200 : 5500 + Math.random() * 7500;
-  sweepTimer = window.setTimeout(() => {
-    emitSweep();
-    scheduleSweep();
-  }, delay);
-}
-/** Déclenche un passage de lumière (aussi exposé au labo). */
-export function emitSweep(strength = 1): void {
-  const e: SweepEvent = { at: performance.now(), angle: -0.62 + (Math.random() - 0.5) * 0.45, strength };
-  sweepSubs.forEach((f) => f(e));
-}
-function subscribeSweep(f: (e: SweepEvent) => void): () => void {
-  sweepSubs.add(f);
-  // ?nosweep : pas de rayon automatique (capture de l'image de repli des étendards)
-  const noSweep = typeof location !== "undefined" && new URLSearchParams(location.search).has("nosweep");
-  if (sweepSubs.size === 1 && !noSweep) scheduleSweep(true);
-  return () => {
-    sweepSubs.delete(f);
-    if (sweepSubs.size === 0) window.clearTimeout(sweepTimer);
-  };
 }
 
 // ─── environnement « arène » pour les reflets de l'or ────────────────────────
@@ -180,20 +168,36 @@ export async function mountBanner(canvas: HTMLCanvasElement, opts: BannerOptions
   console.info(`[KCBanner] ${opts.variant}/${opts.side} → ${backendName}`);
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
   renderer.toneMapping = THREE.NeutralToneMapping;
-  renderer.toneMappingExposure = 0.88;
   renderer.setClearColor(0x000000, 0);
+
+  // ── météo : état courant (glisse vers la cible à chaque image) ──
+  const w0 = opts.weather ?? WEATHER.variable;
+  const target = {
+    key: new THREE.Color(w0.keyColor),
+    keyI: w0.keyIntensity,
+    exposure: w0.exposure,
+    env: w0.envIntensity,
+    wear: w0.wear,
+  };
+  const cur = { ...target, key: target.key.clone() };
+  setSky(w0);
+
+  renderer.toneMappingExposure = cur.exposure;
 
   const scene = new THREE.Scene();
   scene.environment = buildStageEnvironment(renderer);
-  scene.environmentIntensity = 0.55;
+  scene.environmentIntensity = cur.env;
 
-  const key = new THREE.DirectionalLight(0xffe4c0, 2.3);
+  const key = new THREE.DirectionalLight(cur.key, cur.keyI);
   key.position.set(-1.3, 1.2, 2.4);
   const rim = new THREE.DirectionalLight(0xd6ecff, 1.0); // contre-jour froid mais peu saturé : l’or ne vire pas au vert
   rim.position.set(1.8, 0.2, -1.6);
   const fill = new THREE.DirectionalLight(0x8f5cff, 0.55);
   fill.position.set(-2.2, -1, 1);
-  scene.add(key, rim, fill);
+  // éclair : lumière froide, éteinte hors des frappes
+  const flashLight = new THREE.DirectionalLight(0xdfe9ff, 0);
+  flashLight.position.set(0.8, 2.4, 1.6);
+  scene.add(key, rim, fill, flashLight);
 
   const camera = new THREE.PerspectiveCamera(20, 1, 0.1, 50);
 
@@ -219,6 +223,8 @@ export async function mountBanner(canvas: HTMLCanvasElement, opts: BannerOptions
   const uSweepDir = uniform(new THREE.Vector2(0.82, -0.57));
   const uSweepOn = uniform(0);
   const uRayDir = uniform(new THREE.Vector3(-0.45, 0.55, 0.7).normalize());
+  const uWear = uniform(cur.wear);
+  const uTime = uniform(0);
 
   // ── matériau du drap brodé ──
   const clothMat = new THREE.MeshPhysicalNodeMaterial({ side: THREE.DoubleSide });
@@ -227,9 +233,14 @@ export async function mountBanner(canvas: HTMLCanvasElement, opts: BannerOptions
   {
     const UV = uv();
     const s0 = texture(tex, UV);
-    const gold = s0.r;
+    const P = UV.mul(vec2(SHAPE.width, SHAPE.height)); // coordonnées physiques (m), y depuis le bas
+    const wear = uWear;
+    // Usure : la broderie s'élime par plaques (fils d'or arrachés, le drap
+    // réapparaît), sans jamais effacer le logo.
+    const lossN = mx_noise_float(vec3(P.mul(8), 3.3)).mul(0.5).add(0.5);
+    const goldKeep = float(1).sub(wear.mul(0.55).mul(smoothstep(0.42, 0.78, lossN)));
+    const gold = s0.r.mul(goldKeep);
     const theta = s0.g.mul(Math.PI);
-    const P = UV.mul(vec2(SHAPE.width, SHAPE.height)); // coordonnées physiques (m)
 
     // Sergé du drap : fils de chaîne et de trame alternés.
     const weaveD = float(170);
@@ -272,7 +283,9 @@ export async function mountBanner(canvas: HTMLCanvasElement, opts: BannerOptions
     const reliefGrad = vec2(
       hR.sub(hL).div((2 / art.width) * SHAPE.width),
       hU.sub(hD).div((2 / art.height) * SHAPE.height),
-    ).mul(reliefAmp);
+    )
+      .mul(reliefAmp)
+      .mul(goldKeep); // broderie élimée = plus plate
 
     const grad = reliefGrad.add(weaveGrad.mul(float(1).sub(gold))).add(threadGrad.mul(gold));
     // Repères tangents dérivés des UV (pas d'attribut tangent : le tissu se
@@ -308,14 +321,74 @@ export async function mountBanner(canvas: HTMLCanvasElement, opts: BannerOptions
       .mul(weaveH.mul(0.12).add(0.9))
       .mul(damask.mul(0.14).add(1));
     const goldCol = mix(color(0x9a6b22), color(0xefcd82), tvar.mul(0.45).add(profAA.mul(0.55)));
-    clothMat.colorNode = mix(fabric, goldCol, gold).mul(fold);
+
+    // ── usure ──
+    // Distance au bord libre (m), analytique : côtés, et les deux lèvres de
+    // l'encoche (demi-plans ; minorant exact près des bords). Le bord cousu
+    // sur la tringle ne s'effiloche pas.
+    const Wm = SHAPE.width;
+    const Hm = SHAPE.height;
+    const nH = SHAPE.notch * SHAPE.height;
+    const Ln = Math.hypot(Wm / 2, nH);
+    const lipL = P.x.mul(-nH / Ln).add(P.y.mul(Wm / 2 / Ln));
+    const lipR = P.x.sub(Wm).mul(nH / Ln).add(P.y.mul(Wm / 2 / Ln));
+    const edgeDist = min(min(P.x, float(Wm).sub(P.x)), max(max(lipL, lipR), P.y.negate()));
+    // Morsure du bord : déchirures franches (bruit large) et effilochure fine,
+    // plus profondes aux pointes, qui fouettent au vent.
+    const rag = mx_noise_float(vec3(P.mul(7), 1.7))
+      .mul(0.65)
+      .add(mx_noise_float(vec3(P.mul(31), 4.3)).mul(0.35))
+      .mul(0.5)
+      .add(0.5);
+    const tips = float(1).add(float(1).sub(smoothstep(0, 0.55, P.y)).mul(1.5));
+    const topFade = smoothstep(0.02, 0.22, float(Hm).sub(P.y));
+    const bite = wear.mul(wear.sqrt()).mul(0.09).mul(rag.mul(1.3).add(0.05)).mul(tips).mul(topFade);
+    const aaE = fwidth(edgeDist).max(1e-5);
+    const frayAlpha = smoothstep(bite.sub(aaE), bite.add(aaE), edgeDist.add(aaE));
+    // Trous : n'apparaissent qu'au-delà d'une usure de 0,35 ; la broderie et
+    // le haut de l'étendard résistent mieux.
+    const holeN = mx_noise_float(vec3(P.mul(4.6), 9.1))
+      .mul(0.75)
+      .add(mx_noise_float(vec3(P.mul(18), 2.3)).mul(0.25));
+    const holeOn = smoothstep(0.35, 1, wear);
+    const holeThr = mix(float(1), float(0.5), holeOn).add(s0.r.mul(0.35)).add(float(1).sub(topFade).mul(0.5));
+    const aaH = fwidth(holeN).max(1e-5);
+    const holeAlpha = float(1).sub(smoothstep(holeThr.sub(aaH), holeThr.add(aaH), holeN));
+    // Lèvres brûlées autour des trous et des déchirures.
+    const scorch = max(
+      smoothstep(holeThr.sub(0.14), holeThr, holeN).mul(holeOn),
+      float(1)
+        .sub(smoothstep(bite, bite.add(wear.mul(0.02)).add(1e-4), edgeDist))
+        .mul(smoothstep(0.25, 0.8, wear)),
+    );
+    // Crasse (remontée du sol : davantage en bas) et teinture passée.
+    const dirtN = mx_noise_float(vec3(P.mul(3.2), 5.5)).mul(0.5).add(0.5);
+    const dirt = smoothstep(0.3, 0.8, dirtN)
+      .mul(float(1).sub(smoothstep(0, 0.9, P.y)).mul(0.7).add(0.3))
+      .mul(wear);
+    const faded = mix(
+      fabric,
+      vec3(dot(fabric, vec3(0.3, 0.59, 0.11))).mul(vec3(0.8, 0.88, 1.1)).add(fabric.mul(0.25)),
+      wear.mul(0.4),
+    );
+    const fabricWorn = mix(faded, faded.mul(vec3(0.52, 0.46, 0.4)), dirt.mul(0.7));
+    const goldWorn = mix(goldCol, goldCol.mul(vec3(0.6, 0.5, 0.38)), wear.mul(0.55).mul(lossN.mul(0.6).add(0.4)));
+
+    clothMat.colorNode = mix(mix(fabricWorn, goldWorn, gold), color(0x100904), scorch.mul(0.85)).mul(fold);
     clothMat.aoNode = ao;
-    clothMat.metalnessNode = gold.mul(0.96);
-    clothMat.roughnessNode = mix(mix(float(0.9), float(0.5), damask), float(0.24).add(tvar.mul(0.1)), gold);
-    clothMat.sheenNode = mix(color(0x3d6cff).mul(mix(float(0.32), float(0.7), damask)), vec3(0), gold).mul(fold);
+    clothMat.metalnessNode = gold.mul(0.96).mul(float(1).sub(scorch));
+    clothMat.roughnessNode = mix(
+      mix(mix(float(0.9), float(0.5), damask), float(0.24).add(tvar.mul(0.1)).add(wear.mul(0.22)), gold),
+      float(0.95),
+      scorch,
+    );
+    clothMat.sheenNode = mix(color(0x3d6cff).mul(mix(float(0.32), float(0.7), damask)), vec3(0), gold)
+      .mul(fold)
+      .mul(float(1).sub(scorch))
+      .mul(float(1).sub(dirt.mul(0.5)));
     clothMat.sheenRoughnessNode = float(0.36);
     clothMat.anisotropyNode = dir.mul(gold.mul(0.85));
-    clothMat.opacityNode = s0.a;
+    clothMat.opacityNode = s0.a.mul(frayAlpha).mul(holeAlpha);
 
     // Passage de lumière : bande + halo, l'or s'embrase le long des fils.
     const d = dot(positionLocal.xy, uSweepDir).sub(uSweepC);
@@ -336,7 +409,11 @@ export async function mountBanner(canvas: HTMLCanvasElement, opts: BannerOptions
     const blueGlow = color(0x3f6dff)
       .mul(float(1).sub(gold))
       .mul(fres.mul(0.45).add(0.05).add(damask.mul(0.3)));
-    clothMat.emissiveNode = goldHot.add(blueGlow).mul(ray);
+    // Braises au bord des trous, seulement quand l'étendard est en lambeaux.
+    const emberRim = smoothstep(holeThr.sub(0.03), holeThr.sub(0.004), holeN).mul(smoothstep(0.6, 0.95, wear));
+    const flicker = mx_noise_float(vec3(P.mul(22), uTime.mul(1.7))).mul(0.5).add(0.5);
+    const embers = color(0xff5a1e).mul(emberRim).mul(flicker.mul(1.6).add(0.2)).mul(1.4);
+    clothMat.emissiveNode = goldHot.add(blueGlow).mul(ray).add(embers);
   }
 
   // ── tringle en or brossé, avec pommeaux ──
@@ -373,8 +450,8 @@ export async function mountBanner(canvas: HTMLCanvasElement, opts: BannerOptions
   const wind: WindState = {
     // en miroir : les deux étendards du header ondulent symétriquement
     dir: [opts.side === "left" ? 0.4 : -0.4, 0, -1],
-    speed: 2.3,
-    turbulence: 0.8,
+    speed: w0.wind,
+    turbulence: w0.turbulence,
     offsetX: opts.side === "left" ? -6.5 : 6.5,
   };
 
@@ -383,7 +460,15 @@ export async function mountBanner(canvas: HTMLCanvasElement, opts: BannerOptions
       if (m.type === "ready") resolve(m);
     });
   });
-  worker.postMessage({ type: "init", id, spec, wind, seed: opts.side === "left" ? 1337 : 4242 });
+  worker.postMessage({
+    type: "init",
+    id,
+    spec,
+    wind,
+    gustAmp: w0.gustAmp,
+    gustEvery: w0.gustEvery,
+    seed: opts.side === "left" ? 1337 : 4242,
+  });
   const init = await ready;
 
   const ib = new THREE.InterleavedBuffer(new Float32Array(init.frame), 7);
@@ -452,7 +537,6 @@ export async function mountBanner(canvas: HTMLCanvasElement, opts: BannerOptions
   const unsubscribe = subscribeSweep((e) => {
     sweep = { ...e, start: e.at + sideDelay };
   });
-  const SWEEP_MS = 1500;
   const updateSweep = (now: number) => {
     if (!sweep) {
       uSweepOn.value = 0;
@@ -487,6 +571,58 @@ export async function mountBanner(canvas: HTMLCanvasElement, opts: BannerOptions
     uSweepOn.value = sweep.strength * Math.pow(Math.sin(Math.PI * k), 0.8);
   };
 
+  // ── éclairs ──
+  let strike: StrikeEvent | null = null;
+  const unsubscribeStrike = subscribeStrike((e) => {
+    strike = e;
+    // l'éclair tombe du côté où il frappe
+    flashLight.position.set(e.x * 2.2, 2.4, 1.6);
+  });
+  const updateStrike = (now: number) => {
+    if (!strike) {
+      flashLight.intensity = 0;
+      return;
+    }
+    const t = (now - strike.at) / 1000;
+    if (t > 1.2) {
+      strike = null;
+      flashLight.intensity = 0;
+      return;
+    }
+    flashLight.intensity = 7 * strike.strength * strikeEnvelope(t);
+  };
+
+  // ── météo : glissement vers la cible ──
+  const applyWeather = (w: WeatherSettings) => {
+    target.key.setHex(w.keyColor);
+    target.keyI = w.keyIntensity;
+    target.exposure = w.exposure;
+    target.env = w.envIntensity;
+    target.wear = w.wear;
+    worker.postMessage({
+      type: "wind",
+      id,
+      speed: w.wind,
+      turbulence: w.turbulence,
+      gustAmp: w.gustAmp,
+      gustEvery: w.gustEvery,
+    });
+    setSky(w);
+  };
+  const easeWeather = (dt: number) => {
+    const k = 1 - Math.exp(-dt / 0.9);
+    cur.key.lerp(target.key, k);
+    cur.keyI += (target.keyI - cur.keyI) * k;
+    cur.exposure += (target.exposure - cur.exposure) * k;
+    cur.env += (target.env - cur.env) * k;
+    cur.wear += (target.wear - cur.wear) * k;
+    key.color.copy(cur.key);
+    key.intensity = cur.keyI;
+    renderer.toneMappingExposure = cur.exposure;
+    scene.environmentIntensity = cur.env;
+    uWear.value = cur.wear;
+  };
+
   // ── boucle ──
   let last = performance.now();
   let first = true;
@@ -501,7 +637,10 @@ export async function mountBanner(canvas: HTMLCanvasElement, opts: BannerOptions
       pending = null;
     }
     rod.rotation.z = rodAngle;
+    easeWeather(Math.min(dt, 0.1));
+    uTime.value = (now / 1000) % 3600; // borné : précision du bruit des braises
     updateSweep(now);
+    updateStrike(now);
     pipeline.render();
     if (first) {
       first = false;
@@ -527,9 +666,13 @@ export async function mountBanner(canvas: HTMLCanvasElement, opts: BannerOptions
     gust(strength = 1.2) {
       worker.postMessage({ type: "gust", id, strength });
     },
+    setWeather(w: WeatherSettings) {
+      applyWeather(w);
+    },
     dispose() {
       renderer.setAnimationLoop(null);
       unsubscribe();
+      unsubscribeStrike();
       ro.disconnect();
       simListeners.delete(id);
       worker.postMessage({ type: "dispose", id });
