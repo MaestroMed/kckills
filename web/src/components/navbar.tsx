@@ -11,6 +11,8 @@ import { SearchBar } from "./search/SearchBar";
 import { LeagueNav } from "./league/LeagueNav";
 import { HeaderAura } from "./HeaderAura";
 import { useT } from "@/lib/i18n/use-lang";
+import { useMoodWeather } from "@/lib/mood/use-mood-weather";
+import { isHiddenRoute } from "@/lib/hidden-routes";
 
 // PR-loltok BC : env-gated multi-league chip strip.
 // `NEXT_PUBLIC_LOLTOK_PUBLIC` is exposed to the client bundle via the
@@ -41,7 +43,10 @@ const NAV_DIRECT: { href: string; tKey: string }[] = [
   { href: "/clips", tKey: "nav.clips" },
 ];
 
-const NAV_GROUPS: { tKey: string; items: { href: string; tKey: string }[] }[] = [
+// Les pages en chantier (lib/hidden-routes) sont retirées du menu, desktop
+// comme mobile ; un groupe vidé disparaît.
+type NavGroup = { tKey: string; items: { href: string; tKey: string }[] };
+const NAV_GROUPS: NavGroup[] = ([
   {
     tKey: "nav.g_discover",
     items: [
@@ -70,14 +75,15 @@ const NAV_GROUPS: { tKey: string; items: { href: string; tKey: string }[] }[] = 
       { href: "/community", tKey: "nav.community" },
       { href: "/alumni", tKey: "nav.alumni" },
       { href: "/hall-of-fame", tKey: "nav.hall_of_fame" },
-      // Wave 36 — the two hidden experiences surface in the nav. La
-      // Chambre existed with zero inbound link outside the homepage ;
-      // l'Antre was only reachable by typing B-C-C on Bo's page.
+      // Wave 36 — la Chambre existait sans aucun lien hors de l'accueil.
+      // L'Antre de la BCC, elle, redevient cachée (29/09/2026) : on n'y
+      // entre qu'en tapant B-C-C sur la page de Bo.
       { href: "/chambre", tKey: "nav.chambre" },
-      { href: "/antre", tKey: "nav.antre" },
     ],
   },
-];
+] satisfies NavGroup[])
+  .map((g) => ({ tKey: g.tKey, items: g.items.filter((i) => !isHiddenRoute(i.href)) }))
+  .filter((g) => g.items.length > 0);
 
 export function Navbar() {
   const t = useT();
@@ -101,6 +107,10 @@ export function Navbar() {
   const [clothReady, setClothReady] = useState(false);
   // Étendard dont le tissu 3D a peint sa première image (l'image de repli s'efface).
   const [liveBanners, setLiveBanners] = useState<{ left?: boolean; right?: boolean }>({});
+  // Météo (forme de la KC, lib/mood) : les étendards 3D attendent de la
+  // connaître pour naître directement dans le bon temps (l'image de repli
+  // couvre l'attente).
+  const weather = useMoodWeather(showPennants);
   useEffect(() => {
     if (window.innerWidth < 1024) return;
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
@@ -232,12 +242,13 @@ export function Navbar() {
                   >
                     {poster}
                   </div>
-                  {clothReady && (
+                  {clothReady && weather && (
                     <KCBanner
                       side={side}
                       variant="header"
                       pxPerMeter={95}
                       paused={scrolled}
+                      weather={weather}
                       className="kc-pennant-canvas"
                       onReady={() => setLiveBanners((v) => ({ ...v, [side]: true }))}
                     />

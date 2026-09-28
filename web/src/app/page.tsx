@@ -36,6 +36,7 @@ import { MacronEasterEgg } from "@/components/MacronEasterEgg";
 import { HeroImageCarousel } from "@/components/HeroImageCarousel";
 import { HERO_IMAGES } from "@/lib/hero-images";
 import { NextMatchOverlay } from "@/components/NextMatchOverlay";
+import { HeroWeather } from "@/components/weather/HeroWeather";
 import { PageViewTracker } from "@/components/analytics/PageViewTracker";
 // Scroll Vivant (HomeGridSection) retiré de l'accueil le 24/09/2026 :
 // trop de cases vides tant que la grille n'est pas finie (Mehdi). Le
@@ -107,6 +108,10 @@ export default async function HomePage() {
             No side vignettes — the cards themselves have dark backdrops. */}
         <div className="absolute inset-0 bg-gradient-to-b from-black/10 via-transparent to-[var(--bg-primary)] pointer-events-none" />
         <div className="absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-black/50 to-transparent pointer-events-none" />
+
+        {/* Météo du jour (forme de la KC, lib/mood) : pluie, soleil, nuages,
+            éclairs — sur la photo, sous le texte. Montée après l'idle. */}
+        <HeroWeather />
 
         {/* ─── Floating "next rendez-vous" overlay — top-right of hero ─── */}
         <NextMatchOverlay />

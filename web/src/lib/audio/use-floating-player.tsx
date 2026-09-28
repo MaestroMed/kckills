@@ -57,18 +57,25 @@ import {
   playlistForRoute,
   shufflePlaylist,
   shuffleWithOpeners,
+  withMoodOpeners,
   SCROLL_OPENER_IDS,
   type BgmTrack,
   type PlaylistId,
 } from "./playlists";
+import type { MoodMusic } from "@/lib/mood/presets";
+import { useMoodWeather } from "@/lib/mood/use-mood-weather";
+
+/** Météo connue (lib/mood) : ambiance + catalogue où piocher les titres. */
+type MoodOrder = { music: MoodMusic; catalog: BgmTrack[] };
 
 /** Queue ordering per surface : the scroll feed always opens with its fixed
  *  5-anthem intro (RISE → Warriors → Awaken → Phoenix → Legends Never Die),
- *  then shuffles the rest ; every other surface is fully shuffled. */
-function shuffleForPlaylist(id: PlaylistId, tracks: BgmTrack[]): BgmTrack[] {
-  return id === "scroll"
-    ? shuffleWithOpeners(tracks, SCROLL_OPENER_IDS)
-    : shufflePlaylist(tracks);
+ *  then shuffles the rest ; the homepage opens on the weather's tracks
+ *  (hymns after a win, « Still Here » in the storm) ; the rest is shuffled. */
+function shuffleForPlaylist(id: PlaylistId, tracks: BgmTrack[], mood?: MoodOrder | null): BgmTrack[] {
+  if (id === "scroll") return shuffleWithOpeners(tracks, SCROLL_OPENER_IDS);
+  if (id === "homepage" && mood) return withMoodOpeners(tracks, mood.catalog, mood.music);
+  return shufflePlaylist(tracks);
 }
 
 /**
@@ -203,6 +210,16 @@ export function FloatingPlayerProvider({ children }: { children: ReactNode }) {
     return base.length > 0 ? shuffleForPlaylist(initialPlaylistId, base) : [];
   });
 
+  // Météo (lib/mood) : sur l'accueil, les premiers titres suivent la forme
+  // de la KC. Lue par ref dans les rebuilds de file ci-dessous.
+  const moodMusic = useMoodWeather(playlistId === "homepage")?.music ?? null;
+  const moodRef = useRef<MoodOrder | null>(null);
+  useEffect(() => {
+    moodRef.current = moodMusic
+      ? { music: moodMusic, catalog: [...allPlaylists.homepage, ...allPlaylists.scroll] }
+      : null;
+  }, [moodMusic, allPlaylists]);
+
   // Hydrate operator-curated playlists from the public API. Falls back
   // to DEFAULT_PLAYLISTS if the fetch fails.
   //
@@ -250,7 +267,7 @@ export function FloatingPlayerProvider({ children }: { children: ReactNode }) {
         // (scroll keeps its fixed opener sequence via shuffleForPlaylist).
         const active = merged[playlistId] ?? merged.homepage;
         if (active.length > 0) {
-          setQueue(shuffleForPlaylist(playlistId, active));
+          setQueue(shuffleForPlaylist(playlistId, active, moodRef.current));
         }
       })
       .catch((err) => {
@@ -342,11 +359,26 @@ export function FloatingPlayerProvider({ children }: { children: ReactNode }) {
       wlog("route-driven playlist swap", { from: playlistId, to: next });
       setPlaylistId(next);
       const target = allPlaylists[next];
-      setQueue(target && target.length > 0 ? shuffleForPlaylist(next, target) : []);
+      setQueue(target && target.length > 0 ? shuffleForPlaylist(next, target, moodRef.current) : []);
       setIndex(0);
       setPosition(0);
     }
   }, [pathname, playlistId, isPlaying, allPlaylists, playlistOverride]);
+
+  // La météo arrive après le montage : tant que rien ne joue, l'accueil
+  // repart sur les titres du temps qu'il fait (une fois par temps).
+  const moodQueuedRef = useRef<MoodMusic | null>(null);
+  useEffect(() => {
+    if (!moodMusic || moodQueuedRef.current === moodMusic) return;
+    if (playlistId !== "homepage" || playlistOverride || isPlaying) return;
+    const base = allPlaylists.homepage;
+    if (base.length === 0) return;
+    moodQueuedRef.current = moodMusic;
+    wlog("mood-driven homepage queue", { music: moodMusic });
+    setQueue(withMoodOpeners(base, [...base, ...allPlaylists.scroll], moodMusic));
+    setIndex(0);
+    setPosition(0);
+  }, [moodMusic, playlistId, playlistOverride, isPlaying, allPlaylists]);
 
   // ─── First-interaction autoplay ──────────────────────────────────
   // After the user has opted-in once, we auto-resume on the next visit
@@ -572,7 +604,7 @@ export function FloatingPlayerProvider({ children }: { children: ReactNode }) {
       wlog("loadPlaylist", { id, autoplay: opts.autoplay });
       setPlaylistId(id);
       const target = allPlaylists[id];
-      setQueue(target && target.length > 0 ? shuffleForPlaylist(id, target) : []);
+      setQueue(target && target.length > 0 ? shuffleForPlaylist(id, target, moodRef.current) : []);
       setIndex(0);
       setPosition(0);
       if (opts.autoplay) {
@@ -598,7 +630,7 @@ export function FloatingPlayerProvider({ children }: { children: ReactNode }) {
         const routeId = playlistForRoute(pathname || "/");
         setPlaylistId(routeId);
         const target = allPlaylists[routeId];
-        setQueue(target && target.length > 0 ? shuffleForPlaylist(routeId, target) : []);
+        setQueue(target && target.length > 0 ? shuffleForPlaylist(routeId, target, moodRef.current) : []);
         setIndex(0);
         setPosition(0);
         // Stop the cave track from continuing under the hood — without

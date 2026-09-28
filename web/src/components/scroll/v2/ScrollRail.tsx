@@ -42,6 +42,7 @@ import {
 } from "next/navigation";
 import { useTransition } from "react";
 import { useT } from "@/lib/i18n/use-lang";
+import { isHiddenRoute } from "@/lib/hidden-routes";
 import { m, useReducedMotion } from "motion/react";
 import {
   Users,
@@ -325,13 +326,16 @@ export function ScrollRail({ clipCount, collapsed = false, rosterChips = [], onT
           collapsed={collapsed}
           active={isPageActive("/matches")}
         />
-        <RailLink
-          icon={Swords}
-          label={t("p_scroll.rail_vs_roulette")}
-          href="/vs"
-          collapsed={collapsed}
-          active={isPageActive("/vs")}
-        />
+        {/* VS : en chantier (lib/hidden-routes) */}
+        {!isHiddenRoute("/vs") && (
+          <RailLink
+            icon={Swords}
+            label={t("p_scroll.rail_vs_roulette")}
+            href="/vs"
+            collapsed={collapsed}
+            active={isPageActive("/vs")}
+          />
+        )}
         <RailLink
           icon={Radio}
           label={t("p_scroll.rail_live")}

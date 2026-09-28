@@ -161,7 +161,6 @@ const _fr = {
     alumni: "Alumni",
     hall_of_fame: "Hall of Fame",
     chambre: "La Chambre des Souffrances",
-    antre: "L'Antre de la BCC",
     vs_stream: "Mode Stream",
     home: "Accueil",
     scroll: "Scroll",

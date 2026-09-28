@@ -145,7 +145,6 @@ export const ko: FrDict = {
     alumni: "동문",
     hall_of_fame: "명예의 전당",
     chambre: "고통의 방",
-    antre: "BCC의 소굴",
     vs_stream: "스트림 모드",
     home: "홈",
     scroll: "스크롤",

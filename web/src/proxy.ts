@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyAdminCookie } from "@/lib/admin/session";
+import { BCC_MEMBER_COOKIE } from "@/lib/bcc-state";
+import { isHiddenRoute } from "@/lib/hidden-routes";
 
 /**
  * Proxy — protects /admin/* and /api/admin/* (admin auth gate).
@@ -40,6 +42,25 @@ import { verifyAdminCookie } from "@/lib/admin/session";
 
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
+
+  // L'Antre de la BCC est cachée (29/09/2026) : sans le cookie posé par le
+  // rituel B-C-C (lib/bcc-state), l'adresse n'existe pas — vrai 404, décidé
+  // ici avant le rendu (la page, elle, streame et ne peut plus changer son
+  // statut). La page garde son propre contrôle en seconde ligne.
+  if (pathname === "/antre") {
+    if (request.cookies.get(BCC_MEMBER_COOKIE)?.value === "1") return NextResponse.next();
+    return NextResponse.rewrite(new URL("/_antre-fermee", request.url));
+  }
+
+  // Pages en chantier (lib/hidden-routes) : vrai 404 pour le public,
+  // ouvertes en dev et pour l'admin (cookie kc_admin valide) pour continuer
+  // à les travailler.
+  if (isHiddenRoute(pathname)) {
+    const open =
+      process.env.NODE_ENV !== "production" || (await verifyAdminCookie(request.cookies.get("kc_admin")?.value));
+    if (open) return NextResponse.next();
+    return NextResponse.rewrite(new URL("/_page-en-chantier", request.url));
+  }
 
   // The matcher (see config below) ONLY routes /admin/*, /api/admin/*,
   // /api/kills/:id/edit and /api/bgm to this proxy as of the
@@ -169,5 +190,13 @@ export const config = {
     "/api/admin/:path*",
     "/api/kills/:id/edit",
     "/api/bgm",
+    // porte de l'Antre (cachée) : page dynamique de toute façon (cookie)
+    "/antre",
+    // pages en chantier — liste littérale exigée par Next, à garder
+    // identique à HIDDEN_ROUTES (lib/hidden-routes.ts)
+    "/chambre/:path*",
+    "/vs/:path*",
+    "/bracket/:path*",
+    "/community/:path*",
   ],
 };

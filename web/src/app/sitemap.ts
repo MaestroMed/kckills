@@ -5,6 +5,7 @@ import { loadRealData, getKCRoster } from "@/lib/real-data";
 import { getSitemapKills, getSitemapVideoKills } from "@/lib/supabase/kills";
 import { pickAssetUrl } from "@/lib/kill-assets";
 import { SITE_URL } from "@/lib/site-url";
+import { isHiddenRoute } from "@/lib/hidden-routes";
 
 
 // Cap how many clip URLs we expose in the sitemap so it stays under
@@ -360,5 +361,5 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     ...matchupPages,
     ...matchPages,
     ...clipPages,
-  ];
+  ].filter((e) => !isHiddenRoute(new URL(e.url).pathname)); // pages en chantier (lib/hidden-routes)
 }

@@ -35,6 +35,12 @@ export interface WindState {
   turbulence: number;
   /** Décalage du champ de vent (m) : deux étendards éloignés ne reçoivent pas la même rafale au même instant. */
   offsetX: number;
+  /**
+   * Avancée du champ turbulent (m), intégrée par l'appelant au rythme du
+   * vent réel : la turbulence défile plus vite en tempête, sans saut quand la
+   * vitesse change. Absent : t × 1,4.
+   */
+  phase?: number;
 }
 
 // ─── Bruit de valeur 3D (léger, sans dépendance) ────────────────────────────
@@ -244,7 +250,7 @@ export class Cloth {
     const by = (wind.dir[1] / dl) * wind.speed;
     const bz = (wind.dir[2] / dl) * wind.speed;
     const turb = wind.speed * wind.turbulence;
-    const adv = t * 1.4;
+    const adv = wind.phase ?? t * 1.4;
     for (let i = 0; i < this.count; i++) {
       const o = i * 3;
       const qx = (pos[o] + wind.offsetX) * 1.3 - adv;

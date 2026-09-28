@@ -15,20 +15,26 @@
  * (somme de sinus incommensurables) et par des rafales aléatoires
  * (attaque ~0,7 s, tenue ~1,3 s, relâche ~2,5 s), direction qui dérive
  * doucement. Le champ turbulent voyage avec le vent (cloth-sim).
+ *
+ * Météo (lib/mood) : vitesse, turbulence, amplitude et cadence des rafales
+ * changent par message « wind » ; vitesse et turbulence glissent vers leur
+ * nouvelle valeur (~1,5 s) au lieu de sauter. Plus le vent forcit, plus il
+ * vient de face : l'étendard file vers l'arrière au lieu de sortir du cadre.
  */
 import { Cloth, type ClothSpec, type WindState } from "./cloth-sim";
 
+type GustSettings = { gustAmp?: number; gustEvery?: [number, number] };
 type Init = {
   type: "init";
   id: string;
   spec: ClothSpec;
   wind: WindState;
   seed: number;
-};
+} & GustSettings;
 type Msg =
   | Init
+  | ({ type: "wind"; id: string; speed?: number; turbulence?: number } & GustSettings)
   | { type: "tick"; id: string; dt: number }
-  | { type: "wind"; id: string; speed?: number; turbulence?: number }
   | { type: "gust"; id: string; strength?: number }
   | { type: "dispose"; id: string };
 
@@ -41,6 +47,10 @@ interface Sim {
   cloth: Cloth;
   wind: WindState;
   baseSpeed: number;
+  targetSpeed: number;
+  targetTurb: number;
+  gustAmp: number;
+  gustEvery: [number, number];
   baseDirX: number;
   t: number;
   acc: number;
@@ -107,20 +117,28 @@ function gustEnvelope(age: number): number {
   return r >= 1 ? 0 : 1 - r * r * (3 - 2 * r);
 }
 
+const EASE = 1 - Math.exp(-STEP / 1.5);
+
 function advanceWind(sim: Sim): number {
   const t = sim.t;
+  sim.baseSpeed += (sim.targetSpeed - sim.baseSpeed) * EASE;
+  sim.wind.turbulence += (sim.targetTurb - sim.wind.turbulence) * EASE;
   // respiration lente, jamais nulle
   const breath =
     0.18 * Math.sin(t * 0.41 + 1.3) + 0.12 * Math.sin(t * 0.73 + 0.2) + 0.08 * Math.sin(t * 1.37 + 2.1);
   if (t >= sim.nextGust) {
-    sim.gusts.push({ start: t, amp: 0.55 + rand(sim) * 0.75 });
-    sim.nextGust = t + 7 + rand(sim) * 9;
+    sim.gusts.push({ start: t, amp: sim.gustAmp * (0.6 + rand(sim) * 0.8) });
+    const [a, b] = sim.gustEvery;
+    sim.nextGust = t + a + rand(sim) * (b - a);
   }
   let gust = 0;
   sim.gusts = sim.gusts.filter((g) => t - g.start < 5);
   for (const g of sim.gusts) gust += g.amp * gustEnvelope(t - g.start);
   sim.wind.speed = sim.baseSpeed * (1 + breath + gust);
-  sim.wind.dir[0] = sim.baseDirX + 0.25 * Math.sin(t * 0.23 + 0.7) + 0.2 * gust;
+  // au-delà du vent de référence (2,3 m/s), la part latérale diminue
+  const lateral = Math.min(1, Math.pow(2.3 / Math.max(0.5, sim.baseSpeed), 1.2));
+  sim.wind.dir[0] = (sim.baseDirX + 0.25 * Math.sin(t * 0.23 + 0.7) + 0.2 * gust) * lateral;
+  sim.wind.phase = (sim.wind.phase ?? 0) + STEP * 0.55 * sim.wind.speed;
   return gust;
 }
 
@@ -200,6 +218,10 @@ self.onmessage = (e: MessageEvent<Msg>) => {
       cloth,
       wind: { ...msg.wind, dir: [...msg.wind.dir] as [number, number, number] },
       baseSpeed: msg.wind.speed,
+      targetSpeed: msg.wind.speed,
+      targetTurb: msg.wind.turbulence,
+      gustAmp: msg.gustAmp ?? 0.93,
+      gustEvery: msg.gustEvery ?? [7, 16],
       baseDirX: msg.wind.dir[0],
       t: 0,
       acc: 0,
@@ -240,8 +262,14 @@ self.onmessage = (e: MessageEvent<Msg>) => {
     if (steps === 4) sim.acc = 0; // onglet ralenti : on ne rattrape pas
     self.postMessage({ type: "frame", id: msg.id, frame: writeFrame(sim), rod: sim.cloth.rodAngle });
   } else if (msg.type === "wind") {
-    if (msg.speed !== undefined) sim.baseSpeed = msg.speed;
-    if (msg.turbulence !== undefined) sim.wind.turbulence = msg.turbulence;
+    if (msg.speed !== undefined) sim.targetSpeed = msg.speed;
+    if (msg.turbulence !== undefined) sim.targetTurb = msg.turbulence;
+    if (msg.gustAmp !== undefined) sim.gustAmp = msg.gustAmp;
+    if (msg.gustEvery) {
+      sim.gustEvery = msg.gustEvery;
+      // la prochaine rafale suit la nouvelle cadence (pas d'attente de 16 s après un passage en tempête)
+      sim.nextGust = Math.min(sim.nextGust, sim.t + msg.gustEvery[1]);
+    }
   } else if (msg.type === "gust") {
     sim.gusts.push({ start: sim.t, amp: msg.strength ?? 1.2 });
   } else if (msg.type === "dispose") {

@@ -9,6 +9,7 @@
  * prête — ou pour toujours si le GPU refuse.
  */
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import type { WeatherSettings } from "@/lib/mood/presets";
 import type { BannerHandle, BannerVariant } from "./banner-engine";
 
 export interface KCBannerProps {
@@ -19,8 +20,10 @@ export interface KCBannerProps {
   topMarginPx?: number;
   /** Rendu suspendu (étendards repliés au scroll, onglet de labo masqué…). */
   paused?: boolean;
-  /** Vitesse moyenne du vent (m/s), pilotable depuis le labo. */
+  /** Vitesse moyenne du vent (m/s), pilotable depuis le labo (prime sur la météo). */
   windSpeed?: number;
+  /** Météo (lib/mood) : vent, lumière, rayons, éclairs, usure. */
+  weather?: WeatherSettings | null;
   className?: string;
   fallback?: ReactNode;
   /** Accès impératif (labo : rafale). */
@@ -36,6 +39,7 @@ export function KCBanner({
   topMarginPx,
   paused = false,
   windSpeed,
+  weather,
   className,
   fallback,
   onHandle,
@@ -48,10 +52,13 @@ export function KCBanner({
   const [onScreen, setOnScreen] = useState(true);
   const onHandleRef = useRef(onHandle);
   const onReadyRef = useRef(onReady);
+  // Météo connue au montage : appliquée d'emblée (pas de transition visible).
+  const weatherRef = useRef(weather);
   useEffect(() => {
     onHandleRef.current = onHandle;
     onReadyRef.current = onReady;
-  }, [onHandle, onReady]);
+    weatherRef.current = weather;
+  }, [onHandle, onReady, weather]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -64,6 +71,7 @@ export function KCBanner({
           variant,
           pxPerMeter,
           topMarginPx,
+          weather: weatherRef.current ?? undefined,
           onReady: () => {
             if (disposed) return;
             setReady(true);
@@ -104,6 +112,11 @@ export function KCBanner({
     handleRef.current?.setPaused(paused || !onScreen);
   }, [paused, onScreen, ready]);
 
+  useEffect(() => {
+    if (weather) handleRef.current?.setWeather(weather);
+  }, [weather, ready]);
+
+  // Déclaré après la météo : le réglage manuel du labo garde le dernier mot.
   useEffect(() => {
     if (windSpeed !== undefined) handleRef.current?.setWind(windSpeed);
   }, [windSpeed, ready]);
