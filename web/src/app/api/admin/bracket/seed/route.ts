@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createServerSupabase } from "@/lib/supabase/server";
-import { deriveActorRole, logAdminAction, requireAdmin } from "@/lib/admin/audit";
+import { createServiceSupabase } from "@/lib/supabase/server";
+import {
+  adminDbUnavailable,
+  deriveActorRole,
+  logAdminAction,
+  requireAdmin,
+} from "@/lib/admin/audit";
 
 /**
  * POST /api/admin/bracket/seed
@@ -31,7 +36,8 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const sb = await createServerSupabase();
+  const sb = createServiceSupabase();
+  if (!sb) return adminDbUnavailable();
   const { data, error } = await sb.rpc("fn_seed_monthly_bracket", {
     p_month_year: monthYear,
   });

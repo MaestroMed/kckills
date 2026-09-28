@@ -33,8 +33,13 @@
  * prevent runaway invocations.
  */
 import { NextResponse } from "next/server";
-import { createServerSupabase } from "@/lib/supabase/server";
-import { deriveActorRole, logAdminAction, requireAdmin } from "@/lib/admin/audit";
+import { createServiceSupabase } from "@/lib/supabase/server";
+import {
+  adminDbUnavailable,
+  deriveActorRole,
+  logAdminAction,
+  requireAdmin,
+} from "@/lib/admin/audit";
 
 type BulkAction = "cancel" | "retry" | "reprioritize";
 
@@ -116,7 +121,8 @@ export async function POST(req: Request): Promise<NextResponse> {
     priority = Math.round(p);
   }
 
-  const sb = await createServerSupabase();
+  const sb = createServiceSupabase();
+  if (!sb) return adminDbUnavailable();
   const results: RowResult[] = [];
   const okCount = { value: 0 };
   const failCount = { value: 0 };
@@ -164,7 +170,7 @@ export async function POST(req: Request): Promise<NextResponse> {
 
 // ─── Per-row workers ─────────────────────────────────────────────────
 
-type SBClient = Awaited<ReturnType<typeof createServerSupabase>>;
+type SBClient = NonNullable<ReturnType<typeof createServiceSupabase>>;
 
 async function processOne(
   sb: SBClient,

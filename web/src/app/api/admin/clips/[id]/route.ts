@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerSupabase } from "@/lib/supabase/server";
-import { requireAdmin } from "@/lib/admin/audit";
+import { ADMIN_DB_UNAVAILABLE, requireAdmin } from "@/lib/admin/audit";
 import { patchClip } from "@/app/admin/clips/actions";
 
 /** GET /api/admin/clips/[id] */
@@ -45,7 +45,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   }
   const result = await patchClip(id, body as Record<string, never>);
   if (!result.ok) {
-    const status = result.error?.includes("Forbidden") ? 403 : 400;
+    const status = result.error === ADMIN_DB_UNAVAILABLE
+      ? 500
+      : result.error?.includes("Forbidden") ? 403 : 400;
     return NextResponse.json({ error: result.error }, { status });
   }
   return NextResponse.json({ ok: true, patched: result.patched ?? [] });

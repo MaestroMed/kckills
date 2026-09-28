@@ -8,6 +8,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { ADMIN_DB_UNAVAILABLE } from "@/lib/admin/audit";
 import { patchPlayer, type PlayerPatchInput } from "@/app/admin/roster/actions";
 
 export async function PATCH(
@@ -23,7 +24,9 @@ export async function PATCH(
   }
   const result = await patchPlayer(id, body);
   if (!result.ok) {
-    const status = result.error?.includes("Forbidden") ? 403 : 400;
+    const status = result.error === ADMIN_DB_UNAVAILABLE
+      ? 500
+      : result.error?.includes("Forbidden") ? 403 : 400;
     return NextResponse.json({ error: result.error }, { status });
   }
   return NextResponse.json({ ok: true });

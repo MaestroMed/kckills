@@ -8,6 +8,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { ADMIN_DB_UNAVAILABLE } from "@/lib/admin/audit";
 import { pinFeature, type FeaturePinInput } from "@/app/admin/editorial/actions";
 
 export async function POST(request: NextRequest) {
@@ -19,11 +20,11 @@ export async function POST(request: NextRequest) {
   }
   const result = await pinFeature(body);
   if (!result.ok) {
-    const status = result.error?.includes("Forbidden")
-      ? 403
-      : result.error?.includes("not found")
-        ? 404
-        : 400;
+    const status =
+      result.error === ADMIN_DB_UNAVAILABLE ? 500
+      : result.error?.includes("Forbidden") ? 403
+      : result.error?.includes("not found") ? 404
+      : 400;
     return NextResponse.json({ error: result.error }, { status });
   }
   return NextResponse.json({ ok: true, feature_date: result.feature_date });

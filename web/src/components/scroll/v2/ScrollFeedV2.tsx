@@ -844,8 +844,9 @@ export function ScrollFeedV2({
 
   // Wave 41 — admin flag/hide. Cull a bad clip (offset drift, draft, plateau,
   // OTP screen) straight from the scroll via the existing requireAdmin-gated
-  // /api/admin/clips/bulk hide action (sets kill_visible=false), then
-  // optimistically drop it from the feed so it vanishes immediately.
+  // /api/admin/clips/bulk hide action (sets kill_visible=false), then drop it
+  // from the feed — only once the server reports a row really hidden : a 200
+  // with affected=0 changed nothing in the DB, so the clip stays on screen.
   const [hidingId, setHidingId] = useState<string | null>(null);
   const hideActiveClip = useCallback(async () => {
     const active = visibleItems[activeIndex];
@@ -858,8 +859,18 @@ export function ScrollFeedV2({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ids: [id], action: "hide" }),
       });
-      if (r.ok) {
+      const res = (await r.json().catch(() => null)) as
+        | { affected?: unknown; error?: unknown }
+        | null;
+      if (r.ok && typeof res?.affected === "number" && res.affected > 0) {
         setItems((prev) => prev.filter((x) => x.id !== id));
+      } else {
+        setShareToast(
+          typeof res?.error === "string"
+            ? `Masquage refusé : ${res.error}`
+            : "Masquage sans effet en base",
+        );
+        window.setTimeout(() => setShareToast(null), 2500);
       }
     } catch {
       /* swallow — admin action, best-effort */

@@ -15,8 +15,13 @@
  * Audit row written to admin_actions for traceability.
  */
 import { NextResponse } from "next/server";
-import { createServerSupabase } from "@/lib/supabase/server";
-import { deriveActorRole, logAdminAction, requireAdmin } from "@/lib/admin/audit";
+import { createServiceSupabase } from "@/lib/supabase/server";
+import {
+  adminDbUnavailable,
+  deriveActorRole,
+  logAdminAction,
+  requireAdmin,
+} from "@/lib/admin/audit";
 
 export async function POST(
   req: Request,
@@ -32,7 +37,8 @@ export async function POST(
     return NextResponse.json({ error: "missing id" }, { status: 400 });
   }
 
-  const sb = await createServerSupabase();
+  const sb = createServiceSupabase();
+  if (!sb) return adminDbUnavailable();
 
   // Read first so we can audit the original state and reject illegal
   // transitions (e.g. trying to cancel an already-finished job).

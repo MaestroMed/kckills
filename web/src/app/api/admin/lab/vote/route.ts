@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { deriveActorRole, logAdminAction, requireAdmin } from "@/lib/admin/audit";
-import { createServerSupabase } from "@/lib/supabase/server";
+import {
+  adminDbUnavailable,
+  deriveActorRole,
+  logAdminAction,
+  requireAdmin,
+} from "@/lib/admin/audit";
+import { createServiceSupabase } from "@/lib/supabase/server";
 
 const VALID_VERDICTS = ["great", "good", "ok", "meh", "bad"];
 
@@ -35,7 +40,8 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const sb = await createServerSupabase();
+  const sb = createServiceSupabase();
+  if (!sb) return adminDbUnavailable();
   const note = typeof body.note === "string" ? body.note.slice(0, 500) : null;
   const { error } = await sb
     .from("lab_evaluations")

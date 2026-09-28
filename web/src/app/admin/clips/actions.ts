@@ -16,8 +16,9 @@
  */
 import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
-import { createServerSupabase } from "@/lib/supabase/server";
+import { createServiceSupabase } from "@/lib/supabase/server";
 import {
+  ADMIN_DB_UNAVAILABLE,
   deriveActorRole,
   logAdminAction,
   requireAdmin,
@@ -97,7 +98,8 @@ export async function patchClip(
   if (!admin.ok) return { ok: false, error: admin.error };
   if (!id) return { ok: false, error: "id required" };
 
-  const sb = await createServerSupabase();
+  const sb = createServiceSupabase();
+  if (!sb) return { ok: false, error: ADMIN_DB_UNAVAILABLE };
 
   const { data: before } = await sb
     .from("kills")

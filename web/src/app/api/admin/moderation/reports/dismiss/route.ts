@@ -8,8 +8,9 @@
  * Used when the operator decides the reports are bogus / spam-flag.
  */
 import { NextResponse } from "next/server";
-import { createServerSupabase } from "@/lib/supabase/server";
+import { createServiceSupabase } from "@/lib/supabase/server";
 import {
+  adminDbUnavailable,
   deriveActorRole,
   logAdminAction,
   requireAdmin,
@@ -45,7 +46,8 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "reportIds empty after filtering" }, { status: 400 });
   }
 
-  const sb = await createServerSupabase();
+  const sb = createServiceSupabase();
+  if (!sb) return adminDbUnavailable();
   const { error } = await sb
     .from("reports")
     .update({

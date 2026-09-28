@@ -1,7 +1,23 @@
 import "server-only";
 import { createHash, randomUUID } from "crypto";
-import { createServerSupabase } from "@/lib/supabase/server";
+import { NextResponse } from "next/server";
+import { createServerSupabase, createServiceSupabase } from "@/lib/supabase/server";
 import { verifyAdminCookie } from "@/lib/admin/session";
+
+/**
+ * Les écritures admin passent par le service role : kills, admin_actions,
+ * pipeline_jobs… n'ont aucune policy RLS d'écriture pour anon/authenticated,
+ * donc via la session PostgREST ignorait l'UPDATE (0 ligne, pas d'erreur).
+ * Sans SUPABASE_SERVICE_ROLE_KEY on refuse l'écriture (fail-closed).
+ */
+export const ADMIN_DB_UNAVAILABLE =
+  "Écriture admin impossible : SUPABASE_SERVICE_ROLE_KEY non configurée";
+
+/** Réponse 500 des routes admin quand le client service role est absent. */
+export function adminDbUnavailable(): NextResponse {
+  console.error(`[admin] ${ADMIN_DB_UNAVAILABLE}`);
+  return NextResponse.json({ error: ADMIN_DB_UNAVAILABLE }, { status: 500 });
+}
 
 /**
  * Result of `requireAdmin()` augmented with the auth path that succeeded.
@@ -96,7 +112,9 @@ function readClientIp(req: Request): string | null {
 
 /**
  * Log an admin action to the audit trail.
- * Silent-fail — never block the primary action if logging fails.
+ * Never blocks the primary action if logging fails — but failures are
+ * logged server-side (admin_actions n'a aucune policy RLS : l'insert
+ * passe par le service role, jamais par la session).
  *
  * When `request` is provided, we derive ip_hash and user_agent_class
  * from its headers. Both stay `null` when the request is omitted (e.g.
@@ -118,7 +136,11 @@ export async function logAdminAction(params: {
   request?: Request;
 }): Promise<void> {
   try {
-    const sb = await createServerSupabase();
+    const sb = createServiceSupabase();
+    if (!sb) {
+      console.error(`[admin/audit] ${params.action} non journalisée : ${ADMIN_DB_UNAVAILABLE}`);
+      return;
+    }
 
     let ipHash: string | null = null;
     let userAgentClass: UserAgentClass | null = null;
@@ -131,7 +153,7 @@ export async function logAdminAction(params: {
 
     const requestId = randomUUID().replace(/-/g, "").slice(0, 12);
 
-    await sb.from("admin_actions").insert({
+    const { error } = await sb.from("admin_actions").insert({
       action: params.action,
       entity_type: params.entityType,
       entity_id: params.entityId ?? null,
@@ -144,8 +166,12 @@ export async function logAdminAction(params: {
       request_id: requestId,
       user_agent_class: userAgentClass,
     });
-  } catch {
-    // Silent-fail: audit is best-effort, never blocks the primary action.
+    if (error) {
+      console.error(`[admin/audit] insert ${params.action} échoué : ${error.message}`);
+    }
+  } catch (err) {
+    // Audit best-effort : never blocks the primary action.
+    console.error(`[admin/audit] ${params.action} non journalisée :`, err);
   }
 }
 
