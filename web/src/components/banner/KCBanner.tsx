@@ -25,6 +25,8 @@ export interface KCBannerProps {
   fallback?: ReactNode;
   /** Accès impératif (labo : rafale). */
   onHandle?: (h: BannerHandle | null) => void;
+  /** Première image 3D peinte (le parent peut effacer son image de repli). */
+  onReady?: () => void;
 }
 
 export function KCBanner({
@@ -37,6 +39,7 @@ export function KCBanner({
   className,
   fallback,
   onHandle,
+  onReady,
 }: KCBannerProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const handleRef = useRef<BannerHandle | null>(null);
@@ -44,9 +47,11 @@ export function KCBanner({
   const [failed, setFailed] = useState(false);
   const [onScreen, setOnScreen] = useState(true);
   const onHandleRef = useRef(onHandle);
+  const onReadyRef = useRef(onReady);
   useEffect(() => {
     onHandleRef.current = onHandle;
-  }, [onHandle]);
+    onReadyRef.current = onReady;
+  }, [onHandle, onReady]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -60,7 +65,9 @@ export function KCBanner({
           pxPerMeter,
           topMarginPx,
           onReady: () => {
-            if (!disposed) setReady(true);
+            if (disposed) return;
+            setReady(true);
+            onReadyRef.current?.();
           },
         }),
       )
@@ -114,8 +121,13 @@ export function KCBanner({
             style={{ opacity: ready ? 1 : 0 }}
           />
         )}
-        {fallback && (!ready || failed) ? (
-          <div className="absolute inset-0 flex items-start justify-center">{fallback}</div>
+        {fallback ? (
+          <div
+            className="pointer-events-none absolute inset-0 transition-opacity duration-700"
+            style={{ opacity: ready && !failed ? 0 : 1 }}
+          >
+            {fallback}
+          </div>
         ) : null}
       </div>
     </div>

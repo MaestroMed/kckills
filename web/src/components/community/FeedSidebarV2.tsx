@@ -514,7 +514,8 @@ export function FeedSidebarV2({
       <StarRatingPopover
         killId={killId}
         isOpen={showRating}
-        initialScore={Math.round(initialAvgRating ?? 0)}
+        // pas la moyenne : la retoucher envoyait 0 (= retirer SA note)
+        initialScore={0}
         onClose={() => setShowRating(false)}
         onAuthRequired={() => {
           setShowRating(false);

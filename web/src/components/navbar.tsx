@@ -99,6 +99,8 @@ export function Navbar() {
   // Passe à true quand on peut monter les étendards en tissu 3D (desktop,
   // GPU dispo, pas de reduced-motion, après idle).
   const [clothReady, setClothReady] = useState(false);
+  // Étendard dont le tissu 3D a peint sa première image (l'image de repli s'efface).
+  const [liveBanners, setLiveBanners] = useState<{ left?: boolean; right?: boolean }>({});
   useEffect(() => {
     if (window.innerWidth < 1024) return;
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
@@ -204,26 +206,45 @@ export function Navbar() {
             Home uniquement (voir showPennants). */}
         {showPennants && (
           <>
-            {(["left", "right"] as const).map((side) => (
-              <div key={side} aria-hidden className={`kc-pennant-wrap kc-pennant-wrap--${side} hidden lg:block`}>
-                {clothReady ? (
-                  <KCBanner
-                    side={side}
-                    variant="header"
-                    pxPerMeter={95}
-                    paused={scrolled}
-                    className="kc-pennant-canvas"
-                    fallback={
-                      <div className="kc-pennant-fallback">
-                        <KCPennantStatic side={side} />
-                      </div>
-                    }
-                  />
-                ) : (
-                  <KCPennantStatic side={side} />
-                )}
-              </div>
-            ))}
+            {(["left", "right"] as const).map((side) => {
+              // Repli = image fixe du NOUVEL étendard (capturée du rendu 3D par
+              // scripts/banner-poster.mjs) : même cadre, même pose, le passage
+              // au tissu animé est un fondu invisible.
+              const poster = (
+                <Image
+                  src={`/images/etendards/etendard-${side === "left" ? "gauche" : "droite"}.webp`}
+                  alt=""
+                  width={140}
+                  height={262}
+                  unoptimized
+                  loading="eager"
+                  className="h-full w-full"
+                />
+              );
+              return (
+                <div key={side} aria-hidden className={`kc-pennant-wrap kc-pennant-wrap--${side} hidden lg:block`}>
+                  {/* L'image reste dessous en permanence (même pendant le chargement du
+                      code 3D, où dynamic() ne rend rien) et ne s'efface qu'une fois la
+                      première image du tissu peinte : aucun trou, fondu enchaîné. */}
+                  <div
+                    className="kc-pennant-canvas transition-opacity duration-700"
+                    style={{ opacity: liveBanners[side] ? 0 : 1 }}
+                  >
+                    {poster}
+                  </div>
+                  {clothReady && (
+                    <KCBanner
+                      side={side}
+                      variant="header"
+                      pxPerMeter={95}
+                      paused={scrolled}
+                      className="kc-pennant-canvas"
+                      onReady={() => setLiveBanners((v) => ({ ...v, [side]: true }))}
+                    />
+                  )}
+                </div>
+              );
+            })}
           </>
         )}
 
@@ -517,73 +538,6 @@ function PlayIcon({ className = "" }: { className?: string }) {
   );
 }
 
-/**
- * KCPennantStatic — étendard héraldique accroché sous un coin de la barre :
- * bannière navy, gros liseré or, vrai logo Karmine Corp teinté or (filtre
- * feFlood/feComposite sur le PNG officiel). Fallback instantané du tissu
- * 3D — et version définitive sur mobile / reduced-motion / no-WebGL.
- */
-function KCPennantStatic({ side }: { side: "left" | "right" }) {
-  const gradId = `kc-pennant-gold-${side}`;
-  const goldizeId = `kc-pennant-goldize-${side}`;
-  return (
-    <svg
-      aria-hidden
-      className="kc-pennant-static"
-      viewBox="0 0 58 150"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-    >
-      <defs>
-        <linearGradient id={gradId} x1="0" y1="0" x2="58" y2="150">
-          <stop stopColor="#E8D6A8" />
-          <stop offset="0.5" stopColor="#C8AA6E" />
-          <stop offset="1" stopColor="#785A28" />
-        </linearGradient>
-        <linearGradient id={`${gradId}-blue`} x1="0" y1="0" x2="58" y2="150">
-          <stop stopColor="#0a63ff" />
-          <stop offset="0.5" stopColor="#0047d1" />
-          <stop offset="1" stopColor="#012372" />
-        </linearGradient>
-        {/* Recolore le logo (blanc → or) via son canal alpha. */}
-        <filter id={goldizeId} x="-20%" y="-20%" width="140%" height="140%">
-          <feFlood floodColor="#C8AA6E" result="gold" />
-          <feComposite in="gold" in2="SourceAlpha" operator="in" />
-        </filter>
-      </defs>
-      {/* tringle d'accroche */}
-      <rect x="0" y="0" width="58" height="6" rx="3" fill={`url(#${gradId})`} />
-      {/* corps bleu KC, queue d'aronde */}
-      <path
-        d="M4 6 H54 V138 L29 122 L4 138 Z"
-        fill={`url(#${gradId}-blue)`}
-        stroke={`url(#${gradId})`}
-        strokeWidth="3.5"
-        strokeLinejoin="round"
-      />
-      {/* liseré crème interne */}
-      <path
-        d="M9 12 H49 V128 L29 115.4 L9 128 Z"
-        stroke="#F0E6D2"
-        strokeOpacity="0.35"
-        strokeWidth="1"
-        fill="none"
-      />
-      {/* vrai logo KC, teinté or — au tiers bas */}
-      <image
-        href="/images/kc-logo.png"
-        x="11"
-        y="58"
-        width="36"
-        height="36"
-        filter={`url(#${goldizeId})`}
-      />
-      {/* pointes de la queue d'aronde rehaussées */}
-      <circle cx="4" cy="138" r="2" fill="#E8D6A8" />
-      <circle cx="54" cy="138" r="2" fill="#E8D6A8" />
-    </svg>
-  );
-}
 
 function KCKILLSLogo() {
   return (

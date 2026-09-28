@@ -21,6 +21,7 @@
  * 25 routes that should follow.
  */
 
+import { saveRating } from "@/lib/community/ratings";
 import { createServerSupabase } from "@/lib/supabase/server";
 
 export type CommentVoteValue = -1 | 0 | 1;
@@ -258,20 +259,9 @@ export async function rateKill(
     return { ok: false, error: "Connecte-toi pour noter", authRequired: true };
   }
 
-  if (score === 0) {
-    const { error } = await supabase
-      .from("ratings")
-      .delete()
-      .eq("kill_id", killId)
-      .eq("user_id", user.id);
-    if (error) return { ok: false, error: error.message };
-  } else {
-    const { error } = await supabase.from("ratings").upsert(
-      { kill_id: killId, user_id: user.id, score },
-      { onConflict: "kill_id,user_id" },
-    );
-    if (error) return { ok: false, error: error.message };
-  }
+  // Pas d'upsert ni de DELETE de session : cf. saveRating.
+  const saved = await saveRating(supabase, killId, user.id, score);
+  if (!saved.ok) return { ok: false, error: saved.error };
 
   // fn_update_kill_rating fired synchronously above.
   const { data } = await supabase

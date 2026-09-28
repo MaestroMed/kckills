@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createServerSupabase } from "@/lib/supabase/server";
+import { createServerSupabase, createServiceSupabase } from "@/lib/supabase/server";
 
 const VALID_REASONS = ["toxic", "spam", "off_topic", "other"];
 
@@ -34,14 +34,14 @@ export async function POST(
     return NextResponse.json({ error: reportErr.message }, { status: 500 });
   }
 
-  // Bump report_count on the comment for quick admin filtering
-  const { data: existing } = await sb
-    .from("comments")
-    .select("report_count")
-    .eq("id", id)
-    .maybeSingle();
-  const newCount = (existing?.report_count ?? 0) + 1;
-  await sb.from("comments").update({ report_count: newCount }).eq("id", id);
+  // Compteur de signalements : colonne non accordée à `authenticated` (083),
+  // la mise à jour de session ne faisait rien → service role.
+  const service = createServiceSupabase();
+  if (service) {
+    const { data: existing } = await service.from("comments").select("report_count").eq("id", id).maybeSingle();
+    const newCount = (existing?.report_count ?? 0) + 1;
+    await service.from("comments").update({ report_count: newCount }).eq("id", id);
+  }
 
   return NextResponse.json({ ok: true });
 }

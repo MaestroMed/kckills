@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerSupabase } from "@/lib/supabase/server";
+import { saveRating } from "@/lib/community/ratings";
 
 export async function POST(
   request: NextRequest,
@@ -23,18 +24,10 @@ export async function POST(
     return NextResponse.json({ error: "Score invalide (1-5)" }, { status: 400 });
   }
 
-  // Upsert rating
-  const { error } = await supabase.from("ratings").upsert(
-    {
-      kill_id: id,
-      user_id: user.id,
-      score,
-    },
-    { onConflict: "kill_id,user_id" }
-  );
-
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  // Pas d'upsert : cf. saveRating (droits colonne par colonne de la migration 083).
+  const saved = await saveRating(supabase, id, user.id, score);
+  if (!saved.ok) {
+    return NextResponse.json({ error: saved.error }, { status: 500 });
   }
 
   // Get updated kill rating

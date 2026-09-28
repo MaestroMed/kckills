@@ -27,10 +27,17 @@ function LoginContent() {
   const t = useT();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const returnTo = searchParams.get("returnTo") || "/";
+  // `return_to` : alias envoyé par InlineAuthPrompt. `popup=1` : la fenêtre
+  // doit prévenir la page d'origine puis se fermer (/auth/popup-done).
+  const rawReturn = searchParams.get("returnTo") || searchParams.get("return_to") || "/";
+  const returnTo = rawReturn.startsWith("/") && !rawReturn.startsWith("//") ? rawReturn : "/";
+  const popup = searchParams.get("popup") === "1";
+  const landing = popup ? `/auth/popup-done?next=${encodeURIComponent(returnTo)}` : returnTo;
+  const authFailed = searchParams.get("error") === "auth";
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const shownError = error ?? (authFailed ? "La connexion Discord a échoué. Réessaie." : null);
   const [checkingSession, setCheckingSession] = useState(true);
 
   // If the user is already logged in, skip the page entirely.
@@ -40,14 +47,14 @@ function LoginContent() {
       .getUser()
       .then(({ data }) => {
         if (data.user) {
-          // Already authenticated — respect returnTo
-          router.replace(returnTo);
+          // Already authenticated — respect returnTo (ou ferme la fenêtre)
+          router.replace(landing);
           return;
         }
         setCheckingSession(false);
       })
       .catch(() => setCheckingSession(false));
-  }, [router, returnTo]);
+  }, [router, landing]);
 
   const handleDiscordLogin = async () => {
     setLoading(true);
@@ -59,7 +66,7 @@ function LoginContent() {
         options: {
           // Forward returnTo through the callback so the session bounce
           // lands the user where they started.
-          redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(returnTo)}`,
+          redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(landing)}`,
         },
       });
       if (authError) {
@@ -199,9 +206,9 @@ function LoginContent() {
                   )}
                 </button>
 
-                {error && (
+                {shownError && (
                   <p className="mt-3 rounded-lg border border-[var(--red)]/40 bg-[var(--red)]/10 px-3 py-2 text-xs text-[var(--red)]">
-                    {error}
+                    {shownError}
                   </p>
                 )}
 
