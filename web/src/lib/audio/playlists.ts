@@ -23,6 +23,8 @@
  * pulses with the play state).
  */
 
+import type { MoodMusic } from "@/lib/mood/presets";
+
 export interface BgmTrack {
   id: string;
   title: string;
@@ -677,6 +679,34 @@ export const SCROLL_OPENER_IDS: readonly string[] = [
   "i1IKnWDecwA", // Phoenix
   "r6zIGXun57U", // Legends Never Die
 ];
+
+/** Premiers titres de l'accueil selon la météo (lib/mood), par ordre de
+ *  préférence (ids YouTube). Un titre absent de la playlist de l'accueil est
+ *  pris dans le catalogue complet (scroll compris). Le scroll garde son
+ *  intro signature (SCROLL_OPENER_IDS), quel que soit le temps. */
+export const MOOD_OPENER_IDS: Record<MoodMusic, readonly string[]> = {
+  // gloire : les hymnes de la victoire
+  hymnes: ["fB8TyLTD7EE" /* RISE */, "aR-KAldshAE" /* Warriors 2020 */, "r6zIGXun57U" /* Legends Never Die */],
+  // beau temps, match en direct : l'énergie
+  hype: ["F5tSoaJ93ac" /* Enemy */, "i1IKnWDecwA" /* Phoenix */, "sVZpHFXcFJw" /* GIANTS */],
+  // variable : l'épique
+  epique: ["pKNEx-9OqRM" /* Guns for Hire */, "r6zIGXun57U" /* Legends Never Die */, "HtHrjFJGDys" /* The Call */],
+  // ciel couvert, tempête : se relever
+  sombre: ["EcwLGLBS2cE" /* Still Here */, "ZAt8oxY0GQo" /* Heavy Is The Crown */, "pKNEx-9OqRM" /* Guns for Hire */],
+};
+
+/** File de l'accueil : les titres de la météo en tête, le reste mélangé. */
+export function withMoodOpeners(tracks: BgmTrack[], catalog: BgmTrack[], music: MoodMusic): BgmTrack[] {
+  const byId = new Map<string, BgmTrack>();
+  for (const t of [...catalog, ...tracks]) byId.set(t.youtubeId, t);
+  const openers: BgmTrack[] = [];
+  for (const id of MOOD_OPENER_IDS[music]) {
+    const t = byId.get(id);
+    if (t && !openers.includes(t)) openers.push(t);
+  }
+  const used = new Set(openers.map((t) => t.youtubeId));
+  return [...openers, ...shufflePlaylist(tracks.filter((t) => !used.has(t.youtubeId)))];
+}
 
 /** Shuffle that PINS a fixed opener sequence to the front (in the given
  *  order), then Fisher-Yates shuffles everything after it. Openers absent
