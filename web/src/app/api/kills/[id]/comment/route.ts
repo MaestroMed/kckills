@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createServerSupabase } from "@/lib/supabase/server";
+import { createServerSupabase, createServiceSupabase } from "@/lib/supabase/server";
 
 const PROFILE_SELECT = "id, discord_username, discord_avatar_url, badges";
 // Wave 7 (Agent AF) — `upvotes` is now the running SUM(vote_value) from
@@ -51,9 +51,9 @@ async function fetchProfilesById(
  * processes them in the background).
  *
  * Two queries are needed because the public RLS policy on `comments` only
- * exposes `moderation_status='approved'`. The pending slice runs scoped to
- * `auth.uid() = user_id`, which the "Own comment update" policy already
- * permits at SELECT time once we attach the user JWT.
+ * exposes `moderation_status='approved'`. No policy lets an author READ their
+ * own pending rows, so the pending slice is read with the service role,
+ * filtered on the user id taken from the verified session.
  *
  * Wave 7 (Agent AF) — also returns per-comment vote metadata :
  *   * `upvotes`         : running score (SUM(vote_value), can be negative)
@@ -83,8 +83,9 @@ export async function GET(
     .eq("moderation_status", "approved")
     .order("created_at", { ascending: false });
 
-  const pendingQ = user
-    ? supabase
+  const service = createServiceSupabase();
+  const pendingQ = user && service
+    ? service
         .from("comments")
         .select(COMMENT_SELECT)
         .eq("kill_id", id)
@@ -220,28 +221,43 @@ export async function POST(
     return NextResponse.json({ error: "Commentaire trop long (max 500)" }, { status: 400 });
   }
 
-  const { data, error } = await supabase
-    .from("comments")
-    .insert({
-      kill_id: id,
-      user_id: user.id,
-      parent_id: parentId || null,
-      content: text.trim(),
-      moderation_status: "pending",
-    })
-    .select(COMMENT_SELECT)
-    .single();
+  // Insertion SANS relecture : relire la ligne « pending » exige un droit de
+  // lecture que la RLS ne donne pas à l'auteur → « new row violates row-level
+  // security policy », tous les commentaires échouaient (constaté le 29/09).
+  // L'id est choisi ici pour relire exactement cette ligne avec le service role.
+  const commentId = crypto.randomUUID();
+  const { error } = await supabase.from("comments").insert({
+    id: commentId,
+    kill_id: id,
+    user_id: user.id,
+    parent_id: parentId || null,
+    content: text.trim(),
+    moderation_status: "pending",
+  });
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
+
+  const service = createServiceSupabase();
+  const { data } = service
+    ? await service.from("comments").select(COMMENT_SELECT).eq("id", commentId).maybeSingle()
+    : { data: null };
 
   // Recoud le profil auteur (pas d'embed possible, cf. COMMENT_SELECT).
   const profileById = await fetchProfilesById(supabase, [user.id]);
 
   // Echo the pending flag so the client knows to badge it.
   return NextResponse.json({
-    ...data,
+    ...(data ?? {
+      id: commentId,
+      kill_id: id,
+      user_id: user.id,
+      parent_id: parentId || null,
+      content: text.trim(),
+      moderation_status: "pending",
+      created_at: new Date().toISOString(),
+    }),
     profile: profileById.get(user.id) ?? null,
     _pending: true,
   });

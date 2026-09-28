@@ -501,7 +501,8 @@ export function FeedItemVideo({
         killId={item.id}
         shareTitle={`${item.killerChampion} kills ${item.victimChampion}`}
         shareText={item.aiDescription ?? undefined}
-        initialLikeCount={item.ratingCount ?? 0}
+        // le vrai compteur arrive par getKillLikeState (le flux ne porte pas like_count)
+        initialLikeCount={0}
         initialCommentCount={item.commentCount ?? 0}
         initialAvgRating={item.avgRating}
         initialRatingCount={item.ratingCount ?? 0}
