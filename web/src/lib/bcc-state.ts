@@ -11,10 +11,15 @@
  * page, we flip `bcc_member` to `"true"` so we can surface a discreet
  * "BCC" hint next time. The cave itself STILL requires the ritual to be
  * performed every visit (per spec) — the flag only unlocks the hint.
+ *
+ * 29/09/2026 — l'Antre redevient cachée (Mehdi) : le rituel pose aussi le
+ * cookie `bcc_member`, seul sésame de l'adresse /antre (404 pour les autres).
  */
 
 const SESSION_KEY = "kckills_bcc_session_id";
 const MEMBER_KEY = "bcc_member";
+/** Cookie des initiés : /antre répond 404 sans lui (app/antre/page.tsx). */
+export const BCC_MEMBER_COOKIE = "bcc_member";
 
 /** Returns the persistent BCC session id, generating one on first call.
  *  Safe to call during SSR — returns a placeholder that gets replaced on
@@ -68,4 +73,6 @@ export function markBCCMember(): void {
   } catch {
     // ignore — private mode
   }
+  // un an ; lu côté serveur par /antre
+  document.cookie = `${BCC_MEMBER_COOKIE}=1; path=/; max-age=31536000; SameSite=Lax; Secure`;
 }

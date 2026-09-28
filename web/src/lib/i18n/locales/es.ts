@@ -142,7 +142,6 @@ export const es: FrDict = {
     alumni: "Alumni",
     hall_of_fame: "Salón de la Fama",
     chambre: "La Cámara del Sufrimiento",
-    antre: "La Guarida de la BCC",
     vs_stream: "Modo Stream",
     home: "Inicio",
     scroll: "Scroll",

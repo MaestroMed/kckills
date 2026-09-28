@@ -71,11 +71,10 @@ const NAV_GROUPS: { tKey: string; items: { href: string; tKey: string }[] }[] = 
       { href: "/community", tKey: "nav.community" },
       { href: "/alumni", tKey: "nav.alumni" },
       { href: "/hall-of-fame", tKey: "nav.hall_of_fame" },
-      // Wave 36 — the two hidden experiences surface in the nav. La
-      // Chambre existed with zero inbound link outside the homepage ;
-      // l'Antre was only reachable by typing B-C-C on Bo's page.
+      // Wave 36 — la Chambre existait sans aucun lien hors de l'accueil.
+      // L'Antre de la BCC, elle, redevient cachée (29/09/2026) : on n'y
+      // entre qu'en tapant B-C-C sur la page de Bo.
       { href: "/chambre", tKey: "nav.chambre" },
-      { href: "/antre", tKey: "nav.antre" },
     ],
   },
 ];

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyAdminCookie } from "@/lib/admin/session";
+import { BCC_MEMBER_COOKIE } from "@/lib/bcc-state";
 
 /**
  * Proxy — protects /admin/* and /api/admin/* (admin auth gate).
@@ -40,6 +41,15 @@ import { verifyAdminCookie } from "@/lib/admin/session";
 
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
+
+  // L'Antre de la BCC est cachée (29/09/2026) : sans le cookie posé par le
+  // rituel B-C-C (lib/bcc-state), l'adresse n'existe pas — vrai 404, décidé
+  // ici avant le rendu (la page, elle, streame et ne peut plus changer son
+  // statut). La page garde son propre contrôle en seconde ligne.
+  if (pathname === "/antre") {
+    if (request.cookies.get(BCC_MEMBER_COOKIE)?.value === "1") return NextResponse.next();
+    return NextResponse.rewrite(new URL("/_antre-fermee", request.url));
+  }
 
   // The matcher (see config below) ONLY routes /admin/*, /api/admin/*,
   // /api/kills/:id/edit and /api/bgm to this proxy as of the
@@ -169,5 +179,7 @@ export const config = {
     "/api/admin/:path*",
     "/api/kills/:id/edit",
     "/api/bgm",
+    // porte de l'Antre (cachée) : page dynamique de toute façon (cookie)
+    "/antre",
   ],
 };
