@@ -12,6 +12,7 @@ import { LeagueNav } from "./league/LeagueNav";
 import { HeaderAura } from "./HeaderAura";
 import { useT } from "@/lib/i18n/use-lang";
 import { useMoodWeather } from "@/lib/mood/use-mood-weather";
+import { isHiddenRoute } from "@/lib/hidden-routes";
 
 // PR-loltok BC : env-gated multi-league chip strip.
 // `NEXT_PUBLIC_LOLTOK_PUBLIC` is exposed to the client bundle via the
@@ -42,7 +43,10 @@ const NAV_DIRECT: { href: string; tKey: string }[] = [
   { href: "/clips", tKey: "nav.clips" },
 ];
 
-const NAV_GROUPS: { tKey: string; items: { href: string; tKey: string }[] }[] = [
+// Les pages en chantier (lib/hidden-routes) sont retirées du menu, desktop
+// comme mobile ; un groupe vidé disparaît.
+type NavGroup = { tKey: string; items: { href: string; tKey: string }[] };
+const NAV_GROUPS: NavGroup[] = ([
   {
     tKey: "nav.g_discover",
     items: [
@@ -77,7 +81,9 @@ const NAV_GROUPS: { tKey: string; items: { href: string; tKey: string }[] }[] = 
       { href: "/chambre", tKey: "nav.chambre" },
     ],
   },
-];
+] satisfies NavGroup[])
+  .map((g) => ({ tKey: g.tKey, items: g.items.filter((i) => !isHiddenRoute(i.href)) }))
+  .filter((g) => g.items.length > 0);
 
 export function Navbar() {
   const t = useT();

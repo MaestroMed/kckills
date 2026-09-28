@@ -30,6 +30,7 @@ import { useRouter } from "next/navigation";
 import kcMatchesJson from "@/data/kc_matches.json";
 import { ERAS } from "@/lib/eras";
 import { ALUMNI } from "@/lib/alumni";
+import { isHiddenRoute } from "@/lib/hidden-routes";
 import { useT, type TranslateFn } from "@/lib/i18n/use-lang";
 
 // ─── Index types ────────────────────────────────────────────────────────────
@@ -48,7 +49,7 @@ interface Entry {
 
 // ─── Static routes ──────────────────────────────────────────────────────────
 
-const PAGES: Entry[] = [
+const PAGES: Entry[] = ([
   { id: "page-home",    group: "page", label: "Accueil",       subtitle: "Landing KCKILLS", href: "/",            searchText: "accueil home landing" },
   { id: "page-scroll",  group: "page", label: "Scroll kills",  subtitle: "Mode TikTok",      href: "/scroll",      searchText: "scroll tiktok feed clips kills" },
   { id: "page-best",    group: "page", label: "Meilleurs",     subtitle: "Curation IA + comm.", href: "/clips?sort=score",     searchText: "meilleurs best top curation legendaires" },
@@ -79,7 +80,7 @@ const PAGES: Entry[] = [
   { id: "page-bracket", group: "page", label: "Bracket",        subtitle: "Tournoi des clips", href: "/bracket",    searchText: "bracket tournoi élimination vote communauté" },
   { id: "page-compilation", group: "page", label: "Compilations", subtitle: "Best-of generes", href: "/compilation", searchText: "compilation best-of montage clips generes" },
   { id: "page-settings",group: "page", label: "Parametres",    subtitle: "Profil",           href: "/settings",    searchText: "settings parametres profil" },
-];
+] satisfies Entry[]).filter((e) => !isHiddenRoute(e.href)); // pages en chantier (lib/hidden-routes)
 
 // Alumni are grouped under "player" so the search UX is consistent
 const ALUMNI_ENTRIES: Entry[] = ALUMNI.map((a) => ({

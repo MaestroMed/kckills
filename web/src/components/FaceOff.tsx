@@ -36,6 +36,7 @@ import { m, useInView, useReducedMotion } from "motion/react";
 
 import { createClient } from "@/lib/supabase/client";
 import { useT } from "@/lib/i18n/use-lang";
+import { isHiddenRoute } from "@/lib/hidden-routes";
 import type {
   FaceOffPlayerStats,
   FaceOffTally,
@@ -1673,12 +1674,14 @@ function PopularDuelsFooter({
         >
           {t("p_vsgame.fo_new_duel")}
         </Link>
-        <Link
-          href="/vs"
-          className="rounded-xl border border-white/20 bg-black/25 px-5 py-2.5 font-display text-xs font-bold uppercase tracking-[0.25em] text-white/75 hover:border-white/45 hover:text-white transition-all"
-        >
-          {t("p_vsgame.vs_roulette")}
-        </Link>
+        {!isHiddenRoute("/vs") && (
+          <Link
+            href="/vs"
+            className="rounded-xl border border-white/20 bg-black/25 px-5 py-2.5 font-display text-xs font-bold uppercase tracking-[0.25em] text-white/75 hover:border-white/45 hover:text-white transition-all"
+          >
+            {t("p_vsgame.vs_roulette")}
+          </Link>
+        )}
       </div>
     </section>
   );
