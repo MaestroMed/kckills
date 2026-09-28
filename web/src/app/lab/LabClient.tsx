@@ -3,6 +3,7 @@
 import { useState } from "react";
 import dynamic from "next/dynamic";
 import type { BannerHandle } from "@/components/banner/banner-engine";
+import { LogoLab } from "./LogoLab";
 
 const KCBanner = dynamic(() => import("@/components/banner/KCBanner"), { ssr: false });
 
@@ -85,8 +86,7 @@ export function LabClient() {
         </div>
       </div>
 
-      <h2 className="mt-16 font-display text-3xl font-black text-[var(--gold-bright)]">Logo</h2>
-      <p className="mt-2 text-sm text-[var(--text-secondary)]">Pistes en préparation.</p>
+      <LogoLab />
     </div>
   );
 }
