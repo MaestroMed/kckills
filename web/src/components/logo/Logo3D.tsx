@@ -1,14 +1,27 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import type { LogoConcept } from "./logo-marks";
+import { CREST_SPEC, type CrestSpec } from "./logo-marks";
 import type { LogoHandle } from "./logo-engine";
 
-/** Vue 3D d'une piste de logo (labo). `sweepTick` : incrémenter pour lancer un rayon. */
-export default function Logo3D({ concept, sweepTick, className }: { concept: LogoConcept; sweepTick: number; className?: string }) {
+/**
+ * « L'Écrin » en 3D (labo, fin de la vidéo). `sweepTick` / `assembleTick` :
+ * incrémenter pour lancer un rayon ou rejouer l'assemblage.
+ */
+export default function Logo3D({
+  spec = CREST_SPEC,
+  sweepTick = 0,
+  assembleTick = 0,
+  className,
+}: {
+  spec?: CrestSpec;
+  sweepTick?: number;
+  assembleTick?: number;
+  className?: string;
+}) {
   const ref = useRef<HTMLCanvasElement>(null);
   const handle = useRef<LogoHandle | null>(null);
-  const first = useRef(concept);
+  const first = useRef(spec);
   const [failed, setFailed] = useState(false);
 
   useEffect(() => {
@@ -33,8 +46,12 @@ export default function Logo3D({ concept, sweepTick, className }: { concept: Log
   }, []);
 
   useEffect(() => {
-    handle.current?.setConcept(concept);
-  }, [concept]);
+    if (spec !== first.current) handle.current?.setSpec(spec);
+  }, [spec]);
+
+  useEffect(() => {
+    if (assembleTick > 0) handle.current?.assemble();
+  }, [assembleTick]);
 
   useEffect(() => {
     if (sweepTick > 0) handle.current?.sweep();
