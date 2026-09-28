@@ -8,7 +8,7 @@ import { LogoMark } from "@/components/logo/LogoMark";
 const Logo3D = dynamic(() => import("@/components/logo/Logo3D"), { ssr: false });
 
 export function LogoLab() {
-  const [pick, setPick] = useState(LOGO_CONCEPTS[2]);
+  const [pick, setPick] = useState(LOGO_CONCEPTS[LOGO_CONCEPTS.length - 1]);
   const [tick, setTick] = useState(0);
 
   return (

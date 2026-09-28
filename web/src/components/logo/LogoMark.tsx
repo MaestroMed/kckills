@@ -46,6 +46,14 @@ export function LogoMark({
             <stop offset="0.5" stopColor="#0057FF" />
             <stop offset="1" stopColor="#0A2A8C" />
           </linearGradient>
+          <linearGradient id={`${uid}-gemLight`} x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stopColor="#B8F0FF" />
+            <stop offset="1" stopColor="#2F7BFF" />
+          </linearGradient>
+          <linearGradient id={`${uid}-gemDark`} x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stopColor="#0A3DCC" />
+            <stop offset="1" stopColor="#041A66" />
+          </linearGradient>
           <linearGradient id={`${uid}-plate`} x1="0" y1="0" x2="0" y2="1">
             <stop offset="0" stopColor="#0B2A7A" />
             <stop offset="1" stopColor="#050F33" />

@@ -36,7 +36,7 @@ export interface LogoHandle {
   dispose(): void;
 }
 
-const DEPTH: Record<Tone, number> = { goldLight: 30, goldDark: 24, gem: 38, plate: 10 };
+const DEPTH: Record<Tone, number> = { goldLight: 30, goldDark: 24, gem: 38, gemLight: 42, gemDark: 34, plate: 10 };
 
 export async function mountLogo3D(canvas: HTMLCanvasElement, initial: LogoConcept): Promise<LogoHandle> {
   const renderer = new THREE.WebGPURenderer({ canvas, antialias: true, alpha: true });
@@ -72,18 +72,22 @@ export async function mountLogo3D(canvas: HTMLCanvasElement, initial: LogoConcep
     m.emissiveNode = color(0xffd48a).mul(bandAt()).mul(fres.mul(1.6).add(0.35));
     return m;
   };
-  const mats: Record<Tone, THREE.Material> = {
-    goldLight: goldMat(0xf2dca0, 0.2),
-    goldDark: goldMat(0xcfa55c, 0.28),
-    gem: new THREE.MeshPhysicalNodeMaterial({
-      color: 0x1f5cff,
+  const gemMat = (hex: number, glow: number) =>
+    new THREE.MeshPhysicalNodeMaterial({
+      color: hex,
       metalness: 0,
       roughness: 0.04,
       clearcoat: 1,
       clearcoatRoughness: 0.02,
       emissive: 0x0a2a8c,
-      emissiveIntensity: 0.35,
-    }),
+      emissiveIntensity: glow,
+    });
+  const mats: Record<Tone, THREE.Material> = {
+    goldLight: goldMat(0xf2dca0, 0.2),
+    goldDark: goldMat(0xcfa55c, 0.28),
+    gem: gemMat(0x1f5cff, 0.35),
+    gemLight: gemMat(0x6fb8ff, 0.5),
+    gemDark: gemMat(0x0a2fa8, 0.25),
     plate: new THREE.MeshPhysicalNodeMaterial({
       color: 0x1640b0,
       roughness: 0.4,

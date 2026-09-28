@@ -9,14 +9,14 @@
  * et à l'extrusion 3D du labo.
  */
 
-export type Tone = "goldLight" | "goldDark" | "gem" | "plate";
+export type Tone = "goldLight" | "goldDark" | "gem" | "gemLight" | "gemDark" | "plate";
 export interface LogoPart {
   d: string;
   tone: Tone;
 }
 export interface LogoConcept {
-  id: "ecu" | "face" | "eclats";
-  letter: "A" | "B" | "C";
+  id: "ecu" | "face" | "eclats" | "eclats2" | "face-eclats";
+  letter: "A" | "B" | "C" | "C2" | "D";
   name: string;
   idea: string;
   parts: LogoPart[];
@@ -59,9 +59,17 @@ function blade(a: P, b: P, w: number, ta: number, tb: number): LogoPart[] {
 }
 
 function gem(c: P, rx: number, ry: number): LogoPart[] {
+  const top: P = [c[0], c[1] - ry];
+  const right: P = [c[0] + rx, c[1]];
+  const bottom: P = [c[0], c[1] + ry];
+  const left: P = [c[0] - rx, c[1]];
+  // table centrale légèrement décalée vers le haut : lecture « taille brillant »
+  const core: P = [c[0], c[1] - ry * 0.12];
   return [
-    { d: path([[c[0], c[1] - ry], [c[0] + rx, c[1]], [c[0], c[1] + ry]]), tone: "gem" },
-    { d: path([[c[0], c[1] - ry], [c[0], c[1] + ry], [c[0] - rx, c[1]]]), tone: "gem" },
+    { d: path([left, top, core]), tone: "gemLight" },
+    { d: path([top, right, core]), tone: "gem" },
+    { d: path([left, core, bottom]), tone: "gem" },
+    { d: path([core, right, bottom]), tone: "gemDark" },
   ];
 }
 
@@ -126,8 +134,40 @@ function eclats(): LogoPart[] {
   ];
 }
 
+// ─── C2 · Cinq éclats, affiné ─────────────────────────────────────────────
+function eclats2(): LogoPart[] {
+  return [
+    ...shard([168, 44], [168, 244], 36), // fût haut, plus élancé
+    ...shard([168, 268], [168, 468], 36), // fût bas
+    ...shard([270, 230], [428, 52], 34), // bras haut, jusqu'au coin
+    ...shard([270, 282], [428, 460], 34), // bras bas
+    ...gem([236, 256], 30, 44), // cœur à facettes, plus présent
+  ];
+}
+
+// ─── D · Face-à-face en éclats (B × C) ─────────────────────────────────────
+function faceEclats(): LogoPart[] {
+  return [
+    // K de gauche : fût en deux éclats
+    ...shard([92, 60], [92, 246], 28),
+    ...shard([92, 266], [92, 452], 28),
+    // K de droite, en miroir
+    ...shard([420, 60], [420, 246], 28),
+    ...shard([420, 266], [420, 452], 28),
+    // leurs bras : quatre éclats qui dessinent le losange Hextech
+    ...shard([118, 240], [246, 92], 26),
+    ...shard([394, 240], [266, 92], 26),
+    ...shard([118, 272], [246, 420], 26),
+    ...shard([394, 272], [266, 420], 26),
+    // la gemme au cœur
+    ...gem([256, 256], 46, 66),
+  ];
+}
+
 export const LOGO_CONCEPTS: LogoConcept[] = [
   { id: "ecu", letter: "A", name: "L'Écu", idea: "Blason pentagonal, cinq pointes pour les cinq kills, K taillé en lames.", parts: ecu() },
   { id: "face", letter: "B", name: "Face-à-face", idea: "Deux K se font face ; leurs bras dessinent un losange Hextech. Symétrie de logo métal.", parts: face() },
   { id: "eclats", letter: "C", name: "Cinq éclats", idea: "Un K fait de cinq éclats de gemme Hextech : un par kill.", parts: eclats() },
+  { id: "eclats2", letter: "C2", name: "Cinq éclats, affiné", idea: "C plus élancé : fûts plus fins, bras jusqu'aux coins, cœur taillé en brillant.", parts: eclats2() },
+  { id: "face-eclats", letter: "D", name: "Face-à-face en éclats", idea: "B × C : deux K qui se font face, taillés en éclats ; leurs bras forment le losange, la gemme au cœur.", parts: faceEclats() },
 ];
