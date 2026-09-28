@@ -298,7 +298,8 @@ export function mountHeroSky(
       ro.disconnect();
       gl.deleteBuffer(buf);
       gl.deleteProgram(prog);
-      gl.getExtension("WEBGL_lose_context")?.loseContext();
+      // pas de loseContext() : un remontage sur le même canvas (StrictMode, changement
+      // de préférence de mouvement) récupérerait un contexte perdu et ne compilerait plus.
     },
   };
 }
