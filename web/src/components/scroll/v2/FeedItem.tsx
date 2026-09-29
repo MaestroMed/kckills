@@ -385,7 +385,7 @@ export function FeedItemVideo({
           {...swipeBind()}
           aria-hidden
           className="absolute inset-0 z-[4]"
-          style={{ touchAction: "pan-y" }}
+          style={{ touchAction: "none" }}
         />
       )}
 
@@ -946,7 +946,7 @@ export function FeedItemMoment({
           {...swipeBind()}
           aria-hidden
           className="absolute inset-0 z-[4]"
-          style={{ touchAction: "pan-y" }}
+          style={{ touchAction: "none" }}
         />
       )}
 

@@ -182,7 +182,13 @@ interface Props {
   videoCount?: number;
   initialKillId?: string;
   chipFilters?: ChipFilters;
-  rosterChips?: { id: string; ign: string; role: "TOP" | "JGL" | "MID" | "ADC" | "SUP" }[];
+  rosterChips?: {
+    id: string;
+    ign: string;
+    role: "TOP" | "JGL" | "MID" | "ADC" | "SUP";
+    /** Photo détourée officielle (static.lolesports.com, en https). */
+    image?: string | null;
+  }[];
   /** V26 — active feed tab from the URL. The server already
    *  ordered the items list according to this ; the prop is just
    *  for the FeedTabBar's active-pill state. */
@@ -1132,10 +1138,13 @@ export function ScrollFeedV2({
       // depuis que les FeedItem sont transparents (voir zIndex: 10 plus bas).
       // Mobile l'héritait déjà de la racine fixed ; la StageFrame non.
       className="absolute inset-0 overflow-hidden bg-black"
-      // Touch-action: pan-y so the browser doesn't fight the drag. (Was on
-      // the old fixed-inset-0 root ; moved here verbatim so the gesture math
-      // is identical and the wide-stage frame gets the same touch contract.)
-      style={{ touchAction: "pan-y", overscrollBehavior: "contain" }}
+      // touch-action: none (fix 2026-09-29) — c'est useFeedGesture qui porte
+      // le glissement vertical. En pan-y, le navigateur prenait la main dès
+      // ~15 px (pointercancel au bout de 36-53 ms, mesuré en émulation Pixel 7,
+      // local ET prod) : le feed revenait en place et le swipe mobile ne
+      // passait jamais au clip suivant. Les zones qui défilent en natif
+      // (feuilles, listes) restent des conteneurs de scroll : pas concernées.
+      style={{ touchAction: "none", overscrollBehavior: "contain" }}
     >
       {/* Pull-to-refresh indicator — visible only when at the top of the
           feed AND user is pulling down past 5px. */}
@@ -1418,7 +1427,8 @@ export function ScrollFeedV2({
         <ScrollSettingsDrawer open={settingsOpen} onClose={() => setSettingsOpen(false)} />
         {rosterChips && rosterChips.length > 0 && (
           <OnboardingModal
-            roster={rosterChips.map((p) => ({ id: p.id, ign: p.ign, role: p.role }))}
+            clipsSeen={activeIndex}
+            roster={rosterChips.map((p) => ({ id: p.id, ign: p.ign, role: p.role, image: p.image }))}
           />
         )}
         <OfflineBanner />
@@ -1454,8 +1464,8 @@ export function ScrollFeedV2({
   return (
     <div
       className="fixed inset-0 z-[60] bg-black overflow-hidden"
-      // Touch-action: pan-y so the browser doesn't fight the drag.
-      style={{ touchAction: "pan-y", overscrollBehavior: "contain" }}
+      // touch-action: none — voir feedStage : le geste vertical est à nous.
+      style={{ touchAction: "none", overscrollBehavior: "contain" }}
     >
       {adminFlagBtn}
       {/* BgmPlayer removed (Wave 30c) — the wolf player now handles
@@ -1552,6 +1562,7 @@ export function ScrollFeedV2({
             id: p.id,
             ign: p.ign,
             role: p.role,
+            image: p.image,
           }))}
         />
       )}

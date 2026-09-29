@@ -109,8 +109,11 @@ export function useFeedBuffer({
       videoWarmedRef.current.add(item.id);
       // Fire-and-forget HEAD. Using fetch instead of XHR for keepalive.
       // Errors are silent — the pool will retry on actual playback.
+      // no-cors (fix 2026-09-29) : R2 ne renvoie aucun en-tête CORS, donc en
+      // mode "cors" chaque préchauffage finissait en erreur console (2-3 par
+      // swipe). La requête part quand même en opaque : DNS + TLS chauffés pareil.
       try {
-        fetch(url, { method: "HEAD", mode: "cors", cache: "default" }).catch(
+        fetch(url, { method: "HEAD", mode: "no-cors", cache: "default" }).catch(
           () => {
             // Ignore — connection warming is best-effort
           },
