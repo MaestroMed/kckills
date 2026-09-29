@@ -71,9 +71,14 @@ h1, h2, h3, h4, .font-display {
    prefers-reduced-motion: no-preference. The animation is pure decoration
    and on low-end mobiles it caused ~150 ms of FCP delay + repaint cascade
    on every section. Reduced-motion users now see the page paint instantly. */
+/* `backwards` et non `both` (29/09/2026) : l'état final (opacité 1, pas de
+   décalage) est l'état naturel, inutile de le figer. `both` laissait un
+   transform permanent sur ces conteneurs, qui devenaient le repère de tous
+   leurs descendants `fixed` (barres collantes, overlays plein écran de /vs,
+   de la Chambre…) au lieu de l'écran. */
 @media (prefers-reduced-motion: no-preference) {
   main > * > * {
-    animation: fadeInUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) both;
+    animation: fadeInUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) backwards;
   }
   main > * > *:nth-child(2) { animation-delay: 0.08s; }
   main > * > *:nth-child(3) { animation-delay: 0.16s; }

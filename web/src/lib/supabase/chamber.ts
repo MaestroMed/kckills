@@ -1,12 +1,22 @@
 /**
  * La Chambre des Souffrances — data layer.
  *
- * The inverse of the feed : instead of KC's best kills, this loads KC's
- * worst DEATHS — every clip where the tracked team was the VICTIM
- * (`tracked_team_involvement = 'team_victim'`), published + clipped. It
- * scores each death by how brutal it was and buckets the worst ~150 into
- * 10 "circles" of increasing severity (circle 1 = a bad moment, circle 10
- * = getting penta'd). The route /chambre renders the descent.
+ * The inverse of the feed : KC's DEATHS — every published, QC-visible clip
+ * where the tracked team was the VICTIM (`tracked_team_involvement =
+ * 'team_victim'`).
+ *
+ * Refonte du 29/09/2026 : la descente suit le TYPE de souffrance au lieu
+ * d'un classement global (qui ne gardait que des multi-kills : 605 doubles
+ * subis suffisaient à remplir tous les cercles, le Seuil commençait déjà par
+ * des doubles). Douze morts par cercle, les pires en tête (la première est
+ * le « coup de grâce » du cercle) :
+ *   I       morts simples les plus spectaculaires
+ *   II      premiers sangs encaissés
+ *   III-V   doubles subis
+ *   VI-IX   triples subis
+ *   X       l'Enfer : pentakills et quadras subis
+ * Cinq petites requêtes (~130 lignes au total, egress minimal) au lieu de
+ * mille lignes pour en garder 240.
  *
  * Server-only, reads anonymously (RLS "Public kills" covers published rows).
  */
@@ -27,32 +37,41 @@ export interface ChamberClip {
   multiKill: string | null;
   isFirstBlood: boolean;
   description: string | null;
-  /** Composite brutality score — drives circle placement. */
+  /** Contexte du match : adversaire, étape, date, numéro de game. */
+  opponent: string | null;
+  stage: string | null;
+  playedAt: string | null;
+  gameNumber: number | null;
+  /** Composite brutality score — orders the clips inside a circle. */
   severity: number;
 }
 
 export interface ChamberCircle {
-  /** 1 (the threshold) → 10 (l'Enfer, pentas subis). */
+  /** 1 (the threshold) → 10 (l'Enfer). */
   depth: number;
   name: string;
   /** Short French subtitle for the circle card. */
   tagline: string;
+  /** Ce qu'on y subit (« Doubles subis »…). */
+  kind: string;
   clips: ChamberClip[];
 }
 
 /** Circle names, shallow → deepest. Index 0 = depth 1. */
-const CIRCLE_NAMES: readonly [string, string][] = [
-  ["Le Seuil", "Là où tout commence à déraper"],
-  ["Le Frisson", "La première goutte de sueur froide"],
-  ["L'Inquiétude", "Quelque chose ne tourne pas rond"],
-  ["La Pression", "L'étau se resserre"],
-  ["La Spirale", "On ne remonte plus la pente"],
-  ["Le Naufrage", "Le navire prend l'eau de toutes parts"],
-  ["La Débâcle", "Les lignes cèdent une à une"],
-  ["Le Massacre", "Plus rien ne tient debout"],
-  ["L'Effondrement", "Le silence avant la fin"],
-  ["L'Enfer", "Karmine Corp, effacée de la carte"],
+const CIRCLES: readonly { name: string; tagline: string; kind: string }[] = [
+  { name: "Le Seuil", tagline: "Là où tout commence à déraper", kind: "Morts isolées" },
+  { name: "Le Frisson", tagline: "La première goutte de sueur froide", kind: "Premiers sangs encaissés" },
+  { name: "L'Inquiétude", tagline: "Quelque chose ne tourne pas rond", kind: "Doubles subis" },
+  { name: "La Pression", tagline: "L'étau se resserre", kind: "Doubles subis" },
+  { name: "La Spirale", tagline: "On ne remonte plus la pente", kind: "Doubles subis" },
+  { name: "Le Naufrage", tagline: "Le navire prend l'eau de toutes parts", kind: "Triples subis" },
+  { name: "La Débâcle", tagline: "Les lignes cèdent une à une", kind: "Triples subis" },
+  { name: "Le Massacre", tagline: "Plus rien ne tient debout", kind: "Triples subis" },
+  { name: "L'Effondrement", tagline: "Le silence avant la fin", kind: "Triples subis" },
+  { name: "L'Enfer", tagline: "Karmine Corp, effacée de la carte", kind: "Pentakill et quadras subis" },
 ];
+
+const PER_CIRCLE = 12;
 
 function multiWeight(mk: string | null): number {
   switch (mk) {
@@ -69,16 +88,8 @@ function multiWeight(mk: string | null): number {
   }
 }
 
-function severityOf(c: {
-  multiKill: string | null;
-  isFirstBlood: boolean;
-  highlightScore: number | null;
-}): number {
-  return (
-    multiWeight(c.multiKill) +
-    (c.isFirstBlood ? 40 : 0) +
-    (c.highlightScore ?? 0) * 8
-  );
+function severityOf(c: { multiKill: string | null; isFirstBlood: boolean; highlightScore: number | null }): number {
+  return multiWeight(c.multiKill) + (c.isFirstBlood ? 40 : 0) + (c.highlightScore ?? 0) * 8;
 }
 
 const SELECT = `
@@ -93,19 +104,22 @@ const SELECT = `
   multi_kill,
   is_first_blood,
   ai_description,
-  ai_description_fr
+  ai_description_fr,
+  games!inner (
+    game_number,
+    matches!inner (
+      scheduled_at,
+      stage,
+      team_blue:teams!matches_team_blue_id_fkey ( code ),
+      team_red:teams!matches_team_red_id_fkey ( code )
+    )
+  )
 `.trim();
 
-const PUBLISHED =
-  "publication_status.eq.published,and(publication_status.is.null,status.eq.published)";
+const PUBLISHED = "publication_status.eq.published,and(publication_status.is.null,status.eq.published)";
 
-/** How many of the worst deaths make it into the descent (10 circles).
- *  Wave 36 — raised 150 → 240 : the catalogue now holds 1 400+ clipped KC
- *  deaths (517 multi-kills suffered), the descent can afford richer
- *  circles. Thumbnails are lazy + videos preload="none", so the page
- *  weight stays flat ; only the JSON payload grows (~40 KB). */
-const TOTAL = 240;
-const CIRCLES = 10;
+type One<T> = T | T[] | null | undefined;
+const one = <T,>(x: One<T>): T | null => (Array.isArray(x) ? (x[0] ?? null) : (x ?? null));
 
 interface RawChamberRow {
   id?: string | null;
@@ -120,12 +134,24 @@ interface RawChamberRow {
   is_first_blood?: boolean | null;
   ai_description?: string | null;
   ai_description_fr?: string | null;
+  games?: One<{
+    game_number?: number | null;
+    matches?: One<{
+      scheduled_at?: string | null;
+      stage?: string | null;
+      team_blue?: One<{ code?: string | null }>;
+      team_red?: One<{ code?: string | null }>;
+    }>;
+  }>;
 }
 
 function normalize(row: RawChamberRow): ChamberClip {
   const multiKill = row.multi_kill ?? null;
   const isFirstBlood = row.is_first_blood ?? false;
   const highlightScore = row.highlight_score ?? null;
+  const game = one(row.games);
+  const match = one(game?.matches);
+  const codes = [one(match?.team_blue)?.code, one(match?.team_red)?.code].filter(Boolean) as string[];
   return {
     id: String(row.id ?? ""),
     killerChampion: row.killer_champion ?? null,
@@ -138,23 +164,19 @@ function normalize(row: RawChamberRow): ChamberClip {
     multiKill,
     isFirstBlood,
     description: row.ai_description_fr ?? row.ai_description ?? null,
+    opponent: codes.find((c) => c !== "KC") ?? null,
+    stage: match?.stage ?? null,
+    playedAt: match?.scheduled_at ?? null,
+    gameNumber: game?.game_number ?? null,
     severity: severityOf({ multiKill, isFirstBlood, highlightScore }),
   };
 }
 
-/**
- * Load the descent : the worst ~150 KC deaths, bucketed into 10 circles of
- * increasing severity. Two passes so the rare multi-kills (penta/quadra) are
- * always present regardless of their AI highlight score, then merged with the
- * highest-scored singles to fill the shallow circles.
- */
-export const getChamberCircles = cache(async function getChamberCircles(): Promise<
-  ChamberCircle[]
-> {
+/** Load the descent : ten circles of twelve deaths, shallow → deep. */
+export const getChamberCircles = cache(async function getChamberCircles(): Promise<ChamberCircle[]> {
   try {
     const supabase = createCachedAnonSupabase();
-
-    const victimBase = () =>
+    const deaths = () =>
       supabase
         .from("kills")
         .select(SELECT)
@@ -162,52 +184,41 @@ export const getChamberCircles = cache(async function getChamberCircles(): Promi
         .eq("kill_visible", true)
         .eq("tracked_team_involvement", "team_victim")
         .not("clip_url_vertical", "is", null)
-        .not("thumbnail_url", "is", null);
+        .not("thumbnail_url", "is", null)
+        .order("highlight_score", { ascending: false, nullsFirst: false });
 
-    const [multisRes, topRes] = await Promise.all([
-      // Every multi-kill suffered — the core of the suffering. 600 covers
-      // the full 517 known multi-deaths with headroom (Wave 36).
-      victimBase()
-        .or("multi_kill.eq.penta,multi_kill.eq.quadra,multi_kill.eq.triple,multi_kill.eq.double")
-        .limit(600),
-      // The most spectacular single deaths to fill the shallow circles.
-      victimBase()
-        .order("highlight_score", { ascending: false, nullsFirst: false })
-        .limit(400),
+    const [hell, triples, doubles, bloods, singles] = await Promise.all([
+      deaths().in("multi_kill", ["penta", "quadra"]).limit(PER_CIRCLE),
+      deaths().eq("multi_kill", "triple").limit(PER_CIRCLE * 4),
+      deaths().eq("multi_kill", "double").limit(PER_CIRCLE * 3),
+      deaths().is("multi_kill", null).eq("is_first_blood", true).limit(PER_CIRCLE),
+      deaths().is("multi_kill", null).eq("is_first_blood", false).limit(PER_CIRCLE),
     ]);
-
-    if (multisRes.error) {
-      console.warn("[chamber] multis error:", multisRes.error.message);
-    }
-    if (topRes.error) {
-      console.warn("[chamber] top error:", topRes.error.message);
+    for (const [label, res] of Object.entries({ hell, triples, doubles, bloods, singles })) {
+      if (res.error) console.warn(`[chamber] ${label} error:`, res.error.message);
     }
 
-    // Merge + dedupe by id.
-    const byId = new Map<string, ChamberClip>();
-    for (const row of [...(multisRes.data ?? []), ...(topRes.data ?? [])]) {
-      const clip = normalize(row as RawChamberRow);
-      if (clip.id && clip.clipUrl) byId.set(clip.id, clip);
-    }
+    const rows = (res: { data: unknown[] | null }) =>
+      ((res.data ?? []) as RawChamberRow[]).map(normalize).filter((c) => c.id && c.clipUrl);
+    const chunks = (list: ChamberClip[], n: number) =>
+      Array.from({ length: n }, (_, i) => list.slice(i * PER_CIRCLE, (i + 1) * PER_CIRCLE));
 
-    const sorted = [...byId.values()].sort((a, b) => b.severity - a.severity);
-    const worst = sorted.slice(0, TOTAL);
-    if (worst.length === 0) return [];
+    // Les plus violents au plus profond : dans chaque famille, le haut du
+    // classement descend dans le cercle le plus bas.
+    const dbl = chunks(rows(doubles), 3).reverse(); // III, IV, V
+    const tri = chunks(rows(triples), 4).reverse(); // VI … IX
+    const byDepth: ChamberClip[][] = [rows(singles), rows(bloods), ...dbl, ...tri, rows(hell)];
 
-    // Chunk the severity-sorted list into 10 groups. Group 0 (the worst) is
-    // the deepest circle (depth 10) ; the least-severe group is depth 1.
-    const per = Math.ceil(worst.length / CIRCLES);
     const circles: ChamberCircle[] = [];
-    for (let i = 0; i < CIRCLES; i++) {
-      const group = worst.slice(i * per, (i + 1) * per);
-      if (group.length === 0) continue;
-      const depth = CIRCLES - i; // group 0 → depth 10
-      const [name, tagline] = CIRCLE_NAMES[depth - 1];
-      circles.push({ depth, name, tagline, clips: group });
-    }
-    // Return shallow → deep (depth 1 first) so the page renders the descent
-    // top-to-bottom.
-    return circles.sort((a, b) => a.depth - b.depth);
+    byDepth.forEach((clips, i) => {
+      if (clips.length === 0) return;
+      circles.push({
+        depth: i + 1,
+        ...CIRCLES[i],
+        clips: [...clips].sort((a, b) => b.severity - a.severity),
+      });
+    });
+    return circles;
   } catch (err) {
     rethrowIfDynamic(err);
     console.warn("[chamber] getChamberCircles threw:", err);
