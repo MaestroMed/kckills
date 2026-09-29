@@ -452,7 +452,11 @@ async def clip_kill(
                     error=str(e)[:160],
                 )
 
-        chosen = await asyncio.to_thread(_pick_best_thumbnail, thumb_candidates)
+        # 2026-09-29 — les candidates qui montrent le jeu d'abord : la
+        # variance de luminance seule élisait les volets de transition
+        # (LFL, REPLAY, LEC Versus) — 295 clips de jeu avec une affiche hors jeu.
+        chosen = await asyncio.to_thread(
+            lambda: _pick_best_thumbnail(_gameplay_first(thumb_candidates)))
         if chosen and chosen != thumb_path:
             try:
                 # Rename winner to canonical thumb_path
@@ -1161,6 +1165,16 @@ def _archive_prior_assets(kill_id: str) -> None:
                  kill_id=kill_id[:8], error=str(e)[:160])
 
 
+def _gameplay_first(candidates: list[str]) -> list[str]:
+    """Candidates de vignette montrant le jeu (porte locale) ; liste
+    inchangée si la porte est indisponible ou si aucune ne montre le jeu."""
+    try:
+        from modules import gameplay_gate
+        return gameplay_gate.gameplay_candidates(candidates)
+    except Exception:
+        return candidates
+
+
 def _pick_best_thumbnail(candidates: list[str]) -> str | None:
     """From a list of candidate thumbnail paths, return the one with
     the highest "informative-ness" score.
@@ -1683,6 +1697,18 @@ async def run() -> int:
                                     if abs(_drift) > DRIFT_TOLERANCE:
                                         qc_local_ok = False
                                         qc_why = f"timer_drift: {_drift:+d}s"
+                        if qc_local_ok:
+                            # 2026-09-29 — porte « sans jeu » locale (SigLIP 2 +
+                            # sonde) : draft, plateau, interview, scène ou
+                            # facecam sur ≥ 3 images sur 5 -> jamais publié.
+                            from modules import gameplay_gate
+                            _gp = await gameplay_gate.check_clip(_local_h, crop_vertical=True)
+                            if _gp.verdict == "fail":
+                                qc_local_ok = False
+                                qc_why = f"non_gameplay: {_gp.detail}"
+                            elif _gp.verdict == "warn":
+                                log.info("clipper_gameplay_gate_warn", kill_id=kill["id"][:8],
+                                         detail=_gp.detail, p=_gp.p)
                     except Exception as _qc_e:
                         qc_local_ok, qc_why = True, f"qc_error:{str(_qc_e)[:60]}"
 
@@ -1690,7 +1716,9 @@ async def run() -> int:
                     log.warn("clipper_local_qc_rejected",
                              kill_id=kill["id"][:8], reason=qc_why[:120])
                     await batched_safe_update(
-                        "kills", {"status": "needs_review"}, "id", kill["id"])
+                        "kills", {"status": "needs_review", "needs_reclip": True,
+                                  "reclip_reason": f"clip_qc_local: {qc_why}"[:240]},
+                        "id", kill["id"])
                     try:
                         from services.event_qc import fail_qc_clip_validated
                         fail_qc_clip_validated(

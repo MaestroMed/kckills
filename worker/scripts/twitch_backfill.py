@@ -225,6 +225,17 @@ async def clip_one(kill: dict, game: dict, clock: feed_clock.FeedClock, sync: tw
                 if kill.get("status") != "published":
                     safe_update("kills", {"status": "needs_review"}, "id", kill["id"])
                 return "media_fail"
+            # 2026-09-29 — porte « sans jeu » locale : un clip Twitch calé sur
+            # une pause, l'avant-match ou le plateau ne remplace pas l'ancien.
+            from modules import gameplay_gate
+            gp = await gameplay_gate.check_clip(h_path, crop_vertical=True)
+            if gp.verdict == "fail":
+                log.warn("twitch_clip_non_gameplay", kill=kill["id"][:8], detail=gp.detail)
+                if kill.get("status") != "published":
+                    safe_update("kills", {"status": "needs_review", "needs_reclip": True,
+                                          "reclip_reason": f"twitch_non_gameplay: {gp.detail}"},
+                                "id", kill["id"])
+                return "non_gameplay"
         # kill_visible de l'ANCIEN clip ne doit pas être passé comme vérité :
         # l'analyzer le transmet à Gemini (« ne pas affirmer le kill »).
         ign = _player_igns()
