@@ -37,7 +37,8 @@ import type { GridAxisId } from "@/lib/grid/axis-config";
 import { JsonLd, breadcrumbLD } from "@/lib/seo/jsonld";
 import { pickAssetUrl } from "@/lib/kill-assets";
 import { getServerT } from "@/lib/i18n/server-lang";
-import { cleanTeamCode, resolveOpponentFromCodes } from "@/lib/team-display";
+import { cleanTeamCode, httpsLogoUrl, resolveOpponentFromCodes } from "@/lib/team-display";
+import { PLAYER_PHOTOS } from "@/lib/kc-assets";
 
 const SITE_URL =
   process.env.NEXT_PUBLIC_SITE_URL ??
@@ -341,9 +342,18 @@ export default async function ScrollV2Page({ searchParams }: ScrollPageProps) {
     ADC: 3,
     SUP: 4,
   };
+  // Casse ignorée (fix 2026-09-29) : la base stocke « kyeahoo » en minuscule,
+  // la recherche exacte l'écartait des filtres joueur, du rail et de
+  // l'onboarding. On affiche le pseudo canonique de ROLE_FOR_IGN.
+  const canonicalIgn = (ign: string) =>
+    Object.keys(ROLE_FOR_IGN).find((c) => c.toLowerCase() === ign.toLowerCase()) ?? null;
   const rosterChips = roster
-    .filter((p) => ROLE_FOR_IGN[p.ign])
-    .map((p) => ({ id: p.id, ign: p.ign, role: ROLE_FOR_IGN[p.ign] }))
+    .flatMap((p) => {
+      const ign = canonicalIgn(p.ign);
+      if (!ign) return [];
+      const image = PLAYER_PHOTOS[ign] ?? httpsLogoUrl(p.image_url);
+      return [{ id: p.id, ign, role: ROLE_FOR_IGN[ign], image }];
+    })
     .sort((a, b) => ROLE_ORDER[a.role] - ROLE_ORDER[b.role]);
 
   // Audit 2026-07-02 : the « VS KC » chip (?side=vs) filtered for

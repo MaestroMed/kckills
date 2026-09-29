@@ -30,7 +30,8 @@ interface RosterPick {
   id: string;
   ign: string;
   role: "TOP" | "JGL" | "MID" | "ADC" | "SUP";
-  championIcon?: string | null;
+  /** Photo détourée officielle (static.lolesports.com). */
+  image?: string | null;
 }
 
 interface Props {
@@ -166,7 +167,11 @@ export function OnboardingModal({ roster, clipsSeen = 0 }: Props) {
               </p>
             </header>
 
-            <ul className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
+            {/* Le line-up : les cinq titulaires côte à côte, photos détourées
+                officielles, comme la présentation des équipes en broadcast.
+                Non choisi = en retrait (désaturé), choisi = pleine couleur,
+                liseré or et coche. */}
+            <ul className="grid grid-cols-5 gap-1.5 sm:gap-2">
               {roster.map((p) => {
                 const active = picked.has(p.id);
                 return (
@@ -175,46 +180,62 @@ export function OnboardingModal({ roster, clipsSeen = 0 }: Props) {
                       type="button"
                       onClick={() => togglePick(p.id)}
                       aria-pressed={active}
+                      aria-label={`${p.ign}, ${p.role}`}
                       className={
-                        "w-full flex flex-col items-center gap-2 rounded-2xl border p-3 transition-all " +
+                        "group relative block aspect-[3/4.6] w-full overflow-hidden rounded-xl border transition-[border-color,box-shadow,transform] duration-200 motion-safe:active:scale-95 " +
                         (active
-                          ? "bg-[var(--gold)]/15 border-[var(--gold)]/60 shadow-lg shadow-[var(--gold)]/20"
-                          : "bg-[var(--bg-elevated)]/50 border-[var(--border-gold)] hover:border-[var(--gold)]/40")
+                          ? "border-[var(--gold)] shadow-[0_0_22px_rgba(200,170,110,0.35)]"
+                          : "border-[var(--border-gold)] hover:border-[var(--gold)]/50")
                       }
                     >
-                      <div
-                        className={
-                          "h-12 w-12 rounded-full overflow-hidden border-2 transition-colors " +
-                          (active
-                            ? "border-[var(--gold)]"
-                            : "border-white/15")
-                        }
-                      >
-                        {p.championIcon ? (
-                          <Image
-                            src={p.championIcon}
-                            alt={p.ign}
-                            width={48}
-                            height={48}
-                            className="h-full w-full object-cover"
-                          />
-                        ) : (
-                          <div className="h-full w-full flex items-center justify-center bg-[var(--bg-primary)] text-xs text-[var(--text-muted)]">
-                            {p.ign.slice(0, 2)}
-                          </div>
-                        )}
-                      </div>
                       <span
-                        className={
-                          "font-display text-sm font-bold " +
-                          (active ? "text-[var(--gold)]" : "text-white")
-                        }
-                      >
-                        {p.ign}
+                        aria-hidden
+                        className="absolute inset-0 bg-[radial-gradient(120%_80%_at_50%_20%,#16305f_0%,#0A1428_55%,#010A13_100%)]"
+                      />
+                      {p.image ? (
+                        <Image
+                          src={p.image}
+                          alt=""
+                          fill
+                          sizes="(max-width: 640px) 20vw, 90px"
+                          className={
+                            "object-cover object-top transition-[filter] duration-300 " +
+                            (active ? "" : "grayscale-[70%] brightness-75 group-hover:grayscale-0 group-hover:brightness-100")
+                          }
+                        />
+                      ) : (
+                        <span
+                          aria-hidden
+                          className="absolute inset-0 flex items-center justify-center font-display text-2xl font-black text-[var(--gold)]/40"
+                        >
+                          {p.ign.charAt(0)}
+                        </span>
+                      )}
+                      <span
+                        aria-hidden
+                        className="absolute inset-x-0 bottom-0 h-3/5 bg-gradient-to-t from-black via-black/70 to-transparent"
+                      />
+                      <span className="absolute inset-x-0 bottom-1.5 px-0.5 text-center leading-none">
+                        <span
+                          className={
+                            "block truncate font-display text-[11px] font-bold uppercase tracking-wide sm:text-xs " +
+                            (active ? "text-[var(--gold)]" : "text-white")
+                          }
+                        >
+                          {p.ign}
+                        </span>
+                        <span className="mt-1 block font-data text-[8px] uppercase tracking-[0.2em] text-[var(--text-secondary)]">
+                          {p.role}
+                        </span>
                       </span>
-                      <span className="font-data text-[9px] uppercase tracking-widest text-[var(--text-muted)]">
-                        {p.role}
-                      </span>
+                      {active && (
+                        <span
+                          aria-hidden
+                          className="absolute right-1 top-1 grid h-5 w-5 place-items-center rounded-full bg-[var(--gold)] text-[11px] font-black text-black"
+                        >
+                          ✓
+                        </span>
+                      )}
                     </button>
                   </li>
                 );
