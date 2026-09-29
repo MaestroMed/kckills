@@ -191,7 +191,12 @@ async def main():
             total_fail += len(game_kills)
             continue
 
-        vod_offset = int(g.get("vod_offset_seconds") or 0)
+        # 2026-09-29 — offset inconnu (NULL / 0) : pas de clip dans le pré-show.
+        from services.vod_offset import usable_offset
+        vod_offset = usable_offset(g.get("vod_offset_seconds"))
+        if vod_offset is None:
+            total_fail += len(game_kills)
+            continue
         game_num = g.get("game_number", "?")
 
         # Download VOD

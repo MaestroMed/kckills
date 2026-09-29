@@ -42,6 +42,7 @@ sys.path.insert(0, _THIS)
 load_dotenv(os.path.join(_THIS, ".env"))
 
 from services.supabase_client import safe_select, safe_update  # noqa: E402
+from services.vod_offset import parse_api_offset  # noqa: E402
 
 API = "https://esports-api.lolesports.com/persisted/gw"
 KEY = os.environ.get("LOL_ESPORTS_API_KEY", "0TvQnueqKa5mxJntVWt0w4LpLfEkrV1Ta8rQBb9Z")
@@ -70,9 +71,12 @@ def extract_vod(game_payload: dict) -> tuple[str | None, int | None]:
     vods = game_payload.get("vods") or []
     for v in vods:
         if v.get("provider") == "youtube":
+            # 2026-09-29 — offset absent = None, jamais 0 : l'API renvoie la
+            # VOD de TOUTE la série pour chaque game ; « 0 » y coupait les
+            # clips des 5 games d'un BO5 dans le pré-show (LEC 2025).
             return (
                 v.get("parameter"),
-                int(v.get("offset", 0) or 0),
+                parse_api_offset(v.get("offset")),
             )
     return None, None
 

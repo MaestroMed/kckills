@@ -34,6 +34,7 @@ import structlog
 from services import discord_webhook, lolesports_api
 from services.schema_cache import table_exists
 from services.supabase_client import safe_select, safe_upsert, safe_update, safe_insert
+from services.vod_offset import parse_api_offset, usable_offset
 from modules import harvester, clipper, analyzer, og_generator, qc
 from modules import sentinel  # noqa: F401 — keeps symbol for tests
 
@@ -103,7 +104,7 @@ async def upsert_match_and_games(match_external_id: str, report: dict | None = N
                 continue
             locale = str(vod.get("locale", ""))
             vid = vod.get("parameter")
-            off = int(vod.get("offset") or 0)
+            off = parse_api_offset(vod.get("offset"))   # absent = None, jamais 0
             if locale.startswith("fr"):
                 # French cast = primary (Kamel!)
                 vod_yt_id = vid
@@ -131,7 +132,8 @@ async def upsert_match_and_games(match_external_id: str, report: dict | None = N
         }
         if vod_yt_id:
             payload["vod_youtube_id"] = vod_yt_id
-            payload["vod_offset_seconds"] = vod_offset or 0
+            if vod_offset is not None:              # 2026-09-29 : jamais 0 par défaut
+                payload["vod_offset_seconds"] = vod_offset
         if alt_vod_yt_id:
             payload["alt_vod_youtube_id"] = alt_vod_yt_id
 
@@ -184,10 +186,13 @@ async def run_for_match(match_external_id: str) -> dict:
         if a:
             anchors[ext] = a
 
-    if sorted_games and anchors.get(sorted_games[0].get("external_id", "")):
+    # Dérivation depuis l'offset de la 1re game : impossible s'il est inconnu
+    # (NULL / 0 -> toutes les games décalées du même pré-show).
+    if (sorted_games and anchors.get(sorted_games[0].get("external_id", ""))
+            and usable_offset(sorted_games[0].get("vod_offset_seconds")) is not None):
         first_ext = sorted_games[0]["external_id"]
         first_anchor_dt, _first_data = anchors[first_ext]
-        first_api_offset = int(sorted_games[0].get("vod_offset_seconds") or 0)
+        first_api_offset = usable_offset(sorted_games[0].get("vod_offset_seconds"))
         for g in sorted_games:
             ext = g.get("external_id")
             if not ext or ext not in anchors:
@@ -230,7 +235,7 @@ async def run_for_match(match_external_id: str) -> dict:
         game_ext_id = game_row.get("external_id")
         game_db_id = game_row.get("id")
         yt_id = game_row.get("vod_youtube_id")
-        vod_offset = int(game_row.get("vod_offset_seconds") or 0)
+        vod_offset = usable_offset(game_row.get("vod_offset_seconds"))
 
         if not (game_ext_id and game_db_id):
             continue
@@ -301,6 +306,13 @@ async def run_for_match(match_external_id: str) -> dict:
 
         if not yt_id:
             log.warn("pipeline_no_vod", game=game_ext_id)
+            continue
+        if vod_offset is None:
+            # 2026-09-29 — offset inconnu : couper à 0 + game_time tombe dans le
+            # pré-show / la draft. Les kills restent vod_found ; le démon les
+            # clippe une fois l'offset calibré (vod_offset_finder).
+            log.warn("pipeline_vod_offset_unknown", game=game_ext_id, vod=yt_id)
+            report["errors"].append(f"{game_ext_id}: offset VOD inconnu, clips reportés")
             continue
 
         # ─── QC: calibrate offset before clipping ────────────────────
@@ -588,7 +600,7 @@ async def run_moments_for_match(match_external_id: str) -> dict:
                 continue
             locale = str(vod.get("locale", ""))
             vid = vod.get("parameter")
-            off = int(vod.get("offset") or 0)
+            off = parse_api_offset(vod.get("offset"))   # absent = None, jamais 0
             if locale.startswith("fr"):
                 vod_yt_id = vid
                 vod_offset = off
@@ -600,7 +612,8 @@ async def run_moments_for_match(match_external_id: str) -> dict:
                    "game_number": g.get("number", 1), "state": "vod_found" if vod_yt_id else "pending"}
         if vod_yt_id:
             payload["vod_youtube_id"] = vod_yt_id
-            payload["vod_offset_seconds"] = vod_offset or 0
+            if vod_offset is not None:              # 2026-09-29 : jamais 0 par défaut
+                payload["vod_offset_seconds"] = vod_offset
         game_row = safe_upsert("games", payload, on_conflict="external_id")
         if game_row:
             game_db_rows.append(game_row)
@@ -623,10 +636,13 @@ async def run_moments_for_match(match_external_id: str) -> dict:
             if a:
                 anchors[ext] = a
 
-    if sorted_games and anchors.get(sorted_games[0].get("external_id", "")):
+    # Dérivation depuis l'offset de la 1re game : impossible s'il est inconnu
+    # (NULL / 0 -> toutes les games décalées du même pré-show).
+    if (sorted_games and anchors.get(sorted_games[0].get("external_id", ""))
+            and usable_offset(sorted_games[0].get("vod_offset_seconds")) is not None):
         first_ext = sorted_games[0]["external_id"]
         first_anchor_dt, _ = anchors[first_ext]
-        first_api_offset = int(sorted_games[0].get("vod_offset_seconds") or 0)
+        first_api_offset = usable_offset(sorted_games[0].get("vod_offset_seconds"))
         for g in sorted_games:
             ext = g.get("external_id")
             if not ext or ext not in anchors:
@@ -651,7 +667,7 @@ async def run_moments_for_match(match_external_id: str) -> dict:
         game_ext_id = game_row.get("external_id")
         game_db_id = game_row.get("id")
         yt_id = game_row.get("vod_youtube_id")
-        vod_offset = int(game_row.get("vod_offset_seconds") or 0)
+        vod_offset = usable_offset(game_row.get("vod_offset_seconds"))
 
         if not (game_ext_id and game_db_id):
             continue
@@ -687,6 +703,11 @@ async def run_moments_for_match(match_external_id: str) -> dict:
                 safe_insert("kills", k_payload)
 
         safe_update("games", {"kills_extracted": True}, "id", game_db_id)
+
+        if vod_offset is None:
+            log.warn("moments_vod_offset_unknown", game=game_ext_id, vod=yt_id)
+            report["errors"].append(f"{game_ext_id}: VOD ou offset inconnu, clips reportés")
+            continue
 
         # ─── QC offset calibration ──────────────────────────────────
         if inserted_moments and kills:

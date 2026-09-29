@@ -31,6 +31,7 @@ import structlog
 from services import job_queue, team_config  # noqa: F401 — imported for team-aware ecosystem
 from services.observability import run_logged
 from services.supabase_client import safe_select, safe_update
+from services.vod_offset import usable_offset
 
 log = structlog.get_logger()
 
@@ -87,8 +88,14 @@ async def run() -> int:
         "id, external_id, vod_youtube_id, vod_offset_seconds",
         _limit=5000,
     ) or []
+    # 2026-09-29 — une VOD YouTube sans offset utilisable (NULL ou 0) n'est
+    # PAS clippable : couper à 0 + game_time tombe dans le pré-show / la draft
+    # (EWC 2026, LEC 2025 : 1 149 clips hors jeu publiés). Les kills restent
+    # raw jusqu'à ce que vod_offset_finder calibre ; la voie Twitch ci-dessous
+    # ne dépend pas de cet offset.
     games_with_vod = {
-        g["id"]: g for g in games if g.get("vod_youtube_id")
+        g["id"]: g for g in games
+        if g.get("vod_youtube_id") and usable_offset(g.get("vod_offset_seconds")) is not None
     }
     # 2026-09-23 — source Twitch : une game TERMINÉE dans le feed (horloge
     # complète en cache) et récente est clippable sans VOD YouTube (IP
