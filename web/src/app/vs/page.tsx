@@ -16,6 +16,10 @@
  *      server-side so the FIRST spin is glitch-free (no thumb-pop on
  *      empty placeholders).
  *
+ * 29/09/2026 — l'entrée est désormais l'arène (components/vs/VSArena) :
+ * écran de sélection façon jeu de combat, manches, vote. La roulette à
+ * filtres reste en dessous (FreeRoulette), chargée à la demande.
+ *
  * Every below-the-fold work is delegated to the client `<VSRoulette />`
  * which talks to Supabase directly via `createClient()` (browser).
  *
@@ -27,7 +31,6 @@
 
 import type { Metadata } from "next";
 import Link from "next/link";
-import { Suspense } from "react";
 
 import { ERAS } from "@/lib/eras";
 import { getTrackedRoster } from "@/lib/supabase/players";
@@ -39,7 +42,9 @@ import {
   type VSPlayerOption,
 } from "@/lib/vs-roulette";
 
-import { VSRoulette } from "@/components/VSRoulette";
+import { VSArena } from "@/components/vs/VSArena";
+import { FreeRoulette } from "@/components/vs/FreeRoulette";
+import { getVSFighters } from "@/lib/supabase/vs-fighters";
 import { JsonLd, breadcrumbLD } from "@/lib/seo/jsonld";
 import { getStaticT } from "@/lib/i18n/server-lang";
 
@@ -184,11 +189,12 @@ async function buildChampionsAndThumbnails(): Promise<{
 
 export default async function VSPage() {
   const { t } = getStaticT();
-  const [players, { champions, rouletteThumbnails }, eraOptions] =
+  const [players, { champions, rouletteThumbnails }, eraOptions, fighters] =
     await Promise.all([
       buildPlayerOptions(),
       buildChampionsAndThumbnails(),
       buildAvailableEras(),
+      getVSFighters(),
     ]);
 
   const breadcrumbJsonLd = breadcrumbLD([
@@ -210,125 +216,28 @@ export default async function VSPage() {
     >
       <JsonLd data={breadcrumbJsonLd} />
 
-      {/* ─── Hero strip — gold sweep + cinematic title ────────────── */}
-      <section
-        className="relative overflow-hidden border-b border-[var(--border-gold)]"
-        style={{
-          background:
-            "radial-gradient(ellipse 70% 55% at 50% 30%, rgba(200,170,110,0.18) 0%, transparent 60%), linear-gradient(180deg, var(--bg-surface) 0%, var(--bg-primary) 100%)",
-        }}
-      >
-        {/* Subtle scanline overlay — matches the homepage hero */}
-        <div
-          aria-hidden
-          className="absolute inset-0 opacity-[0.14] mix-blend-overlay pointer-events-none"
-          style={{
-            backgroundImage:
-              "repeating-linear-gradient(180deg, transparent 0px, transparent 2px, rgba(200,170,110,0.08) 3px, transparent 4px)",
-          }}
-        />
-        {/* Floating gold rhombus accents */}
-        <div
-          aria-hidden
-          className="absolute left-[5%] top-10 hidden md:block"
-          style={{
-            width: 14,
-            height: 14,
-            transform: "rotate(45deg)",
-            background: "linear-gradient(135deg, var(--gold), var(--gold-dark))",
-            opacity: 0.55,
-            boxShadow: "0 0 22px rgba(200,170,110,0.5)",
-          }}
-        />
-        <div
-          aria-hidden
-          className="absolute right-[7%] top-24 hidden md:block"
-          style={{
-            width: 9,
-            height: 9,
-            transform: "rotate(45deg)",
-            background: "var(--gold)",
-            opacity: 0.4,
-            boxShadow: "0 0 14px rgba(200,170,110,0.4)",
-          }}
-        />
+      {/* ─── L'arène : sélection des combattants, manches, vote ────── */}
+      <VSArena fighters={fighters} />
 
-        <div className="relative z-10 mx-auto max-w-6xl px-5 pt-12 pb-8 md:pt-20 md:pb-12 text-center">
-          <nav
-            aria-label={t("p_vsgame.breadcrumb_aria")}
-            className="mb-6 flex items-center justify-center gap-2 text-xs text-white/55"
-          >
-            <Link
-              href="/"
-              className="hover:text-[var(--gold)] transition-colors"
-            >
-              {t("p_vsgame.vs_breadcrumb_home")}
-            </Link>
-            <span aria-hidden className="text-white/25">
-              {"◆"}
-            </span>
-            <span className="text-[var(--gold)]">{t("p_vsgame.vs_breadcrumb_current")}</span>
-          </nav>
+      <nav aria-label="Autres modes VS" className="flex flex-wrap items-center justify-center gap-3 px-4 pb-8">
+        <Link
+          href="/vs/leaderboard"
+          className="rounded-xl border border-[var(--gold)]/40 bg-black/35 px-5 py-2.5 font-display text-xs font-bold uppercase tracking-[0.25em] text-[var(--gold)] transition-all hover:border-[var(--gold)]/80 hover:bg-[var(--gold)]/10"
+        >
+          {t("p_vsgame.vs_see_elo_ranking")}
+        </Link>
+        {/* Wave 36 — le Mode Stream (plein écran OBS, arbitrage clavier,
+            auto-relance) taillé pour les soirées EtoStark. */}
+        <Link
+          href="/vs/stream"
+          className="rounded-xl border border-[var(--cyan)]/40 bg-black/25 px-5 py-2.5 font-display text-xs font-bold uppercase tracking-[0.25em] text-[var(--cyan)] transition-all hover:border-[var(--cyan)]/80 hover:bg-[var(--cyan)]/10"
+        >
+          {t("nav.vs_stream")} 📺
+        </Link>
+      </nav>
 
-          <p className="font-data text-[11px] uppercase tracking-[0.4em] text-[var(--gold)]/70 mb-3">
-            {t("p_vsgame.vs_eyebrow")}
-          </p>
-          <h1
-            className="font-display font-black tracking-tight leading-[0.85] text-5xl md:text-7xl lg:text-[7.5rem]"
-            style={{
-              color: "white",
-              textShadow:
-                "0 0 60px rgba(200,170,110,0.45), 0 6px 30px rgba(0,0,0,0.85)",
-              letterSpacing: "-0.015em",
-            }}
-          >
-            VS <span className="text-shimmer">ROULETTE</span>
-          </h1>
-          <p className="mt-5 mx-auto max-w-2xl text-base md:text-lg text-white/80 font-medium">
-            {t("p_vsgame.vs_hero_subtitle")}
-          </p>
-
-          <div className="mt-7 flex items-center justify-center gap-3 flex-wrap">
-            <Link
-              href="/vs/leaderboard"
-              className="rounded-xl border border-[var(--gold)]/40 bg-black/35 backdrop-blur-sm px-5 py-2.5 font-display text-xs font-bold uppercase tracking-[0.25em] text-[var(--gold)] transition-all hover:border-[var(--gold)]/80 hover:bg-[var(--gold)]/10"
-            >
-              {t("p_vsgame.vs_see_elo_ranking")}
-            </Link>
-            <Link
-              href="/scroll"
-              className="rounded-xl border border-white/20 bg-black/25 backdrop-blur-sm px-5 py-2.5 font-display text-xs font-bold uppercase tracking-[0.25em] text-white/75 transition-all hover:border-white/45 hover:text-white"
-            >
-              {t("p_vsgame.vs_scroll_mode")}
-            </Link>
-            {/* Wave 36 — le Mode Stream (plein écran OBS, arbitrage clavier,
-                auto-relance) taillé pour les soirées EtoStark. */}
-            <Link
-              href="/vs/stream"
-              className="rounded-xl border border-[var(--cyan)]/40 bg-black/25 backdrop-blur-sm px-5 py-2.5 font-display text-xs font-bold uppercase tracking-[0.25em] text-[var(--cyan)] transition-all hover:border-[var(--cyan)]/80 hover:bg-[var(--cyan)]/10"
-            >
-              {t("nav.vs_stream")} 📺
-            </Link>
-          </div>
-        </div>
-      </section>
-
-      {/* ─── Client roulette ─────────────────────────────────────── */}
-      <Suspense
-        fallback={
-          <div className="mx-auto max-w-6xl px-4 py-16 text-center font-data text-xs uppercase tracking-[0.3em] text-[var(--text-muted)]">
-            {t("p_vsgame.vs_loading_roulette")}
-          </div>
-        }
-      >
-        <VSRoulette
-          players={players}
-          champions={champions}
-          eras={eraOptions}
-          rouletteThumbnails={rouletteThumbnails}
-        />
-      </Suspense>
-
+      {/* ─── La roulette libre (filtres), chargée à la demande ─────── */}
+      <FreeRoulette players={players} champions={champions} eras={eraOptions} rouletteThumbnails={rouletteThumbnails} />
       {/* ─── Disclaimer Riot — required on every public page ────── */}
       <p
         aria-label="Riot Games disclaimer"
