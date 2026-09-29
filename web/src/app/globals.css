@@ -1112,3 +1112,28 @@ nav[data-scrolled="true"] .kc-pennant-wrap {
   backdrop-filter: blur(16px) saturate(180%);
   background: rgba(10, 20, 40, 0.72);
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   AFFICHE JOUEUR (components/player/PlayerPoster) — 29/09/2026
+   ═══════════════════════════════════════════════════════════════ */
+.poster-grain {
+  opacity: 0.18;
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence baseFrequency='.9' numOctaves='2'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+}
+@media (prefers-reduced-motion: no-preference) {
+  .poster-splash { animation: posterKen 26s cubic-bezier(0.16, 1, 0.3, 1) both; }
+  .poster-name { animation: posterRise 1s cubic-bezier(0.16, 1, 0.3, 1) both; }
+  .poster-echo { animation: posterEcho 1.4s 0.2s cubic-bezier(0.16, 1, 0.3, 1) backwards; }
+  .poster-photo { animation: posterPhoto 1.2s 0.12s cubic-bezier(0.16, 1, 0.3, 1) both; }
+  .dna-live .dna-dot { animation: dnaIn 0.7s cubic-bezier(0.16, 1, 0.3, 1) backwards; }
+}
+@keyframes posterKen { from { transform: scale(1.14); } to { transform: scale(1); } }
+@keyframes posterRise { from { opacity: 0; transform: translateY(0.35em); } to { opacity: 1; transform: none; } }
+@keyframes posterEcho { from { opacity: 0; transform: translateY(-0.4em); } }
+@keyframes posterPhoto { from { opacity: 0; transform: translateY(40px) scale(1.04); } to { opacity: 1; transform: none; } }
+
+/* ADN d'un joueur (components/player/PlayerDNA) : chaque point naît à son rayon. */
+.dna-dot { transform-box: fill-box; transform-origin: center; }
+@keyframes dnaIn { from { opacity: 0; transform: scale(0); } }
+.dna-wait .dna-dot { opacity: 0; }

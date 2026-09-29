@@ -30,11 +30,3 @@ export const QUOTES: Quote[] = [];
 export function getQuotesByEra(eraId: string): Quote[] {
   return QUOTES.filter((q) => q.eraId === eraId);
 }
-
-export function getQuotesByPlayer(playerSlug: string): Quote[] {
-  return QUOTES.filter((q) => q.playerSlug === playerSlug);
-}
-
-export function getRandomQuote(): Quote | undefined {
-  return QUOTES[Math.floor(Math.random() * QUOTES.length)];
-}
