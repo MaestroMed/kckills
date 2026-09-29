@@ -1,147 +1,124 @@
 "use client";
 
 /**
- * La Chambre des Souffrances — the immersive descent (client).
+ * La Chambre des Souffrances — la descente (refonte du 29/09/2026).
  *
- * A 10-circle plunge through Karmine Corp's worst deaths, each circle worse
- * than the last. As the viewer scrolls deeper, a stress gauge climbs and the
- * whole scene curdles — desaturating, tinting red, the vignette closing in,
- * a heartbeat quickening. Orochimaru's-lab dread, not gore.
+ * Un puits sans fond en 3D (abyss-gl) que la caméra descend au rythme du
+ * scroll : un anneau de lumière à chaque cercle, la pierre qui rougit, la
+ * lueur de l'Enfer qui grandit au fond, des cendres puis des braises qui
+ * montent, un cœur qui s'emballe (62 → 177 battements par minute, audible
+ * et visible). Dix cercles de douze morts de la Karmine Corp, de la mort
+ * isolée au pentakill encaissé (lib/supabase/chamber) : un chiffre romain
+ * monumental, les Moments Maudits du cercle, le coup de grâce en grand,
+ * puis les autres morts en rail. Au fond, on remonte vers la lumière.
  *
- * Accessibility : everything animated is gated behind `prefers-reduced-motion`
- * — under it the descent still darkens by circle but nothing pulses or shakes.
- * A persistent REMONTER control always escapes back to the surface (/).
+ * Accessibilité : reduced-motion → puits figé (une image par cercle), ni
+ * tremblement ni glitch ni pulsation ; « Surface » ramène à l'accueil à tout
+ * moment ; tout le contenu reste du HTML (lecteurs d'écran, clavier).
  */
 
 import Link from "next/link";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
 import { useReducedMotion } from "motion/react";
-import type { ChamberCircle, ChamberClip } from "@/lib/supabase/chamber";
-import { loreForDepth, type ChamberLoreMoment } from "@/lib/chamber-lore";
+import type { ChamberCircle } from "@/lib/supabase/chamber";
+import { loreForDepth } from "@/lib/chamber-lore";
+import { ABYSS_RING, mountAbyss, type AbyssHandle } from "./abyss-gl";
+import { ChamberAudio } from "./ChamberAudio";
+import { DeathRail, HeroDeath, LoreMomentCard, useSessionRespects } from "./cards";
 
-const MULTI_LABEL: Record<string, string> = {
-  penta: "PENTAKILL SUBI",
-  quadra: "QUADRA SUBI",
-  triple: "TRIPLE SUBI",
-  double: "DOUBLE SUBI",
-};
+const ROMAN = ["I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X"];
+const METERS_PER_CIRCLE = 100;
+/** Position continue x (0 = premier cercle, 10 = le fond) → battements par minute. */
+const bpmAt = (x: number) => Math.round(62 + Math.min(10, Math.max(0, x)) * 11.5);
+const GATE_DEPTH = -0.8 * ABYSS_RING;
+/** Titres en serif : la règle globale h1-h4 (Oswald, majuscules) est hors layer et bat les utilitaires Tailwind. */
+const SERIF = { fontFamily: "var(--font-cormorant), 'Cormorant Garamond', Georgia, serif", textTransform: "none", letterSpacing: "0" } as const;
 
-// ════════════════════════════════════════════════════════════════════
-// Le rituel du F — "press F to pay respects", per death. Wave 36.
-//
-// Each tap fires a 💀 reaction through the existing /api/kills/[id]/react
-// route (rate-limited server-side, batched here per card), floats an "F"
-// glyph up from the button, and keeps a session tally that the ExitCard
-// reads to salute the mourner. No new table, no new RPC.
-// ════════════════════════════════════════════════════════════════════
-
-let sessionRespects = 0;
-const respectListeners = new Set<(n: number) => void>();
-
-function bumpSessionRespects() {
-  sessionRespects += 1;
-  respectListeners.forEach((fn) => fn(sessionRespects));
-}
-
-function RespectButton({ killId, reduce }: { killId: string; reduce: boolean }) {
-  const [mine, setMine] = useState(0);
-  const [floats, setFloats] = useState<number[]>([]);
-  const pendingRef = useRef(0);
-  const flushTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const flush = useCallback(() => {
-    const delta = pendingRef.current;
-    pendingRef.current = 0;
-    if (delta <= 0) return;
-    // Fire-and-forget — the Chambre never blocks on the network.
-    fetch(`/api/kills/${killId}/react`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ emoji: "💀", delta }),
-      // Audit — keepalive : le flush de fermeture d'onglet partait dans un
-      // cleanup React et se faisait annuler ; keepalive le laisse aboutir.
-      keepalive: true,
-    }).catch(() => {});
-  }, [killId]);
-
-  useEffect(() => {
-    return () => {
-      if (flushTimer.current) clearTimeout(flushTimer.current);
-      flush();
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const pay = useCallback(
-    (e: React.MouseEvent) => {
-      e.preventDefault();
-      e.stopPropagation();
-      setMine((n) => n + 1);
-      bumpSessionRespects();
-      pendingRef.current += 1;
-      if (flushTimer.current) clearTimeout(flushTimer.current);
-      flushTimer.current = setTimeout(flush, 800);
-      if (!reduce) {
-        const id = Date.now() + Math.random();
-        setFloats((f) => [...f.slice(-4), id]);
-        setTimeout(() => setFloats((f) => f.filter((x) => x !== id)), 900);
-      }
-      try {
-        navigator.vibrate?.(12);
-      } catch {
-        /* no haptics */
-      }
-    },
-    [flush, reduce],
-  );
-
-  return (
-    <button
-      type="button"
-      onClick={pay}
-      aria-label="Rendre hommage (F)"
-      className="absolute right-1.5 top-1.5 z-10 flex h-8 min-w-8 items-center justify-center gap-1 rounded-md border border-white/15 bg-black/60 px-1.5 font-data text-[12px] font-black text-white/75 backdrop-blur-sm transition-all hover:border-[var(--red)] hover:text-[var(--red)] active:scale-90"
-    >
-      F
-      {mine > 0 && (
-        <span className="text-[9px] font-bold tabular-nums text-[var(--red)]">
-          ×{mine}
-        </span>
-      )}
-      {floats.map((id) => (
-        <span
-          key={id}
-          aria-hidden
-          className="pointer-events-none absolute left-1/2 top-0 -translate-x-1/2 font-data text-[14px] font-black text-[var(--red)]"
-          style={{ animation: "chamberRespect 0.9s ease-out forwards" }}
-        >
-          F
-        </span>
-      ))}
-    </button>
-  );
+function mixHex(a: string, b: string, t: number): string {
+  const pa = [1, 3, 5].map((i) => parseInt(a.slice(i, i + 2), 16));
+  const pb = [1, 3, 5].map((i) => parseInt(b.slice(i, i + 2), 16));
+  return `rgb(${pa.map((v, i) => Math.round(v + (pb[i] - v) * t)).join(",")})`;
 }
 
 export function ChamberExperience({ circles }: { circles: ChamberCircle[] }) {
   const reduce = useReducedMotion() ?? false;
+  const router = useRouter();
   const [entered, setEntered] = useState(false);
-  // Current circle depth in the viewport centre (1 shallow → 10 deepest).
-  const [depth, setDepth] = useState(1);
+  const [ascending, setAscending] = useState(false);
+  // cercle courant (1-10) et position continue x (cercles parcourus)
+  const [pos, setPos] = useState({ depth: 1, x: 0 });
   const scrollerRef = useRef<HTMLDivElement>(null);
-
-  const maxDepth = circles.length ? Math.max(...circles.map((c) => c.depth)) : 10;
-  const stress = Math.min(1, depth / 10);
+  const contentRef = useRef<HTMLDivElement>(null);
+  const abyssRef = useRef<AbyssHandle | null>(null);
 
   const totalClips = circles.reduce((n, c) => n + c.clips.length, 0);
+  const bpm = entered ? bpmAt(pos.x) : 0;
+
+  // Scroll → profondeur de la caméra (continue) et cercle courant.
+  useEffect(() => {
+    if (!entered) return;
+    const sc = scrollerRef.current;
+    const content = contentRef.current;
+    if (!sc || !content) return;
+    let raf = 0;
+    const measure = () => {
+      raf = 0;
+      const center = sc.scrollTop + sc.clientHeight / 2;
+      let depth = 1;
+      let x = 0;
+      for (const s of content.querySelectorAll<HTMLElement>("[data-depth]")) {
+        if (center < s.offsetTop) break;
+        depth = Number(s.dataset.depth);
+        x = depth - 1 + Math.min(1, (center - s.offsetTop) / Math.max(1, s.offsetHeight));
+      }
+      abyssRef.current?.setDepth(x * ABYSS_RING, Math.min(1, x / 9.5));
+      setPos((p) => (p.depth === depth && Math.abs(p.x - x) < 0.02 ? p : { depth, x }));
+    };
+    const onScroll = () => {
+      if (!raf) raf = requestAnimationFrame(measure);
+    };
+    sc.addEventListener("scroll", onScroll, { passive: true });
+    measure();
+    return () => {
+      sc.removeEventListener("scroll", onScroll);
+      cancelAnimationFrame(raf);
+    };
+  }, [entered]);
+
+  // Le cœur du puits bat avec celui de la bande-son ; éclat à chaque anneau franchi.
+  useEffect(() => {
+    abyssRef.current?.setBpm(reduce ? 0 : bpm);
+  }, [bpm, reduce]);
+  const lastDepth = useRef(1);
+  useEffect(() => {
+    if (!entered || pos.depth === lastDepth.current) return;
+    lastDepth.current = pos.depth;
+    if (!reduce) abyssRef.current?.flash(0.45 + pos.depth * 0.05);
+  }, [pos.depth, entered, reduce]);
+
+  const enter = () => {
+    setEntered(true);
+    scrollerRef.current?.scrollTo({ top: 0 });
+    abyssRef.current?.setDepth(0, 0);
+    if (!reduce) abyssRef.current?.flash(1);
+  };
+
+  const ascend = () => {
+    if (ascending) return;
+    setAscending(true);
+    abyssRef.current?.ascend();
+    abyssRef.current?.setDepth(GATE_DEPTH, 0);
+    window.setTimeout(() => router.push("/scroll"), reduce ? 150 : 1500);
+  };
 
   if (circles.length === 0) {
     return (
       <div className="fixed inset-0 z-[60] grid place-items-center bg-[#03060c] px-6 text-center">
         <div className="max-w-md">
-          <p className="font-display text-2xl text-[var(--red)]">La Chambre est scellée</p>
+          <p className="font-[family-name:var(--font-cormorant)] text-3xl text-[var(--red)]">La Chambre est scellée</p>
           <p className="mt-3 text-sm text-white/60">
-            Aucune souffrance n&apos;a encore été archivée. Reviens quand les
-            clips auront été moissonnés.
+            Aucune souffrance n&apos;a encore été archivée. Reviens quand les clips auront été moissonnés.
           </p>
           <Link
             href="/"
@@ -154,101 +131,240 @@ export function ChamberExperience({ circles }: { circles: ChamberCircle[] }) {
     );
   }
 
+  const stress = entered ? Math.min(1, pos.x / 10) : 0;
+
   return (
+    // animation:none : la règle globale `main > * > *` (fadeInUp, fill both) laissait un
+    // transform sur ce conteneur, qui devenait le repère des éléments fixed (puits, voile,
+    // HUD) : ils défilaient avec le contenu.
     <div
       ref={scrollerRef}
       className="fixed inset-0 z-[60] overflow-y-auto overflow-x-hidden bg-[#03060c]"
-      style={{ scrollBehavior: reduce ? "auto" : "smooth" }}
+      style={{ animation: "none" }}
     >
-      {/* ── Grade overlays (fixed, pointer-events-none) ─────────────── */}
-      <GradeOverlay stress={stress} reduce={reduce} />
+      <Abyss
+        reduce={reduce}
+        onHandle={(h) => {
+          abyssRef.current = h;
+          h?.setDepth(GATE_DEPTH, 0);
+        }}
+      />
+      <Veil stress={stress} bpm={bpm} reduce={reduce} />
 
-      {/* ── Persistent HUD : stress gauge + escape ──────────────────── */}
-      <StressGauge stress={stress} depth={depth} maxDepth={maxDepth} reduce={reduce} />
       <Link
         href="/"
-        aria-label="Remonter à la surface"
+        aria-label="Remonter à la surface (accueil)"
         className="fixed left-4 top-4 z-[95] flex items-center gap-2 rounded-full border border-white/15 bg-black/50 px-4 py-2 font-data text-[11px] uppercase tracking-[0.25em] text-white/70 backdrop-blur-sm transition-colors hover:border-[var(--gold)] hover:text-[var(--gold)]"
       >
-        ↑ Remonter
+        ↑ Surface
       </Link>
+      {entered && <DepthHud x={pos.x} depth={pos.depth} bpm={bpm} reduce={reduce} />}
+      <GlitchFlash depth={pos.depth} reduce={reduce || !entered} />
+      <ChamberAudio depth={pos.depth} bpm={bpm} active={entered} />
 
-      {/* One-shot glitch each time the descent crosses into a new circle. */}
-      <GlitchFlash depth={depth} reduce={reduce} />
+      <div ref={contentRef} className="relative z-10">
+        {!entered ? (
+          <EntryGate totalClips={totalClips} onEnter={enter} />
+        ) : (
+          <>
+            {circles.map((circle) => (
+              <CircleSection key={circle.depth} circle={circle} reduce={reduce} />
+            ))}
+            <ExitCard onAscend={ascend} ascending={ascending} />
+            <RiotDisclaimer />
+          </>
+        )}
+      </div>
 
-      {/* Escalating dread music — a hidden YT player the Chambre owns; the
-          global scroll playlist is paused for the duration (see
-          use-floating-player). Only mounts once the user has descended. */}
-      <ChamberAudio depth={depth} active={entered} />
-
-      {!entered ? (
-        <EntryGate totalClips={totalClips} onEnter={() => setEntered(true)} />
-      ) : (
-        <>
-          {circles.map((circle) => (
-            <CircleSection
-              key={circle.depth}
-              circle={circle}
-              onActive={setDepth}
-              reduce={reduce}
-            />
-          ))}
-          <ExitCard />
-          <RiotDisclaimer />
-        </>
+      {ascending && (
+        <div
+          aria-hidden
+          className="pointer-events-none fixed inset-0 z-[99] bg-[#fff4dc]"
+          style={{ animation: reduce ? undefined : "chamberAscend 1.5s ease-in forwards" }}
+        />
       )}
+      <style>{`
+        @keyframes chamberGlitch{0%{opacity:1;transform:translateX(0)}18%{opacity:.9;transform:translateX(-5px)}36%{opacity:.65;transform:translateX(6px)}54%{opacity:.85;transform:translateX(-3px)}72%{opacity:.4;transform:translateX(2px)}100%{opacity:0;transform:translateX(0)}}
+        @keyframes chamberShake{0%,100%{transform:translate(0,0)}20%{transform:translate(-1.5px,1px)}40%{transform:translate(1.5px,-1px)}60%{transform:translate(-1px,-1.5px)}80%{transform:translate(1px,1.5px)}}
+        @keyframes chamberRespect{0%{opacity:1;transform:translate(-50%,0) scale(1)}100%{opacity:0;transform:translate(-50%,-34px) scale(1.6)}}
+        @keyframes chamberBeat{0%{transform:scale(1)}8%{transform:scale(1.28)}20%{transform:scale(1)}30%{transform:scale(1.14)}45%,100%{transform:scale(1)}}
+        @keyframes chamberBreath{0%{opacity:0}8%{opacity:1}28%{opacity:.25}34%{opacity:.7}60%,100%{opacity:0}}
+        @keyframes chamberAscend{0%{opacity:0}55%{opacity:.35}100%{opacity:1}}
+      `}</style>
     </div>
   );
 }
 
 // ════════════════════════════════════════════════════════════════════
-// EntryGate — the warning + stress preview + "Descendre" CTA.
+// Le puits (canvas plein écran derrière le contenu)
 // ════════════════════════════════════════════════════════════════════
 
-function EntryGate({
-  totalClips,
-  onEnter,
-}: {
-  totalClips: number;
-  onEnter: () => void;
-}) {
+function Abyss({ reduce, onHandle }: { reduce: boolean; onHandle: (h: AbyssHandle | null) => void }) {
+  const ref = useRef<HTMLCanvasElement>(null);
+  const [ok, setOk] = useState(false);
+  const onHandleRef = useRef(onHandle);
+  useEffect(() => {
+    onHandleRef.current = onHandle;
+  }, [onHandle]);
+  useEffect(() => {
+    const canvas = ref.current;
+    if (!canvas) return;
+    let h: AbyssHandle | null = null;
+    try {
+      const mobile = window.innerWidth < 768;
+      h = mountAbyss(canvas, { scale: mobile ? 0.5 : 0.6, fps: mobile ? 30 : 60, still: reduce });
+    } catch (err) {
+      console.warn("[Chambre] puits indisponible :", err);
+    }
+    if (!h) return;
+    const handle = h;
+    onHandleRef.current(handle);
+    setOk(true);
+    const onVis = () => handle.setPaused(document.hidden);
+    document.addEventListener("visibilitychange", onVis);
+    return () => {
+      document.removeEventListener("visibilitychange", onVis);
+      onHandleRef.current(null);
+      handle.dispose();
+    };
+  }, [reduce]);
   return (
-    <section className="relative grid min-h-[100dvh] place-items-center px-6 text-center">
+    <canvas
+      ref={ref}
+      aria-hidden
+      className="pointer-events-none fixed inset-0 h-full w-full transition-opacity duration-1000"
+      style={{ opacity: ok ? 1 : 0 }}
+    />
+  );
+}
+
+// ════════════════════════════════════════════════════════════════════
+// Voile : la vignette se referme et le cœur colore les bords.
+// ════════════════════════════════════════════════════════════════════
+
+function Veil({ stress, bpm, reduce }: { stress: number; bpm: number; reduce: boolean }) {
+  return (
+    <>
       <div
         aria-hidden
-        className="pointer-events-none absolute inset-0 opacity-70"
+        className="pointer-events-none fixed inset-0 z-[80]"
         style={{
-          background:
-            "radial-gradient(circle at 50% 40%, rgba(232,64,87,0.12), transparent 60%)",
+          background: `radial-gradient(ellipse at 50% 45%, transparent ${64 - stress * 24}%, rgba(40,0,6,${stress * 0.28}) 84%, rgba(0,0,0,${0.18 + stress * 0.34}) 100%)`,
+          transition: reduce ? "none" : "background 0.8s ease-out",
         }}
       />
-      <div className="relative z-10 max-w-lg">
-        <p className="font-data text-[11px] uppercase tracking-[0.5em] text-[var(--red)]">
-          Avertissement
-        </p>
-        <h1 className="mt-4 font-display text-4xl font-black leading-tight text-[var(--gold-bright)] sm:text-5xl">
+      {!reduce && bpm > 0 && stress > 0.12 && (
+        <div
+          aria-hidden
+          className="pointer-events-none fixed inset-0 z-[81]"
+          style={{
+            background: "radial-gradient(ellipse at 50% 50%, transparent 55%, rgba(232,64,87,0.16) 100%)",
+            animation: `chamberBreath ${(60 / bpm).toFixed(3)}s ease-out infinite`,
+            opacity: stress,
+          }}
+        />
+      )}
+    </>
+  );
+}
+
+// ════════════════════════════════════════════════════════════════════
+// Profondeur et cœur (à droite ; puce compacte sur mobile)
+// ════════════════════════════════════════════════════════════════════
+
+function Heart({ bpm, reduce }: { bpm: number; reduce: boolean }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      aria-hidden
+      className="h-3.5 w-3.5 fill-current"
+      style={{ animation: reduce || bpm <= 0 ? undefined : `chamberBeat ${(60 / bpm).toFixed(3)}s ease-out infinite` }}
+    >
+      <path d="M12 21s-7.5-4.6-9.6-9.3C.9 8.2 3 4.5 6.6 4.5c2 0 3.4 1.1 4.1 2.2h.6c.7-1.1 2.1-2.2 4.1-2.2 3.6 0 5.7 3.7 4.2 7.2C19.5 16.4 12 21 12 21z" />
+    </svg>
+  );
+}
+
+function DepthHud({ x, depth, bpm, reduce }: { x: number; depth: number; bpm: number; reduce: boolean }) {
+  const meters = Math.round(Math.max(0, x) * METERS_PER_CIRCLE);
+  const t = Math.min(1, x / 10);
+  return (
+    <>
+      <div
+        className="pointer-events-none fixed right-4 top-1/2 z-[95] hidden -translate-y-1/2 flex-col items-center gap-3 sm:flex"
+        aria-label={`Profondeur ${meters} mètres, cercle ${depth} sur 10, ${bpm} battements par minute`}
+        role="status"
+      >
+        <span className="font-data text-[10px] tabular-nums tracking-[0.15em] text-white/60">−{meters} m</span>
+        <div className="relative h-60 w-px bg-gradient-to-b from-white/25 via-white/15 to-[var(--red)]/50">
+          {ROMAN.map((r, i) => (
+            <span
+              key={r}
+              className="absolute right-3 -translate-y-1/2 font-[family-name:var(--font-cormorant)] text-[12px] font-semibold"
+              style={{ top: `${(i / 9) * 100}%`, color: i + 1 <= depth ? "var(--red)" : "rgba(255,255,255,0.3)" }}
+            >
+              {r}
+            </span>
+          ))}
+          <span
+            className="absolute left-1/2 h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rotate-45 bg-[var(--red)]"
+            style={{
+              top: `${t * 100}%`,
+              boxShadow: "0 0 12px rgba(232,64,87,0.8)",
+              transition: reduce ? "none" : "top 0.3s ease-out",
+            }}
+          />
+        </div>
+        <span className="flex items-center gap-1.5 font-data text-[11px] font-bold tabular-nums text-[var(--red)]">
+          <Heart bpm={bpm} reduce={reduce} />
+          {bpm}
+        </span>
+      </div>
+      <div
+        className="pointer-events-none fixed bottom-4 right-4 z-[95] flex items-center gap-2 rounded-full border border-white/12 bg-black/55 px-3 py-1.5 font-data text-[10px] tabular-nums text-white/70 backdrop-blur-sm sm:hidden"
+        aria-hidden
+      >
+        <span className="font-[family-name:var(--font-cormorant)] text-[12px] font-semibold text-[var(--red)]">{ROMAN[depth - 1]}</span>
+        <span>−{meters} m</span>
+        <span className="flex items-center gap-1 text-[var(--red)]">
+          <Heart bpm={bpm} reduce={reduce} />
+          {bpm}
+        </span>
+      </div>
+    </>
+  );
+}
+
+// ════════════════════════════════════════════════════════════════════
+// La porte
+// ════════════════════════════════════════════════════════════════════
+
+function EntryGate({ totalClips, onEnter }: { totalClips: number; onEnter: () => void }) {
+  return (
+    <section className="relative grid min-h-[100dvh] place-items-center px-6 text-center">
+      <div className="relative max-w-2xl">
+        <p className="font-data text-[11px] uppercase tracking-[0.55em] text-[var(--red)]/80">Avertissement</p>
+        <h1 className="mt-6 text-6xl leading-[0.88] text-[var(--gold-bright)] sm:text-8xl" style={{ ...SERIF, fontWeight: 300 }}>
           La Chambre
           <br />
-          des Souffrances
+          <em className="font-normal italic text-[var(--gold)]">des Souffrances</em>
         </h1>
-        <p className="mx-auto mt-5 max-w-md text-[15px] leading-relaxed text-white/70">
-          Dix cercles. {totalClips} morts de la Karmine Corp, du simple faux-pas
-          au pentakill encaissé. Chaque cercle est pire que le précédent.
-          La pression monte à mesure que tu descends. Tu peux remonter à tout
-          moment.
+        <p className="mx-auto mt-7 max-w-lg font-[family-name:var(--font-cormorant)] text-xl italic leading-relaxed text-white/70 sm:text-2xl">
+          Dix cercles, {totalClips} morts de la Karmine Corp. Du faux pas isolé au pentakill encaissé, chaque cercle est pire
+          que le précédent, et le cœur s&apos;emballe à mesure qu&apos;on descend.
         </p>
         <button
           type="button"
           onClick={onEnter}
-          className="group mt-9 inline-flex items-center gap-3 rounded-full border-2 border-[var(--red)]/60 bg-[var(--red)]/10 px-8 py-3.5 font-display text-lg font-bold uppercase tracking-[0.15em] text-[var(--red)] transition-all hover:border-[var(--red)] hover:bg-[var(--red)]/20 hover:shadow-[0_0_40px_rgba(232,64,87,0.35)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--red)] focus-visible:outline-offset-2"
+          className="group mt-10 inline-flex items-center gap-3 rounded-full border border-[var(--red)]/60 bg-[var(--red)]/10 px-9 py-4 font-display text-lg font-bold uppercase tracking-[0.25em] text-[var(--red)] backdrop-blur-sm transition-all hover:border-[var(--red)] hover:bg-[var(--red)]/20 hover:shadow-[0_0_48px_rgba(232,64,87,0.4)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--red)]"
         >
           Descendre
           <span aria-hidden className="transition-transform group-hover:translate-y-0.5">
             ↓
           </span>
         </button>
-        <p className="mt-6 font-data text-[10px] uppercase tracking-[0.3em] text-white/30">
-          Sons, désaturation, vignette — respecte prefers-reduced-motion
+        <p className="mt-6 font-data text-[10px] uppercase tracking-[0.3em] text-white/35">
+          Son recommandé · on peut remonter à tout moment
         </p>
       </div>
     </section>
@@ -256,326 +372,75 @@ function EntryGate({
 }
 
 // ════════════════════════════════════════════════════════════════════
-// CircleSection — one circle : header + a grid of its deaths.
+// Un cercle
 // ════════════════════════════════════════════════════════════════════
 
-function CircleSection({
-  circle,
-  onActive,
-  reduce,
-}: {
-  circle: ChamberCircle;
-  onActive: (depth: number) => void;
-  reduce: boolean;
-}) {
-  const ref = useRef<HTMLElement>(null);
-
-  // When this circle occupies the viewport centre, it becomes the "current"
-  // depth driving the grade. A thin centre band avoids two circles fighting.
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    const io = new IntersectionObserver(
-      ([e]) => {
-        if (e.isIntersecting) onActive(circle.depth);
-      },
-      { rootMargin: "-45% 0px -45% 0px", threshold: 0 },
-    );
-    io.observe(el);
-    return () => io.disconnect();
-  }, [circle.depth, onActive]);
-
+function CircleSection({ circle, reduce }: { circle: ChamberCircle; reduce: boolean }) {
+  const [hero, ...rest] = circle.clips;
+  const lore = loreForDepth(circle.depth);
+  const g = (circle.depth - 1) / 9;
+  const numeralTop = mixHex("#F0E6D2", "#FF5a4a", g);
+  const numeralBottom = mixHex("#C8AA6E", "#7a0a14", g);
   return (
     <section
-      ref={ref}
+      data-depth={circle.depth}
       aria-label={`Cercle ${circle.depth} — ${circle.name}`}
-      className="relative border-t border-white/5 px-4 py-14 sm:px-8"
+      className="relative px-4 pb-32 pt-[24vh] sm:px-8"
     >
-      {/* Circle header */}
-      <div className="mx-auto mb-8 max-w-6xl">
-        <div className="flex items-baseline gap-3">
-          <span
-            className="font-data text-[11px] uppercase tracking-[0.4em]"
-            style={{ color: `rgba(232,64,87,${0.4 + circle.depth * 0.06})` }}
-          >
-            Cercle {circle.depth} / 10
-          </span>
-          <span aria-hidden className="h-px flex-1 bg-gradient-to-r from-[var(--red)]/40 to-transparent" />
-        </div>
-        <h2
-          className="mt-2 font-display font-black leading-none"
+      {/* halo sombre : l'en-tête se pose souvent sur la lueur du fond du puits */}
+      <header
+        className="mx-auto max-w-4xl px-6 py-10 text-center"
+        style={{ background: "radial-gradient(ellipse 60% 55% at 50% 50%, rgba(0,0,0,0.55), transparent 72%)" }}
+      >
+        <p className="font-data text-[11px] uppercase tracking-[0.5em]" style={{ color: `rgba(232,64,87,${0.5 + g * 0.45})` }}>
+          Cercle {circle.depth} · −{circle.depth * METERS_PER_CIRCLE} m
+        </p>
+        <p
+          aria-hidden
+          className="select-none font-[family-name:var(--font-cormorant)] font-light leading-[0.85]"
           style={{
-            fontSize: `clamp(1.75rem, ${2 + circle.depth * 0.35}vw, ${2.4 + circle.depth * 0.25}rem)`,
+            fontSize: "clamp(7rem, 22vw, 15rem)",
+            backgroundImage: `linear-gradient(180deg, ${numeralTop}, ${numeralBottom})`,
+            WebkitBackgroundClip: "text",
+            backgroundClip: "text",
+            color: "transparent",
+            filter: `drop-shadow(0 0 ${14 + g * 34}px rgba(232,64,87,${0.18 + g * 0.5}))`,
+          }}
+        >
+          {ROMAN[circle.depth - 1]}
+        </p>
+        <h2
+          className="mt-1 font-display text-3xl font-black uppercase tracking-[0.18em] sm:text-5xl"
+          style={{
             color: circle.depth >= 9 ? "var(--red)" : "var(--gold-bright)",
-            textShadow:
-              circle.depth >= 8 && !reduce
-                ? `0 0 ${circle.depth * 3}px rgba(232,64,87,0.5)`
-                : "none",
-            animation:
-              circle.depth >= 9 && !reduce
-                ? "chamberShake 0.5s ease-in-out infinite"
-                : undefined,
+            animation: circle.depth >= 9 && !reduce ? "chamberShake 0.5s ease-in-out infinite" : undefined,
           }}
         >
           {circle.name}
         </h2>
-        <p className="mt-1.5 text-sm italic text-white/45">{circle.tagline}</p>
-      </div>
+        <p className="mt-3 font-[family-name:var(--font-cormorant)] text-xl italic text-white/60 sm:text-2xl">{circle.tagline}</p>
+        <p className="mt-5 inline-block rounded-full border border-white/12 bg-black/45 px-3.5 py-1 font-data text-[10px] uppercase tracking-[0.3em] text-white/60 backdrop-blur-sm">
+          {circle.kind} · {circle.clips.length}
+        </p>
+      </header>
 
-      {/* Moments Maudits — la couche lore curatée (Wave 44). Les vieilles
-          blessures YouTube du club, intercalées AVANT les morts du cercle :
-          le récit d'abord, le sang ensuite. Data : lib/chamber-lore.ts. */}
-      {loreForDepth(circle.depth).length > 0 && (
-        <div className="mx-auto mb-8 grid max-w-6xl gap-4 lg:grid-cols-2">
-          {loreForDepth(circle.depth).map((m) => (
+      {/* Moments Maudits (lib/chamber-lore.ts) : le récit d'abord, le sang ensuite. */}
+      {lore.length > 0 && (
+        <div className={`mx-auto mt-14 grid gap-5 ${lore.length > 1 ? "max-w-5xl lg:grid-cols-2" : "max-w-2xl"}`}>
+          {lore.map((m) => (
             <LoreMomentCard key={m.youtubeId} moment={m} depth={circle.depth} reduce={reduce} />
           ))}
         </div>
       )}
 
-      {/* Deaths grid */}
-      <div className="mx-auto grid max-w-6xl grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-        {circle.clips.map((clip) => (
-          <ClipCard key={clip.id} clip={clip} depth={circle.depth} reduce={reduce} />
-        ))}
-      </div>
+      {hero && <HeroDeath clip={hero} depth={circle.depth} reduce={reduce} />}
+      <DeathRail clips={rest} depth={circle.depth} reduce={reduce} />
     </section>
   );
 }
 
 // ════════════════════════════════════════════════════════════════════
-// LoreMomentCard — un Moment Maudit : récit + lite-embed YouTube.
-// Thumbnail seule au chargement (zéro iframe tant qu'on ne clique pas),
-// iframe youtube-nocookie autoplay au clic. Gradée par la profondeur.
-// ════════════════════════════════════════════════════════════════════
-
-function LoreMomentCard({
-  moment,
-  depth,
-  reduce,
-}: {
-  moment: ChamberLoreMoment;
-  depth: number;
-  reduce: boolean;
-}) {
-  const [playing, setPlaying] = useState(false);
-  const g = depth / 10;
-  const intense = depth >= 8;
-  return (
-    <figure
-      className="relative overflow-hidden rounded-xl border bg-black/60"
-      style={{
-        borderColor: `rgba(232,64,87,${0.15 + g * 0.35})`,
-        boxShadow: intense && !reduce ? "0 0 32px rgba(232,64,87,0.22)" : "none",
-      }}
-    >
-      <div className="relative aspect-video w-full bg-black">
-        {playing ? (
-          <iframe
-            className="absolute inset-0 h-full w-full"
-            src={`https://www.youtube-nocookie.com/embed/${moment.youtubeId}?autoplay=1&rel=0`}
-            title={moment.title}
-            allow="autoplay; encrypted-media; picture-in-picture"
-            allowFullScreen
-          />
-        ) : (
-          <button
-            type="button"
-            onClick={() => setPlaying(true)}
-            aria-label={`Regarder : ${moment.title}`}
-            className="group absolute inset-0 h-full w-full"
-          >
-            {/* eslint-disable-next-line @next/next/no-img-element -- thumb YouTube externe, pas d'optimisation next/image nécessaire */}
-            <img
-              src={`https://img.youtube.com/vi/${moment.youtubeId}/hqdefault.jpg`}
-              alt=""
-              className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.03]"
-              style={{
-                filter: `grayscale(${(g * 0.7).toFixed(2)}) sepia(${(g * 0.3).toFixed(2)}) brightness(${(0.95 - g * 0.2).toFixed(2)})`,
-              }}
-              loading="lazy"
-            />
-            <span
-              aria-hidden
-              className="absolute inset-0 flex items-center justify-center bg-black/30 transition-colors group-hover:bg-black/15"
-            >
-              <span className="flex h-14 w-14 items-center justify-center rounded-full border border-[var(--red)]/70 bg-black/70 text-xl text-[var(--red)] backdrop-blur-sm transition-transform group-hover:scale-110">
-                ▶
-              </span>
-            </span>
-          </button>
-        )}
-      </div>
-      <figcaption className="space-y-1.5 p-4">
-        <div className="flex items-center gap-2">
-          <span className="rounded-full border border-[var(--red)]/40 bg-[var(--red)]/10 px-2 py-0.5 font-data text-[9px] uppercase tracking-[0.25em] text-[var(--red)]">
-            Moment maudit
-          </span>
-          <span className="font-data text-[10px] uppercase tracking-[0.2em] text-white/40">
-            {moment.era}
-          </span>
-        </div>
-        <h3 className="font-display text-lg font-black leading-tight text-[var(--gold-bright)]">
-          {moment.title}
-        </h3>
-        <p className="text-[13px] leading-relaxed text-white/60">{moment.story}</p>
-      </figcaption>
-    </figure>
-  );
-}
-
-// ════════════════════════════════════════════════════════════════════
-// ClipCard — a single death. Video plays only while in view.
-// ════════════════════════════════════════════════════════════════════
-
-function ClipCard({
-  clip,
-  depth,
-  reduce,
-}: {
-  clip: ChamberClip;
-  /** The circle's depth (1-10) — grades the video (deeper = drained + red). */
-  depth: number;
-  reduce: boolean;
-}) {
-  const ref = useRef<HTMLVideoElement>(null);
-  const [play, setPlay] = useState(false);
-  const g = depth / 10; // 0.1 → 1.0
-  const intense = depth >= 8;
-  // Filter the VIDEO directly — the only thing that grades a hardware-
-  // composited <video> layer (overlays / mix-blend / backdrop-filter don't
-  // reach it). Constant per circle, so no re-render on scroll.
-  const videoFilter = `grayscale(${(g * 0.82).toFixed(2)}) sepia(${(g * 0.38).toFixed(2)}) hue-rotate(${Math.round(-g * 22)}deg) contrast(${(1 + g * 0.16).toFixed(2)}) brightness(${(1 - g * 0.14).toFixed(2)})`;
-
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    const io = new IntersectionObserver(
-      ([e]) => {
-        setPlay(e.isIntersecting);
-        if (e.isIntersecting) {
-          el.play().catch(() => {});
-        } else {
-          el.pause();
-        }
-      },
-      { threshold: 0.35 },
-    );
-    io.observe(el);
-    return () => io.disconnect();
-  }, []);
-
-  const src = clip.clipUrlLow ?? clip.clipUrl ?? undefined;
-  const badge = clip.multiKill ? MULTI_LABEL[clip.multiKill] : clip.isFirstBlood ? "FIRST BLOOD SUBI" : null;
-
-  return (
-    <figure
-      className="group relative aspect-[9/16] overflow-hidden rounded-lg border border-white/8 bg-black"
-      style={{
-        boxShadow: intense && !reduce ? "0 0 24px rgba(232,64,87,0.18)" : "none",
-      }}
-    >
-      <RespectButton killId={clip.id} reduce={reduce} />
-      <video
-        ref={ref}
-        src={src}
-        poster={clip.thumbnailUrl ?? undefined}
-        muted
-        loop
-        playsInline
-        preload="none"
-        className="h-full w-full object-cover"
-        style={{ opacity: play ? 1 : 0.85, filter: videoFilter }}
-      />
-      {/* Wave 44 (audit) — chaque mort est cliquable vers sa page /kill.
-          Le Link couvre la carte SOUS le RespectButton (z-10) qui garde
-          son stopPropagation ; aria-label explicite pour les lecteurs. */}
-      <Link
-        href={`/kill/${clip.id}`}
-        aria-label={`Voir la mort : ${clip.victimChampion ?? "?"} face à ${clip.killerChampion ?? "?"}`}
-        className="absolute inset-0 z-[5]"
-      />
-      {/* bottom scrim + caption */}
-      <figcaption className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 via-black/40 to-transparent p-2.5">
-        {badge && (
-          <span className="mb-1 inline-block rounded-sm bg-[var(--red)]/85 px-1.5 py-0.5 font-data text-[9px] font-bold uppercase tracking-[0.12em] text-white">
-            {badge}
-          </span>
-        )}
-        <p className="truncate font-data text-[11px] text-white/85">
-          {clip.victimChampion ?? "?"}
-          <span className="text-white/40"> tombe face à </span>
-          {clip.killerChampion ?? "?"}
-        </p>
-        {/* Audit — la description IA existait en payload mais n'était jamais
-            montrée : révélée au hover/focus, 2 lignes max. */}
-        {clip.description && (
-          <p className="mt-0.5 hidden text-[10px] leading-snug text-white/55 line-clamp-2 group-hover:block group-focus-within:block">
-            {clip.description}
-          </p>
-        )}
-      </figcaption>
-    </figure>
-  );
-}
-
-// ════════════════════════════════════════════════════════════════════
-// GradeOverlay — the escalating dread : vignette + red wash + desaturation,
-// all scaling with `stress` (0→1). Fixed, non-interactive.
-// ════════════════════════════════════════════════════════════════════
-
-function GradeOverlay({ stress, reduce }: { stress: number; reduce: boolean }) {
-  // Desaturate + close the vignette as we descend. Under reduced motion we
-  // keep the static darkening but drop the heartbeat pulse.
-  return (
-    <>
-      {/* Blood haze — a faint red fills the gaps and washes over the clips as
-          we sink. Normal alpha compositing (NOT mix-blend), so it actually
-          reaches the hardware-composited <video> layers ; the desaturation
-          itself is done per-card via a CSS filter on each video. */}
-      <div
-        aria-hidden
-        className="pointer-events-none fixed inset-0 z-[86]"
-        style={{
-          background: `rgba(46,0,8,${stress * 0.3})`,
-          transition: reduce ? "none" : "background 0.6s ease-out",
-        }}
-      />
-      {/* Vignette — closes in on the frame as the walls press in. */}
-      <div
-        aria-hidden
-        className="pointer-events-none fixed inset-0 z-[90]"
-        style={{
-          background: `radial-gradient(ellipse at 50% 45%, transparent ${52 - stress * 34}%, rgba(50,0,6,${stress * 0.42}) 80%, rgba(0,0,0,${0.4 + stress * 0.52}) 100%)`,
-          transition: reduce ? "none" : "background 0.6s ease-out",
-        }}
-      />
-      {/* Heartbeat — a faint red breath that quickens with stress. */}
-      {!reduce && stress > 0.15 && (
-        <div
-          aria-hidden
-          className="pointer-events-none fixed inset-0 z-[89]"
-          style={{
-            background:
-              "radial-gradient(ellipse at 50% 55%, rgba(232,64,87,0.10), transparent 70%)",
-            animation: `chamberPulse ${Math.max(0.5, 1.5 - stress)}s ease-in-out infinite`,
-            opacity: stress,
-          }}
-        />
-      )}
-      <style>{`
-        @keyframes chamberPulse{0%,100%{opacity:${stress * 0.4}}50%{opacity:${stress}}}
-        @keyframes chamberGlitch{0%{opacity:1;transform:translateX(0)}18%{opacity:.9;transform:translateX(-5px)}36%{opacity:.65;transform:translateX(6px)}54%{opacity:.85;transform:translateX(-3px)}72%{opacity:.4;transform:translateX(2px)}100%{opacity:0;transform:translateX(0)}}
-        @keyframes chamberShake{0%,100%{transform:translate(0,0)}20%{transform:translate(-1.5px,1px)}40%{transform:translate(1.5px,-1px)}60%{transform:translate(-1px,-1.5px)}80%{transform:translate(1px,1.5px)}}
-        @keyframes chamberRespect{0%{opacity:1;transform:translate(-50%,0) scale(1)}100%{opacity:0;transform:translate(-50%,-34px) scale(1.6)}}
-      `}</style>
-    </>
-  );
-}
-
-// ════════════════════════════════════════════════════════════════════
-// GlitchFlash — a one-shot RGB-split flash fired each time the descent
-// crosses into a new circle. Orochimaru's-lab jolt. Reduced-motion → nothing.
+// Déchirure RVB au passage d'un cercle (sans flash blanc : le puits éclaire)
 // ════════════════════════════════════════════════════════════════════
 
 function GlitchFlash({ depth, reduce }: { depth: number; reduce: boolean }) {
@@ -591,16 +456,6 @@ function GlitchFlash({ depth, reduce }: { depth: number; reduce: boolean }) {
   const intensity = Math.min(1, depth / 10);
   return (
     <div key={burst} aria-hidden className="pointer-events-none fixed inset-0 z-[92]">
-      {/* white overload flash */}
-      <div
-        className="absolute inset-0"
-        style={{
-          background: "#fff",
-          mixBlendMode: "overlay",
-          animation: "chamberGlitch 0.26s steps(3,end) forwards",
-        }}
-      />
-      {/* red tear band */}
       <div
         className="absolute inset-x-0"
         style={{
@@ -611,7 +466,6 @@ function GlitchFlash({ depth, reduce }: { depth: number; reduce: boolean }) {
           animation: "chamberGlitch 0.4s steps(2,end) forwards",
         }}
       />
-      {/* cyan tear band — the RGB split */}
       <div
         className="absolute inset-x-0"
         style={{
@@ -626,95 +480,43 @@ function GlitchFlash({ depth, reduce }: { depth: number; reduce: boolean }) {
 }
 
 // ════════════════════════════════════════════════════════════════════
-// StressGauge — a vertical fear meter pinned to the right edge.
+// Le fond : on remonte vers la lumière
 // ════════════════════════════════════════════════════════════════════
 
-function StressGauge({
-  stress,
-  depth,
-  maxDepth,
-  reduce,
-}: {
-  stress: number;
-  depth: number;
-  maxDepth: number;
-  reduce: boolean;
-}) {
-  const pct = Math.round(stress * 100);
+function ExitCard({ onAscend, ascending }: { onAscend: () => void; ascending: boolean }) {
+  const respects = useSessionRespects();
   return (
-    <div className="fixed right-3 top-1/2 z-[95] flex -translate-y-1/2 flex-col items-center gap-2">
-      <span className="font-data text-[9px] uppercase tracking-[0.2em] text-white/50">
-        Stress
-      </span>
-      <div className="relative h-40 w-2.5 overflow-hidden rounded-full border border-white/15 bg-black/50">
-        <div
-          className="absolute inset-x-0 bottom-0"
-          style={{
-            height: `${pct}%`,
-            background:
-              "linear-gradient(to top, var(--red), #ff9a3c 55%, var(--gold))",
-            transition: reduce ? "none" : "height 0.5s ease-out",
-            boxShadow: !reduce && stress > 0.6 ? "0 0 12px rgba(232,64,87,0.7)" : "none",
-          }}
-        />
-      </div>
-      <span
-        className="font-data text-[11px] font-bold tabular-nums"
-        style={{ color: stress > 0.6 ? "var(--red)" : "var(--gold)" }}
+    <section data-exit className="relative grid min-h-[92dvh] place-items-center px-6 text-center">
+      <div
+        className="max-w-xl px-8 py-12"
+        style={{ background: "radial-gradient(ellipse 60% 55% at 50% 50%, rgba(0,0,0,0.6), transparent 72%)" }}
       >
-        {pct}%
-      </span>
-      <span className="font-data text-[9px] uppercase tracking-[0.15em] text-white/40">
-        {depth}/{maxDepth}
-      </span>
-    </div>
-  );
-}
-
-// ════════════════════════════════════════════════════════════════════
-// ExitCard + Riot disclaimer — the floor of the Chambre.
-// ════════════════════════════════════════════════════════════════════
-
-function ExitCard() {
-  // Wave 36 — the mourner's tally. Subscribes to the session respect
-  // counter (fed by every F tapped during the descent).
-  const [respects, setRespects] = useState(sessionRespects);
-  useEffect(() => {
-    respectListeners.add(setRespects);
-    return () => {
-      respectListeners.delete(setRespects);
-    };
-  }, []);
-  return (
-    <section className="relative grid min-h-[70dvh] place-items-center px-6 text-center">
-      <div className="max-w-md">
-        <p className="font-data text-[11px] uppercase tracking-[0.4em] text-[var(--red)]">
-          Tu as tout vu
-        </p>
+        <p className="font-data text-[11px] uppercase tracking-[0.45em] text-[var(--red)]">Le fond de la Chambre</p>
+        <h2 className="mt-5 text-5xl leading-tight text-[var(--gold-bright)] sm:text-7xl" style={{ ...SERIF, fontWeight: 300 }}>
+          Tu as tout vu.
+        </h2>
         {respects > 0 && (
-          <p className="mt-2 font-data text-[11px] uppercase tracking-[0.2em] text-white/45">
-            Tu as rendu <span className="font-black text-[var(--red)]">{respects}</span>{" "}
-            hommage{respects > 1 ? "s" : ""}. Les morts s&apos;en souviendront.
+          <p className="mt-4 font-data text-[11px] uppercase tracking-[0.2em] text-white/50">
+            Tu as rendu <span className="font-black text-[var(--red)]">{respects}</span> hommage{respects > 1 ? "s" : ""}. Les morts
+            s&apos;en souviendront.
           </p>
         )}
-        <h2 className="mt-3 font-display text-3xl font-black text-[var(--gold-bright)]">
-          On remonte ?
-        </h2>
-        <p className="mt-3 text-sm text-white/60">
-          La Karmine Corp s&apos;est relevée de chacune de ces morts. Va voir
-          ses meilleurs kills pour t&apos;en remettre.
+        <p className="mx-auto mt-5 max-w-md font-[family-name:var(--font-cormorant)] text-xl italic leading-relaxed text-white/70 sm:text-2xl">
+          La Karmine Corp s&apos;est relevée de chacune de ces morts. À ton tour.
         </p>
-        <div className="mt-7 flex flex-wrap items-center justify-center gap-3">
-          <Link
-            href="/scroll"
+        <div className="mt-9 flex flex-wrap items-center justify-center gap-3">
+          <button
+            type="button"
+            onClick={onAscend}
+            disabled={ascending}
             style={{ background: "var(--gold-gradient)" }}
-            className="rounded-full px-6 py-3 font-display text-sm font-bold uppercase tracking-[0.1em] text-[#1a1206] transition-transform hover:scale-105"
+            className="rounded-full px-8 py-3.5 font-display text-sm font-bold uppercase tracking-[0.2em] text-[#1a1206] shadow-[0_0_40px_rgba(200,170,110,0.35)] transition-transform hover:scale-105 disabled:opacity-80"
           >
-            Voir les kills
-          </Link>
+            Remonter à la lumière ↑
+          </button>
           <Link
             href="/"
-            className="rounded-full border border-white/20 px-6 py-3 text-sm text-white/80 hover:border-[var(--gold)] hover:text-[var(--gold)]"
+            className="rounded-full border border-white/20 px-6 py-3.5 text-sm text-white/80 hover:border-[var(--gold)] hover:text-[var(--gold)]"
           >
             Accueil
           </Link>
@@ -727,235 +529,8 @@ function ExitCard() {
 function RiotDisclaimer() {
   return (
     <p className="px-6 pb-10 text-center text-[9px] leading-relaxed text-white/25">
-      KCKILLS was created under Riot Games&apos; &ldquo;Legal Jibber Jabber&rdquo;
-      policy using assets owned by Riot Games. Riot Games does not endorse or
-      sponsor this project.
+      KCKILLS was created under Riot Games&apos; &ldquo;Legal Jibber Jabber&rdquo; policy using assets owned by Riot Games. Riot
+      Games does not endorse or sponsor this project.
     </p>
-  );
-}
-
-// ════════════════════════════════════════════════════════════════════
-// ChamberAudio — the escalating dread soundtrack (hidden YT player).
-// Deeper circle → more oppressive track + louder. Gesture-gated (only
-// mounts after "Descendre"), opt-out via the sound toggle.
-// ════════════════════════════════════════════════════════════════════
-
-/** Dread tiers by depth — all verified embeddable (live embed test). */
-const DREAD_TIERS: readonly { maxDepth: number; id: string }[] = [
-  { maxDepth: 3, id: "CDWtH8eHeEU" }, // malaise — Dark & Mysterious Ambient
-  { maxDepth: 6, id: "APfszb7_y7Y" }, // dread — Beyond the Veil (Lovecraftian)
-  { maxDepth: 8, id: "sEsWTHdaCQI" }, // oppression — Edge of Unbeing
-  { maxDepth: 10, id: "73pRh2dx0JU" }, // terreur — Somatic Horror Drone (L'Enfer)
-];
-
-function trackForDepth(d: number): string {
-  return (DREAD_TIERS.find((t) => d <= t.maxDepth) ?? DREAD_TIERS[DREAD_TIERS.length - 1]).id;
-}
-
-interface YTPlayer {
-  setVolume(v: number): void;
-  mute(): void;
-  unMute(): void;
-  playVideo(): void;
-  loadVideoById(id: string): void;
-  destroy(): void;
-}
-interface YTNamespace {
-  Player: new (
-    el: HTMLElement,
-    cfg: {
-      videoId: string;
-      height: string;
-      width: string;
-      playerVars?: Record<string, number | string>;
-      events?: {
-        onReady?: (e: { target: YTPlayer }) => void;
-        onStateChange?: (e: { data: number; target: YTPlayer }) => void;
-      };
-    },
-  ) => YTPlayer;
-}
-
-let ytApiPromise: Promise<void> | null = null;
-function loadYTApi(): Promise<void> {
-  if (typeof window === "undefined") return Promise.resolve();
-  const w = window as unknown as { YT?: YTNamespace; onYouTubeIframeAPIReady?: () => void };
-  if (w.YT?.Player) return Promise.resolve();
-  if (ytApiPromise) return ytApiPromise;
-  ytApiPromise = new Promise<void>((resolve) => {
-    const tag = document.createElement("script");
-    tag.src = "https://www.youtube.com/iframe_api";
-    document.head.appendChild(tag);
-    const prev = w.onYouTubeIframeAPIReady;
-    w.onYouTubeIframeAPIReady = () => {
-      prev?.();
-      resolve();
-    };
-    const iv = window.setInterval(() => {
-      if (w.YT?.Player) {
-        window.clearInterval(iv);
-        resolve();
-      }
-    }, 200);
-  });
-  return ytApiPromise;
-}
-
-function ChamberAudio({ depth, active }: { depth: number; active: boolean }) {
-  const hostRef = useRef<HTMLDivElement>(null);
-  const playerRef = useRef<YTPlayer | null>(null);
-  const trackRef = useRef<string>("");
-  const [ready, setReady] = useState(false);
-  const [soundOn, setSoundOn] = useState(true);
-  const [track, setTrack] = useState("");
-  const [playing, setPlaying] = useState(false);
-  const soundOnRef = useRef(true);
-  soundOnRef.current = soundOn;
-
-  const stress = Math.min(1, depth / 10);
-  const volume = Math.round((0.4 + stress * 0.55) * 100); // 40 → 95
-
-  // Create the player once the user has descended (Descendre = a real user
-  // gesture, so unmuting is permitted by the autoplay policy).
-  useEffect(() => {
-    if (!active) return;
-    let cancelled = false;
-    loadYTApi().then(() => {
-      if (cancelled || !hostRef.current || playerRef.current) return;
-      const w = window as unknown as { YT?: YTNamespace };
-      if (!w.YT) return;
-      const first = trackForDepth(depth);
-      trackRef.current = first;
-      setTrack(first);
-      playerRef.current = new w.YT.Player(hostRef.current, {
-        videoId: first,
-        height: "120",
-        width: "200",
-        playerVars: {
-          autoplay: 1,
-          controls: 0,
-          disablekb: 1,
-          playsinline: 1,
-          loop: 1,
-          playlist: first,
-        },
-        events: {
-          onReady: (e) => {
-            try {
-              e.target.setVolume(volume);
-              if (soundOnRef.current) e.target.unMute();
-              else e.target.mute();
-              e.target.playVideo();
-            } catch {
-              /* swallow */
-            }
-            setReady(true);
-          },
-          onStateChange: (e) => {
-            setPlaying(e.data === 1); // 1 = PLAYING
-            if (e.data === 0) {
-              try {
-                e.target.playVideo();
-              } catch {
-                /* swallow */
-              }
-            }
-          },
-        },
-      });
-    });
-    return () => {
-      cancelled = true;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [active]);
-
-  // Swap the track when the descent crosses a tier boundary.
-  useEffect(() => {
-    if (!ready || !playerRef.current) return;
-    const want = trackForDepth(depth);
-    if (want !== trackRef.current) {
-      trackRef.current = want;
-      setTrack(want);
-      try {
-        playerRef.current.loadVideoById(want);
-        playerRef.current.setVolume(volume);
-        if (!soundOnRef.current) playerRef.current.mute();
-      } catch {
-        /* swallow */
-      }
-    }
-  }, [depth, ready, volume]);
-
-  // Volume tracks the stress.
-  useEffect(() => {
-    if (!ready || !playerRef.current) return;
-    try {
-      playerRef.current.setVolume(volume);
-    } catch {
-      /* swallow */
-    }
-  }, [volume, ready]);
-
-  // Tear down on unmount (leaving /chambre) so no audio lingers.
-  useEffect(() => {
-    return () => {
-      try {
-        playerRef.current?.destroy();
-      } catch {
-        /* swallow */
-      }
-      playerRef.current = null;
-    };
-  }, []);
-
-  const toggleSound = () => {
-    setSoundOn((s) => {
-      const next = !s;
-      try {
-        if (next) {
-          playerRef.current?.unMute();
-          playerRef.current?.playVideo();
-        } else {
-          playerRef.current?.mute();
-        }
-      } catch {
-        /* swallow */
-      }
-      return next;
-    });
-  };
-
-  if (!active) return null;
-  return (
-    <>
-      {/* Hidden player host — off-screen so only its audio reaches the user. */}
-      <div
-        aria-hidden
-        style={{ position: "fixed", left: -9999, top: 0, pointerEvents: "none", opacity: 0 }}
-      >
-        <div ref={hostRef} />
-      </div>
-      {/* Sound opt-in / mute toggle. */}
-      <button
-        type="button"
-        onClick={toggleSound}
-        aria-label={soundOn ? "Couper le son" : "Activer le son"}
-        aria-pressed={soundOn}
-        data-dread-track={track}
-        data-dread-playing={playing ? "1" : "0"}
-        className="fixed bottom-4 left-4 z-[95] flex h-11 w-11 items-center justify-center rounded-full border border-white/15 bg-black/55 text-white/75 backdrop-blur-sm transition-colors hover:border-[var(--red)] hover:text-[var(--red)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--red)] focus-visible:outline-offset-2"
-      >
-        {soundOn ? (
-          <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.536 8.464a5 5 0 010 7.072M17.95 6.05a8 8 0 010 11.9M11 5L6 9H2v6h4l5 4V5z" />
-          </svg>
-        ) : (
-          <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5L6 9H2v6h4l5 4V5zM23 9l-6 6M17 9l6 6" />
-          </svg>
-        )}
-      </button>
-    </>
   );
 }
