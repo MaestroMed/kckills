@@ -48,7 +48,8 @@ export interface KCTimelineProps {
  *  - Hover-delay popup (1.5s sustained hover opens a cinematic full-image lightbox)
  *  - Keyboard navigation (arrow keys)
  *  - Vertical wheel remapped to horizontal scroll
- *  - Native touch swipe (touch-action: pan-x)
+ *  - Native touch swipe (touch-action: manipulation — the page still scrolls
+ *    vertically when a swipe starts on the timeline)
  *  - prefers-reduced-motion : grayscale + scale transitions snap instantly,
  *    no spring on the cards (the GPU-cheap opacity dim still applies).
  */
@@ -331,7 +332,13 @@ export function KCTimeline({
         style={{
           scrollbarWidth: "none",
           msOverflowStyle: "none",
-          touchAction: "pan-x",
+          // manipulation (fix 2026-09-29) : défilement natif dans les deux
+          // axes, le navigateur choisit selon la direction du geste. En pan-x,
+          // un swipe vertical parti de la frise (640 px de haut, ~76 % d'un
+          // écran de téléphone) ne faisait plus défiler la page : mesuré en
+          // prod, scrollY figé. Le glisser à la souris (pointer events) ne
+          // dépend pas de touch-action.
+          touchAction: "manipulation",
         }}
       >
         <style>{`.timeline-container::-webkit-scrollbar { display: none; }`}</style>
