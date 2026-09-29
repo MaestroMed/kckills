@@ -1,6 +1,3 @@
-import { existsSync } from "node:fs";
-import path from "node:path";
-
 import { notFound } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
@@ -9,11 +6,13 @@ import type { Metadata } from "next";
 import { loadRealData, getPlayerStats, getCurrentRoster } from "@/lib/real-data";
 import { championSplashUrl, championIconUrl } from "@/lib/constants";
 import { PLAYER_PHOTOS } from "@/lib/kc-assets";
+import { ALUMNI } from "@/lib/alumni";
 import { ClipReel } from "@/components/ClipReel";
 import { getPlayerByIgn } from "@/lib/supabase/players";
 import { getPublicRiotStatsBySummoner } from "@/lib/supabase/riot_profile";
 import { getKillsByKillerChampion } from "@/lib/supabase/kills";
 import type { PublishedKillRow } from "@/lib/supabase/kills";
+import { getPlayerDna } from "@/lib/supabase/player-dna";
 import { JsonLd, breadcrumbLD } from "@/lib/seo/jsonld";
 import { WolfHowlOnEnter } from "@/components/player/WolfHowlOnEnter";
 import { MatchHistory } from "./match-history";
@@ -22,10 +21,10 @@ import {
   ChampionPerformanceChart,
   RecentFormChart,
 } from "@/components/PlayerChartsLazy";
-import { getQuotesByPlayer } from "@/lib/quotes";
 
-import { PlayerHero } from "@/components/player/PlayerHero";
-import { SignatureQuote } from "@/components/player/SignatureQuote";
+import { PlayerPoster } from "@/components/player/PlayerPoster";
+import { PlayerDNA } from "@/components/player/PlayerDNA";
+import { StatsDisclosure } from "@/components/player/StatsDisclosure";
 import { ChampionPoolHextech } from "@/components/player/ChampionPoolHextech";
 import { HonorsAndEras } from "@/components/player/HonorsAndEras";
 import { TeammatesGrid } from "@/components/player/TeammatesGrid";
@@ -35,6 +34,24 @@ import { ERAS, type Era } from "@/lib/eras";
 import { getStaticT } from "@/lib/i18n/server-lang";
 import { formatDate } from "@/lib/i18n/lang";
 import { SITE_URL } from "@/lib/site-url";
+
+/**
+ * /player/[slug] — refonte du 29/09/2026 (« la page joueur est dégueulasse…
+ * t'aurais pu en faire des œuvres d'art », Mehdi ; directions validées : A
+ * en haut, C juste dessous, puis tous ses clips).
+ *
+ *   1. L'affiche (PlayerPoster) : nom en or, photo détourée, splash du
+ *      champion le plus joué, quatre chiffres, le kill signature.
+ *   2. L'ADN (PlayerDNA) : tous ses kills en points, minute × date.
+ *   3. Ses clips, ses face-à-face, son pool de champions.
+ *   4. « Les chiffres » repliés (site de clips, pas de stats) : profil,
+ *      forme, économie, compte Riot, historique complet.
+ *   5. Ses époques, ses coéquipiers.
+ *
+ * Retirés : le bandeau d'exploits écrit à la main (il affirmait « ex-T1 ·
+ * champion du monde 2020 » pour Canna — T1 n'a pas gagné les Worlds 2020),
+ * le numéro de maillot inventé et la citation (aucune sourcée).
+ */
 
 /**
  * Safe decode for route params. Next already decodes params once —
@@ -58,40 +75,6 @@ interface Props {
   params: Promise<{ slug: string }>;
 }
 
-// ─── Jersey numbers by signing order ──────────────────────────────────────
-// Per blueprint :
-//   Canna 1, Yike 2, Kyeahoo 3, Caliste 4, Busio 5.
-// Falls back to a stable hash-based number for any other player.
-const JERSEY_NUMBERS: Record<string, number> = {
-  Canna: 1,
-  Yike: 2,
-  Kyeahoo: 3,
-  kyeahoo: 3,
-  Caliste: 4,
-  Busio: 5,
-};
-
-function jerseyFor(name: string): number {
-  const direct = JERSEY_NUMBERS[name];
-  if (direct) return direct;
-  // Stable hash → 1..99 — keeps numbers consistent across re-renders.
-  let h = 0;
-  for (let i = 0; i < name.length; i += 1) h = (h * 31 + name.charCodeAt(i)) >>> 0;
-  return (h % 89) + 10;
-}
-
-// ─── Achievement strip per player ─────────────────────────────────────────
-// Hand-curated honors tied to each current KC player. Pulled from CLAUDE.md
-// roster + research. Keeps the hero strip short — 3 lines max.
-const ACHIEVEMENTS: Record<string, string[]> = {
-  Canna: ["ARMÉE KC", "MVP LEC WINTER 2025", "EX-T1 · CHAMPION DU MONDE 2020"],
-  Yike: ["VOCAL LEADER", "EX-G2", "JUNGLER DU SACRE 2025"],
-  Kyeahoo: ["RECRUE 2026", "EX-DRX CHALLENGERS", "MID LANE KR"],
-  kyeahoo: ["RECRUE 2026", "EX-DRX CHALLENGERS", "MID LANE KR"],
-  Caliste: ["ARMÉE KC", "ROOKIE OF THE YEAR 2025", "ROYAL ROADER · LEC WINTER 2025"],
-  Busio: ["WORLDS 2024 · 2025", "EX-FLYQUEST", "RECRUE 2026"],
-};
-
 const ROLE_LABEL: Record<string, string> = {
   top: "TOP",
   jungle: "JGL",
@@ -99,6 +82,15 @@ const ROLE_LABEL: Record<string, string> = {
   bottom: "ADC",
   adc: "ADC",
   support: "SUP",
+};
+
+const ROLE_POSTER: Record<string, string> = {
+  top: "Top",
+  jungle: "Jungle",
+  mid: "Mid",
+  bottom: "ADC",
+  adc: "ADC",
+  support: "Support",
 };
 
 // ─── Real-kills proxy (legacy champion-based filter, kept as fallback) ───
@@ -186,19 +178,13 @@ export default async function PlayerPage({ params }: Props) {
   const photo = PLAYER_PHOTOS[name];
   const signatureChamp = stats.champions[0]?.name ?? "Jhin";
 
-  const playerPhoto = PLAYER_PHOTOS[name];
-  const morphImages = [
-    ...(playerPhoto ? [playerPhoto] : []),
-    ...stats.champions.slice(0, 5).map((c) => championSplashUrl(c.name)),
-  ];
-  if (morphImages.length === 0) morphImages.push(championSplashUrl(signatureChamp));
-
-  const realKills = await getRealKillsForPlayer(name, stats.champions, data);
-
-  const playerRow = await getPlayerByIgn(name);
+  const [realKills, playerRow, riotStats, dna] = await Promise.all([
+    getRealKillsForPlayer(name, stats.champions, data),
+    getPlayerByIgn(name),
+    getPublicRiotStatsBySummoner(name),
+    getPlayerDna(name),
+  ]);
   const playerId = playerRow?.id ?? null;
-
-  const riotStats = await getPublicRiotStatsBySummoner(name);
 
   const winRate = stats.matchHistory.length
     ? Math.round(
@@ -206,31 +192,9 @@ export default async function PlayerPage({ params }: Props) {
       )
     : 0;
 
-  // Audit 2026-08-12 — l'URL était construite sans vérifier que le fichier
-  // existe (aucun bg custom n'a jamais été déposé dans public/images/players/),
-  // donc chaque profil déclenchait une requête /_next/image en 400. On ne
-  // référence le bg que si le fichier est réellement présent ; sinon
-  // PlayerHero garde son fallback splash (prop customBgUrl absente).
-  const customBgFile = `player-bg-${name.toLowerCase()}.jpg`;
-  const customBg = existsSync(
-    path.join(process.cwd(), "public", "images", "players", customBgFile),
-  )
-    ? `/images/players/${customBgFile}`
-    : undefined;
-
-  // ─── Year range from match history (first → last) ───────────────────────
-  const yearRange =
-    stats.matchHistory.length > 0
-      ? {
-          first: stats.matchHistory[stats.matchHistory.length - 1]?.date.slice(0, 4) ?? "",
-          last: stats.matchHistory[0]?.date.slice(0, 4) ?? "",
-        }
-      : undefined;
-
   // ─── Eras this player has played through ───────────────────────────────
   // We don't have a per-player era map yet — derive one by intersecting the
-  // dates in match history with the era windows. This catches everything from
-  // LEC Winter 2025 to LEC Spring 2026 for the current active roster.
+  // dates in match history with the era windows.
   const playerEras: Era[] = (() => {
     if (stats.matchHistory.length === 0) return [];
     const matchDates = new Set(stats.matchHistory.map((m) => m.date));
@@ -260,6 +224,12 @@ export default async function PlayerPage({ params }: Props) {
       signatureChampion: p.champions[0] ?? "Jhin",
     }));
 
+  // Rôle pour l'affiche : le roster actuel, sinon la fiche des anciens.
+  const role =
+    roster.find((p) => p.name.toLowerCase() === name.toLowerCase())?.role ??
+    ALUMNI.find((a) => a.name.toLowerCase() === name.toLowerCase())?.role ??
+    null;
+
   // ─── Prev / next player navigation (active roster only) ────────────────
   const rosterNames = roster.map((p) => p.name);
   const rosterIdx = rosterNames.findIndex(
@@ -271,10 +241,6 @@ export default async function PlayerPage({ params }: Props) {
     rosterIdx >= 0 && rosterIdx < rosterNames.length - 1
       ? { slug: rosterNames[rosterIdx + 1], name: rosterNames[rosterIdx + 1] }
       : undefined;
-
-  // ─── Quote — first quote sourced for this player slug ─────────────────
-  const playerQuotes = getQuotesByPlayer(name);
-  const heroQuote = playerQuotes[0];
 
   // ─── JSON-LD ──────────────────────────────────────────────────────────
   const personNode = {
@@ -344,231 +310,21 @@ export default async function PlayerPage({ params }: Props) {
       <JsonLd data={breadcrumbJsonLd} />
       <WolfHowlOnEnter />
 
-      {/* ═══ SECTION 1 — HERO ═══════════════════════════════════════════════ */}
-      <PlayerHero
+      {/* ═══ 1 — L'AFFICHE ═══════════════════════════════════════════════════ */}
+      <PlayerPoster
         name={name}
+        roleLabel={role ? (ROLE_POSTER[role] ?? null) : null}
         photo={photo ?? null}
-        signatureChampion={signatureChamp}
-        customBgUrl={customBg}
-        morphImages={morphImages}
-        jerseyNumber={jerseyFor(name)}
-        stats={{
-          kda: stats.kda,
-          gamesPlayed: stats.gamesPlayed,
-          avgKills: stats.avgKills,
-          avgDeaths: stats.avgDeaths,
-          avgAssists: stats.avgAssists,
-          winRate,
-        }}
-        achievements={ACHIEVEMENTS[name] ?? ["KARMINE CORP"]}
-        yearRange={yearRange}
-        prevPlayer={prevPlayer}
-        nextPlayer={nextPlayer}
+        dna={dna}
+        fallbackChampion={signatureChamp}
       />
 
-      {/* ═══ SECTION 2 — SIGNATURE QUOTE ════════════════════════════════════ */}
-      {heroQuote && (
-        <section
-          className="relative max-w-7xl mx-auto px-6"
-          aria-labelledby="player-signature-quote"
-        >
-          <h2 id="player-signature-quote" className="sr-only">
-            {t("p_player.signature_quote")}
-          </h2>
-          <SignatureQuote
-            text={heroQuote.text}
-            author={heroQuote.author}
-            role={heroQuote.role}
-            source={heroQuote.source}
-            accent="var(--gold)"
-          />
-        </section>
+      {/* ═══ 2 — L'ADN ═══════════════════════════════════════════════════════ */}
+      {dna && dna.kills.length >= 8 && (
+        <PlayerDNA name={name} kills={dna.kills} first={dna.first} last={dna.last} />
       )}
 
-      {/* ═══ SECTION 3 — CHAMPION POOL HEXTECH ═════════════════════════════ */}
-      {stats.champions.length > 0 && (
-        <section className="relative max-w-7xl mx-auto px-6 py-16">
-          <SectionHeader kicker={`${t("p_player.champion_pool")} · ${stats.champions.length} ${t("p_player.champions")}`} />
-          <ChampionPoolHextech champions={stats.champions} accent="var(--gold)" />
-        </section>
-      )}
-
-      {/* ═══ SECTION 4 — ANALYTICS ════════════════════════════════════════ */}
-      <section className="relative max-w-7xl mx-auto px-6 py-16">
-        <SectionHeader kicker={t("p_player.analytics")} />
-        <div className="grid gap-6 md:grid-cols-3">
-          <div className="rounded-2xl border border-[var(--border-gold)] bg-[var(--bg-surface)] p-5">
-            <h3 className="font-display text-sm font-bold mb-4 text-[var(--text-secondary)]">
-              {t("p_player.play_profile")}
-            </h3>
-            <div className="flex justify-center">
-              <PlayerRadar
-                avgKills={parseFloat(stats.avgKills)}
-                avgDeaths={parseFloat(stats.avgDeaths)}
-                avgAssists={parseFloat(stats.avgAssists)}
-                gamesPlayed={stats.gamesPlayed}
-                totalGold={stats.totalGold}
-                totalCS={stats.totalCS}
-              />
-            </div>
-          </div>
-          <div className="rounded-2xl border border-[var(--border-gold)] bg-[var(--bg-surface)] p-5">
-            <h3 className="font-display text-sm font-bold mb-4 text-[var(--text-secondary)]">
-              {t("p_player.champions_games_played")}
-            </h3>
-            <ChampionPerformanceChart champions={stats.champions} />
-          </div>
-          <div className="rounded-2xl border border-[var(--border-gold)] bg-[var(--bg-surface)] p-5">
-            <h3 className="font-display text-sm font-bold mb-4 text-[var(--text-secondary)]">
-              {t("p_player.recent_form_kda")}
-            </h3>
-            <RecentFormChart history={stats.matchHistory} />
-          </div>
-        </div>
-
-        {/* Wave 31d — farming + economy card. Per-game averages because
-            per-minute would need game duration which the static log
-            doesn't carry. LEC averages ~33min so /min ≈ /game / 33. */}
-        {stats.gamesPlayed > 0 && (
-          <div className="mt-6 grid gap-6 md:grid-cols-3">
-            <div className="rounded-2xl border border-[var(--border-gold)] bg-[var(--bg-surface)] p-5">
-              <p className="text-[10px] uppercase tracking-[0.25em] text-[var(--text-muted)]">
-                {t("p_player.cs_per_game")}
-              </p>
-              <p className="font-data text-4xl font-black tabular-nums text-[var(--gold)] mt-2">
-                {stats.avgCS.toLocaleString("fr-FR")}
-              </p>
-              <p className="text-[10px] text-[var(--text-muted)] mt-1">
-                ≈{" "}
-                <span className="text-[var(--text-secondary)] font-data">
-                  {(stats.avgCS / 33.5).toFixed(1)}
-                </span>{" "}
-                {t("p_player.cs_per_min_note")}
-              </p>
-            </div>
-            <div className="rounded-2xl border border-[var(--border-gold)] bg-[var(--bg-surface)] p-5">
-              <p className="text-[10px] uppercase tracking-[0.25em] text-[var(--text-muted)]">
-                {t("p_player.gold_per_game")}
-              </p>
-              <p className="font-data text-4xl font-black tabular-nums text-[var(--gold)] mt-2">
-                {stats.avgGold.toLocaleString("fr-FR")}
-              </p>
-              <p className="text-[10px] text-[var(--text-muted)] mt-1">
-                ≈{" "}
-                <span className="text-[var(--text-secondary)] font-data">
-                  {Math.round(stats.avgGold / 33.5).toLocaleString("fr-FR")}
-                </span>{" "}
-                {t("p_player.gold_per_min")}
-              </p>
-            </div>
-            <div className="rounded-2xl border border-[var(--border-gold)] bg-[var(--bg-surface)] p-5">
-              <p className="text-[10px] uppercase tracking-[0.25em] text-[var(--text-muted)]">
-                {t("p_player.series_winrate")}
-              </p>
-              <p
-                className="font-data text-4xl font-black tabular-nums mt-2"
-                style={{
-                  color:
-                    winRate >= 65
-                      ? "var(--green)"
-                      : winRate >= 50
-                        ? "var(--gold)"
-                        : "var(--red)",
-                }}
-              >
-                {winRate}%
-              </p>
-              <p className="text-[10px] text-[var(--text-muted)] mt-1">
-                {t("p_player.wins_over_series", {
-                  wins: stats.wins ?? 0,
-                  total: stats.matchHistory.length,
-                })}
-              </p>
-            </div>
-          </div>
-        )}
-      </section>
-
-      {/* ─── Riot stats — surfaced when linked ──────────────────────────── */}
-      {riotStats && (riotStats.rank || riotStats.topChampions.length > 0) && (
-        <section className="relative max-w-7xl mx-auto px-6 py-10">
-          <SectionHeader kicker={t("p_player.riot_stats_linked")} />
-          <div className="grid gap-4 md:grid-cols-3">
-            <div className="rounded-2xl border border-[var(--border-gold)] bg-[var(--bg-surface)] p-5 space-y-2">
-              <p className="text-[10px] uppercase tracking-[0.3em] text-[var(--text-muted)]">
-                {t("p_player.riot_account")}
-              </p>
-              <p className="font-display text-2xl font-black text-[var(--gold)] leading-tight break-words">
-                {riotStats.summonerName}
-                {riotStats.tag && (
-                  <span className="font-data text-base text-[var(--text-muted)]">
-                    #{riotStats.tag}
-                  </span>
-                )}
-              </p>
-              {riotStats.linkedAt && (
-                <p className="text-[10px] text-[var(--text-muted)]">
-                  {t("p_player.linked_on")}{" "}
-                  {formatDate(lang, riotStats.linkedAt, {
-                    day: "numeric",
-                    month: "short",
-                    year: "numeric",
-                  })}
-                </p>
-              )}
-            </div>
-            <div className="rounded-2xl border border-[var(--gold)]/30 bg-[var(--gold)]/5 p-5 space-y-2">
-              <p className="text-[10px] uppercase tracking-[0.3em] text-[var(--text-muted)]">
-                {t("p_player.rank_solo_duo")}
-              </p>
-              {riotStats.rank ? (
-                <p className="font-display text-3xl font-black text-[var(--gold)] leading-tight">
-                  {riotStats.rank}
-                </p>
-              ) : (
-                <p className="text-sm text-[var(--text-muted)]">{t("p_player.no_rank_this_season")}</p>
-              )}
-            </div>
-            <div className="rounded-2xl border border-[var(--border-gold)] bg-[var(--bg-surface)] p-5 space-y-3">
-              <p className="text-[10px] uppercase tracking-[0.3em] text-[var(--text-muted)]">
-                {t("p_player.top_n_champions", { n: riotStats.topChampions.length })}
-              </p>
-              {riotStats.topChampions.length === 0 ? (
-                <p className="text-sm text-[var(--text-muted)]">{t("p_player.no_mastery")}</p>
-              ) : (
-                <ul className="grid grid-cols-5 gap-2">
-                  {riotStats.topChampions.map((c) => (
-                    <li
-                      key={c.champ_id}
-                      className="flex flex-col items-center gap-1"
-                      title={`${c.name} — ${t("p_player.mastery_tooltip", { level: c.level, points: c.points.toLocaleString("fr-FR") })}`}
-                    >
-                      <div className="relative h-10 w-10 rounded-full overflow-hidden border border-[var(--border-gold)] bg-[var(--bg-elevated)]">
-                        <Image
-                          src={championIconUrl(c.name)}
-                          alt={c.name}
-                          fill
-                          sizes="40px"
-                          className="object-cover"
-                        />
-                      </div>
-                      <span className="text-[9px] font-data text-[var(--text-muted)]">M{c.level}</span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-          </div>
-        </section>
-      )}
-
-      {/* ═══ SECTION 4.5 — HEAD-TO-HEAD ═══════════════════════════════════ */}
-      {/* Wave 31a — surface the player's biggest nemesis + favourite
-          victim with a deep-link into /face-off. Renders only if at least
-          one side has data (HeadToHead returns null otherwise). */}
-      <HeadToHead playerSlug={name} playerName={name} />
-
-      {/* ═══ SECTION 5 — CLIP REEL ═════════════════════════════════════════ */}
+      {/* ═══ 3 — SES CLIPS ═══════════════════════════════════════════════════ */}
       {playerId && (
         <section className="relative max-w-7xl mx-auto px-6 py-16 space-y-12">
           <ClipReel
@@ -581,7 +337,7 @@ export default async function PlayerPage({ params }: Props) {
               minHighlight: 5,
             }}
             limit={9}
-            ctaHref="/scroll"
+            ctaHref={`/scroll?player=${playerId}`}
             ctaLabel={t("p_player.reel_see_all_scroll")}
             emptyState={null}
           />
@@ -654,13 +410,192 @@ export default async function PlayerPage({ params }: Props) {
         </section>
       )}
 
-      {/* ═══ SECTION 6 — MATCH HISTORY ═════════════════════════════════════ */}
-      <section className="relative max-w-7xl mx-auto px-6 py-16">
-        <SectionHeader kicker={t("p_player.full_history")} />
-        <MatchHistory history={stats.matchHistory} />
-      </section>
+      {/* ═══ Face-à-face (bête noire, victime préférée) ═════════════════════ */}
+      <HeadToHead playerSlug={name} playerName={name} />
 
-      {/* ═══ SECTION 7 — HONORS & ÉPOQUES KC ══════════════════════════════ */}
+      {/* ═══ Pool de champions ═══════════════════════════════════════════════ */}
+      {stats.champions.length > 0 && (
+        <section className="relative max-w-7xl mx-auto px-6 py-16">
+          <SectionHeader kicker={`${t("p_player.champion_pool")} · ${stats.champions.length} ${t("p_player.champions")}`} />
+          <ChampionPoolHextech champions={stats.champions} accent="var(--gold)" />
+        </section>
+      )}
+
+      {/* ═══ 4 — LES CHIFFRES (repliés) ═══════════════════════════════════════ */}
+      <StatsDisclosure
+        title="Les chiffres"
+        hint={`KDA ${stats.kda} · ${stats.gamesPlayed} games · ${winRate} % de séries gagnées · historique complet`}
+      >
+        <div className="grid gap-6 md:grid-cols-3">
+          <div className="rounded-2xl border border-[var(--border-gold)] bg-[var(--bg-surface)] p-5">
+            <h3 className="font-display text-sm font-bold mb-4 text-[var(--text-secondary)]">
+              {t("p_player.play_profile")}
+            </h3>
+            <div className="flex justify-center">
+              <PlayerRadar
+                avgKills={parseFloat(stats.avgKills)}
+                avgDeaths={parseFloat(stats.avgDeaths)}
+                avgAssists={parseFloat(stats.avgAssists)}
+                gamesPlayed={stats.gamesPlayed}
+                totalGold={stats.totalGold}
+                totalCS={stats.totalCS}
+              />
+            </div>
+          </div>
+          <div className="rounded-2xl border border-[var(--border-gold)] bg-[var(--bg-surface)] p-5">
+            <h3 className="font-display text-sm font-bold mb-4 text-[var(--text-secondary)]">
+              {t("p_player.champions_games_played")}
+            </h3>
+            <ChampionPerformanceChart champions={stats.champions} />
+          </div>
+          <div className="rounded-2xl border border-[var(--border-gold)] bg-[var(--bg-surface)] p-5">
+            <h3 className="font-display text-sm font-bold mb-4 text-[var(--text-secondary)]">
+              {t("p_player.recent_form_kda")}
+            </h3>
+            <RecentFormChart history={stats.matchHistory} />
+          </div>
+        </div>
+
+        {/* Wave 31d — farming + economy card. Per-game averages because
+            per-minute would need game duration which the static log
+            doesn't carry. LEC averages ~33min so /min ≈ /game / 33. */}
+        <div className="mt-6 grid gap-6 md:grid-cols-3">
+          <div className="rounded-2xl border border-[var(--border-gold)] bg-[var(--bg-surface)] p-5">
+            <p className="text-[10px] uppercase tracking-[0.25em] text-[var(--text-muted)]">
+              {t("p_player.cs_per_game")}
+            </p>
+            <p className="font-data text-4xl font-black tabular-nums text-[var(--gold)] mt-2">
+              {stats.avgCS.toLocaleString("fr-FR")}
+            </p>
+            <p className="text-[10px] text-[var(--text-muted)] mt-1">
+              ≈{" "}
+              <span className="text-[var(--text-secondary)] font-data">
+                {(stats.avgCS / 33.5).toFixed(1)}
+              </span>{" "}
+              {t("p_player.cs_per_min_note")}
+            </p>
+          </div>
+          <div className="rounded-2xl border border-[var(--border-gold)] bg-[var(--bg-surface)] p-5">
+            <p className="text-[10px] uppercase tracking-[0.25em] text-[var(--text-muted)]">
+              {t("p_player.gold_per_game")}
+            </p>
+            <p className="font-data text-4xl font-black tabular-nums text-[var(--gold)] mt-2">
+              {stats.avgGold.toLocaleString("fr-FR")}
+            </p>
+            <p className="text-[10px] text-[var(--text-muted)] mt-1">
+              ≈{" "}
+              <span className="text-[var(--text-secondary)] font-data">
+                {Math.round(stats.avgGold / 33.5).toLocaleString("fr-FR")}
+              </span>{" "}
+              {t("p_player.gold_per_min")}
+            </p>
+          </div>
+          <div className="rounded-2xl border border-[var(--border-gold)] bg-[var(--bg-surface)] p-5">
+            <p className="text-[10px] uppercase tracking-[0.25em] text-[var(--text-muted)]">
+              {t("p_player.series_winrate")}
+            </p>
+            <p
+              className="font-data text-4xl font-black tabular-nums mt-2"
+              style={{
+                color:
+                  winRate >= 65
+                    ? "var(--green)"
+                    : winRate >= 50
+                      ? "var(--gold)"
+                      : "var(--red)",
+              }}
+            >
+              {winRate}%
+            </p>
+            <p className="text-[10px] text-[var(--text-muted)] mt-1">
+              {t("p_player.wins_over_series", {
+                wins: stats.wins ?? 0,
+                total: stats.matchHistory.length,
+              })}
+            </p>
+          </div>
+        </div>
+
+        {/* ─── Riot stats — surfaced when linked ──────────────────────────── */}
+        {riotStats && (riotStats.rank || riotStats.topChampions.length > 0) && (
+          <div className="mt-10">
+            <SectionHeader kicker={t("p_player.riot_stats_linked")} />
+            <div className="grid gap-4 md:grid-cols-3">
+              <div className="rounded-2xl border border-[var(--border-gold)] bg-[var(--bg-surface)] p-5 space-y-2">
+                <p className="text-[10px] uppercase tracking-[0.3em] text-[var(--text-muted)]">
+                  {t("p_player.riot_account")}
+                </p>
+                <p className="font-display text-2xl font-black text-[var(--gold)] leading-tight break-words">
+                  {riotStats.summonerName}
+                  {riotStats.tag && (
+                    <span className="font-data text-base text-[var(--text-muted)]">
+                      #{riotStats.tag}
+                    </span>
+                  )}
+                </p>
+                {riotStats.linkedAt && (
+                  <p className="text-[10px] text-[var(--text-muted)]">
+                    {t("p_player.linked_on")}{" "}
+                    {formatDate(lang, riotStats.linkedAt, {
+                      day: "numeric",
+                      month: "short",
+                      year: "numeric",
+                    })}
+                  </p>
+                )}
+              </div>
+              <div className="rounded-2xl border border-[var(--gold)]/30 bg-[var(--gold)]/5 p-5 space-y-2">
+                <p className="text-[10px] uppercase tracking-[0.3em] text-[var(--text-muted)]">
+                  {t("p_player.rank_solo_duo")}
+                </p>
+                {riotStats.rank ? (
+                  <p className="font-display text-3xl font-black text-[var(--gold)] leading-tight">
+                    {riotStats.rank}
+                  </p>
+                ) : (
+                  <p className="text-sm text-[var(--text-muted)]">{t("p_player.no_rank_this_season")}</p>
+                )}
+              </div>
+              <div className="rounded-2xl border border-[var(--border-gold)] bg-[var(--bg-surface)] p-5 space-y-3">
+                <p className="text-[10px] uppercase tracking-[0.3em] text-[var(--text-muted)]">
+                  {t("p_player.top_n_champions", { n: riotStats.topChampions.length })}
+                </p>
+                {riotStats.topChampions.length === 0 ? (
+                  <p className="text-sm text-[var(--text-muted)]">{t("p_player.no_mastery")}</p>
+                ) : (
+                  <ul className="grid grid-cols-5 gap-2">
+                    {riotStats.topChampions.map((c) => (
+                      <li
+                        key={c.champ_id}
+                        className="flex flex-col items-center gap-1"
+                        title={`${c.name} — ${t("p_player.mastery_tooltip", { level: c.level, points: c.points.toLocaleString("fr-FR") })}`}
+                      >
+                        <div className="relative h-10 w-10 rounded-full overflow-hidden border border-[var(--border-gold)] bg-[var(--bg-elevated)]">
+                          <Image
+                            src={championIconUrl(c.name)}
+                            alt={c.name}
+                            fill
+                            sizes="40px"
+                            className="object-cover"
+                          />
+                        </div>
+                        <span className="text-[9px] font-data text-[var(--text-muted)]">M{c.level}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        <div className="mt-10">
+          <SectionHeader kicker={t("p_player.full_history")} />
+          <MatchHistory history={stats.matchHistory} />
+        </div>
+      </StatsDisclosure>
+
+      {/* ═══ 5 — ÉPOQUES KC ═════════════════════════════════════════════════ */}
       {playerEras.length > 0 && (
         <section className="relative max-w-5xl mx-auto px-6 py-16">
           <SectionHeader kicker={`${t("p_player.honors")} · ${playerEras.length} ${t("p_player.eras")}`} />
@@ -668,7 +603,7 @@ export default async function PlayerPage({ params }: Props) {
         </section>
       )}
 
-      {/* ═══ SECTION 8 — COÉQUIPIERS ACTUELS + AUXILIAIRES ════════════════ */}
+      {/* ═══ COÉQUIPIERS ACTUELS + LIENS ═══════════════════════════════════ */}
       {teammates.length > 0 && (
         <section className="relative max-w-7xl mx-auto px-6 py-16">
           <SectionHeader kicker={t("p_player.current_teammates")} />
