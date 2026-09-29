@@ -91,9 +91,11 @@ async def _fetch_recent_published(db) -> list[dict]:
             # on kills — embed it and flatten below so the rest of the
             # module keeps reading row["vod_youtube_id"]. (Fixes the boot
             # 42703 "column kills.vod_youtube_id does not exist".)
+            # duration_ms vit sur kill_assets, pas sur kills (42703 au boot,
+            # corrigé le 30/09) : la durée est lue sur l'asset plus bas.
             "select": (
                 "id,created_at,clip_url_horizontal,games(vod_youtube_id),"
-                "highlight_score,data_source,kill_visible,duration_ms"
+                "highlight_score,data_source,kill_visible"
             ),
             "status": "eq.published",
             "kill_visible": "eq.true",
