@@ -43,6 +43,7 @@ from services.runtime_tuning import (
 )
 from services.supabase_batch import batched_safe_insert, batched_safe_update, get_writer
 from services.supabase_client import get_db, safe_select, safe_update
+from services.vod_offset import usable_offset
 
 log = structlog.get_logger()
 
@@ -263,7 +264,7 @@ async def download_full_vod(youtube_id: str) -> str | None:
 async def clip_kill(
     kill_id: str,
     youtube_id: str,
-    vod_offset_seconds: int,
+    vod_offset_seconds: int | None,
     game_time_seconds: int,
     multi_kill: str | None = None,
     killer_champion: str | None = None,
@@ -293,6 +294,10 @@ async def clip_kill(
     reclip_from_ledger passe désormais une fenêtre qui couvre toute la
     séquence. None → CLIP_TIMING par tier, comportement historique.
     """
+    if vod_offset_seconds is None:
+        # 2026-09-29 — un offset absent n'est pas 0 (voir services/vod_offset.py).
+        log.error("clip_refused_offset_unknown", kill_id=kill_id, youtube_id=youtube_id)
+        return None
     os.makedirs(config.CLIPS_DIR, exist_ok=True)
     os.makedirs(config.THUMBNAILS_DIR, exist_ok=True)
 
@@ -304,7 +309,7 @@ async def clip_kill(
         before = int(window_override.get("before", before))
         after = int(window_override.get("after", after))
 
-    vod_time = int(vod_offset_seconds or 0) + int(game_time_seconds or 0)
+    vod_time = int(vod_offset_seconds) + int(game_time_seconds or 0)
     clip_start = max(0, vod_time - before)
     clip_end = vod_time + after
     clip_duration = clip_end - clip_start
@@ -447,7 +452,11 @@ async def clip_kill(
                     error=str(e)[:160],
                 )
 
-        chosen = await asyncio.to_thread(_pick_best_thumbnail, thumb_candidates)
+        # 2026-09-29 — les candidates qui montrent le jeu d'abord : la
+        # variance de luminance seule élisait les volets de transition
+        # (LFL, REPLAY, LEC Versus) — 295 clips de jeu avec une affiche hors jeu.
+        chosen = await asyncio.to_thread(
+            lambda: _pick_best_thumbnail(_gameplay_first(thumb_candidates)))
         if chosen and chosen != thumb_path:
             try:
                 # Rename winner to canonical thumb_path
@@ -622,7 +631,7 @@ async def clip_kill(
                     "size_bytes": size,
                     "content_hash": asset_content_hash,
                     "perceptual_hash": asset_phash,
-                    "source_offset_seconds": int(vod_offset_seconds or 0),
+                    "source_offset_seconds": int(vod_offset_seconds),
                     "source_clip_window_seconds": window_json,
                     "encoder_args": encoder_args,
                     "encoding_node": encoding_node,
@@ -685,11 +694,14 @@ async def clip_moment(
     uses the moment's computed window: 15s before first kill to 10s after
     last kill, clamped to [20, 60] seconds.
     """
+    if vod_offset_seconds is None:
+        log.error("moment_clip_refused_offset_unknown", moment_id=moment_id, youtube_id=youtube_id)
+        return None
     os.makedirs(config.CLIPS_DIR, exist_ok=True)
     os.makedirs(config.THUMBNAILS_DIR, exist_ok=True)
 
-    vod_start = int(vod_offset_seconds or 0) + int(clip_start_game_seconds or 0)
-    vod_end = int(vod_offset_seconds or 0) + int(clip_end_game_seconds or 0)
+    vod_start = int(vod_offset_seconds) + int(clip_start_game_seconds or 0)
+    vod_end = int(vod_offset_seconds) + int(clip_end_game_seconds or 0)
     clip_start = max(0, vod_start)
     clip_duration = vod_end - clip_start
 
@@ -1153,6 +1165,16 @@ def _archive_prior_assets(kill_id: str) -> None:
                  kill_id=kill_id[:8], error=str(e)[:160])
 
 
+def _gameplay_first(candidates: list[str]) -> list[str]:
+    """Candidates de vignette montrant le jeu (porte locale) ; liste
+    inchangée si la porte est indisponible ou si aucune ne montre le jeu."""
+    try:
+        from modules import gameplay_gate
+        return gameplay_gate.gameplay_candidates(candidates)
+    except Exception:
+        return candidates
+
+
 def _pick_best_thumbnail(candidates: list[str]) -> str | None:
     """From a list of candidate thumbnail paths, return the one with
     the highest "informative-ness" score.
@@ -1492,6 +1514,7 @@ async def run() -> int:
     twitch_items: list[tuple[dict, dict | None]] = []
     yt_work: list[tuple[dict, dict | None]] = []
     deferred = 0
+    offset_unknown = 0
     for k, j in work:
         gid = k.get("game_id") or ""
         if gid in twitch_by_game and k.get("event_epoch"):
@@ -1501,11 +1524,25 @@ async def run() -> int:
             if j is not None:
                 await asyncio.to_thread(job_queue.defer, j, 600, f"twitch_{twitch_pending[gid]}")
             deferred += 1
+        elif (games_by_id.get(gid) or {}).get("vod_youtube_id") and usable_offset(
+                (games_by_id.get(gid) or {}).get("vod_offset_seconds")) is None:
+            # 2026-09-29 — offset VOD inconnu (NULL ou 0) : couper à 0 +
+            # game_time tombe dans le pré-show / la draft (1 149 clips hors jeu
+            # publiés). On reporte sans tentative consommée le temps que
+            # vod_offset_finder calibre, et on ne télécharge pas la VOD.
+            if j is not None:
+                await asyncio.to_thread(job_queue.defer, j, 1800, "vod_offset_unknown")
+            else:
+                # Chemin legacy : retour en raw, le transitioner ne le
+                # reprendra qu'une fois l'offset connu.
+                await batched_safe_update("kills", {"status": "raw"}, "id", k["id"])
+            offset_unknown += 1
         else:
             yt_work.append((k, j))
-    if twitch_items or deferred:
+    if twitch_items or deferred or offset_unknown:
         log.info("clipper_twitch_split", twitch=len(twitch_items), deferred=deferred,
-                 youtube=len(yt_work), games_ready=len(twitch_by_game), games_pending=len(twitch_pending))
+                 offset_unknown=offset_unknown, youtube=len(yt_work),
+                 games_ready=len(twitch_by_game), games_pending=len(twitch_pending))
 
     vod_groups: dict[str, list[tuple[dict, dict | None]]] = {}
     singles: list[tuple[dict, dict | None]] = []
@@ -1560,7 +1597,12 @@ async def run() -> int:
                         )
                     return
                 yt_id = game.get("vod_youtube_id")
-                offset = int(game.get("vod_offset_seconds") or 0)
+                offset = usable_offset(game.get("vod_offset_seconds"))
+                if yt_id and offset is None and twitch_section is None:
+                    # Filtré plus haut ; filet de sécurité si l'appel vient d'ailleurs.
+                    if job is not None:
+                        await asyncio.to_thread(job_queue.defer, job, 1800, "vod_offset_unknown")
+                    return
                 if not yt_id and twitch_section is None:
                     # No VOD yet — surface as retry, the vod_offset_finder
                     # will fill it in. 30 min retry lets that module run.
@@ -1655,6 +1697,18 @@ async def run() -> int:
                                     if abs(_drift) > DRIFT_TOLERANCE:
                                         qc_local_ok = False
                                         qc_why = f"timer_drift: {_drift:+d}s"
+                        if qc_local_ok:
+                            # 2026-09-29 — porte « sans jeu » locale (SigLIP 2 +
+                            # sonde) : draft, plateau, interview, scène ou
+                            # facecam sur ≥ 3 images sur 5 -> jamais publié.
+                            from modules import gameplay_gate
+                            _gp = await gameplay_gate.check_clip(_local_h, crop_vertical=True)
+                            if _gp.verdict == "fail":
+                                qc_local_ok = False
+                                qc_why = f"non_gameplay: {_gp.detail}"
+                            elif _gp.verdict == "warn":
+                                log.info("clipper_gameplay_gate_warn", kill_id=kill["id"][:8],
+                                         detail=_gp.detail, p=_gp.p)
                     except Exception as _qc_e:
                         qc_local_ok, qc_why = True, f"qc_error:{str(_qc_e)[:60]}"
 
@@ -1662,7 +1716,9 @@ async def run() -> int:
                     log.warn("clipper_local_qc_rejected",
                              kill_id=kill["id"][:8], reason=qc_why[:120])
                     await batched_safe_update(
-                        "kills", {"status": "needs_review"}, "id", kill["id"])
+                        "kills", {"status": "needs_review", "needs_reclip": True,
+                                  "reclip_reason": f"clip_qc_local: {qc_why}"[:240]},
+                        "id", kill["id"])
                     try:
                         from services.event_qc import fail_qc_clip_validated
                         fail_qc_clip_validated(

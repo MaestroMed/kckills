@@ -45,6 +45,7 @@ log = structlog.get_logger()
 
 from config import config  # noqa: E402
 from services.supabase_client import get_db, safe_update  # noqa: E402
+from services.vod_offset import usable_offset  # noqa: E402
 from modules import clipper  # noqa: E402
 from modules.clip_qc_v2 import run_qc  # noqa: E402
 from modules.decryptage import ProbeBudget  # noqa: E402
@@ -75,7 +76,11 @@ async def reclip_one(db, entry: dict, kill: dict, game: dict,
     if resolved_vt is not None:
         synthetic_offset = int(float(resolved_vt) - gt)
     else:
-        synthetic_offset = game.get("vod_offset_seconds") or 0
+        # 2026-09-29 — offset inconnu (NULL / 0) : on ne coupe pas au début
+        # de la VOD (pré-show / draft), le kill attend un vrai calage.
+        synthetic_offset = usable_offset(game.get("vod_offset_seconds"))
+        if synthetic_offset is None:
+            return "clip_fail"
 
     # Vague 2 — fenêtre couvrant TOUTE la séquence multi-kill : un penta
     # étalé sur 25 s clippé -30/+10 autour du dernier kill amputait la

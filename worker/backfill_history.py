@@ -28,6 +28,7 @@ load_dotenv()
 sys.path.insert(0, os.path.dirname(__file__))
 
 from services.supabase_client import safe_select, safe_insert, safe_update
+from services.vod_offset import parse_api_offset
 from services.league_config import get_league_lolesports_id
 
 API = "https://esports-api.lolesports.com/persisted/gw"
@@ -206,14 +207,14 @@ def insert_games(match_uuid: str, match_external_id: str):
         # VOD info
         vods = g.get("vods", [])
         vod_youtube_id = None
-        vod_offset = 0
+        vod_offset = None          # absent = NULL, jamais 0 (services/vod_offset.py)
         # Prefer fr-FR
         fr_vod = next((v for v in vods if v.get("locale") == "fr-FR"), None)
         en_vod = next((v for v in vods if v.get("locale") == "en-US"), None)
         chosen = fr_vod or en_vod or (vods[0] if vods else None)
         if chosen and chosen.get("provider") == "youtube":
             vod_youtube_id = chosen.get("parameter")
-            vod_offset = chosen.get("offset") or 0
+            vod_offset = parse_api_offset(chosen.get("offset"))
 
         safe_insert("games", {
             "external_id": gid,

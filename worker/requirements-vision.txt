@@ -1,0 +1,11 @@
+# Porte « clip sans jeu » (modules/gameplay_gate.py) — OPTIONNELLE.
+# Sans ces paquets la porte répond 'skipped' et le pipeline continue
+# (CLAUDE.md §5.9). Version CPU de torch : ~5 s par clip, aucun GPU requis.
+#
+#   .venv\Scripts\python.exe -m pip install -r requirements-vision.txt
+#
+# Au premier appel, open_clip télécharge les poids SigLIP 2 (~375 Mo,
+# cache Hugging Face) ; la sonde (gameplay_probe.npz, 7 Ko) est versionnée.
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch>=2.12
+open_clip_torch>=3.3

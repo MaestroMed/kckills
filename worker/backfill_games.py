@@ -11,6 +11,7 @@ load_dotenv()
 sys.path.insert(0, os.path.dirname(__file__))
 
 from services.supabase_client import safe_select, safe_insert
+from services.vod_offset import parse_api_offset
 
 API = "https://esports-api.lolesports.com/persisted/gw"
 KEY = os.environ.get("LOL_ESPORTS_API_KEY", "0TvQnueqKa5mxJntVWt0w4LpLfEkrV1Ta8rQBb9Z")
@@ -64,13 +65,13 @@ for m in matches:
         # VOD info
         vods = g.get("vods", [])
         vod_youtube_id = None
-        vod_offset = 0
+        vod_offset = None          # absent = NULL, jamais 0 (services/vod_offset.py)
         fr_vod = next((v for v in vods if v.get("locale") == "fr-FR"), None)
         en_vod = next((v for v in vods if v.get("locale") == "en-US"), None)
         chosen = fr_vod or en_vod or (vods[0] if vods else None)
         if chosen and chosen.get("provider") == "youtube":
             vod_youtube_id = chosen.get("parameter")
-            vod_offset = chosen.get("offset") or 0
+            vod_offset = parse_api_offset(chosen.get("offset"))
 
         try:
             safe_insert("games", {

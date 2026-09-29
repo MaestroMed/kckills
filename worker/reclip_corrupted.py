@@ -100,7 +100,12 @@ async def main():
 
         # Get game offset
         game_rows = safe_select("games", "vod_offset_seconds", id=gid)
-        vod_offset = int((game_rows[0] if game_rows else {}).get("vod_offset_seconds") or 0)
+        # 2026-09-29 — offset inconnu (NULL / 0) : pas de clip dans le pré-show.
+        from services.vod_offset import usable_offset
+        vod_offset = usable_offset((game_rows[0] if game_rows else {}).get("vod_offset_seconds"))
+        if vod_offset is None:
+            print(f"  offset VOD inconnu pour la game {gid}, skipping")
+            continue
 
         for k in kill_list:
             gt = int(k.get("game_time_seconds") or 0)
