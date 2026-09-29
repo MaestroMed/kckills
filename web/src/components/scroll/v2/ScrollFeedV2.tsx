@@ -1391,7 +1391,9 @@ export function ScrollFeedV2({
         onClick={hideActiveClip}
         disabled={hidingId === msActive.id}
         aria-label="Masquer ce clip (admin)"
-        className="fixed left-4 top-16 z-[76] flex items-center gap-1.5 rounded-full border border-[var(--red)]/55 bg-black/70 px-3.5 py-2 font-data text-[11px] font-bold uppercase tracking-[0.15em] text-[var(--red)] backdrop-blur-md transition-colors hover:border-[var(--red)] hover:bg-[var(--red)]/15 disabled:opacity-50"
+        // Mobile : sous le compteur « #n / total » (en top-16 il recouvrait
+        // l'onglet « Pour toi »). Grande scène (lg) : pas d'onglets, top-16.
+        className="fixed left-4 top-40 lg:top-16 z-[76] flex items-center gap-1.5 rounded-full border border-[var(--red)]/55 bg-black/70 px-3.5 py-2 font-data text-[11px] font-bold uppercase tracking-[0.15em] text-[var(--red)] backdrop-blur-md transition-colors hover:border-[var(--red)] hover:bg-[var(--red)]/15 disabled:opacity-50"
       >
         🚩 {hidingId === msActive.id ? "…" : "Masquer"}
       </button>
