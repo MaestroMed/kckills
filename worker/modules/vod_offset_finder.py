@@ -38,6 +38,7 @@ import structlog
 
 from config import config
 from scheduler import scheduler
+from services.vod_offset import FRAME_STREAM_FORMAT
 from services.supabase_client import get_db, safe_update
 from services import livestats_api, youtube_cookies
 
@@ -224,7 +225,7 @@ async def _read_timer_at(youtube_id: str, vod_seconds: int) -> int | None:
                 __import__("sys").executable, "-m", "yt_dlp",
                 *youtube_cookies.cli_args(),
                 "--js-runtimes", "node",
-                "-g", "-f", "best[height<=720]",
+                "-g", "-f", FRAME_STREAM_FORMAT,
                 "--no-playlist", f"https://youtu.be/{youtube_id}",
             ],
             capture_output=True, text=True, timeout=30,

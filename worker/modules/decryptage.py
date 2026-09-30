@@ -55,6 +55,7 @@ import structlog
 
 from config import config
 from scheduler import scheduler
+from services.vod_offset import FRAME_STREAM_FORMAT
 from services.supabase_client import get_db, safe_select, safe_update, safe_insert
 from modules import timer_ocr
 
@@ -827,7 +828,7 @@ async def decrypt_game(
         try:
             proc = subprocess.run(
                 [sys.executable, "-m", "yt_dlp", *youtube_cookies.cli_args(),
-                 "--js-runtimes", "node", "-g", "-f", "best[height<=720]",
+                 "--js-runtimes", "node", "-g", "-f", FRAME_STREAM_FORMAT,
                  "--no-playlist", f"https://youtu.be/{yt}"],
                 capture_output=True, text=True, timeout=30,
             )
