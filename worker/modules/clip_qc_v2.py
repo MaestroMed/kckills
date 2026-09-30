@@ -237,6 +237,13 @@ def _parse_timer_str(t: Optional[str]) -> Optional[int]:
     return int(m.group(1)) * 60 + int(m.group(2)) if m else None
 
 
+def timer_reads_coherent(reads: list[tuple[int, int, str]], tol_s: int = 5) -> bool:
+    """Lectures (position dans le clip, chrono lu, méthode) triées par position :
+    le chrono doit avancer comme le clip (± tol_s entre deux images)."""
+    return all(abs((r2 - r1) - (p2 - p1)) <= tol_s
+               for (p1, r1, _), (p2, r2, _) in zip(reads, reads[1:]))
+
+
 # ─── QC complet d'un clip ─────────────────────────────────────────────
 
 async def run_qc(
@@ -307,6 +314,34 @@ async def run_qc(
                 os.remove(tmp)
             except OSError:
                 pass
+
+    # 2026-09-30 — cohérence des lectures : deux images prises à Δ s d'écart
+    # doivent montrer des chronos à Δ s d'écart. L'OCR, calibrée depuis peu
+    # sur l'habillage LEC 2026 (or et score juste au-dessus du chrono), lit
+    # parfois autre chose (dérives de +27 min), et avec 2 lectures la
+    # « médiane » retenait la plus haute : une seule lecture fausse faisait
+    # échouer un clip juste. Lectures incohérentes → on garde Gemini (relu
+    # si besoin et si le budget le permet), sinon « illisible ».
+    if len(timer_reads) >= 2:
+        ordered = sorted(timer_reads)
+        if not timer_reads_coherent(ordered):
+            gem = [t for t in timer_reads if t[2] == "gemini"]
+            if not gem and budget.take_gemini():
+                pos0 = min(expected_timer_at)
+                if await _extract_frame(clip_path, pos0, tmp):
+                    vr = await _vision_audit_frame(tmp)
+                    if vr and vision_result is None:
+                        vision_result = vr
+                    s = _parse_timer_str((vr or {}).get("timer"))
+                    if s is not None:
+                        gem = [(pos0, s, "gemini")]
+                    try:
+                        os.remove(tmp)
+                    except OSError:
+                        pass
+            log.info("clip_qc_v2_timer_incoherent", clip=os.path.basename(clip_path),
+                     reads=[(p, r, m) for p, r, m in ordered], kept=len(gem))
+            timer_reads = gem
 
     if timer_reads:
         drifts = [read - expected_timer_at[pos] for pos, read, _ in timer_reads]
