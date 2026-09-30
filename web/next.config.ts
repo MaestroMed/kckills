@@ -36,7 +36,10 @@ const securityHeaders = [
       `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ""} https://vercel.live https://*.umami.is https://www.youtube.com https://www.gstatic.com`,
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
       "font-src 'self' https://fonts.gstatic.com",
-      "img-src 'self' data: blob: https://ddragon.leagueoflegends.com https://static.lolesports.com https://static.wikia.nocookie.net https://clips.kckills.com https://img.youtube.com https://i.ytimg.com https://*.r2.cloudflarestorage.com",
+      // cdn.discordapp.com (fix 30/09/2026) : les avatars Discord du header
+      // sont en <Image unoptimized>, donc chargés en direct par le
+      // navigateur — sans cet hôte la CSP les bloquait (image cassée).
+      "img-src 'self' data: blob: https://ddragon.leagueoflegends.com https://static.lolesports.com https://static.wikia.nocookie.net https://clips.kckills.com https://img.youtube.com https://i.ytimg.com https://*.r2.cloudflarestorage.com https://cdn.discordapp.com",
       "media-src 'self' https://clips.kckills.com https://*.r2.cloudflarestorage.com",
       "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://clips.kckills.com https://fonts.googleapis.com https://fonts.gstatic.com https://ddragon.leagueoflegends.com https://static.lolesports.com https://esports-api.lolesports.com https://img.youtube.com https://vercel.live https://*.r2.cloudflarestorage.com https://*.umami.is",
       "frame-src 'self' https://www.youtube-nocookie.com https://www.youtube.com https://vercel.live",
