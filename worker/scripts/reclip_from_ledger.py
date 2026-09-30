@@ -149,15 +149,29 @@ async def reclip_one(db, entry: dict, kill: dict, game: dict,
     # plein combat il se trompe (12 champions « vus » sur 3 clips d'une même
     # game, clips justes vérifiés à l'image). Quand c'est le SEUL échec et
     # que le chrono est validé, on le garde comme avis et on publie.
+    # --permissive-advisory : idem pour kill_visible. Ces deux contrôles
+    # « permissifs » lisent l'image prise pour le chrono (t=15 s, voire t=1 s)
+    # alors que le kill tombe à t=before (30 s) : « kill non visible » y est
+    # la norme (15 échecs sur 47 clips du 30/09). Le chrono validé à deux
+    # positions encadre l'instant du kill ; seuls les bloquants arrêtent.
     verdict = qc.verdict
-    if args.actors_advisory and verdict == "needs_review":
+    advisory = {"actors_match"} if args.actors_advisory else set()
+    if args.permissive_advisory:
+        advisory |= {"actors_match", "kill_visible"}
+    if advisory and verdict == "needs_review":
         fails = [c for c in qc.checks if c.verdict == "fail"]
         timer_ok = any(c.name == "timer_matches" and c.verdict == "pass" for c in qc.checks)
-        if fails and timer_ok and all(c.name == "actors_match" for c in fails):
+        if fails and timer_ok and all(c.name in advisory and not c.blocking for c in fails):
             verdict = "pass"
-            asset_check["actors_advisory"] = True
+            asset_check["advisory_checks"] = sorted(c.name for c in fails)
     if verdict == "pass":
         url_patch = {k: result[k] for k in URL_KEYS if result.get(k)}
+        if kill["id"] in args.restore_ids:
+            # Kill publié avant un passage dont le QC a échoué à tort :
+            # republication explicite, status + publication_status ensemble
+            # (le trigger ne recalcule la visibilité que si status change).
+            url_patch.update({"status": "published", "publication_status": "published"})
+            print(f"  {kill['id'][:8]} republié", flush=True)
         if url_patch:
             safe_update("kills", url_patch, "id", kill["id"])
         asset_check.update({
@@ -197,7 +211,16 @@ async def main():
                     help="ne re-clipper que ces kills.status (ex. published,needs_review)")
     ap.add_argument("--actors-advisory", action="store_true",
                     help="actors_match seul en échec (chrono validé) = avis, pas blocage")
+    ap.add_argument("--permissive-advisory", action="store_true",
+                    help="actors_match / kill_visible en échec (chrono validé) = avis")
+    ap.add_argument("--restore-ids", dest="restore_ids_file", type=str, default=None,
+                    help="fichier JSON (liste d'uuid) : kills à republier si le re-clip passe")
     args = ap.parse_args()
+    args.restore_ids = set()
+    if args.restore_ids_file:
+        import json
+        with open(args.restore_ids_file, encoding="utf-8") as f:
+            args.restore_ids = set(json.load(f))
 
     db = get_db()
     if db is None:
