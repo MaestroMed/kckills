@@ -42,6 +42,13 @@ def usable_offset(value) -> int | None:
     return parse_api_offset(value)
 
 
+# Format yt-dlp pour LIRE des images (chrono) dans un flux distant. Sur
+# YouTube, `best[height<=720]` (audio+vidéo) ne donne que le 360p progressif
+# (format 18) : le chrono y fait ~15 px, l'OCR échoue et Gemini lit mal.
+# La piste vidéo seule 720p suffit à ffmpeg -ss (30/09/2026).
+FRAME_STREAM_FORMAT = "bestvideo[height<=720][ext=mp4]/bestvideo[height<=720]/best[height<=720]"
+
+
 # Deux games d'une même série ne démarrent jamais à moins de 15 min
 # d'intervalle dans une VOD (une game dure 25-45 min).
 SHARED_OFFSET_WINDOW_S = 900
