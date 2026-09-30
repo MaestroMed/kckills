@@ -43,7 +43,7 @@ from services.runtime_tuning import (
 )
 from services.supabase_batch import batched_safe_insert, batched_safe_update, get_writer
 from services.supabase_client import get_db, safe_select, safe_update
-from services.vod_offset import usable_offset
+from services.vod_offset import shared_offset_game_ids, usable_offset
 
 log = structlog.get_logger()
 
@@ -1477,6 +1477,19 @@ async def run() -> int:
         if rows:
             games_by_id[gid] = rows[0]
 
+    # 2026-09-30 — VOD + offset partagés par plusieurs games d'un même match
+    # (séries entières « G1 à G5 à 301 s ») : au plus une est juste, les
+    # autres couperaient les images d'une autre game au même chrono, ce que
+    # ni la porte « sans jeu » ni la dérive du chrono ne détectent.
+    siblings: list[dict] = []
+    for mid in {g.get("match_id") for g in games_by_id.values() if g.get("match_id")}:
+        siblings += safe_select(
+            "games",
+            "id, match_id, game_number, vod_youtube_id, vod_offset_seconds",
+            match_id=mid,
+        ) or []
+    shared_blocked = shared_offset_game_ids(siblings)
+
     # ─── 3a. Source Twitch d'abord (2026-09-23) ───────────────────
     # YouTube bloque l'IP du worker depuis l'été. Une game terminée et
     # récente se clippe depuis le past broadcast Twitch officiel, calé sur
@@ -1515,6 +1528,7 @@ async def run() -> int:
     yt_work: list[tuple[dict, dict | None]] = []
     deferred = 0
     offset_unknown = 0
+    offset_shared = 0
     for k, j in work:
         gid = k.get("game_id") or ""
         if gid in twitch_by_game and k.get("event_epoch"):
@@ -1537,11 +1551,19 @@ async def run() -> int:
                 # reprendra qu'une fois l'offset connu.
                 await batched_safe_update("kills", {"status": "raw"}, "id", k["id"])
             offset_unknown += 1
+        elif gid in shared_blocked:
+            # 2026-09-30 — VOD et offset partagés avec une autre game du match :
+            # report long (le recalage est manuel ou via vod_offset_finder).
+            if j is not None:
+                await asyncio.to_thread(job_queue.defer, j, 6 * 3600, "vod_offset_shared")
+            else:
+                await batched_safe_update("kills", {"status": "raw"}, "id", k["id"])
+            offset_shared += 1
         else:
             yt_work.append((k, j))
-    if twitch_items or deferred or offset_unknown:
+    if twitch_items or deferred or offset_unknown or offset_shared:
         log.info("clipper_twitch_split", twitch=len(twitch_items), deferred=deferred,
-                 offset_unknown=offset_unknown, youtube=len(yt_work),
+                 offset_unknown=offset_unknown, offset_shared=offset_shared, youtube=len(yt_work),
                  games_ready=len(twitch_by_game), games_pending=len(twitch_pending))
 
     vod_groups: dict[str, list[tuple[dict, dict | None]]] = {}
@@ -1602,6 +1624,10 @@ async def run() -> int:
                     # Filtré plus haut ; filet de sécurité si l'appel vient d'ailleurs.
                     if job is not None:
                         await asyncio.to_thread(job_queue.defer, job, 1800, "vod_offset_unknown")
+                    return
+                if yt_id and twitch_section is None and game.get("id") in shared_blocked:
+                    if job is not None:
+                        await asyncio.to_thread(job_queue.defer, job, 6 * 3600, "vod_offset_shared")
                     return
                 if not yt_id and twitch_section is None:
                     # No VOD yet — surface as retry, the vod_offset_finder

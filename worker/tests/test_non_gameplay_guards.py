@@ -10,7 +10,7 @@ import pytest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 from modules import gameplay_gate  # noqa: E402
-from services.vod_offset import parse_api_offset, usable_offset  # noqa: E402
+from services.vod_offset import parse_api_offset, shared_offset_game_ids, usable_offset  # noqa: E402
 
 
 # ─── services/vod_offset ────────────────────────────────────────────────────
@@ -75,3 +75,35 @@ def test_gate_disabled_by_env(monkeypatch):
     monkeypatch.setenv("KCKILLS_GAMEPLAY_GATE", "0")
     r = asyncio.run(gameplay_gate.check_clip("nope.mp4"))
     assert r.verdict == "skipped"
+
+
+# ─── VOD + offset partagés dans un match (audit du 30/09/2026) ──────────────
+
+def _g(gid, num, vod, off, match="m1"):
+    return {"id": gid, "match_id": match, "game_number": num,
+            "vod_youtube_id": vod, "vod_offset_seconds": off}
+
+
+def test_shared_offset_blocks_whole_series_on_one_offset():
+    # « G1 à G5 à 301 s » sur une seule VOD : au plus une est juste.
+    games = [_g(f"g{i}", i, "H4F", 301) for i in range(1, 6)]
+    assert shared_offset_game_ids(games) == {"g1", "g2", "g3", "g4", "g5"}
+
+
+def test_series_vod_with_spaced_offsets_is_fine():
+    # Vraie VOD de série : une game toutes les ~50 min.
+    games = [_g("g1", 1, "V", 372), _g("g2", 2, "V", 3302), _g("g3", 3, "V", 5302)]
+    assert shared_offset_game_ids(games) == set()
+
+
+def test_same_game_from_two_sources_is_not_blocked():
+    # Doublon de source d'une même game (même numéro) : légitime.
+    games = [_g("lol", 1, "V", 474), _g("dup", 1, "V", 484)]
+    assert shared_offset_game_ids(games) == set()
+
+
+def test_other_match_and_unknown_offsets_are_ignored():
+    games = [_g("a", 1, "V", 301), _g("b", 2, "V", 301, match="m2"),
+             _g("c", 2, "W", 0), _g("d", 3, "W", 0)]
+    # a/b : matchs différents ; c/d : offsets inconnus (déjà refusés ailleurs).
+    assert shared_offset_game_ids(games) == set()
