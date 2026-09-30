@@ -40,10 +40,11 @@ import structlog
 
 from config import config
 from scheduler import scheduler
-from services.vod_offset import FRAME_STREAM_FORMAT
+from services.vod_offset import FRAME_STREAM_FORMAT, SHARED_OFFSET_WINDOW_S, usable_offset
 from services.observability import run_logged
-from services.supabase_client import get_db, safe_update
+from services.supabase_client import get_db, safe_select, safe_update
 from services import livestats_api, youtube_cookies
+from services.lolesports_api import get_event_details
 
 log = structlog.get_logger()
 
@@ -64,7 +65,7 @@ def _fetch_pending_games(limit: int) -> list[dict]:
             f"{db.base}/games",
             headers=db.headers,
             params={
-                "select": "id,external_id,vod_youtube_id,duration_seconds",
+                "select": "id,external_id,match_id,game_number,vod_youtube_id,duration_seconds",
                 "vod_offset_seconds": "is.null",
                 "vod_youtube_id": "not.is.null",
                 "limit": str(limit),
@@ -277,16 +278,82 @@ async def _scan_for_gameplay(
     return None
 
 
-async def _process_game(game: dict) -> bool:
-    gid = game["id"]
-    ext = game.get("external_id") or ""
-    yt = game.get("vod_youtube_id")
-    if not ext or not yt:
+DRAFT_GUESS_S = 330                      # début du segment API -> 00:00 du chrono
+GAME_START_MAX_AFTER_SEGMENT = 25 * 60   # draft + chargement, borne haute
+SEGMENT_SCAN_MAX = 45 * 60
+
+
+async def _api_segment(game: dict) -> Optional[tuple[float, Optional[float]]]:
+    """(début, fin) en secondes du segment de LA game dans SA VOD, d'après
+    getEventDetails (startMillis / endMillis par VOD de langue). None si le
+    match n'est pas dans l'API (gol.gg…) ou si l'API ne positionne pas cette
+    VOD pour cette game."""
+    mid = game.get("match_id")
+    if not mid:
+        return None
+    rows = safe_select("matches", "external_id", id=mid) or []
+    ext = (rows[0] or {}).get("external_id") if rows else None
+    if not ext or not str(ext).isdigit():
+        return None
+    try:
+        d = await get_event_details(str(ext))
+    except Exception as e:
+        log.warn("vof2_event_details_failed", match=str(ext), error=str(e)[:120])
+        return None
+    for g in ((d or {}).get("match") or {}).get("games") or []:
+        if str(g.get("id")) != str(game.get("external_id")):
+            continue
+        for v in g.get("vods") or []:
+            if v.get("parameter") == game.get("vod_youtube_id") and v.get("startMillis") is not None:
+                end = v.get("endMillis")
+                return float(v["startMillis"]) / 1000.0, (float(end) / 1000.0 if end is not None else None)
+    return None
+
+
+async def _scan_segment(yt: str, start_s: float, end_s: Optional[float], short: str) -> Optional[int]:
+    """Cherche le 00:00 de la game DANS son segment : un offset dérivé n'est
+    accepté que dans [début - 60 s, début + 25 min]. Un replay de la game
+    précédente, ou la game suivante, ne peuvent donc pas être retenus."""
+    lo, hi = start_s - 60, start_s + GAME_START_MAX_AFTER_SEGMENT
+    probe = int(start_s + DRAFT_GUESS_S + 4 * 60)
+    stop = int(min(end_s if end_s else start_s + SEGMENT_SCAN_MAX, start_s + SEGMENT_SCAN_MAX))
+    while probe <= stop:
+        timer = await _read_timer_at(yt, probe)
+        if timer is not None and timer >= 0:
+            derived = probe - timer
+            if lo <= derived <= hi:
+                log.info("vof2_api_segment_hit", game_id=short, yt=yt, segment_start=int(start_s),
+                         probe_vod_s=probe, timer_s=timer, offset=int(derived))
+                return int(derived)
+            log.info("vof2_api_segment_reject", game_id=short, yt=yt, probe_vod_s=probe,
+                     timer_s=timer, derived=int(derived))
+        probe += SCAN_STEP_SECONDS
+    log.info("vof2_api_segment_miss", game_id=short, yt=yt, segment_start=int(start_s))
+    return None
+
+
+def _offset_collides(game: dict, offset: int) -> bool:
+    """Vrai si une AUTRE game du même match (numéro différent) a déjà un
+    offset utilisable à moins de SHARED_OFFSET_WINDOW_S sur la même VOD :
+    l'écrire recréerait une « VOD partagée au même offset »."""
+    mid = game.get("match_id")
+    if not mid:
         return False
+    for s in safe_select("games", "id, game_number, vod_youtube_id, vod_offset_seconds", match_id=mid) or []:
+        if s.get("id") == game.get("id") or s.get("vod_youtube_id") != game.get("vod_youtube_id"):
+            continue
+        if s.get("game_number") == game.get("game_number"):
+            continue
+        so = usable_offset(s.get("vod_offset_seconds"))
+        if so is not None and abs(so - offset) < SHARED_OFFSET_WINDOW_S:
+            return True
+    return False
 
-    short = gid[:8]
-    log.info("vof2_start", game_id=short, yt=yt)
 
+async def _legacy_offset(game: dict, ext: str, yt: str, short: str) -> Optional[int]:
+    """Ancienne recherche (heuristique epoch / milieu de vidéo / balayage).
+    Sur une VOD de série elle rend le départ de la PREMIÈRE game lisible :
+    ne sert plus qu'en repli, derrière _api_segment + garde de collision."""
     # Stage A : try v1 heuristic first (cheap)
     game_epoch = await _game_start_epoch(ext)
     if not game_epoch:
@@ -303,7 +370,7 @@ async def _process_game(game: dict) -> bool:
             # cookies, region lock, or gone). Probing frames would fail the
             # same way 60 times — skip now, retry after a cookie refresh.
             log.warn("vof2_video_inaccessible", game_id=short, yt=yt)
-            return False
+            return None
         vid_dur = int(meta.get("duration") or 0)
         offset = None
         if vid_dur > 120:
@@ -318,15 +385,15 @@ async def _process_game(game: dict) -> bool:
             offset = await _scan_for_gameplay(yt, 0, scan_cap)
         if offset is None:
             log.warn("vof2_scan_failed_no_livestats", game_id=short)
-            return False
+            return None
     else:
         meta = await _vod_metadata(yt)
         if not meta:
             log.info("vof2_no_meta", game_id=short, yt=yt)
-            return False
+            return None
         candidate = _initial_candidate(game_epoch, meta)
         if candidate is None:
-            return False
+            return None
 
         # Try the heuristic candidate first — works for many recent LEC games
         timer = await _read_timer_at(yt, candidate + TARGET_GAME_TIME)
@@ -355,7 +422,37 @@ async def _process_game(game: dict) -> bool:
 
         if offset is None:
             log.warn("vof2_no_offset_found", game_id=short)
-            return False
+            return None
+
+    return offset
+
+
+async def _process_game(game: dict) -> bool:
+    gid = game["id"]
+    ext = game.get("external_id") or ""
+    yt = game.get("vod_youtube_id")
+    if not ext or not yt:
+        return False
+
+    short = gid[:8]
+    log.info("vof2_start", game_id=short, yt=yt)
+
+    # 2026-09-30 — d'abord le segment de LA game dans SA VOD (getEventDetails
+    # startMillis) : l'ancienne recherche prenait le premier chrono lisible,
+    # donc la G1, pour toutes les games d'une VOD de série (79 games, 1 346
+    # kills publiés sur la mauvaise game).
+    seg = await _api_segment(game)
+    if seg is not None:
+        # Segment connu : pas de repli aveugle (il rendrait le départ de la
+        # G1 et la G2 le prendrait avant elle) ; nouvel essai au cycle suivant.
+        offset = await _scan_segment(yt, seg[0], seg[1], short)
+    else:
+        offset = await _legacy_offset(game, ext, yt, short)
+    if offset is None:
+        return False
+    if _offset_collides(game, offset):
+        log.warn("vof2_offset_shared_refused", game_id=short, yt=yt, offset=offset)
+        return False
 
     # Persist the offset
     if not safe_update("games", {"vod_offset_seconds": offset}, "id", gid):
