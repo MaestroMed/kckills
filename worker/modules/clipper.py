@@ -1610,6 +1610,16 @@ async def run() -> int:
             game_id=kill.get("game_id"),
         ):
             async with sem:
+                # 2026-09-30 — échéance dure : un gros groupe de VOD démarré
+                # juste avant l'échéance débordait encore du plafond de 30 min
+                # (module_timeout à 07:26 UTC, re-clip en parallèle). Un kill
+                # qui obtient son créneau trop tard repart en file, intact.
+                if time.monotonic() - pass_start > hard_deadline_s:
+                    nonlocal released
+                    if job is not None:
+                        await asyncio.to_thread(job_queue.defer, job, 60, "clipper_pass_deadline")
+                    released += 1
+                    return
                 # Parent game (VOD info) prefetched once per pass in
                 # games_by_id — the VOD grouping needed it before dispatch.
                 game = games_by_id.get(kill.get("game_id") or "")
@@ -1834,7 +1844,9 @@ async def run() -> int:
     # plus de 2 h : la coupure tombait en plein encodage. Passé l'échéance,
     # on ne démarre plus de groupe ; les jobs restants repartent en file
     # sans tentative consommée et la passe suivante (5 min) les reprend.
-    deadline_s = max(300, int(os.environ.get("KCKILLS_MODULE_TIMEOUT_SEC", "1800") or 1800) - 360)
+    _module_timeout = int(os.environ.get("KCKILLS_MODULE_TIMEOUT_SEC", "1800") or 1800)
+    deadline_s = max(300, _module_timeout - 360)          # plus de nouveau groupe
+    hard_deadline_s = max(deadline_s, _module_timeout - 150)  # plus de nouveau kill
     past_deadline = lambda: time.monotonic() - pass_start > deadline_s  # noqa: E731
     released = 0
 
