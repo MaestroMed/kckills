@@ -26,6 +26,7 @@ import asyncio
 import os
 import socket
 import sys
+import time
 import structlog
 
 from config import config
@@ -1338,6 +1339,7 @@ async def run() -> int:
 
     Returns the number of kills successfully clipped this pass.
     """
+    pass_start = time.monotonic()
     log.info("clipper_scan_start")
 
     worker_id = f"clipper-{os.getpid()}"
@@ -1826,6 +1828,23 @@ async def run() -> int:
     # summary log. TaskGroup's "cancel all siblings on first error" semantic
     # would lose work and break that audit log. Keep gather().
     results: list = []
+    # 2026-09-30 — échéance de passe : main.py coupe un module après
+    # KCKILLS_MODULE_TIMEOUT_SEC (30 min). À ~1,5 clip/min (VOD complète +
+    # 3 encodages + porte « sans jeu » + upload), un lot de 200 en demande
+    # plus de 2 h : la coupure tombait en plein encodage. Passé l'échéance,
+    # on ne démarre plus de groupe ; les jobs restants repartent en file
+    # sans tentative consommée et la passe suivante (5 min) les reprend.
+    deadline_s = max(300, int(os.environ.get("KCKILLS_MODULE_TIMEOUT_SEC", "1800") or 1800) - 360)
+    past_deadline = lambda: time.monotonic() - pass_start > deadline_s  # noqa: E731
+    released = 0
+
+    async def _release(items: list[tuple[dict, dict | None]]) -> None:
+        nonlocal released
+        for _k, _j in items:
+            if _j is not None:
+                await asyncio.to_thread(job_queue.defer, _j, 60, "clipper_pass_deadline")
+            released += 1
+
     # Multi-clip groups first : ONE full-VOD download per group (cache-
     # aware + ytdlp-scheduled inside download_full_vod), then the group's
     # kills fan out to the encode workers and extract locally — zero
@@ -1833,6 +1852,9 @@ async def run() -> int:
     # serialise the downloads anyway, and it keeps at most one freshly
     # downloaded VOD pending hygiene at a time.
     for group_vid, group_items in vod_groups.items():
+        if past_deadline():
+            await _release(group_items)
+            continue
         local_vod = await download_full_vod(group_vid)
         # None → download failed / quota : the group's kills fall back
         # to the per-kill segment path inside clip_kill.
@@ -1842,17 +1864,24 @@ async def run() -> int:
         ))
         if local_vod:
             await asyncio.to_thread(_vod_cache_hygiene, local_vod)
-    if twitch_items:
+    if twitch_items and past_deadline():
+        await _release(twitch_items)
+    elif twitch_items:
         results.extend(await asyncio.gather(
             *(_process_one(k, j, None, twitch_by_game.get(k.get("game_id") or ""))
               for (k, j) in twitch_items),
             return_exceptions=True,
         ))
-    if singles:
+    if singles and past_deadline():
+        await _release(singles)
+    elif singles:
         results.extend(await asyncio.gather(
             *(_process_one(k, j) for (k, j) in singles),
             return_exceptions=True,
         ))
+    if released:
+        log.info("clipper_pass_deadline", released=released, deadline_s=deadline_s,
+                 elapsed_s=int(time.monotonic() - pass_start))
     # Drain the tail of the buffer so the next module sees a consistent
     # DB state immediately.
     await get_writer().flush_now()
