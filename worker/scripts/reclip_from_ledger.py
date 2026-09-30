@@ -179,6 +179,8 @@ async def main():
     ap.add_argument("--reasons", type=str, default=None,
                     help="filtre : no_audio,no_video,drift_offset,…")
     ap.add_argument("--gemini-per-clip", type=int, default=2)
+    ap.add_argument("--games-file", type=str, default=None,
+                    help="ne traiter que ces games (un uuid par ligne)")
     args = ap.parse_args()
 
     db = get_db()
@@ -197,6 +199,10 @@ async def main():
         entries = [e for e in entries
                    if wanted & {r.split(":")[0] for r in
                                 (e.get("asset_check") or {}).get("reclip_reasons", [])}]
+    if args.games_file:
+        with open(args.games_file, encoding="utf-8") as f:
+            only = {line.strip() for line in f if line.strip()}
+        entries = [e for e in entries if e.get("game_id") in only]
     entries = entries[:args.limit]
     print(f"{len(entries)} re-clip(s) à exécuter "
           f"({'APPLY' if args.apply else 'DRY-RUN'})")
@@ -251,7 +257,10 @@ async def main():
                           error=str(ex)[:160])
                 outcome = "clip_fail"
             stats[outcome] += 1
-            print(f"  {e['kill_id'][:8]} → {outcome}")
+            print(f"  {e['kill_id'][:8]} → {outcome}", flush=True)
+        # Même hygiène que le clipper : cache borné (~60 Go), VOD retirée si
+        # le disque passe sous 40 Go libres.
+        await asyncio.to_thread(clipper._vod_cache_hygiene, local_vod)
 
     print(f"\nRÉSULTAT : {stats}")
     return 0
