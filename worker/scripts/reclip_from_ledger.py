@@ -144,7 +144,19 @@ async def reclip_one(db, entry: dict, kill: dict, game: dict,
             log.warn("qc_feedback_failed", error=str(_fb_e)[:100])
 
     asset_check = dict(entry.get("asset_check") or {})
-    if qc.verdict == "pass":
+    # --actors-advisory (30/09/2026) : actors_match compare le tueur/la
+    # victime aux champions que Gemini reconnaît sur UNE image mi-clip ; en
+    # plein combat il se trompe (12 champions « vus » sur 3 clips d'une même
+    # game, clips justes vérifiés à l'image). Quand c'est le SEUL échec et
+    # que le chrono est validé, on le garde comme avis et on publie.
+    verdict = qc.verdict
+    if args.actors_advisory and verdict == "needs_review":
+        fails = [c for c in qc.checks if c.verdict == "fail"]
+        timer_ok = any(c.name == "timer_matches" and c.verdict == "pass" for c in qc.checks)
+        if fails and timer_ok and all(c.name == "actors_match" for c in fails):
+            verdict = "pass"
+            asset_check["actors_advisory"] = True
+    if verdict == "pass":
         url_patch = {k: result[k] for k in URL_KEYS if result.get(k)}
         if url_patch:
             safe_update("kills", url_patch, "id", kill["id"])
@@ -181,6 +193,10 @@ async def main():
     ap.add_argument("--gemini-per-clip", type=int, default=2)
     ap.add_argument("--games-file", type=str, default=None,
                     help="ne traiter que ces games (un uuid par ligne)")
+    ap.add_argument("--statuses", type=str, default=None,
+                    help="ne re-clipper que ces kills.status (ex. published,needs_review)")
+    ap.add_argument("--actors-advisory", action="store_true",
+                    help="actors_match seul en échec (chrono validé) = avis, pas blocage")
     args = ap.parse_args()
 
     db = get_db()
@@ -219,6 +235,15 @@ async def main():
             "id": f"in.({','.join(kill_ids[i:i + 60])})",
         }):
             kills[k["id"]] = k
+
+    if args.statuses:
+        allowed = set(args.statuses.split(","))
+        before_n = len(entries)
+        entries = [e for e in entries
+                   if (kills.get(e["kill_id"]) or {}).get("status") in allowed]
+        print(f"filtre statuts {sorted(allowed)} : {len(entries)}/{before_n}")
+        if not entries:
+            return 0
 
     game_ids = sorted({e["game_id"] for e in entries})
     games = {g["id"]: g for g in fetch_all(db, "games", {
