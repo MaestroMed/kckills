@@ -1303,3 +1303,191 @@ nav[data-scrolled="true"] .kc-pennant-wrap {
 .matchday-ticker-dot { width: 6px; height: 6px; transform: rotate(45deg); background: #b8893a; display: inline-block; }
 @keyframes matchday-ticker { from { transform: translateX(0); } to { transform: translateX(-50%); } }
 @media (prefers-reduced-motion: reduce) { .matchday-ticker-track { animation: none; } .matchday-player-photo { transition: none; } }
+/* adversaire : cadre et lueur à ses couleurs (palette.rival) */
+.matchday-team:not(.matchday-team--home) .matchday-crest {
+  border: 2px solid color-mix(in srgb, var(--theme-rival, #ffffff) 70%, transparent);
+  box-shadow: 0 0 0 4px rgba(1, 10, 19, 0.6), 0 0 44px color-mix(in srgb, var(--theme-rival, #ffffff) 35%, transparent), 0 24px 60px rgba(0, 0, 0, 0.5);
+}
+
+/* ═══ Galerie des thèmes (/themes) ═══ */
+.theme-card {
+  position: relative;
+  overflow: hidden;
+  border-radius: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: linear-gradient(160deg, #0b1830, #050b16);
+  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.3s, box-shadow 0.3s;
+}
+.theme-card:hover { transform: translateY(-4px); border-color: color-mix(in srgb, var(--card-rival, #c8aa6e) 70%, transparent); box-shadow: 0 24px 60px rgba(0, 0, 0, 0.5), 0 0 40px color-mix(in srgb, var(--card-rival, #c8aa6e) 25%, transparent); }
+.theme-card-stage {
+  position: relative;
+  height: 230px;
+  background:
+    radial-gradient(70% 90% at 50% 0%, color-mix(in srgb, var(--card-rival, #c8aa6e) 22%, transparent), transparent 70%),
+    radial-gradient(60% 80% at 50% 100%, rgba(245, 241, 232, 0.08), transparent 70%);
+}
+.theme-card-banner { position: absolute; top: 0; width: 76px; height: 142px; object-fit: contain; filter: drop-shadow(0 12px 20px rgba(0, 0, 0, 0.55)); }
+@media (prefers-reduced-motion: reduce) { .theme-card { transition: none; } }
+
+/* ═══ Ouverture de l'accueil (components/home/HomeOpening) ═══
+   2,3 s : filet d'or → blasons → éclat → le rideau se fend. Transform,
+   opacity et clip-path seulement (composité, 60 i/s). */
+#kc-opening {
+  --op-ease: cubic-bezier(0.16, 1, 0.3, 1);
+  --op-curtain: cubic-bezier(0.76, 0, 0.24, 1);
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  pointer-events: auto;
+  cursor: pointer;
+  animation: op-end 0.01s linear 2.3s forwards;
+}
+html[data-intro="seen"] #kc-opening,
+html[data-intro="done"] #kc-opening { display: none; }
+@keyframes op-end { to { visibility: hidden; pointer-events: none; } }
+
+.op-half {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 50.5%;
+  background:
+    radial-gradient(90% 120% at 50% 100%, #0b1a38 0%, #030b18 55%, #010a13 100%);
+  will-change: transform;
+}
+.op-half--top { top: 0; animation: op-up 0.78s var(--op-curtain) 1.5s forwards; }
+.op-half--bottom {
+  bottom: 0;
+  background: radial-gradient(90% 120% at 50% 0%, #0b1a38 0%, #030b18 55%, #010a13 100%);
+  animation: op-down 0.78s var(--op-curtain) 1.5s forwards;
+}
+@keyframes op-up { to { transform: translateY(-101%); } }
+@keyframes op-down { to { transform: translateY(101%); } }
+
+/* le filet d'or, au centre */
+.op-line {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 1px;
+  transform: scaleX(0);
+  background: linear-gradient(90deg, transparent, var(--op-accent) 20%, #fff3d6 50%, var(--op-accent) 80%, transparent);
+  box-shadow: 0 0 18px var(--op-accent), 0 0 42px color-mix(in srgb, var(--op-accent) 60%, transparent);
+  animation: op-line 1.95s var(--op-ease) 0.08s forwards;
+}
+@keyframes op-line {
+  0% { transform: scaleX(0); opacity: 1; }
+  32% { transform: scaleX(1); opacity: 1; }
+  74% { transform: scaleX(1); opacity: 1; height: 1px; }
+  80% { opacity: 1; height: 3px; }
+  100% { transform: scaleX(1); opacity: 0; height: 1px; }
+}
+
+/* éclat quand les blasons se rejoignent */
+.op-flash {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  background: radial-gradient(40% 30% at 50% 50%, rgba(255, 246, 225, 0.55), transparent 70%);
+  animation: op-flash 0.5s ease-out 1.08s forwards;
+}
+@keyframes op-flash { 0% { opacity: 0; } 30% { opacity: 1; } 100% { opacity: 0; } }
+
+.op-stage {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 22px;
+  animation: op-stage-out 0.6s var(--op-ease) 1.42s forwards;
+}
+@keyframes op-stage-out { to { opacity: 0; transform: scale(1.06); filter: blur(6px); } }
+.op-row { display: flex; align-items: center; gap: clamp(18px, 4vw, 44px); }
+
+.op-crest {
+  display: grid;
+  place-items: center;
+  width: clamp(96px, 12vw, 176px);
+  height: clamp(96px, 12vw, 176px);
+  border-radius: 30%;
+  opacity: 0;
+}
+.op-crest img { width: 64%; height: 64%; object-fit: contain; }
+.op-crest--home {
+  background: linear-gradient(160deg, #fbf8f2, var(--op-primary) 55%, #ddd5c4);
+  border: 2px solid var(--op-accent);
+  box-shadow: 0 0 50px color-mix(in srgb, var(--op-accent) 45%, transparent), 0 24px 60px rgba(0, 0, 0, 0.6);
+  animation: op-from-left 0.95s var(--op-ease) 0.3s forwards;
+}
+.op--home .op-crest--home { background: linear-gradient(160deg, #0f1d36, #061023); animation: op-rise 0.9s var(--op-ease) 0.3s forwards; }
+.op-crest--away {
+  background: linear-gradient(160deg, #0f1d36, #050c1a);
+  border: 2px solid color-mix(in srgb, var(--op-rival) 75%, transparent);
+  box-shadow: 0 0 50px color-mix(in srgb, var(--op-rival) 40%, transparent), 0 24px 60px rgba(0, 0, 0, 0.6);
+  animation: op-from-right 0.95s var(--op-ease) 0.3s forwards;
+}
+@keyframes op-from-left { from { opacity: 0; transform: translateX(-38vw) scale(0.9); filter: blur(10px); } to { opacity: 1; transform: none; filter: blur(0); } }
+@keyframes op-from-right { from { opacity: 0; transform: translateX(38vw) scale(0.9); filter: blur(10px); } to { opacity: 1; transform: none; filter: blur(0); } }
+@keyframes op-rise { from { opacity: 0; transform: translateY(18px) scale(0.86); filter: blur(10px); } to { opacity: 1; transform: none; filter: blur(0); } }
+
+.op-vs {
+  font-family: var(--font-display, inherit);
+  font-weight: 900;
+  font-size: clamp(2.6rem, 6vw, 5.6rem);
+  line-height: 1;
+  background: linear-gradient(180deg, #fff6e2, var(--op-accent) 55%, #8a6326);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  opacity: 0;
+  animation: op-vs 0.55s var(--op-ease) 0.85s forwards;
+}
+@keyframes op-vs { from { opacity: 0; transform: scale(1.7); filter: blur(8px); } to { opacity: 1; transform: none; filter: drop-shadow(0 0 16px color-mix(in srgb, var(--op-accent) 70%, transparent)); } }
+
+.op-meta,
+.op-word {
+  margin: 0;
+  opacity: 0;
+  color: var(--op-primary);
+  text-transform: uppercase;
+}
+.op-meta {
+  font-family: var(--font-data, ui-monospace, monospace);
+  font-size: 12px;
+  letter-spacing: 0.6em;
+  animation: op-track 0.7s var(--op-ease) 0.95s forwards;
+}
+@keyframes op-track { from { opacity: 0; letter-spacing: 0.9em; } to { opacity: 0.85; letter-spacing: 0.34em; } }
+.op-word {
+  font-family: var(--font-display, inherit);
+  font-weight: 900;
+  font-size: clamp(2.6rem, 8vw, 5.5rem);
+  letter-spacing: 0.02em;
+  background: linear-gradient(180deg, #fff6e2, var(--op-accent) 60%, #8a6326);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  clip-path: inset(0 100% 0 0);
+  animation: op-wipe 0.8s var(--op-ease) 0.7s forwards;
+}
+@keyframes op-wipe { from { opacity: 1; clip-path: inset(0 100% 0 0); } to { opacity: 1; clip-path: inset(0 0 0 0); } }
+
+/* le hero entre en cascade quand le rideau s'ouvre (seulement si l'ouverture joue) */
+html[data-intro="play"] .hero-in {
+  animation: hero-in 1s cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation-delay: calc(1.7s + var(--i, 0) * 90ms);
+}
+@keyframes hero-in { from { opacity: 0; transform: translateY(22px); filter: blur(6px); } to { opacity: 1; transform: none; filter: blur(0); } }
+
+@media (prefers-reduced-motion: reduce) {
+  #kc-opening { display: none; }
+  html[data-intro="play"] .hero-in { animation: none; }
+}
+
+/* transition de route (app/template.tsx) */
+.route-enter { animation: route-enter 0.3s cubic-bezier(0.16, 1, 0.3, 1) backwards; }
+@keyframes route-enter { from { opacity: 0; transform: translateY(12px); } }
+@media (prefers-reduced-motion: reduce) { .route-enter { animation: none; } }

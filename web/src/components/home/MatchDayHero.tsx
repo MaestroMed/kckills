@@ -27,11 +27,11 @@ const AFTER_MS = 4 * 3600_000;
 
 type Phase = "upcoming" | "soon" | "live" | "after";
 
-export function MatchDayHero({ theme }: { theme: HomeTheme }) {
+export function MatchDayHero({ theme, preview = false }: { theme: HomeTheme; preview?: boolean }) {
   const t = useT();
   const s = theme.spotlight!;
   const [now, setNow] = useState<number | null>(null);
-  const [kickoff, setKickoff] = useState(() => Date.parse(s.kickoffISO));
+  const [kickoff, setKickoff] = useState<number | null>(() => (s.kickoffISO ? Date.parse(s.kickoffISO) : null));
   const [apiLive, setApiLive] = useState(false);
 
   useEffect(() => {
@@ -41,6 +41,7 @@ export function MatchDayHero({ theme }: { theme: HomeTheme }) {
   }, []);
 
   useEffect(() => {
+    if (preview) return;
     const ac = new AbortController();
     const pull = async () => {
       try {
@@ -62,9 +63,9 @@ export function MatchDayHero({ theme }: { theme: HomeTheme }) {
       ac.abort();
       window.clearInterval(id);
     };
-  }, [s.opponentCode]);
+  }, [s.opponentCode, preview]);
 
-  const ms = now === null ? null : kickoff - now;
+  const ms = now === null || kickoff === null ? null : kickoff - now;
   let phase: Phase | null = null;
   if (ms !== null) {
     if (apiLive) phase = "live";
@@ -74,13 +75,14 @@ export function MatchDayHero({ theme }: { theme: HomeTheme }) {
     else phase = "upcoming";
   }
 
-  const kickoffLocal = new Date(kickoff).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/Paris" });
-  const dayLocal = new Date(kickoff).toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long", timeZone: "Europe/Paris" });
+  const kickoffLocal = kickoff === null ? "--:--" : new Date(kickoff).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/Paris" });
+  const dayLocal = kickoff === null ? t("p_home_matchday.tbd") : new Date(kickoff).toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long", timeZone: "Europe/Paris" });
 
   return (
-    <div className="matchday flex flex-col items-center md:items-start text-center md:text-left">
+    <div className="matchday flex flex-col" data-preview={preview || undefined} style={theme.palette.rival ? ({ ["--theme-rival" as string]: theme.palette.rival }) : undefined}>
+      <div className="flex flex-col items-center md:items-start text-center md:text-left">
       {/* pastille du thème */}
-      <span className="matchday-kicker inline-flex items-center gap-2 rounded-full px-4 py-1.5 text-[11px] font-bold uppercase tracking-[0.24em]">
+      <span style={{ ["--i" as string]: 0 }} className="hero-in matchday-kicker inline-flex items-center gap-2 rounded-full px-4 py-1.5 text-[11px] font-bold uppercase tracking-[0.24em]">
         <span aria-hidden className="matchday-diamond" />
         {theme.kicker}
       </span>
@@ -89,18 +91,18 @@ export function MatchDayHero({ theme }: { theme: HomeTheme }) {
       <h1 className="sr-only">
         Karmine Corp contre {s.opponentName} — {s.competition}, {s.stage}, {s.format}
       </h1>
-      <div aria-hidden className="matchday-versus mt-7 flex items-center gap-5 md:gap-8">
+      <div aria-hidden style={{ ["--i" as string]: 1 }} className="hero-in matchday-versus mt-7 flex items-center gap-5 md:gap-8">
         <TeamMark src={KC_LOGO} code="KC" name="Karmine Corp" home />
         <span className="matchday-vs font-display font-black">VS</span>
         <TeamMark src={s.opponentLogo} code={s.opponentCode} name={s.opponentName} />
       </div>
 
-      <p className="mt-6 font-data text-[11px] md:text-xs uppercase tracking-[0.32em] text-white/75">
+      <p style={{ ["--i" as string]: 2 }} className="hero-in mt-6 font-data text-[11px] md:text-xs uppercase tracking-[0.32em] text-white/75">
         {s.competition} · {s.stage} · {s.format}
       </p>
 
       {/* coup d'envoi + compte à rebours */}
-      <div className="mt-5 flex items-end gap-5">
+      <div style={{ ["--i" as string]: 3 }} className="hero-in mt-5 flex items-end gap-5">
         <div>
           <p className="matchday-time font-display font-black leading-none">{kickoffLocal}</p>
           <p className="mt-1 text-[11px] uppercase tracking-[0.2em] text-white/55">
@@ -113,7 +115,7 @@ export function MatchDayHero({ theme }: { theme: HomeTheme }) {
       </div>
 
       {/* actions */}
-      <div className="mt-8 flex flex-wrap items-center gap-3 justify-center md:justify-start">
+      <div style={{ ["--i" as string]: 4 }} className="hero-in mt-8 flex flex-wrap items-center gap-3 justify-center md:justify-start">
         {phase === "after" ? (
           <Link href="/scroll" className="matchday-cta-primary">
             {t("p_home_matchday.cta_relive")}
@@ -126,6 +128,7 @@ export function MatchDayHero({ theme }: { theme: HomeTheme }) {
         <Link href="/scroll" className="matchday-cta-ghost">
           {t("p_home.cta_scroll_kills")}
         </Link>
+      </div>
       </div>
     </div>
   );

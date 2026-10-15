@@ -56,7 +56,7 @@ export async function HeroLiveStats({ allMatches }: HeroLiveStatsProps) {
   return (
     // lg:max-w-7xl (page) + lg:mr-8 : le clip reste à gauche de l'étendard KC
     // qui pend sous le coin droit de la barre (sinon il en masquait le coin).
-    <div className="md:col-span-5 lg:col-span-6 flex flex-col gap-3 w-full max-w-sm md:ml-auto lg:mr-8">
+    <div style={{ ["--i" as string]: 6 }} className="hero-in md:col-span-5 lg:col-span-6 flex flex-col gap-3 w-full max-w-sm md:ml-auto lg:mr-8">
       {heroClip}
 
       {lastMatch && (() => {

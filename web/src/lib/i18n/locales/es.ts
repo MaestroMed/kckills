@@ -740,6 +740,7 @@ export const es: FrDict = {
     "side_stat_ai": "IA",
   },
   p_home_matchday: {
+    "tbd": "fecha por confirmar",
     "roster": "Los cinco de KC",
     "paris_time": "hora de París",
     "cta_follow": "Seguir el partido",

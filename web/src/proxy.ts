@@ -198,5 +198,6 @@ export const config = {
     "/vs/:path*",
     "/bracket/:path*",
     "/community/:path*",
+    "/themes/:path*",
   ],
 };

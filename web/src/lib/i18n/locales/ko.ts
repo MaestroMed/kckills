@@ -747,6 +747,7 @@ export const ko: FrDict = {
     "side_stat_ai": "AI",
   },
   p_home_matchday: {
+    "tbd": "일정 미정",
     "roster": "KC 라인업",
     "paris_time": "파리 시간",
     "cta_follow": "경기 보기",
