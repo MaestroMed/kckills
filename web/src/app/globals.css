@@ -1137,3 +1137,169 @@ nav[data-scrolled="true"] .kc-pennant-wrap {
 .dna-dot { transform-box: fill-box; transform-origin: center; }
 @keyframes dnaIn { from { opacity: 0; transform: scale(0); } }
 .dna-wait .dna-dot { opacity: 0; }
+
+/* ═══ Thème d'accueil : affiche de jour de match (components/home/MatchDayHero) ═══
+   Couleurs : --theme-primary (maillot), --theme-accent (or), --theme-glow,
+   posées par app/page.tsx depuis lib/home-themes. */
+.matchday-backdrop {
+  background:
+    radial-gradient(60% 55% at 28% 42%, color-mix(in srgb, var(--theme-primary) 22%, transparent), transparent 70%),
+    radial-gradient(40% 40% at 30% 40%, color-mix(in srgb, var(--theme-accent) 18%, transparent), transparent 70%),
+    linear-gradient(90deg, rgba(1, 10, 19, 0.72), rgba(1, 10, 19, 0.15) 60%, transparent);
+}
+.matchday-backdrop::after {
+  /* faisceaux de stade, très lents */
+  content: "";
+  position: absolute;
+  inset: -20%;
+  background: repeating-conic-gradient(from 200deg at 22% 0%, transparent 0deg 7deg, color-mix(in srgb, var(--theme-primary) 9%, transparent) 8deg 10deg, transparent 11deg 18deg);
+  mask-image: radial-gradient(70% 60% at 25% 20%, #000, transparent 75%);
+  animation: matchday-rays 18s ease-in-out infinite alternate;
+}
+@keyframes matchday-rays {
+  from { transform: rotate(-3deg); opacity: 0.7; }
+  to { transform: rotate(3deg); opacity: 1; }
+}
+.matchday-kicker {
+  color: var(--theme-primary);
+  background: linear-gradient(90deg, rgba(1, 10, 19, 0.65), rgba(1, 10, 19, 0.35));
+  border: 1px solid color-mix(in srgb, var(--theme-accent) 60%, transparent);
+  box-shadow: 0 0 24px color-mix(in srgb, var(--theme-accent) 25%, transparent);
+  backdrop-filter: blur(6px);
+}
+.matchday-diamond {
+  width: 7px;
+  height: 7px;
+  transform: rotate(45deg);
+  background: var(--theme-accent);
+  box-shadow: 0 0 10px var(--theme-accent);
+}
+.matchday-crest {
+  width: 104px;
+  height: 104px;
+  border-radius: 28px;
+  background: linear-gradient(160deg, rgba(10, 20, 40, 0.75), rgba(1, 10, 19, 0.9));
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.55);
+  overflow: hidden;
+}
+.matchday-team--home .matchday-crest {
+  /* le maillot : satin blanc, liseré or */
+  background: linear-gradient(160deg, #fbf8f2, var(--theme-primary) 55%, #ddd5c4);
+  border: 2px solid var(--theme-accent);
+  box-shadow: 0 0 0 4px rgba(1, 10, 19, 0.6), 0 0 48px var(--theme-glow), 0 24px 60px rgba(0, 0, 0, 0.5);
+}
+.matchday-crest::after {
+  /* reflet qui passe */
+  content: "";
+  position: absolute;
+  inset: -40%;
+  background: linear-gradient(115deg, transparent 42%, rgba(255, 255, 255, 0.55) 50%, transparent 58%);
+  transform: translateX(-60%);
+  animation: matchday-sheen 5.5s cubic-bezier(0.16, 1, 0.3, 1) infinite;
+}
+.matchday-team:not(.matchday-team--home) .matchday-crest::after { animation-delay: 0.35s; opacity: 0.5; }
+@keyframes matchday-sheen {
+  0%, 55% { transform: translateX(-60%); }
+  100% { transform: translateX(60%); }
+}
+.matchday-logo {
+  width: 72px;
+  height: 72px;
+  position: relative;
+  z-index: 1;
+  filter: drop-shadow(0 6px 14px rgba(0, 0, 0, 0.35));
+}
+.matchday-team span { color: var(--theme-primary); text-shadow: 0 2px 12px rgba(0, 0, 0, 0.8); }
+.matchday-vs {
+  font-size: 3.25rem;
+  line-height: 1;
+  letter-spacing: 0.04em;
+  background: linear-gradient(180deg, #fff6e2, var(--theme-accent) 55%, #8a6326);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  filter: drop-shadow(0 0 18px var(--theme-glow));
+  transform: translateY(-14px);
+}
+.matchday-time {
+  font-size: 4.5rem;
+  color: var(--theme-primary);
+  text-shadow: 0 0 30px var(--theme-glow), 0 4px 18px rgba(0, 0, 0, 0.85);
+}
+.matchday-countdown {
+  color: var(--theme-accent);
+  text-shadow: 0 0 16px color-mix(in srgb, var(--theme-accent) 50%, transparent);
+}
+.matchday-live-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 999px;
+  background: var(--red);
+  box-shadow: 0 0 12px var(--red);
+  animation: next-match-pulse 1.4s ease-in-out infinite;
+}
+.matchday-cta-primary,
+.matchday-cta-ghost {
+  border-radius: 0.75rem;
+  padding: 1rem 2rem;
+  font-family: var(--font-display, inherit);
+  font-size: 0.875rem;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s, background 0.2s;
+}
+.matchday-cta-primary {
+  color: #0a0f1a;
+  background: linear-gradient(180deg, #fffdf8, var(--theme-primary));
+  border: 1px solid var(--theme-accent);
+  box-shadow: 0 0 0 1px rgba(1, 10, 19, 0.5), 0 10px 30px rgba(0, 0, 0, 0.45), 0 0 34px var(--theme-glow);
+}
+.matchday-cta-primary:hover { transform: translateY(-1px) scale(1.02); box-shadow: 0 0 0 1px rgba(1, 10, 19, 0.5), 0 14px 36px rgba(0, 0, 0, 0.5), 0 0 48px var(--theme-glow); }
+.matchday-cta-ghost {
+  color: var(--theme-accent);
+  background: rgba(1, 10, 19, 0.45);
+  border: 1px solid color-mix(in srgb, var(--theme-accent) 55%, transparent);
+  backdrop-filter: blur(6px);
+}
+.matchday-cta-ghost:hover { background: rgba(1, 10, 19, 0.65); border-color: var(--theme-accent); }
+@media (min-width: 768px) {
+  .matchday-crest { width: 148px; height: 148px; border-radius: 36px; }
+  .matchday-logo { width: 104px; height: 104px; }
+  .matchday-vs { font-size: 5rem; transform: translateY(-18px); }
+  .matchday-time { font-size: 6.5rem; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .matchday-backdrop::after,
+  .matchday-crest::after,
+  .matchday-live-dot { animation: none; }
+}
+.matchday-player-photo {
+  width: 52px;
+  height: 52px;
+  border-radius: 16px;
+  border: 1.5px solid color-mix(in srgb, var(--theme-accent) 70%, transparent);
+  background: linear-gradient(180deg, #fbf8f2, var(--theme-primary));
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.45);
+  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.25s;
+}
+.matchday-player:hover .matchday-player-photo { transform: translateY(-3px); box-shadow: 0 14px 30px rgba(0, 0, 0, 0.5), 0 0 22px var(--theme-glow); }
+@media (min-width: 768px) { .matchday-player-photo { width: 64px; height: 64px; border-radius: 18px; } }
+.matchday-ticker {
+  border-block: 1px solid color-mix(in srgb, var(--theme-accent) 45%, transparent);
+  background: linear-gradient(90deg, rgba(245, 241, 232, 0.92), rgba(245, 241, 232, 0.86));
+  color: #0a0f1a;
+  font-family: var(--font-display, inherit);
+  font-weight: 900;
+  font-size: 12px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  padding-block: 7px;
+}
+.matchday-ticker-track { display: flex; width: max-content; animation: matchday-ticker 38s linear infinite; }
+.matchday-ticker-run { display: inline-flex; }
+.matchday-ticker-vs { color: #8a6326; }
+.matchday-ticker-dot { width: 6px; height: 6px; transform: rotate(45deg); background: #b8893a; display: inline-block; }
+@keyframes matchday-ticker { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+@media (prefers-reduced-motion: reduce) { .matchday-ticker-track { animation: none; } .matchday-player-photo { transition: none; } }

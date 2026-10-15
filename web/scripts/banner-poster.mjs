@@ -1,13 +1,13 @@
 // Image de repli des étendards du header : capture des deux étendards 3D du labo à la
 // taille exacte du header (140×262 CSS, DPR 2), fond transparent, sans rayon.
-// Usage : node scripts/banner-poster.mjs <outDir>
+// Usage : node scripts/banner-poster.mjs <outDir> [themeId]
 import { chromium } from "@playwright/test";
 import { mkdirSync } from "node:fs";
-const [, , out] = process.argv;
+const [, , out, theme] = process.argv; // theme : id de lib/home-themes (facultatif)
 mkdirSync(out, { recursive: true });
 const b = await chromium.launch({ channel: "msedge", args: ["--enable-unsafe-webgpu", "--use-angle=d3d11", "--ignore-gpu-blocklist"] });
 const p = await b.newPage({ viewport: { width: 1440, height: 1000 }, deviceScaleFactor: 2 });
-await p.goto("http://localhost:3000/lab?nosweep", { waitUntil: "domcontentloaded", timeout: 120000 });
+await p.goto(`http://localhost:${process.env.PORT ?? 3000}/lab?nosweep${theme ? `&theme=${theme}` : ""}`, { waitUntil: "domcontentloaded", timeout: 120000 });
 await p.getByText("Taille réelle, sur le hero").scrollIntoViewIfNeeded();
 await p.waitForTimeout(2500);
 // les deux étendards de l'aperçu, remis aux dimensions exactes du header

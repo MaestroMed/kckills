@@ -70,6 +70,7 @@ import {
   type StrikeEvent,
   type SweepEvent,
 } from "@/lib/mood/sky";
+import { clientHomeTheme } from "@/lib/home-themes";
 import { loadLogo, paintBanner, type BannerArt } from "./banner-art";
 import type { ClothSpec, WindState } from "./cloth-sim";
 
@@ -226,7 +227,8 @@ export async function mountBanner(canvas: HTMLCanvasElement, opts: BannerOptions
   const uWear = uniform(cur.wear);
   const uTime = uniform(0);
 
-  // ── matériau du drap brodé ──
+  // ── matériau du drap brodé ── (teintes du drap : thème d'accueil actif, lib/home-themes)
+  const pal = clientHomeTheme().banner;
   const clothMat = new THREE.MeshPhysicalNodeMaterial({ side: THREE.DoubleSide });
   clothMat.alphaToCoverage = true;
   clothMat.alphaTest = 0.5;
@@ -316,7 +318,7 @@ export async function mountBanner(canvas: HTMLCanvasElement, opts: BannerOptions
 
     // Teintes : bleu KC profond marbré, or « fil de soie » qui varie d'un fil à l'autre.
     const mottle = mx_noise_float(vec3(P.mul(2.4), 0.37)).mul(0.5).add(0.5);
-    const fabric = mix(color(0x041652), color(0x0a37b8), mottle.mul(0.55).add(0.4))
+    const fabric = mix(color(pal.fabricA), color(pal.fabricB), mottle.mul(0.55).add(0.4))
       .mul(mix(float(1), select(onWarp, float(1.08), float(0.9)), aaW))
       .mul(weaveH.mul(0.12).add(0.9))
       .mul(damask.mul(0.14).add(1));
@@ -382,7 +384,7 @@ export async function mountBanner(canvas: HTMLCanvasElement, opts: BannerOptions
       float(0.95),
       scorch,
     );
-    clothMat.sheenNode = mix(color(0x3d6cff).mul(mix(float(0.32), float(0.7), damask)), vec3(0), gold)
+    clothMat.sheenNode = mix(color(pal.sheen).mul(mix(float(0.32), float(0.7), damask)), vec3(0), gold)
       .mul(fold)
       .mul(float(1).sub(scorch))
       .mul(float(1).sub(dirt.mul(0.5)));
@@ -406,7 +408,7 @@ export async function mountBanner(canvas: HTMLCanvasElement, opts: BannerOptions
     const goldHot = color(0xffd48a).mul(gold).mul(glint.mul(2.6).add(0.22));
     // le drap ne s'éclaire qu'en rasant et sur le satin du damas : le bleu
     // reste profond, c'est l'or et le motif tissé qui accrochent le rayon
-    const blueGlow = color(0x3f6dff)
+    const blueGlow = color(pal.glow)
       .mul(float(1).sub(gold))
       .mul(fres.mul(0.45).add(0.05).add(damask.mul(0.3)));
     // Braises au bord des trous, seulement quand l'étendard est en lambeaux.

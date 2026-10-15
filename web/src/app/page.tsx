@@ -38,6 +38,8 @@ import { HERO_IMAGES } from "@/lib/hero-images";
 import { NextMatchOverlay } from "@/components/NextMatchOverlay";
 import { HeroWeather } from "@/components/weather/HeroWeather";
 import { PageViewTracker } from "@/components/analytics/PageViewTracker";
+import { MatchDayHero } from "@/components/home/MatchDayHero";
+import { activeHomeTheme } from "@/lib/home-themes";
 // Scroll Vivant (HomeGridSection) retiré de l'accueil le 24/09/2026 :
 // trop de cases vides tant que la grille n'est pas finie (Mehdi). Le
 // composant reste dans components/home/ pour la refonte.
@@ -64,6 +66,10 @@ export default async function HomePage() {
   const data = loadRealData();
   const roster = getCurrentRoster(data);
   const allMatches = getMatchesSorted(data);
+  // Thème du jour (lib/home-themes) : choisi à la date du rendu (ISR 30 min).
+  // KCKILLS_HOME_THEME force un thème (aperçu local).
+  const theme = activeHomeTheme(new Date(), process.env.KCKILLS_HOME_THEME);
+  const spotlight = Boolean(theme.spotlight);
 
 
   // Les requêtes de la colonne droite du hero (clip de la semaine, dernier
@@ -74,7 +80,11 @@ export default async function HomePage() {
   return (
     <div
       className="-mt-6"
+      data-home-theme={theme.id}
       style={{
+        ["--theme-primary" as string]: theme.palette.primary,
+        ["--theme-accent" as string]: theme.palette.accent,
+        ["--theme-glow" as string]: theme.palette.glow,
         // Full-bleed: break out of the parent <main max-w-7xl> container
         // so the hero, roster bands, timeline and clips grid can span the
         // entire viewport width instead of being caged at 1280px.
@@ -107,6 +117,9 @@ export default async function HomePage() {
             Only the bottom fade stays strong to blend into the next section.
             No side vignettes — the cards themselves have dark backdrops. */}
         <div className="absolute inset-0 bg-gradient-to-b from-black/10 via-transparent to-[var(--bg-primary)] pointer-events-none" />
+        {/* Voile du thème (ex. ivoire du maillot Worlds) */}
+        <div aria-hidden className="absolute inset-0 pointer-events-none" style={{ background: theme.palette.veil }} />
+        {spotlight && <div aria-hidden className="matchday-backdrop absolute inset-0 pointer-events-none" />}
         <div className="absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-black/50 to-transparent pointer-events-none" />
 
         {/* Météo du jour (forme de la KC, lib/mood) : pluie, soleil, nuages,
@@ -114,22 +127,27 @@ export default async function HomePage() {
         <HeroWeather />
 
         {/* ─── Floating "next rendez-vous" overlay — top-right of hero ─── */}
-        <NextMatchOverlay />
+        {/* L'affiche du jour de match porte déjà le rendez-vous. */}
+        {!spotlight && <NextMatchOverlay />}
 
         {/* ─── Full-width 2-column grid on desktop ───
             Mobile : pt-44 (et non py-24) pour que le logo KC + la rangée
             de tags démarrent SOUS la carte flottante « PROCHAIN RDV »
             (absolue, top 5.5rem + ~70px de haut) au lieu d'être
             recouverts. md:py-0 inchangé → placement desktop intact. */}
-        <div className="relative z-10 min-h-[100vh] md:min-h-[92vh] max-w-[1920px] lg:max-w-7xl mx-auto px-6 md:px-10 lg:px-16 pt-44 pb-24 md:py-0 flex flex-col md:grid md:grid-cols-12 md:items-center gap-8">
+        <div className={`relative z-10 min-h-[100vh] md:min-h-[92vh] max-w-[1920px] lg:max-w-7xl mx-auto px-6 md:px-10 lg:px-16 ${spotlight ? "pt-28" : "pt-44"} pb-24 md:py-0 flex flex-col md:grid md:grid-cols-12 md:items-center gap-8`}>
 
           {/* ─── LEFT : title + tagline + CTAs ─── */}
           <div className="md:col-span-7 lg:col-span-6 flex flex-col items-center md:items-start text-center md:text-left">
+            {spotlight ? (
+              <MatchDayHero theme={theme} />
+            ) : (
+              <>
             {/* Tag row */}
             <div className="inline-flex items-center gap-3 mb-6">
               <MacronEasterEgg />
               <span className="rounded-full border border-[var(--gold)]/30 bg-black/50 backdrop-blur-sm px-4 py-1.5 text-[11px] font-bold tracking-[0.2em] uppercase text-[var(--gold)]">
-                Karmine Corp &middot; LEC
+                {theme.kicker}
               </span>
             </div>
 
@@ -177,8 +195,35 @@ export default async function HomePage() {
               </Link>
             </div>
 
+              </>
+            )}
+
+            {/* Jour de match : les cinq de KC, en grand, avec leur nom */}
+            {spotlight && roster.length > 0 && (
+              <div className="matchday-roster mt-10 w-full">
+                <p className="font-data text-[10px] uppercase tracking-[0.3em] text-[var(--theme-accent)]/80 mb-3">
+                  {t("p_home_matchday.roster")}
+                </p>
+                <div className="flex justify-center md:justify-start gap-3 md:gap-4">
+                  {roster.slice(0, 5).map((p) => {
+                    const photo = PLAYER_PHOTOS[p.name];
+                    return (
+                      <Link key={p.name} href={`/player/${encodeURIComponent(p.name)}`} className="matchday-player group flex flex-col items-center">
+                        <span className="matchday-player-photo relative block overflow-hidden">
+                          {photo ? <Image src={photo} alt={p.name} width={64} height={64} className="h-full w-full object-cover object-top" /> : null}
+                        </span>
+                        <span className="mt-1.5 font-display text-[11px] font-black uppercase tracking-[0.1em] text-white/85 group-hover:text-[var(--theme-accent)]">
+                          {p.name}
+                        </span>
+                      </Link>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
             {/* Small roster pill row — shows active LEC 2026 roster */}
-            {roster.length > 0 && (
+            {!spotlight && roster.length > 0 && (
               <div className="mt-10 hidden md:flex items-center gap-3">
                 <span className="font-data text-[9px] uppercase tracking-[0.25em] text-white/40">
                   {t("p_home.roster_spring_2026")}
@@ -218,6 +263,32 @@ export default async function HomePage() {
             <HeroLiveStats allMatches={allMatches} />
           </Suspense>
         </div>
+
+        {/* Jour de match : bandeau défilant façon habillage TV */}
+        {spotlight && theme.spotlight && (
+          <div aria-hidden className="matchday-ticker absolute inset-x-0 bottom-7 z-10 overflow-hidden">
+            <div className="matchday-ticker-track">
+              {Array.from({ length: 2 }).map((_, k) => (
+                <span key={k} className="matchday-ticker-run">
+                  {Array.from({ length: 6 }).map((__, i) => (
+                    <span key={i} className="inline-flex items-center gap-6 pr-6">
+                      <span>KC</span>
+                      <span className="matchday-ticker-vs">vs</span>
+                      <span>{theme.spotlight!.opponentCode}</span>
+                      <span className="matchday-ticker-dot" />
+                      <span>{theme.spotlight!.competition}</span>
+                      <span className="matchday-ticker-dot" />
+                      <span>{theme.spotlight!.stage}</span>
+                      <span className="matchday-ticker-dot" />
+                      <span>{theme.spotlight!.format}</span>
+                      <span className="matchday-ticker-dot" />
+                    </span>
+                  ))}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Scroll indicator — tiny, bottom center */}
         <div className="absolute bottom-3 left-1/2 -translate-x-1/2 animate-bounce z-10 hidden md:block">
