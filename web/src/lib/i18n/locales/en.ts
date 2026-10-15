@@ -735,6 +735,17 @@ export const en: FrDict = {
     "side_stat_wr": "WR",
     "side_stat_ai": "AI",
   },
+  p_home_matchday: {
+    "roster": "The KC five",
+    "paris_time": "Paris time",
+    "cta_follow": "Follow the match",
+    "cta_follow_live": "Watch live",
+    "cta_relive": "Relive the kills",
+    "live": "Live",
+    "over": "Match over",
+    "soon": "Kick-off imminent",
+    "countdown": "Kick-off in",
+  },
   p_home: {
     "cta_scroll_kills": "Scroll the kills",
     "cta_matches": "Matches",

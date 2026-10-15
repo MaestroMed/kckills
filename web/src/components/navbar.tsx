@@ -5,6 +5,7 @@ import Image from "next/image";
 import dynamic from "next/dynamic";
 import { usePathname } from "next/navigation";
 import { useState, useEffect } from "react";
+import { activeHomeTheme, clientHomeTheme } from "@/lib/home-themes";
 import { CommandPaletteButton } from "./CommandPalette";
 import { LangSwitcher } from "./i18n/LangSwitcher";
 import { SearchBar } from "./search/SearchBar";
@@ -102,6 +103,10 @@ export function Navbar() {
   // d'Ariane. Ils ne s'affichent donc que sur la home, dont le hero
   // plein-écran est le seul décor conçu pour les accueillir.
   const showPennants = pathname === "/";
+  // Images de repli des étendards : celles du thème d'accueil actif (date au
+  // rendu serveur, puis ?theme= côté client — pas d'écart d'hydratation).
+  const [posterDir, setPosterDir] = useState(() => activeHomeTheme().banner.posterDir);
+  useEffect(() => setPosterDir(clientHomeTheme().banner.posterDir), []);
   // Passe à true quand on peut monter les étendards en tissu 3D (desktop,
   // GPU dispo, pas de reduced-motion, après idle).
   const [clothReady, setClothReady] = useState(false);
@@ -222,7 +227,7 @@ export function Navbar() {
               // au tissu animé est un fondu invisible.
               const poster = (
                 <Image
-                  src={`/images/etendards/etendard-${side === "left" ? "gauche" : "droite"}.webp`}
+                  src={`${posterDir}/etendard-${side === "left" ? "gauche" : "droite"}.webp`}
                   alt=""
                   width={140}
                   height={262}

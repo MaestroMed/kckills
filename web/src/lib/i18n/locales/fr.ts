@@ -758,6 +758,17 @@ const _fr = {
     "side_stat_wr": "WR",
     "side_stat_ai": "IA",
   },
+  p_home_matchday: {
+    "roster": "Les cinq de KC",
+    "paris_time": "heure de Paris",
+    "cta_follow": "Suivre le match",
+    "cta_follow_live": "Regarder en direct",
+    "cta_relive": "Revivre les kills",
+    "live": "En direct",
+    "over": "Match terminé",
+    "soon": "Coup d'envoi imminent",
+    "countdown": "Coup d'envoi dans",
+  },
   p_home: {
     "cta_scroll_kills": "Scroll les kills",
     "cta_matches": "Matchs",

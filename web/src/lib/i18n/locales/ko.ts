@@ -746,6 +746,17 @@ export const ko: FrDict = {
     "side_stat_wr": "승률",
     "side_stat_ai": "AI",
   },
+  p_home_matchday: {
+    "roster": "KC 라인업",
+    "paris_time": "파리 시간",
+    "cta_follow": "경기 보기",
+    "cta_follow_live": "생중계 보기",
+    "cta_relive": "킬 다시 보기",
+    "live": "생중계",
+    "over": "경기 종료",
+    "soon": "곧 시작",
+    "countdown": "시작까지",
+  },
   p_home: {
     "cta_scroll_kills": "킬 스크롤하기",
     "cta_matches": "경기",

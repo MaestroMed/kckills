@@ -24,6 +24,7 @@
  */
 
 import type { MoodMusic } from "@/lib/mood/presets";
+import { clientHomeTheme } from "@/lib/home-themes";
 
 export interface BgmTrack {
   id: string;
@@ -700,7 +701,8 @@ export function withMoodOpeners(tracks: BgmTrack[], catalog: BgmTrack[], music: 
   const byId = new Map<string, BgmTrack>();
   for (const t of [...catalog, ...tracks]) byId.set(t.youtubeId, t);
   const openers: BgmTrack[] = [];
-  for (const id of MOOD_OPENER_IDS[music]) {
+  // le thème d'accueil du jour passe devant la météo (ex. Warriors un jour de Mondial)
+  for (const id of [...clientHomeTheme().openerIds, ...MOOD_OPENER_IDS[music]]) {
     const t = byId.get(id);
     if (t && !openers.includes(t)) openers.push(t);
   }

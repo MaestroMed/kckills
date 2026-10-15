@@ -739,6 +739,17 @@ export const es: FrDict = {
     "side_stat_wr": "WR",
     "side_stat_ai": "IA",
   },
+  p_home_matchday: {
+    "roster": "Los cinco de KC",
+    "paris_time": "hora de París",
+    "cta_follow": "Seguir el partido",
+    "cta_follow_live": "Ver en directo",
+    "cta_relive": "Revivir los kills",
+    "live": "En directo",
+    "over": "Partido terminado",
+    "soon": "Inicio inminente",
+    "countdown": "Empieza en",
+  },
   p_home: {
     "cta_scroll_kills": "Desliza los kills",
     "cta_matches": "Partidos",
