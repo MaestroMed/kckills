@@ -70,7 +70,7 @@ import {
   type StrikeEvent,
   type SweepEvent,
 } from "@/lib/mood/sky";
-import { clientHomeTheme } from "@/lib/home-themes";
+import { pageHomeTheme, type BannerLook } from "@/lib/home-themes";
 import { loadLogo, paintBanner, type BannerArt } from "./banner-art";
 import type { ClothSpec, WindState } from "./cloth-sim";
 
@@ -105,15 +105,22 @@ export interface BannerHandle {
 }
 
 // ─── dessin partagé (une texture par résolution, peinte une seule fois) ─────
-const artCache = new Map<number, Promise<BannerArt>>();
-function getArt(texW: number): Promise<BannerArt> {
-  let p = artCache.get(texW);
+const artCache = new Map<string, Promise<BannerArt>>();
+function getArt(texW: number, logoUrl: string): Promise<BannerArt> {
+  const key = `${texW}|${logoUrl}`;
+  let p = artCache.get(key);
   if (!p) {
-    p = loadLogo("/images/kc-logo.png").then((logo) => paintBanner(texW, SHAPE, logo));
-    artCache.set(texW, p);
+    p = loadLogo(logoUrl).then((logo) => paintBanner(texW, SHAPE, logo));
+    artCache.set(key, p);
   }
   return p;
 }
+
+/** Teintes du fil de broderie : or KC ou argent (drap jaune ou or). */
+const THREAD = {
+  gold: { lo: 0x9a6b22, hi: 0xefcd82, hot: 0xffd48a, rod: 0xe7c47c },
+  silver: { lo: 0x6d737d, hi: 0xeef2f7, hot: 0xf4f8ff, rod: 0xd5dbe4 },
+} as const;
 
 // ─── worker de simulation partagé ───────────────────────────────────────────
 type WorkerMsg =
@@ -161,7 +168,8 @@ export function buildStageEnvironment(renderer: THREE.WebGPURenderer): THREE.Tex
 
 export async function mountBanner(canvas: HTMLCanvasElement, opts: BannerOptions): Promise<BannerHandle> {
   const variant = VARIANTS[opts.variant];
-  const [art] = await Promise.all([getArt(variant.texW)]);
+  const look: BannerLook = pageHomeTheme().banners[opts.side];
+  const [art] = await Promise.all([getArt(variant.texW, look.logo)]);
 
   const renderer = new THREE.WebGPURenderer({ canvas, antialias: true, alpha: true });
   await renderer.init();
@@ -227,8 +235,9 @@ export async function mountBanner(canvas: HTMLCanvasElement, opts: BannerOptions
   const uWear = uniform(cur.wear);
   const uTime = uniform(0);
 
-  // ── matériau du drap brodé ── (teintes du drap : thème d'accueil actif, lib/home-themes)
-  const pal = clientHomeTheme().banner;
+  // ── matériau du drap brodé ── (drap, fil, blason : thème d'accueil, un par côté)
+  const pal = look;
+  const thread = THREAD[pal.thread];
   const clothMat = new THREE.MeshPhysicalNodeMaterial({ side: THREE.DoubleSide });
   clothMat.alphaToCoverage = true;
   clothMat.alphaTest = 0.5;
@@ -322,7 +331,7 @@ export async function mountBanner(canvas: HTMLCanvasElement, opts: BannerOptions
       .mul(mix(float(1), select(onWarp, float(1.08), float(0.9)), aaW))
       .mul(weaveH.mul(0.12).add(0.9))
       .mul(damask.mul(0.14).add(1));
-    const goldCol = mix(color(0x9a6b22), color(0xefcd82), tvar.mul(0.45).add(profAA.mul(0.55)));
+    const goldCol = mix(color(thread.lo), color(thread.hi), tvar.mul(0.45).add(profAA.mul(0.55)));
 
     // ── usure ──
     // Distance au bord libre (m), analytique : côtés, et les deux lèvres de
@@ -405,7 +414,7 @@ export async function mountBanner(canvas: HTMLCanvasElement, opts: BannerOptions
     const spec = pow(saturate(dot(Np, Hh)), 36);
     const glint = kajiya.mul(tvar.mul(0.6).add(0.4)).add(spec.mul(0.5));
     const fres = pow(saturate(float(1).sub(dot(Np, V))), 2);
-    const goldHot = color(0xffd48a).mul(gold).mul(glint.mul(2.6).add(0.22));
+    const goldHot = color(thread.hot).mul(gold).mul(glint.mul(2.6).add(0.22));
     // le drap ne s'éclaire qu'en rasant et sur le satin du damas : le bleu
     // reste profond, c'est l'or et le motif tissé qui accrochent le rayon
     const blueGlow = color(pal.glow)
@@ -419,7 +428,7 @@ export async function mountBanner(canvas: HTMLCanvasElement, opts: BannerOptions
   }
 
   // ── tringle en or brossé, avec pommeaux ──
-  const rodMat = new THREE.MeshPhysicalNodeMaterial({ color: 0xe7c47c, metalness: 1, roughness: 0.22 });
+  const rodMat = new THREE.MeshPhysicalNodeMaterial({ color: thread.rod, metalness: 1, roughness: 0.22 });
   rodMat.anisotropyNode = vec2(0, 0.7);
   {
     const d = dot(positionLocal.xy, uSweepDir).sub(uSweepC);

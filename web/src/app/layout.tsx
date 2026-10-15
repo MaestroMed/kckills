@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import Script from "next/script";
+import { INTRO_SCRIPT } from "@/components/home/HomeOpening";
 import {
   Oswald,
   Inter_Tight,
@@ -270,10 +271,14 @@ export default async function RootLayout({
   return (
     <html
       lang={htmlLang}
+      // data-intro est posé par le script de l'ouverture avant l'hydratation
+      suppressHydrationWarning
       className={`${oswald.variable} ${interTight.variable} ${jetbrainsMono.variable} ${playfairDisplay.variable} ${cormorantGaramond.variable} ${imFellEnglish.variable}`}
     >
       <head>
         <link rel="manifest" href="/manifest.json" />
+        {/* Ouverture de l'accueil : décide avant la première peinture si elle joue (components/home/HomeOpening) */}
+        <Script id="kc-intro" strategy="beforeInteractive">{INTRO_SCRIPT}</Script>
         {/* ─── Preconnects ────────────────────────────────────────────
             Wave 13i (2026-05-07) — fonts.googleapis.com / fonts.gstatic.com
             preconnects DROPPED. next/font/google self-hosts the woff2

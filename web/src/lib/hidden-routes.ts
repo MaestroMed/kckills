@@ -15,7 +15,7 @@
  * Remettre une page en ligne : la retirer d'ici ET du matcher de
  * src/proxy.ts (Next exige un matcher littéral).
  */
-export const HIDDEN_ROUTES = ["/chambre", "/vs", "/bracket", "/community"] as const;
+export const HIDDEN_ROUTES = ["/chambre", "/vs", "/bracket", "/community", "/themes"] as const;
 
 /** Vrai pour la page elle-même et ses sous-pages (/vs/leaderboard…), query et ancre ignorées. */
 export function isHiddenRoute(href: string): boolean {

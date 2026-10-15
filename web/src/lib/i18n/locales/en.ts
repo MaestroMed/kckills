@@ -736,6 +736,7 @@ export const en: FrDict = {
     "side_stat_ai": "AI",
   },
   p_home_matchday: {
+    "tbd": "date to be confirmed",
     "roster": "The KC five",
     "paris_time": "Paris time",
     "cta_follow": "Follow the match",

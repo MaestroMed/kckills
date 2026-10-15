@@ -5,7 +5,7 @@ import Image from "next/image";
 import dynamic from "next/dynamic";
 import { usePathname } from "next/navigation";
 import { useState, useEffect } from "react";
-import { activeHomeTheme, clientHomeTheme } from "@/lib/home-themes";
+import { activeHomeTheme, pageHomeTheme } from "@/lib/home-themes";
 import { CommandPaletteButton } from "./CommandPalette";
 import { LangSwitcher } from "./i18n/LangSwitcher";
 import { SearchBar } from "./search/SearchBar";
@@ -102,11 +102,19 @@ export function Navbar() {
   // /compare, /hall-of-fame, /stats…), le drapeau gauche recouvrait le fil
   // d'Ariane. Ils ne s'affichent donc que sur la home, dont le hero
   // plein-écran est le seul décor conçu pour les accueillir.
-  const showPennants = pathname === "/";
+  const showPennants = pathname === "/" || pathname.startsWith("/themes/");
   // Images de repli des étendards : celles du thème d'accueil actif (date au
   // rendu serveur, puis ?theme= côté client — pas d'écart d'hydratation).
-  const [posterDir, setPosterDir] = useState(() => activeHomeTheme().banner.posterDir);
-  useEffect(() => setPosterDir(clientHomeTheme().banner.posterDir), []);
+  const [themeId, setThemeId] = useState("");
+  const [posterDirs, setPosterDirs] = useState(() => {
+    const b = activeHomeTheme().banners;
+    return { left: b.left.posterDir, right: b.right.posterDir };
+  });
+  useEffect(() => {
+    const th = pageHomeTheme();
+    setPosterDirs({ left: th.banners.left.posterDir, right: th.banners.right.posterDir });
+    setThemeId(th.id);
+  }, [pathname]);
   // Passe à true quand on peut monter les étendards en tissu 3D (desktop,
   // GPU dispo, pas de reduced-motion, après idle).
   const [clothReady, setClothReady] = useState(false);
@@ -227,7 +235,7 @@ export function Navbar() {
               // au tissu animé est un fondu invisible.
               const poster = (
                 <Image
-                  src={`${posterDir}/etendard-${side === "left" ? "gauche" : "droite"}.webp`}
+                  src={`${posterDirs[side]}/etendard-${side === "left" ? "gauche" : "droite"}.webp`}
                   alt=""
                   width={140}
                   height={262}
@@ -249,6 +257,8 @@ export function Navbar() {
                   </div>
                   {clothReady && weather && (
                     <KCBanner
+                      // un thème = d'autres draps : on remonte l'étendard
+                      key={`${side}-${themeId}`}
                       side={side}
                       variant="header"
                       pxPerMeter={95}

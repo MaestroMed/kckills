@@ -1,28 +1,13 @@
-"use client";
-
-import { m } from "motion/react";
-
 /**
- * Route transition template — re-created on every page navigation.
+ * Transition de route — recréé à chaque navigation.
  *
- * Provides a subtle fade + upward slide that gives the site a cinematic,
- * polished feel without being distracting. Duration is kept short (250ms)
- * so navigation feels instant but not jarring.
- *
- * The /scroll page uses `fixed inset-0` so it visually breaks out of this
- * wrapper and isn't affected by the animation.
+ * Fondu + légère montée (300 ms) en CSS pur (.route-enter, globals.css) :
+ * l'animation part à la première peinture, sans attendre l'hydratation
+ * (l'ancienne version Motion laissait la page à opacité 0 jusqu'à ce que
+ * React prenne la main, ce qui masquait aussi l'ouverture de l'accueil).
+ * fill-mode backwards : aucune transformation ne reste après la fin, donc
+ * les éléments `fixed` (/scroll) se positionnent toujours sur la fenêtre.
  */
 export default function Template({ children }: { children: React.ReactNode }) {
-  return (
-    <m.div
-      initial={{ opacity: 0, y: 12 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{
-        duration: 0.3,
-        ease: [0.16, 1, 0.3, 1], // cubic-bezier for Hextech feel
-      }}
-    >
-      {children}
-    </m.div>
-  );
+  return <div className="route-enter">{children}</div>;
 }

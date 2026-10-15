@@ -759,6 +759,7 @@ const _fr = {
     "side_stat_ai": "IA",
   },
   p_home_matchday: {
+    "tbd": "date à confirmer",
     "roster": "Les cinq de KC",
     "paris_time": "heure de Paris",
     "cta_follow": "Suivre le match",
