@@ -22,7 +22,7 @@ import Link from "next/link";
 import { useT } from "@/lib/i18n/use-lang";
 import type { HomeTheme } from "@/lib/home-themes";
 
-const KC_LOGO = "https://static.lolesports.com/teams/1704714951336_KC.png";
+const KC_LOGO = "/images/teams/KC.png"; // local : déjà en cache via l'ouverture
 const AFTER_MS = 4 * 3600_000;
 
 type Phase = "upcoming" | "soon" | "live" | "after";
