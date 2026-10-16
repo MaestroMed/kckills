@@ -106,6 +106,21 @@ const ALLOWED_EVENT_TYPES = new Set<string>([
   // était perdu pendant que la route répondait 204. Réparé par la
   // migration 094 (à appliquer côté Supabase).
   "feed.recommendation_score",
+  // ─── 16/10/2026 — émis par le site mais jamais autorisés ───────────
+  // Rejetés en silence ici (aucun clip.dwell en base sur 38 000 événements).
+  // La contrainte CHECK les accepte avec la migration 097 (à appliquer).
+  "clip.dwell",
+  "clip.ttff",
+  "clip.quality_downgrade",
+  "clip.hls.error",
+  "clip.profile_tap",
+  "clip.tag_clicked",
+  "feed.mode_live_entered",
+  "feed.mode_live_exited",
+  "push.subscribed",
+  "push.unsubscribed",
+  "push.preferences_updated",
+  "push.permission_denied",
 ]);
 
 // ─── perf.vital metadata contract ──────────────────────────────────────
@@ -352,6 +367,18 @@ export async function POST(request: NextRequest) {
   // traffic that would otherwise poison "real visitor" counts.
   const userAgent = request.headers.get("user-agent");
   if (looksLikeBot(userAgent)) {
+    return new NextResponse(null, { status: 204 });
+  }
+
+  // Seule la prod écrit : `.env.local` pointe sur la base de prod, donc
+  // `next dev`, les e2e et les captures Playwright gonflaient user_events
+  // (≈ 150-180 faux visiteurs/jour les 23-24/09, vitals des pages admin).
+  // KCKILLS_TRACK_ANYWHERE=1 pour tester le tracking en local.
+  if (process.env.VERCEL_ENV !== "production" && process.env.KCKILLS_TRACK_ANYWHERE !== "1") {
+    return new NextResponse(null, { status: 204 });
+  }
+  // Les pages admin ne sont pas de l'audience.
+  if ((request.headers.get("referer") ?? "").includes("/admin")) {
     return new NextResponse(null, { status: 204 });
   }
 

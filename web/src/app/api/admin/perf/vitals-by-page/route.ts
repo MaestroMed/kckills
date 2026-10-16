@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { fetchAll } from "@/lib/admin/paginate";
 import { createServiceSupabase } from "@/lib/supabase/server";
 import { adminDbUnavailable, requireAdmin } from "@/lib/admin/audit";
 
@@ -123,18 +124,25 @@ export async function GET(req: Request) {
   const sb = createServiceSupabase();
 
   if (!sb) return adminDbUnavailable();
-  const { data, error } = await sb
-    .from("user_events")
-    .select("metadata, client_kind")
-    .eq("event_type", "perf.vital")
-    .gte("created_at", since)
-    .limit(50000);
-
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  // Lecture paginée : `.limit(50000)` était plafonné à 1 000 lignes par
+  // PostgREST. Pages admin exclues (pas de l'audience).
+  let rows: PerfVitalRow[];
+  try {
+    rows = (
+      await fetchAll<PerfVitalRow>((from, to) =>
+        sb
+          .from("user_events")
+          .select("metadata, client_kind")
+          .eq("event_type", "perf.vital")
+          .gte("created_at", since)
+          .order("id")
+          .range(from, to),
+        50_000,
+      )
+    ).filter((r) => !(r.metadata as { page_path?: string } | null)?.page_path?.startsWith("/admin"));
+  } catch (err) {
+    return NextResponse.json({ error: (err as Error).message }, { status: 500 });
   }
-
-  const rows = (data ?? []) as PerfVitalRow[];
 
   // Bucket per page_path. We only track LCP / CLS / INP (the three
   // metrics Google uses for the Core Web Vitals pass/fail) — FCP and

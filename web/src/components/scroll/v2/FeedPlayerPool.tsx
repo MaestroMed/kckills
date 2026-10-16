@@ -185,6 +185,9 @@ export function FeedPlayerPool({
   const videoRefs = useRef<(HTMLVideoElement | null)[]>(
     Array.from({ length: POOL_SIZE }, () => null),
   );
+  // Dernière position lue par slot : sert à repérer le retour au début d'une
+  // vidéo en boucle (`<video loop>` ne déclenche jamais `ended`).
+  const lastTimeRef = useRef<Record<number, number>>({});
 
   /** Has slot N ever played? — used to skip the "seek to 0" race that
    *  stalled play() on cold loads in v1. Only seek when the slot has
@@ -1031,6 +1034,28 @@ export function FeedPlayerPool({
               );
             } catch {
               /* CustomEvent unsupported in some sandboxes */
+            }
+          }}
+          onTimeUpdate={(e) => {
+            // En boucle (comportement par défaut), le navigateur n'émet pas
+            // `ended` : sans ça, clip.completed n'était jamais envoyé (0 sur
+            // 293 lancements au 16/10). On repère le saut fin → début.
+            const v = e.currentTarget;
+            const prev = lastTimeRef.current[slotIdx] ?? 0;
+            lastTimeRef.current[slotIdx] = v.currentTime;
+            if (!v.loop || !Number.isFinite(v.duration) || v.duration <= 0) return;
+            if (!(prev > v.duration - 1 && v.currentTime < 1)) return;
+            const itemIdx = slotItemIndex[slotIdx];
+            const item = items[itemIdx];
+            if (!item || itemIdx !== activeIndex) return;
+            try {
+              window.dispatchEvent(
+                new CustomEvent("kc:clip-ended", {
+                  detail: { itemId: item.id, duration: v.duration | 0 },
+                }),
+              );
+            } catch {
+              /* ignore */
             }
           }}
           onEnded={() => {
