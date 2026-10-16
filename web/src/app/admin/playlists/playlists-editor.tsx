@@ -114,6 +114,8 @@ export function PlaylistsEditor() {
     }));
   };
 
+  const [previewId, setPreviewId] = useState<string | null>(null);
+
   const removeTrack = (idx: number) => {
     setState((prev) => ({
       ...prev,
@@ -193,10 +195,22 @@ export function PlaylistsEditor() {
       {/* ─── Tracks list ───────────────────────────────────────── */}
       <div className="space-y-2">
         {tracks.map((track, idx) => (
-          <div
-            key={track.id}
-            className="rounded-lg border border-[var(--border-gold)] bg-[var(--bg-surface)] p-3 grid gap-2 md:grid-cols-[2.5fr_2fr_1.5fr_90px_70px_auto]"
-          >
+          <div key={track.id} className="rounded-lg border border-[var(--border-gold)] bg-[var(--bg-surface)] p-3 space-y-2">
+          <div className="grid gap-2 md:grid-cols-[64px_2.5fr_2fr_1.5fr_90px_70px_auto] items-center">
+            {/^[A-Za-z0-9_-]{11}$/.test(track.youtubeId) ? (
+              <button
+                type="button"
+                onClick={() => setPreviewId(previewId === track.id ? null : track.id)}
+                aria-label={previewId === track.id ? "Arrêter l'écoute" : `Écouter ${track.title}`}
+                className="relative h-9 w-16 overflow-hidden rounded bg-black"
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={`https://i.ytimg.com/vi/${track.youtubeId}/mqdefault.jpg`} alt="" className="h-full w-full object-cover opacity-80" />
+                <span className="absolute inset-0 grid place-items-center text-sm text-white">{previewId === track.id ? "■" : "▶"}</span>
+              </button>
+            ) : (
+              <span className="grid h-9 w-16 place-items-center rounded bg-[var(--red)]/10 text-[9px] text-[var(--red)]">ID invalide</span>
+            )}
             <input
               type="text"
               value={track.title}
@@ -272,6 +286,15 @@ export function PlaylistsEditor() {
                 ×
               </button>
             </div>
+          </div>
+          {previewId === track.id && (
+            <iframe
+              src={`https://www.youtube-nocookie.com/embed/${track.youtubeId}?autoplay=1`}
+              title={`Aperçu : ${track.title}`}
+              allow="autoplay; encrypted-media"
+              className="aspect-video w-full max-w-md rounded-md"
+            />
+          )}
           </div>
         ))}
 

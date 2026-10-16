@@ -11,8 +11,7 @@
  */
 
 import { redirect } from "next/navigation";
-import { cookies } from "next/headers";
-import { verifyAdminCookie } from "@/lib/admin/session";
+import { requireAdmin } from "@/lib/admin/audit";
 import { PlaylistsEditor } from "./playlists-editor";
 
 export const metadata = {
@@ -20,13 +19,9 @@ export const metadata = {
 };
 
 export default async function PlaylistsAdminPage() {
-  const cookieStore = await cookies();
-  const adminCookie = cookieStore.get("kc_admin")?.value;
-  // Wave 34 T1.2 — cookie is now a signed JWT, verify the signature
-  // instead of just checking presence. Defense in depth on top of the
-  // proxy check (the proxy already gates /admin/* but JWT-verifying
-  // here too keeps the page safe if the matcher ever drifts).
-  if (!(await verifyAdminCookie(adminCookie))) {
+  // requireAdmin() comme le reste de l'admin : le cookie seul refusait les
+  // admins Discord / e-mail et renvoyait vers la connexion en local.
+  if (!(await requireAdmin()).ok) {
     redirect("/admin/login?next=/admin/playlists");
   }
 
