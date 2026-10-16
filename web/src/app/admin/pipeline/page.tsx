@@ -17,6 +17,7 @@
  */
 import Link from "next/link";
 import { adminPageDb } from "@/lib/admin/db";
+import { WorkerStatus } from "@/components/admin/pipeline/WorkerStatus";
 import { AdminCard } from "@/components/admin/ui/AdminCard";
 import { AdminBadge } from "@/components/admin/ui/AdminBadge";
 
@@ -207,6 +208,8 @@ export default async function PipelineDashboardPage() {
           </Link>
         </div>
       </header>
+
+      <WorkerStatus sb={sb} />
 
       {/* ─── KPI cards ────────────────────────────────────────────── */}
       <section className="grid grid-cols-2 md:grid-cols-4 gap-3">

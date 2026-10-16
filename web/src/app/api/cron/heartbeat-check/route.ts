@@ -28,13 +28,17 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { createServerSupabase } from "@/lib/supabase/server";
+import { createServiceSupabase } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 export const revalidate = 0;
 
 const STALE_AFTER_MS = 30 * 60 * 1000; // 30 minutes
+// Une seule alerte par arrêt : le cron passe toutes les 15 min, on ne
+// prévient que dans la fenêtre [30 min, 45 min[ après le dernier signe de
+// vie. Un arrêt voulu (« stop tout ») ne spamme donc pas le salon.
+const ALERT_WINDOW_MS = 15 * 60 * 1000;
 
 interface HeartbeatRow {
   id: string;
@@ -63,9 +67,12 @@ export async function GET(request: NextRequest) {
   }
 
   // ── Fetch heartbeat row ─────────────────────────────────────────
+  // Service role : health_checks n'a pas de policy de lecture, la session
+  // voyait 0 ligne et le cron annonçait le heartbeat « MISSING ».
   let supabase;
   try {
-    supabase = await createServerSupabase();
+    supabase = createServiceSupabase();
+    if (!supabase) throw new Error("SUPABASE_SERVICE_ROLE_KEY absente");
   } catch (err) {
     return NextResponse.json(
       {
@@ -145,7 +152,7 @@ export async function GET(request: NextRequest) {
   const ageMs = Date.now() - lastSeenMs;
   if (ageMs > STALE_AFTER_MS) {
     const minutes = Math.round(ageMs / 60000);
-    const sent = await sendDiscordAlert(
+    const sent = ageMs < STALE_AFTER_MS + ALERT_WINDOW_MS && await sendDiscordAlert(
       `🚨 **Worker heartbeat — STALE**\nLast seen \`${row.last_seen}\` (${minutes} minutes ago). Threshold is 30 min. Check the worker host.`,
     );
     return NextResponse.json(

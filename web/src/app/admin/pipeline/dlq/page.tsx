@@ -19,6 +19,7 @@
  */
 import Link from "next/link";
 import { adminPageDb } from "@/lib/admin/db";
+import { DlqGroups } from "@/components/admin/pipeline/DlqGroups";
 import { DlqRowActions } from "./row-actions";
 import { DlqBulkDrain } from "./bulk-drain";
 
@@ -80,26 +81,13 @@ export default async function DlqPage() {
   const requeuedToday = requeuedTodayRes.count ?? 0;
   const cancelledToday = cancelledTodayRes.count ?? 0;
 
-  // Group counts by error_code for the summary strip
-  const byErrorCode = new Map<string, number>();
-  for (const r of rows) {
-    const k = r.error_code ?? "unknown";
-    byErrorCode.set(k, (byErrorCode.get(k) ?? 0) + 1);
-  }
-
-  // Total counts by error_code across ALL pending DLQ rows (not just
-  // the 200-row preview above) — gives the operator an accurate sense
-  // of the backlog before they click "Drain now".
-  const { data: allCodes } = await sb
+  // Total exact (COUNT) : la liste ci-dessus n'en montre que 200 et un
+  // SELECT simple s'arrêtait à 1 000.
+  const { count: pendingCount } = await sb
     .from("dead_letter_jobs")
-    .select("error_code")
+    .select("id", { count: "exact", head: true })
     .eq("resolution_status", "pending");
-  const totalByCode = new Map<string, number>();
-  for (const r of (allCodes ?? []) as { error_code: string | null }[]) {
-    const k = r.error_code ?? "unknown";
-    totalByCode.set(k, (totalByCode.get(k) ?? 0) + 1);
-  }
-  const totalPending = (allCodes ?? []).length;
+  const totalPending = pendingCount ?? rows.length;
 
   return (
     <div className="space-y-6">
@@ -174,49 +162,8 @@ export default async function DlqPage() {
           {/* Bulk drain controls — Wave 9 P2 */}
           <DlqBulkDrain totalPending={totalPending} />
 
-          {/* Summary strip — counts per error_code (across ALL pending,
-              not just the displayed 200-row preview) with sparkline-style
-              relative bars. */}
-          <section>
-            <h2 className="font-display text-[10px] uppercase tracking-widest text-[var(--text-muted)] mb-3">
-              Répartition par error_code ({totalPending} total)
-            </h2>
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
-              {[...totalByCode.entries()]
-                .sort((a, b) => b[1] - a[1])
-                .map(([code, count]) => {
-                  const max = Math.max(
-                    ...[...totalByCode.values()],
-                    1,
-                  );
-                  const pct = Math.round((count / max) * 100);
-                  return (
-                    <div
-                      key={code}
-                      className="rounded-lg border border-[var(--border-gold)] bg-[var(--bg-surface)] px-3 py-2"
-                    >
-                      <p className="text-[10px] text-[var(--text-muted)] uppercase tracking-widest truncate">
-                        {code}
-                      </p>
-                      <div className="flex items-baseline justify-between gap-2 mt-1">
-                        <p className="font-mono text-base font-bold text-[var(--orange)]">
-                          {count}
-                        </p>
-                        <div
-                          className="flex-1 h-1.5 rounded-full bg-[var(--bg-elevated)] overflow-hidden ml-2"
-                          aria-hidden
-                        >
-                          <div
-                            className="h-full bg-[var(--orange)]/60"
-                            style={{ width: `${pct}%` }}
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-            </div>
-          </section>
+          {/* Groupes par cause, avec actions sur tout le groupe (v8). */}
+          <DlqGroups />
 
           {/* Pending DLQ list (last 200) */}
           <section>

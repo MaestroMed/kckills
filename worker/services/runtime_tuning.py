@@ -94,7 +94,7 @@ DEFAULTS: Final[dict[str, dict[str, int]]] = {
     "job_dispatcher":      {"parallel": 1, "interval":   60, "batch":  50, "lease":  300},
     "admin_job_runner":    {"parallel": 1, "interval":   30, "batch":  10, "lease":  900},
     # Health -------------------------------------------------------------
-    "heartbeat":           {"parallel": 1, "interval": 21600,"batch":   1, "lease":   60},
+    "heartbeat":           {"parallel": 1, "interval": 300,  "batch":   1, "lease":   60},  # 5 min : l'admin juge le worker vivant/arrêté là-dessus (1 upsert = egress négligeable)
     "watchdog":            {"parallel": 1, "interval": 1800, "batch":   1, "lease":   60},
     # queue_health : Wave 35 #4 — bumped 300 → 900 (15 min). Each cycle
     # fires 175 PostgREST queries (25 JOB_KINDS × 7 status/age/throughput

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { JsonDiffView } from "@/components/admin/JsonDiffView";
+import { pickRestorable, tableForAction } from "@/lib/admin/restorable";
 
 interface Row {
   id: string;
@@ -19,12 +20,29 @@ interface Row {
   created_at: string;
 }
 
-const REPLAYABLE = ["kill.edit", "kill.bulk", "player.edit", "featured.set"];
+const REPLAYABLE = ["kill.edit", "player.edit", "featured.set"]; // kill.bulk_* : « après » = liste d'ids, pas un patch
 
 export function AuditRow({ row }: { row: Row }) {
   const [replaying, setReplaying] = useState(false);
   const [replayed, setReplayed] = useState(false);
   const canReplay = REPLAYABLE.some((p) => row.action.startsWith(p));
+  const undoTable = tableForAction(row.action);
+  const canUndo = Boolean(undoTable && row.entity_id && !row.action.endsWith(".undone") && Object.keys(pickRestorable(undoTable, row.before)).length);
+  const [undoState, setUndoState] = useState<"idle" | "armed" | "busy" | "done" | "error">("idle");
+
+  const undo = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (undoState === "idle" || undoState === "error") {
+      setUndoState("armed");
+      window.setTimeout(() => setUndoState((s) => (s === "armed" ? "idle" : s)), 4000);
+      return;
+    }
+    if (undoState !== "armed") return;
+    setUndoState("busy");
+    const r = await fetch(`/api/admin/audit/${row.id}/undo`, { method: "POST" }).catch(() => null);
+    setUndoState(r?.ok ? "done" : "error");
+  };
 
   const replay = async (e: React.MouseEvent) => {
     e.preventDefault();
@@ -49,6 +67,15 @@ export function AuditRow({ row }: { row: Row }) {
         <span className="font-mono text-[10px] text-[var(--text-disabled)] truncate flex-1">
           {row.entity_id ? row.entity_id.slice(0, 16) : "—"}
         </span>
+        {canUndo && (
+          <button
+            onClick={undo}
+            disabled={undoState === "busy" || undoState === "done"}
+            className={`text-[10px] hover:underline disabled:opacity-50 ${undoState === "armed" || undoState === "error" ? "text-[var(--red)]" : "text-[var(--orange)]"}`}
+          >
+            {undoState === "done" ? "✓ annulée" : undoState === "busy" ? "…" : undoState === "armed" ? "confirmer l'annulation" : undoState === "error" ? "échec, réessayer" : "↶ annuler"}
+          </button>
+        )}
         {canReplay && (
           <button
             onClick={replay}

@@ -24,7 +24,6 @@
 import { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { createClient as createBrowserSupabase } from "@/lib/supabase/client";
 import {
   JobsFilterBar,
   type JobAgeKey,
@@ -118,7 +117,6 @@ let toastIdSeq = 0;
 export function JobsQueue() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const sb = useMemo(() => createBrowserSupabase(), []);
 
   // ─── filter state — backed by URL ────────────────────────────────
   const [search, setSearch] = useState<string>(
@@ -187,57 +185,27 @@ export function JobsQueue() {
       if (!silent) setLoading(true);
       setError(null);
       try {
-        let query = sb
-          .from("pipeline_jobs")
-          .select(
-            "id, type, entity_type, entity_id, status, priority, attempts, max_attempts, last_error, created_at, finished_at",
-            { count: "exact" },
-          );
-        if (selectedStatuses.size > 0) {
-          query = query.in("status", [...selectedStatuses]);
-        }
-        if (selectedKinds.size > 0) {
-          query = query.in("type", [...selectedKinds]);
-        }
-        const ageCutoff = parseAgeFilter(age);
-        if (ageCutoff) {
-          query = query.gte("created_at", ageCutoff);
-        }
-        if (search.trim().length > 0) {
-          const s = search.trim();
-          // PostgREST `or` syntax — accept full or prefix match on
-          // job id or entity_id.
-          query = query.or(`id.ilike.${s}%,entity_id.ilike.${s}%`);
-        }
-
-        // sort
-        const ascending = sortDir === "asc";
-        const sortColumn = sortKey === "age" ? "created_at" : sortKey;
-        // age is created_at viewed as "older = bigger" — flip the
-        // direction so the operator's mental model holds.
-        const realAscending = sortKey === "age" ? !ascending : ascending;
-        query = query.order(sortColumn, { ascending: realAscending });
-
-        query = query.range(offset, offset + PAGE_SIZE - 1);
-
-        const { data, error: qErr, count } = await query;
-        if (qErr) {
-          if (
-            qErr.code === "42P01" ||
-            /relation .* does not exist/i.test(qErr.message)
-          ) {
-            setError(
-              "Table pipeline_jobs introuvable — migration 024 non appliquée.",
-            );
-            setJobs([]);
-            setTotalCount(0);
-            setHasMore(false);
-            return;
-          }
-          setError(qErr.message);
+        // Lecture via /api/admin/pipeline/queue (service role) : en direct
+        // depuis le navigateur, le RLS de pipeline_jobs renvoyait 0 ligne.
+        const params = new URLSearchParams();
+        if (selectedStatuses.size > 0) params.set("status", [...selectedStatuses].join(","));
+        if (selectedKinds.size > 0) params.set("kind", [...selectedKinds].join(","));
+        params.set("age", age);
+        if (search.trim()) params.set("search", search.trim());
+        // « âge » = created_at vu comme « plus vieux = plus grand » : on inverse.
+        params.set("sort", sortKey === "attempts" ? "attempts" : "created_at");
+        const asc = sortKey === "age" ? sortDir !== "asc" : sortDir === "asc";
+        params.set("dir", asc ? "asc" : "desc");
+        params.set("offset", String(offset));
+        const res = await fetch(`/api/admin/pipeline/queue?${params}`, { cache: "no-store" });
+        const body = (await res.json().catch(() => ({}))) as { items?: PipelineJob[]; count?: number | null; error?: string };
+        if (!res.ok) {
+          setError(body.error ?? `HTTP ${res.status}`);
           if (!append) setJobs([]);
           return;
         }
+        const data = body.items ?? [];
+        const count = body.count ?? null;
         const rows = (data ?? []) as PipelineJob[];
         setTotalCount(count ?? null);
         setHasMore(rows.length === PAGE_SIZE);
@@ -247,7 +215,7 @@ export function JobsQueue() {
         if (!silent) setLoading(false);
       }
     },
-    [sb, selectedStatuses, selectedKinds, age, search, sortKey, sortDir],
+    [selectedStatuses, selectedKinds, age, search, sortKey, sortDir],
   );
 
   // Reset offset on filter / sort change.

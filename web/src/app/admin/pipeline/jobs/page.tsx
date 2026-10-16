@@ -7,6 +7,7 @@
  */
 import { Suspense } from "react";
 import { JobsQueue } from "./jobs-queue";
+import { QueueMatrix } from "@/components/admin/pipeline/QueueMatrix";
 
 export const dynamic = "force-dynamic";
 export const metadata = {
@@ -16,6 +17,8 @@ export const metadata = {
 
 export default function JobsPage() {
   return (
+    <div className="space-y-6">
+    <QueueMatrix />
     <Suspense
       fallback={
         <div className="space-y-4">
@@ -27,5 +30,6 @@ export default function JobsPage() {
     >
       <JobsQueue />
     </Suspense>
+    </div>
   );
 }

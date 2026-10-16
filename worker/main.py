@@ -163,7 +163,7 @@ DAEMON_MODULES: list[tuple[str, int, str]] = [
     ("job_runner",        _get_interval("job_runner"),        "modules.job_runner"),             # default 30s    — admin-triggered jobs + boost dispatch
     ("job_dispatcher",    _get_interval("job_dispatcher"),    "modules.job_dispatcher"),         # default 60s    — bridge legacy kills.status -> pipeline_jobs
     ("admin_job_runner",  _get_interval("admin_job_runner"),  "modules.admin_job_runner"),       # default 30s    — claim+exec worker.backfill jobs
-    ("heartbeat",         _get_interval("heartbeat"),         "modules.heartbeat"),              # default 21600s — 6h
+    ("heartbeat",         _get_interval("heartbeat"),         "modules.heartbeat"),              # default 300s   — 5 min
     ("watchdog",          _get_interval("watchdog"),          "modules.watchdog"),               # default 1800s  — 30 min
     ("queue_health",      _get_interval("queue_health"),      "modules.queue_health"),           # default 300s   — Wave 6 P2 : stale-lock + queue snapshot
     ("dlq_drainer",       _get_interval("dlq_drainer"),       "modules.dlq_drainer"),            # default 1800s  — Wave 9 : auto-recover fresh DLQ entries
