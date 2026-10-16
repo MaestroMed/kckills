@@ -144,6 +144,8 @@ function useFeedItemAnalytics({
 
   useEffect(() => {
     if (!isActive) return;
+    // Un seul clip.completed par passage sur le clip, même s'il boucle.
+    let completed = false;
     const onPlay = (ev: Event) => {
       const detail = (ev as CustomEvent<{ itemId?: string; durationSec?: number }>).detail;
       if (detail?.itemId !== itemId) return;
@@ -158,7 +160,8 @@ function useFeedItemAnalytics({
       const detail = (ev as CustomEvent<{ itemId?: string; duration?: number }>).detail;
       if (detail?.itemId !== itemId) return;
       const duration = detail?.duration ?? 0;
-      if (duration < COMPLETE_DURATION_THRESHOLD_S) return;
+      if (duration < COMPLETE_DURATION_THRESHOLD_S || completed) return;
+      completed = true;
       track("clip.completed", {
         entityType: "kill",
         entityId: itemId,

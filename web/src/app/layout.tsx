@@ -114,6 +114,9 @@ export const metadata: Metadata = {
   description:
     "Le TikTok des kills LoL. Scroll, rate, et partage chaque kill Karmine Corp de la LEC.",
   applicationName: "KCKILLS",
+  // Via l'API metadata (et non un <link> en dur) pour que /admin puisse le
+  // remplacer par son propre manifeste (admin.webmanifest).
+  manifest: "/manifest.json",
   authors: [{ name: "KCKILLS" }],
   keywords: [
     "Karmine Corp",
@@ -276,7 +279,6 @@ export default async function RootLayout({
       className={`${oswald.variable} ${interTight.variable} ${jetbrainsMono.variable} ${playfairDisplay.variable} ${cormorantGaramond.variable} ${imFellEnglish.variable}`}
     >
       <head>
-        <link rel="manifest" href="/manifest.json" />
         {/* Ouverture de l'accueil : décide avant la première peinture si elle joue (components/home/HomeOpening) */}
         <Script id="kc-intro" strategy="beforeInteractive">{INTRO_SCRIPT}</Script>
         {/* ─── Preconnects ────────────────────────────────────────────

@@ -94,4 +94,8 @@ export default async function AdminLayout({ children }: { children: ReactNode })
 
 export const metadata = {
   robots: { index: false, follow: false },
+  // Installable à part du site public (« Ajouter à l'écran d'accueil »
+  // depuis /admin) : scope /admin, raccourcis revue / worker / DLQ.
+  manifest: "/admin.webmanifest",
+  appleWebApp: { capable: true, title: "KC Admin", statusBarStyle: "black-translucent" as const },
 };

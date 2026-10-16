@@ -1,0 +1,21 @@
+{
+  "name": "KCKILLS Admin",
+  "short_name": "KC Admin",
+  "description": "Backoffice KCKILLS : file, revue des clips, alertes.",
+  "id": "/admin",
+  "start_url": "/admin",
+  "scope": "/admin",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#010A13",
+  "theme_color": "#010A13",
+  "icons": [
+    { "src": "/icons/icon-192x192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-512x512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" }
+  ],
+  "shortcuts": [
+    { "name": "Revue au clavier", "url": "/admin/review" },
+    { "name": "État du worker", "url": "/admin/pipeline" },
+    { "name": "Échecs (DLQ)", "url": "/admin/pipeline/dlq" }
+  ]
+}
