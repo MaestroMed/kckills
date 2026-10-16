@@ -37,6 +37,9 @@ export const ADMIN_NAV: AdminNavGroup[] = [
     label: "Contenu",
     items: [
       { href: "/admin/clips", label: "Clips", icon: "▶", keywords: "clips library bibliotheque kills" },
+      { href: "/admin/review", label: "Revue au clavier", icon: "⌨", keywords: "revue review qc valider clavier signalements" },
+      { href: "/admin/duplicates", label: "Doublons", icon: "⧉", keywords: "doublons duplicates fusion dedup" },
+      { href: "/admin/texts", label: "Textes", icon: "¶", keywords: "textes descriptions provisoires gemini reanalyse" },
       { href: "/admin/editorial", label: "Éditorial", icon: "✦", keywords: "editorial curation masquer discord" },
       { href: "/admin/featured", label: "Clip du jour", icon: "★", keywords: "featured spotlight jour une" },
       { href: "/admin/playlists", label: "Playlists", icon: "♬", keywords: "playlists musique lecteur audio wolf" },
@@ -69,6 +72,7 @@ export const ADMIN_NAV: AdminNavGroup[] = [
     label: "Pipeline",
     items: [
       { href: "/admin/pipeline", label: "État du worker", icon: "◉", keywords: "pipeline daemon worker status heartbeat" },
+      { href: "/admin/games", label: "Games et VOD", icon: "▣", keywords: "games vod offset calage recaler partage reclip" },
       { href: "/admin/pipeline/jobs", label: "Jobs", icon: "⚙", keywords: "jobs queue file attente worker_jobs" },
       { href: "/admin/pipeline/dlq", label: "Échecs (DLQ)", icon: "☠", keywords: "dlq dead letter echec failed" },
       { href: "/admin/pipeline/rate", label: "Débit", icon: "≋", keywords: "rate debit throughput vitesse" },

@@ -19,15 +19,18 @@ import "server-only";
 const PAGE = 1000;
 
 export async function fetchAll<T>(
-  page: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: { message: string } | null }>,
+  // `data: unknown` : un select construit par concaténation n'est pas typé
+  // par supabase-js ; l'appelant donne le type des lignes via <T>.
+  page: (from: number, to: number) => PromiseLike<{ data: unknown; error: { message: string } | null }>,
   max = 100_000,
 ): Promise<T[]> {
   const out: T[] = [];
   for (let from = 0; from < max; from += PAGE) {
     const { data, error } = await page(from, from + PAGE - 1);
     if (error) throw new Error(error.message);
-    out.push(...(data ?? []));
-    if (!data || data.length < PAGE) break;
+    const rows = (data ?? []) as T[];
+    out.push(...rows);
+    if (rows.length < PAGE) break;
   }
   return out;
 }

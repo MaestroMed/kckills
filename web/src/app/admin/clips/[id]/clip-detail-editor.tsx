@@ -24,6 +24,7 @@ import { AdminCard } from "@/components/admin/ui/AdminCard";
 import { AdminEmptyState } from "@/components/admin/ui/AdminEmptyState";
 import { AdminSection } from "@/components/admin/ui/AdminSection";
 import { patchClip } from "../actions";
+import { ThumbnailPicker } from "@/components/admin/clips/ThumbnailPicker";
 
 const FIGHT_TYPES = [
   { value: "solo_kill", label: "Solo Kill (vrai 1v1)" },
@@ -380,6 +381,10 @@ export function ClipDetailEditor({ clip }: Props) {
                 preload="auto"
               />
             </div>
+          </AdminCard>
+
+          <AdminCard variant="default" title="Vignette">
+            <ThumbnailPicker killId={clip.id} videoUrl={clip.clip_url_vertical} current={clip.thumbnail_url} />
           </AdminCard>
 
           <AdminCard variant="default" title="Métadonnées">

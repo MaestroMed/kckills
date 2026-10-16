@@ -17,7 +17,7 @@ import { mkdir, readFile, writeFile } from "fs/promises";
 import path from "path";
 import { getR2Bucket, getR2Client, r2Configured } from "@/lib/r2-server";
 
-export type ConfigName = "playlists" | "hero-videos";
+export type ConfigName = "playlists" | "hero-videos" | "dedup-ignored";
 
 const key = (name: ConfigName) => `config/${name}.json`;
 const localPath = (name: ConfigName) => path.join(process.cwd(), ".cache", `${name}.json`);
