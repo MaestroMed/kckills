@@ -34,6 +34,8 @@ interface Player {
   teamCode: string | null;
   teamName: string | null;
   isKc: boolean;
+  /** Aligné par KC cette saison (lib/real-data, matchs 2026). */
+  isStarter?: boolean;
   killCount: number;
   // Optional extra stats — not always provided by the server query;
   // we tolerate undefined so the page stays sturdy if upstream changes.
@@ -105,7 +107,7 @@ export function RosterEditor({
   const kcPlayers = useMemo(
     () =>
       players
-        .filter((p) => p.isKc)
+        .filter((p) => (players.some((x) => x.isStarter) ? p.isStarter : p.isKc))
         .sort((a, b) => ROLES.indexOf(a.role ?? "") - ROLES.indexOf(b.role ?? "")),
     [players],
   );

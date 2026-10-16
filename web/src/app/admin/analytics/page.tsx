@@ -2,6 +2,28 @@ import Link from "next/link";
 import Image from "next/image";
 import { adminPageDb } from "@/lib/admin/db";
 import { getPublishedKills } from "@/lib/supabase/kills";
+import type { AdminDb } from "@/lib/admin/db";
+
+/**
+ * Kills KC publiés avec clip jouable — prédicat identique à la vue 095 et à
+ * getPublishedKcKillCount (la vérité de /clips et /scroll). Les totaux sont
+ * des COUNT exacts (head) : un SELECT est plafonné à 1 000 lignes par
+ * PostgREST, d'où les « 171 clips KC publiés » affichés avant.
+ */
+function kcClips(sb: AdminDb) {
+  return sb
+    .from("kills")
+    .select("id", { count: "exact", head: true })
+    .or("publication_status.eq.published,and(publication_status.is.null,status.eq.published)")
+    .eq("kill_visible", true)
+    .eq("tracked_team_involvement", "team_killer")
+    .not("clip_url_vertical", "is", null)
+    .not("thumbnail_url", "is", null);
+}
+
+const CLIP_CONTEXTS = ["live_gameplay", "replay", "draft", "lobby", "loading", "plateau", "transition", "other"] as const;
+const FUNNEL_EVENTS = ["page.viewed", "feed.view", "clip.viewed", "clip.started", "clip.completed"] as const;
+const CLIENT_KINDS = ["mobile", "desktop", "tablet", "pwa"] as const;
 
 export const dynamic = "force-dynamic";
 export const metadata = {
@@ -72,17 +94,23 @@ export default async function AnalyticsPage() {
   // analytics sections (engagement KPIs, trending, funnel) pull from
   // Supabase views directly and are unaffected. Admin, force-dynamic,
   // low traffic.
-  const [kills, ratingsRaw, commentsRaw] = await Promise.all([
+  const [kills, ratingsCount, commentsCount, publishedCount, impressedCount, ratedCount, commentedCount] = await Promise.all([
     getPublishedKills(300),
-    sb.from("ratings").select("score,kill_id,created_at"),
-    sb.from("comments").select("kill_id,created_at,is_deleted,moderation_status"),
+    sb.from("ratings").select("id", { count: "exact", head: true }),
+    sb
+      .from("comments")
+      .select("id", { count: "exact", head: true })
+      .eq("is_deleted", false)
+      .eq("moderation_status", "approved"),
+    kcClips(sb),
+    kcClips(sb).gt("impression_count", 0),
+    kcClips(sb).gt("rating_count", 0),
+    kcClips(sb).gt("comment_count", 0),
   ]);
 
   const kcKills = kills.filter((k) => k.tracked_team_involvement === "team_killer");
-  const ratings = ratingsRaw.data ?? [];
-  const comments = (commentsRaw.data ?? []).filter(
-    (c) => !c.is_deleted && c.moderation_status === "approved",
-  );
+  const totalRatings = ratingsCount.count ?? 0;
+  const totalComments = commentsCount.count ?? 0;
 
   // Pre-build a kill lookup so the trending list can hydrate titles.
   const killById = new Map<string, MinimalKill>();
@@ -101,10 +129,10 @@ export default async function AnalyticsPage() {
     .sort((a, b) => (b.comment_count ?? 0) - (a.comment_count ?? 0))
     .slice(0, 10);
 
-  const published = kcKills.length;
-  const withImpressions = kcKills.filter((k) => (k.impression_count ?? 0) > 0).length;
-  const withRatings = kcKills.filter((k) => (k.rating_count ?? 0) > 0).length;
-  const withComments = kcKills.filter((k) => (k.comment_count ?? 0) > 0).length;
+  const published = publishedCount.count ?? kcKills.length;
+  const withImpressions = impressedCount.count ?? 0;
+  const withRatings = ratedCount.count ?? 0;
+  const withComments = commentedCount.count ?? 0;
 
   // Daily activity (kills published per day, last 14 days)
   const now = Date.now();
@@ -126,33 +154,30 @@ export default async function AnalyticsPage() {
   // Sections 3 + 4 : per-format perf + funnel — derived from raw user_events.
   const sinceIso24h = new Date(now - 24 * 3600 * 1000).toISOString();
 
-  const [engagement24hRes, trending1hRes, completedByFormatRes, funnelRes, contextRes] = await Promise.all([
+  const eventCount = (q: (b: ReturnType<AdminDb["from"]>) => PromiseLike<{ count: number | null }>) =>
+    q(sb.from("user_events")).then((r) => r.count ?? 0);
+  const [engagement24hRes, trending1hRes, formatCountsArr, funnelCountsArr, contextCountsArr, contextNullCount] = await Promise.all([
     sb.from("v_clip_engagement_24h").select("*"),
     sb.from("v_trending_kills_1h").select("*").limit(10),
-    // completed events per client_kind, last 24h
-    sb
-      .from("user_events")
-      .select("client_kind, created_at")
-      .eq("event_type", "clip.completed")
-      .gte("created_at", sinceIso24h),
-    // funnel: counts per event_type, last 24h
-    sb
-      .from("user_events")
-      .select("event_type, created_at")
-      .in("event_type", [
-        "page.viewed",
-        "feed.view",
-        "clip.viewed",
-        "clip.started",
-        "clip.completed",
-      ])
-      .gte("created_at", sinceIso24h),
-    // Wave 12 anti-pollution dashboard — distribution of clip_context
-    // across published kills + the not-yet-reanalyzed (NULL) bucket.
-    sb
-      .from("kills")
-      .select("ai_clip_context, status")
-      .eq("status", "published"),
+    Promise.all(CLIENT_KINDS.map((kind) => eventCount((t) =>
+      t.select("id", { count: "exact", head: true })
+        .eq("event_type", "clip.completed")
+        .eq("client_kind", kind)
+        .gte("created_at", sinceIso24h)))),
+    Promise.all(FUNNEL_EVENTS.map((ev) => eventCount((t) =>
+      t.select("id", { count: "exact", head: true })
+        .eq("event_type", ev)
+        .gte("created_at", sinceIso24h)))),
+    // Classement anti-pollution (Wave 12) des kills publiés, par valeur.
+    Promise.all(CLIP_CONTEXTS.map((c) =>
+      sb.from("kills").select("id", { count: "exact", head: true })
+        .eq("status", "published")
+        .eq("ai_clip_context", c)
+        .then((r) => r.count ?? 0))),
+    sb.from("kills").select("id", { count: "exact", head: true })
+      .eq("status", "published")
+      .is("ai_clip_context", null)
+      .then((r) => r.count ?? 0),
   ]);
 
   const engagementRows: ClipEngagement24h[] = (engagement24hRes.data ?? []) as ClipEngagement24h[];
@@ -162,26 +187,9 @@ export default async function AnalyticsPage() {
   // for all published kills. NULL = not yet re-classified (pre-Wave-12
   // backlog). Anything other than `live_gameplay` is forced kill_visible
   // =false at write time so it's hidden from the scroll feed regardless.
-  const contextRows = (contextRes.data ?? []) as Array<{
-    ai_clip_context: string | null;
-    status: string | null;
-  }>;
-  const contextCounts: Record<string, number> = {
-    live_gameplay: 0,
-    replay: 0,
-    draft: 0,
-    lobby: 0,
-    loading: 0,
-    plateau: 0,
-    transition: 0,
-    other: 0,
-    null: 0,
-  };
-  for (const row of contextRows) {
-    const k = row.ai_clip_context ?? "null";
-    contextCounts[k] = (contextCounts[k] ?? 0) + 1;
-  }
-  const contextTotal = contextRows.length;
+  const contextCounts: Record<string, number> = { null: contextNullCount };
+  CLIP_CONTEXTS.forEach((c, i) => { contextCounts[c] = contextCountsArr[i]; });
+  const contextTotal = Object.values(contextCounts).reduce((n, v) => n + v, 0);
   const contextLiveGameplay = contextCounts.live_gameplay;
   const contextNotYetClassified = contextCounts.null;
   const contextPollutionTotal =
@@ -225,11 +233,7 @@ export default async function AnalyticsPage() {
       : Math.max(1, Math.round(summedUniquePerClip / Math.max(1, Math.sqrt(engagementRows.length))));
 
   // Section 3 : per-format completion rows
-  const formatCounts = new Map<string, number>();
-  for (const row of (completedByFormatRes.data ?? []) as Array<{ client_kind: string | null }>) {
-    const k = (row.client_kind ?? "unknown").toLowerCase();
-    formatCounts.set(k, (formatCounts.get(k) ?? 0) + 1);
-  }
+  const formatCounts = new Map<string, number>(CLIENT_KINDS.map((k, i) => [k, formatCountsArr[i]]));
   const formatRows: FormatRow[] = (["mobile", "desktop", "tablet", "pwa"] as const).map((kind) => ({
     client_kind: kind,
     count: formatCounts.get(kind) ?? 0,
@@ -237,10 +241,7 @@ export default async function AnalyticsPage() {
   const formatTotal = Math.max(1, formatRows.reduce((s, r) => s + r.count, 0));
 
   // Section 4 : Funnel rows
-  const funnelMap = new Map<string, number>();
-  for (const row of (funnelRes.data ?? []) as Array<{ event_type: string }>) {
-    funnelMap.set(row.event_type, (funnelMap.get(row.event_type) ?? 0) + 1);
-  }
+  const funnelMap = new Map<string, number>(FUNNEL_EVENTS.map((e, i) => [e, funnelCountsArr[i]]));
   const funnelRows: FunnelRow[] = [
     { event_type: "page.viewed", count: funnelMap.get("page.viewed") ?? 0 },
     { event_type: "feed.view", count: funnelMap.get("feed.view") ?? 0 },
@@ -255,7 +256,7 @@ export default async function AnalyticsPage() {
       <header>
         <h1 className="font-display text-2xl font-black text-[var(--gold)]">Analytics</h1>
         <p className="text-xs text-[var(--text-muted)] mt-0.5">
-          KPIs sur les {kcKills.length} clips KC publiés
+          KPIs sur les {published.toLocaleString("fr-FR")} clips KC publiés
           {" · "}
           <span className="text-[var(--cyan)]">
             tracking events des dernières 24h ({engagementRows.length} clips actifs)
@@ -480,8 +481,8 @@ export default async function AnalyticsPage() {
           value={totalImpressions.toLocaleString("fr-FR")}
           accent="cyan"
         />
-        <KpiCard label="Total ratings" value={ratings.length} accent="gold" />
-        <KpiCard label="Total comments" value={comments.length} accent="green" />
+        <KpiCard label="Total ratings" value={totalRatings} accent="gold" />
+        <KpiCard label="Total comments" value={totalComments} accent="green" />
       </section>
 
       <section>
