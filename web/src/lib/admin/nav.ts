@@ -60,6 +60,7 @@ export const ADMIN_NAV: AdminNavGroup[] = [
     label: "Communauté",
     items: [
       { href: "/admin/community", label: "Vue communauté", icon: "◇", keywords: "community hub communaute" },
+      { href: "/admin/users", label: "Utilisateurs et RGPD", icon: "☺", keywords: "users utilisateurs comptes rgpd export effacer supprimer" },
       { href: "/admin/community/bracket", label: "Bracket", icon: "▦", keywords: "bracket tournoi" },
       { href: "/admin/community/face-off", label: "Face-off", icon: "⚔", keywords: "face off duel vs" },
       { href: "/admin/community/compilations", label: "Compilations", icon: "▸", keywords: "compilations montage" },

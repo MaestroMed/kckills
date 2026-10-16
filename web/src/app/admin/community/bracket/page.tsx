@@ -45,7 +45,7 @@ export default async function BracketAdminPage() {
   return (
     <AdminPage
       title="Bracket — Tournois"
-      subtitle="État du tournoi mensuel + archives. Création via SQL pour l'instant."
+      subtitle="État du tournoi mensuel, création du tournoi du mois et clôture des rounds, archives."
       breadcrumbs={[
         { label: "Admin", href: "/admin" },
         { label: "Community", href: "/admin/community" },
