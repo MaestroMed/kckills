@@ -1,14 +1,15 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { headers } from "next/headers";
 import { requireAdmin } from "@/lib/admin/audit";
+import { adminPageDb } from "@/lib/admin/db";
+import { runGlobalSearch, type SearchType } from "@/lib/admin/global-search";
 import type {
   GlobalSearchKill,
   GlobalSearchMatch,
   GlobalSearchJob,
   GlobalSearchUser,
   GlobalSearchResponse,
-} from "@/app/api/admin/global-search/route";
+} from "@/lib/admin/global-search";
 
 /**
  * /admin/search?q=… — full results page for the topbar global search.
@@ -37,27 +38,13 @@ interface SearchPageProps {
 }
 
 async function fetchResults(q: string, types?: string): Promise<GlobalSearchResponse | { error: string }> {
-  // Internal fetch via absolute URL — Next 15 prefers an absolute URL
-  // when calling our own API from a server component. We derive the
-  // origin from the request headers so this works in dev / preview /
-  // prod without a hard-coded URL.
-  const h = await headers();
-  const proto = h.get("x-forwarded-proto") || "http";
-  const host = h.get("x-forwarded-host") || h.get("host") || "localhost:3000";
-  const url = new URL(`${proto}://${host}/api/admin/global-search`);
-  url.searchParams.set("q", q);
-  if (types) url.searchParams.set("types", types);
-  // Forward cookies so requireAdmin() in the route handler sees the
-  // same session.
-  const cookie = h.get("cookie") ?? "";
-  const res = await fetch(url, {
-    headers: { cookie },
-    cache: "no-store",
-  });
-  if (!res.ok) {
-    return { error: `Search failed (${res.status})` };
-  }
-  return (await res.json()) as GlobalSearchResponse;
+  // Appel direct de la recherche, sans fetch HTTP vers soi-même : celui-ci
+  // transmettait les cookies admin à un hôte déduit des en-têtes de la
+  // requête, donc choisi par le client.
+  const sb = await adminPageDb();
+  const all: SearchType[] = ["kills", "matches", "jobs", "users"];
+  const wanted = types ? all.filter((t) => types.split(",").includes(t)) : all;
+  return runGlobalSearch(sb, q, wanted, 20);
 }
 
 export default async function AdminSearchPage({ searchParams }: SearchPageProps) {

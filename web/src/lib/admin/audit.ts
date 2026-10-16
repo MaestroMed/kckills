@@ -244,8 +244,13 @@ export async function requireAdmin(): Promise<AdminCheckResult> {
     try {
       const sb = await createServerSupabase();
       const { data: { user } } = await sb.auth.getUser();
-      const discordId = (user?.user_metadata as { provider_id?: string } | undefined)?.provider_id;
-      if (discordId && allowedDiscordIds.includes(discordId)) return { ok: true, role: "discord" };
+      // L'ID Discord vient des identités liées (auth.identities, écrites par
+      // Supabase au retour OAuth), jamais de user_metadata : ce dernier est
+      // modifiable par l'utilisateur lui-même via auth.updateUser().
+      const discordIds = (user?.identities ?? [])
+        .filter((i) => i.provider === "discord")
+        .map((i) => String((i.identity_data as { provider_id?: string; sub?: string } | undefined)?.provider_id ?? i.id));
+      if (discordIds.some((id) => allowedDiscordIds.includes(id))) return { ok: true, role: "discord" };
     } catch {
       /* fall through */
     }
@@ -267,7 +272,9 @@ export async function requireAdmin(): Promise<AdminCheckResult> {
     try {
       const sb = await createServerSupabase();
       const { data: { user } } = await sb.auth.getUser();
-      const email = user?.email?.toLowerCase();
+      // Adresse confirmée exigée : sinon n'importe qui pourrait créer un
+      // compte avec l'e-mail d'un admin avant lui.
+      const email = user?.email_confirmed_at ? user.email?.toLowerCase() : undefined;
       if (email && allowedEmails.includes(email)) return { ok: true, role: "email" };
     } catch {
       /* fall through */
