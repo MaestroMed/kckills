@@ -14,7 +14,7 @@
  */
 import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
-import { createServerSupabase } from "@/lib/supabase/server";
+import { createServerSupabase, createServiceSupabase } from "@/lib/supabase/server";
 import {
   deriveActorRole,
   logAdminAction,
@@ -41,6 +41,8 @@ export interface BroadcastInput {
   image_url?: string;
   kill_id?: string;
   dedupe_key?: string;
+  /** Passe outre la limite d'une diffusion toutes les 10 min. */
+  force?: boolean;
 }
 
 export interface BroadcastResult {
@@ -125,6 +127,27 @@ export async function broadcastPush(input: BroadcastInput): Promise<BroadcastRes
   };
 
   const auditReq = await buildAuditRequest();
+
+  // Limite : une diffusion toutes les 10 min. Une notification envoyée
+  // deux fois par erreur (double clic, onglet rejoué) part chez tous les
+  // abonnés et fait désinstaller.
+  if (!input.force) {
+    const svc = createServiceSupabase();
+    const since = new Date(Date.now() - 10 * 60_000).toISOString();
+    const { data: recent } = svc
+      ? await svc
+          .from("admin_actions")
+          .select("created_at")
+          .in("action", ["push.broadcast.send_now", "push.broadcast.enqueue"])
+          .gte("created_at", since)
+          .order("created_at", { ascending: false })
+          .limit(1)
+      : { data: null };
+    if (recent?.length) {
+      const mins = Math.max(1, Math.round((Date.now() - Date.parse(recent[0].created_at)) / 60_000));
+      return { ok: false, error: `Une notification est déjà partie il y a ${mins} min. Attends 10 min ou coche « envoyer quand même ».` };
+    }
+  }
 
   if (input.mode === "send_now") {
     const result = await sendNow(params);

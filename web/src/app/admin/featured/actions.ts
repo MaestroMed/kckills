@@ -117,6 +117,7 @@ export async function setFeaturedKill(
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
+              allowed_mentions: { parse: [] },
               embeds: [
                 {
                   title: `★ Clip vedette du jour : ${kill.killer_champion} → ${kill.victim_champion}`,
