@@ -113,7 +113,8 @@ export async function POST(request: NextRequest) {
     const r = await fetch(webhook, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ content: message, embeds: [embed] }),
+      // Aucune mention : un texte de clip contenant @everyone ne doit rien pinguer.
+      body: JSON.stringify({ content: message, embeds: [embed], allowed_mentions: { parse: [] } }),
     });
     if (!r.ok) {
       const text = await r.text();

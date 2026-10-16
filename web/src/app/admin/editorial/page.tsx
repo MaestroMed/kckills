@@ -22,7 +22,10 @@
  */
 
 import { adminPageDb } from "@/lib/admin/db";
+import Link from "next/link";
 import { EditorialBoard } from "./editorial-board";
+import { FeaturedPicker } from "../featured/featured-picker";
+import { loadFeaturedData } from "@/lib/admin/featured-data";
 
 export const dynamic = "force-dynamic";
 export const fetchCache = "force-no-store";
@@ -62,8 +65,12 @@ interface EditorialActionRow {
   payload: Record<string, unknown> | null;
 }
 
-export default async function EditorialPage() {
+export default async function EditorialPage({ searchParams }: { searchParams: Promise<{ range?: string }> }) {
+  const sp = await searchParams;
   const sb = await adminPageDb();
+  // « 14 j » : les clips récents à mettre en avant ; « tout » : les plus forts
+  // de tout le catalogue (utile quand le worker est à l'arrêt).
+  const range = sp.range === "all" ? "all" : "14d";
 
   // 14-day lookback window — matches the curating cadence the editor
   // would scan during a typical session. Past 14d is plenty even for
@@ -79,7 +86,7 @@ export default async function EditorialPage() {
       .select("id,killer_champion,victim_champion,thumbnail_url,highlight_score,ai_description,multi_kill,is_first_blood,kill_visible,created_at,tracked_team_involvement")
       .eq("status", "published")
       .eq("tracked_team_involvement", "team_killer")
-      .gte("created_at", cutoff)
+      .gte("created_at", range === "all" ? "1970-01-01" : cutoff)
       .order("highlight_score", { ascending: false, nullsFirst: false })
       .limit(120),
 
@@ -120,5 +127,28 @@ export default async function EditorialPage() {
     pinnedFeature: featuredByKill.get(k.id) ?? null,
   }));
 
-  return <EditorialBoard cards={cards} actions={actions} />;
+  const featuredData = await loadFeaturedData(sb);
+
+  return (
+    <div className="space-y-8">
+      <section id="clip-du-jour" className="scroll-mt-20">
+        <FeaturedPicker featured={featuredData.featured} topKills={featuredData.topKills} />
+      </section>
+      <section className="space-y-3">
+        <nav className="flex gap-2 text-xs">
+          {([["14d", "14 derniers jours"], ["all", "Tout le catalogue"]] as const).map(([id, label]) => (
+            <Link
+              key={id}
+              href={`/admin/editorial?range=${id}`}
+              className={`rounded-full border px-3 py-1 ${range === id ? "border-[var(--gold)] bg-[var(--gold)]/15 text-[var(--gold)]" : "border-[var(--border-gold)] text-[var(--text-secondary)] hover:text-[var(--gold)]"}`}
+            >
+              {label}
+            </Link>
+          ))}
+          {range === "14d" && !cards.length && <span className="self-center text-[var(--text-muted)]">Aucun clip publié ces 14 jours : passe sur « Tout le catalogue ».</span>}
+        </nav>
+        <EditorialBoard cards={cards} actions={actions} />
+      </section>
+    </div>
+  );
 }

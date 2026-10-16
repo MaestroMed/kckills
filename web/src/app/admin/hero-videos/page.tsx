@@ -16,8 +16,7 @@
  */
 
 import { redirect } from "next/navigation";
-import { cookies } from "next/headers";
-import { verifyAdminCookie } from "@/lib/admin/session";
+import { requireAdmin } from "@/lib/admin/audit";
 import { HeroVideosEditor } from "./hero-editor";
 
 export const metadata = {
@@ -25,10 +24,9 @@ export const metadata = {
 };
 
 export default async function HeroVideosAdminPage() {
-  const cookieStore = await cookies();
-  const adminCookie = cookieStore.get("kc_admin")?.value;
-  // Wave 34 T1.2 — verify JWT signature, not just presence.
-  if (!(await verifyAdminCookie(adminCookie))) {
+  // requireAdmin() comme le reste de l'admin : le cookie seul refusait les
+  // admins Discord / e-mail et renvoyait vers la connexion en local.
+  if (!(await requireAdmin()).ok) {
     redirect("/admin/login?next=/admin/hero-videos");
   }
 

@@ -40,6 +40,7 @@ export function PushBroadcastForm({ subscriberCount }: { subscriberCount: number
   const [killId, setKillId] = useState("");
   const [dedupeKey, setDedupeKey] = useState("");
   const [pending, setPending] = useState(false);
+  const [force, setForce] = useState(false);
   const [toasts, setToasts] = useState<ToastMsg[]>([]);
   const [, startTransition] = useTransition();
 
@@ -74,6 +75,7 @@ export function PushBroadcastForm({ subscriberCount }: { subscriberCount: number
           image_url: imageUrl.trim() || undefined,
           kill_id: killId.trim() || undefined,
           dedupe_key: dedupeKey.trim() || undefined,
+          force,
         });
         if (!result.ok) {
           pushToast(`Erreur : ${result.error ?? "inconnue"}`, "error");
@@ -251,6 +253,10 @@ export function PushBroadcastForm({ subscriberCount }: { subscriberCount: number
               Envoyer MAINTENANT
             </AdminButton>
           </div>
+          <label className="mt-2 flex items-center gap-2 text-[11px] text-[var(--text-muted)]">
+            <input id="push-force" type="checkbox" checked={force} onChange={(e) => setForce(e.target.checked)} />
+            Envoyer quand même si une notification est partie il y a moins de 10 min
+          </label>
         </div>
       </AdminCard>
 

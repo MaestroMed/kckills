@@ -12,12 +12,13 @@ import { setFeaturedKill } from "@/app/admin/featured/actions";
  *   reclip     → needs_reclip = true (le clipper reprend les kills marqués ;
  *                aucun module ne consomme les jobs clip.reclip)
  *   feature    → clip du jour (featured_clips, date du jour UTC)
+ *   og         → régénère l'image de partage (job og.generate)
  *   delete     → RETRAIT réversible : publication_status = 'retracted' et
  *                kill_visible = false. Pas de DELETE : la ligne porte les
  *                notes, commentaires et l'historique du pipeline.
  */
-type Action = "republish" | "hide" | "reanalyze" | "reclip" | "feature" | "delete";
-const ACTIONS: Action[] = ["republish", "hide", "reanalyze", "reclip", "feature", "delete"];
+type Action = "republish" | "hide" | "reanalyze" | "reclip" | "feature" | "delete" | "og";
+const ACTIONS: Action[] = ["republish", "hide", "reanalyze", "reclip", "feature", "delete", "og"];
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -50,7 +51,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     if (!data?.length) throw new Error("Aucune ligne modifiée");
     after = { ...after, ...patch };
   };
-  const enqueue = async (type: "clip.analyze") => {
+  const enqueue = async (type: "clip.analyze" | "og.generate") => {
     const { error } = await sb.from("pipeline_jobs").insert({
       type,
       entity_type: "kill",
@@ -76,6 +77,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         break;
       case "reanalyze":
         await enqueue("clip.analyze");
+        break;
+      case "og":
+        await enqueue("og.generate");
         break;
       case "reclip":
         await update({ needs_reclip: true, reclip_reason: "admin: re-clip demandé depuis la fiche" });

@@ -41,6 +41,7 @@ import { PageViewTracker } from "@/components/analytics/PageViewTracker";
 import { HomeHero } from "@/components/home/HomeHero";
 import { activeHomeTheme, toClientTheme } from "@/lib/home-themes";
 import { fetchNextKcMatch } from "@/lib/next-match-server";
+import { getHomeThemeOverride } from "@/lib/home-theme-settings";
 // Scroll Vivant (HomeGridSection) retiré de l'accueil le 24/09/2026 :
 // trop de cases vides tant que la grille n'est pas finie (Mehdi). Le
 // composant reste dans components/home/ pour la refonte.
@@ -71,7 +72,9 @@ export default async function HomePage() {
   // fenêtre, sinon thèmes datés, sinon maison (ISR 30 min). KCKILLS_HOME_THEME
   // force un thème (aperçu local).
   const next = await fetchNextKcMatch().catch(() => null);
-  const theme = activeHomeTheme(new Date(), process.env.KCKILLS_HOME_THEME, next);
+  // Forçage depuis /admin/themes (R2), sinon la variable d'environnement historique.
+  const forced = (await getHomeThemeOverride().catch(() => null)) ?? process.env.KCKILLS_HOME_THEME;
+  const theme = activeHomeTheme(new Date(), forced, next);
 
 
   // Les requêtes de la colonne droite du hero (clip de la semaine, dernier
