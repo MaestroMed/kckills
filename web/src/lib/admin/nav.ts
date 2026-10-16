@@ -70,6 +70,7 @@ export const ADMIN_NAV: AdminNavGroup[] = [
     label: "Pipeline",
     items: [
       { href: "/admin/pipeline", label: "État du worker", icon: "◉", keywords: "pipeline daemon worker status heartbeat" },
+      { href: "/admin/games", label: "Games et VOD", icon: "▣", keywords: "games vod offset calage recaler partage reclip" },
       { href: "/admin/pipeline/jobs", label: "Jobs", icon: "⚙", keywords: "jobs queue file attente worker_jobs" },
       { href: "/admin/pipeline/dlq", label: "Échecs (DLQ)", icon: "☠", keywords: "dlq dead letter echec failed" },
       { href: "/admin/pipeline/rate", label: "Débit", icon: "≋", keywords: "rate debit throughput vitesse" },
