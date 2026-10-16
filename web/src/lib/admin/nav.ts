@@ -75,6 +75,7 @@ export const ADMIN_NAV: AdminNavGroup[] = [
       { href: "/admin/pipeline/trigger", label: "Lancer un job", icon: "⚡", keywords: "trigger lancer job" },
       { href: "/admin/pipeline/run", label: "Scripts", icon: "▷", keywords: "run scripts backfill manual" },
       { href: "/admin/ledger", label: "Registre des clips", icon: "▤", keywords: "ledger registre clips" },
+      { href: "/admin/ai-costs", label: "Coûts IA", icon: "$", keywords: "gemini cout ia budget quota depense" },
     ],
   },
   {
