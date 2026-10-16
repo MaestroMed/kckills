@@ -25,6 +25,7 @@ import { AdminEmptyState } from "@/components/admin/ui/AdminEmptyState";
 import { AdminSection } from "@/components/admin/ui/AdminSection";
 import { patchClip } from "../actions";
 import { ThumbnailPicker } from "@/components/admin/clips/ThumbnailPicker";
+import { ShareCardPreview } from "@/components/admin/clips/ShareCardPreview";
 
 const FIGHT_TYPES = [
   { value: "solo_kill", label: "Solo Kill (vrai 1v1)" },
@@ -385,6 +386,17 @@ export function ClipDetailEditor({ clip }: Props) {
 
           <AdminCard variant="default" title="Vignette">
             <ThumbnailPicker killId={clip.id} videoUrl={clip.clip_url_vertical} current={clip.thumbnail_url} />
+          </AdminCard>
+
+          <AdminCard variant="default" title="Carte de partage">
+            <ShareCardPreview
+              killId={clip.id}
+              killer={clip.killer_champion}
+              victim={clip.victim_champion}
+              description={clip.ai_description}
+              score={clip.highlight_score}
+              ogImageUrl={clip.og_image_url}
+            />
           </AdminCard>
 
           <AdminCard variant="default" title="Métadonnées">
