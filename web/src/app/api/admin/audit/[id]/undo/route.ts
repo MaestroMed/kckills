@@ -20,7 +20,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   if (!table || !row.entity_id) {
     return NextResponse.json({ error: `Annulation impossible pour « ${row.action} »` }, { status: 400 });
   }
-  const patch = pickRestorable(table, row.before);
+  const patch = pickRestorable(table, row.before, row.action);
   if (!Object.keys(patch).length) {
     return NextResponse.json({ error: "Pas d'état antérieur enregistré pour cette action" }, { status: 400 });
   }

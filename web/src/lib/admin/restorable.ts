@@ -22,8 +22,14 @@ export function tableForAction(action: string): RestorableTable | null {
   return null;
 }
 
-export function pickRestorable(table: RestorableTable, obj: unknown): Record<string, unknown> {
+/**
+ * Exception : annuler « marquer comme doublon » doit remettre `status` (et
+ * le lien vers le kill conservé) ; le trigger republie alors le clip.
+ */
+const EXTRA_BY_ACTION: Record<string, string[]> = { "kill.mark_duplicate": ["status", "is_duplicate_of"] };
+
+export function pickRestorable(table: RestorableTable, obj: unknown, action?: string): Record<string, unknown> {
   if (!obj || typeof obj !== "object") return {};
-  const allowed = new Set<string>(RESTORABLE[table]);
+  const allowed = new Set<string>([...RESTORABLE[table], ...(action ? EXTRA_BY_ACTION[action] ?? [] : [])]);
   return Object.fromEntries(Object.entries(obj as Record<string, unknown>).filter(([k]) => allowed.has(k)));
 }

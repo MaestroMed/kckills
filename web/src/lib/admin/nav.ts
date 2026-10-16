@@ -38,6 +38,7 @@ export const ADMIN_NAV: AdminNavGroup[] = [
     items: [
       { href: "/admin/clips", label: "Clips", icon: "▶", keywords: "clips library bibliotheque kills" },
       { href: "/admin/review", label: "Revue au clavier", icon: "⌨", keywords: "revue review qc valider clavier signalements" },
+      { href: "/admin/duplicates", label: "Doublons", icon: "⧉", keywords: "doublons duplicates fusion dedup" },
       { href: "/admin/editorial", label: "Éditorial", icon: "✦", keywords: "editorial curation masquer discord" },
       { href: "/admin/featured", label: "Clip du jour", icon: "★", keywords: "featured spotlight jour une" },
       { href: "/admin/playlists", label: "Playlists", icon: "♬", keywords: "playlists musique lecteur audio wolf" },

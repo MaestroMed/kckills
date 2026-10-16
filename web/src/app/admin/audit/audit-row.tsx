@@ -27,7 +27,7 @@ export function AuditRow({ row }: { row: Row }) {
   const [replayed, setReplayed] = useState(false);
   const canReplay = REPLAYABLE.some((p) => row.action.startsWith(p));
   const undoTable = tableForAction(row.action);
-  const canUndo = Boolean(undoTable && row.entity_id && !row.action.endsWith(".undone") && Object.keys(pickRestorable(undoTable, row.before)).length);
+  const canUndo = Boolean(undoTable && row.entity_id && !row.action.endsWith(".undone") && Object.keys(pickRestorable(undoTable, row.before, row.action)).length);
   const [undoState, setUndoState] = useState<"idle" | "armed" | "busy" | "done" | "error">("idle");
 
   const undo = async (e: React.MouseEvent) => {
