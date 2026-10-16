@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { adminCrumbs } from "@/lib/admin/nav";
 
 export interface AdminCrumb {
   label: string;
@@ -21,52 +22,9 @@ interface Props {
  * Friendly labels for known admin path segments. Anything not in this
  * dict falls back to a Capitalised version of the raw segment.
  */
-const SEGMENT_LABELS: Record<string, string> = {
-  admin: "Admin",
-  pipeline: "Pipeline",
-  jobs: "Job Queue",
-  dlq: "Dead Letter Queue",
-  trigger: "Trigger Run",
-  run: "Run",
-  clips: "Clip Library",
-  editorial: "Éditorial",
-  featured: "Featured du jour",
-  playlists: "Playlists",
-  bgm: "BGM",
-  push: "Push Broadcast",
-  moderation: "Modération",
-  reports: "Signalements",
-  "community-clips": "Community Clips",
-  roster: "Roster",
-  analytics: "Analytics",
-  audit: "Audit Log",
-  perf: "Performance",
-  lab: "Lab",
-};
-
-function prettifySegment(seg: string): string {
-  if (SEGMENT_LABELS[seg]) return SEGMENT_LABELS[seg];
-  // Fallback: kebab-case → "Title Case"
-  return seg
-    .split("-")
-    .map((p) => p.charAt(0).toUpperCase() + p.slice(1))
-    .join(" ");
-}
-
 function deriveFromPath(pathname: string): AdminCrumb[] {
-  const parts = pathname.split("/").filter(Boolean);
-  // Always start at /admin → "Admin"
-  const crumbs: AdminCrumb[] = [];
-  let acc = "";
-  for (let i = 0; i < parts.length; i++) {
-    acc += "/" + parts[i];
-    const isLast = i === parts.length - 1;
-    crumbs.push({
-      label: prettifySegment(parts[i]),
-      href: isLast ? undefined : acc,
-    });
-  }
-  return crumbs;
+  const crumbs = adminCrumbs(pathname);
+  return crumbs.map((c, i) => ({ label: c.label, href: i === crumbs.length - 1 ? undefined : c.href }));
 }
 
 /**

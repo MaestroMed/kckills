@@ -8,6 +8,7 @@ import { AdminQuickActionsButton } from "./AdminQuickActions";
 import { AdminMobileNavTrigger } from "./AdminMobileNav";
 import { AdminEnvBadge } from "./AdminEnvBadge";
 import { HeartbeatPill } from "./HeartbeatPill";
+import { adminCrumbs } from "@/lib/admin/nav";
 
 /**
  * AdminTopbar — sticky 56px (48px mobile) top bar of the admin layout.
@@ -25,59 +26,9 @@ import { HeartbeatPill } from "./HeartbeatPill";
  * pretty labels for known segments ; unknown segments get the raw text.
  */
 
-const SEGMENT_LABELS: Record<string, string> = {
-  admin: "Admin",
-  clips: "Clips",
-  editorial: "Editorial",
-  featured: "Featured",
-  playlists: "Playlists",
-  bgm: "BGM",
-  push: "Push",
-  moderation: "Modération",
-  reports: "Reports",
-  pipeline: "Pipeline",
-  jobs: "Jobs",
-  trigger: "Trigger",
-  run: "Run",
-  dlq: "DLQ",
-  roster: "Roster",
-  analytics: "Analytics",
-  audit: "Audit",
-  perf: "Web Vitals",
-  lab: "Lab",
-  search: "Recherche",
-};
-
-interface Crumb {
-  label: string;
-  href: string;
-}
-
-function buildCrumbs(pathname: string): Crumb[] {
-  const parts = pathname.split("/").filter(Boolean);
-  // Always start with /admin even if we're at /admin/foo
-  const crumbs: Crumb[] = [];
-  let acc = "";
-  for (const p of parts) {
-    acc += `/${p}`;
-    // Heuristic : if the segment looks like a UUID or numeric ID,
-    // shorten it instead of showing the raw value
-    let label: string;
-    if (SEGMENT_LABELS[p]) {
-      label = SEGMENT_LABELS[p];
-    } else if (/^[a-f0-9-]{8,}$/i.test(p)) {
-      label = p.slice(0, 8) + "…";
-    } else {
-      label = p;
-    }
-    crumbs.push({ label, href: acc });
-  }
-  return crumbs;
-}
-
 export function AdminTopbar() {
   const pathname = usePathname();
-  const crumbs = useMemo(() => buildCrumbs(pathname), [pathname]);
+  const crumbs = useMemo(() => adminCrumbs(pathname), [pathname]);
 
   return (
     <header

@@ -11,7 +11,7 @@ const VALID_ACTIONS = [
   "hide", "unhide",
   "mark_reclip", "clear_reclip",
   "set_fight_type", "add_tags", "remove_tags",
-  "mark_reanalyze",
+  "mark_reanalyze", "approve_qc", "set_featured",
 ];
 
 /**
@@ -29,7 +29,14 @@ const VALID_ACTIONS = [
  *   set_fight_type — payload.fight_type
  *   add_tags       — payload.tags (merge with existing ai_tags)
  *   remove_tags    — payload.tags
- *   mark_reanalyze — set status='clipped', retry_count=0 (daemon picks up next cycle)
+ *   mark_reanalyze — job clip.analyze par kill (priorité éditoriale). Plus de
+ *                    status='clipped' : changer `status` fait recalculer
+ *                    publication_status par trigger et dépubliait le clip.
+ *   approve_qc     — validation humaine : game_events.qc_human_approved = true
+ *                    (porte de publication) + kills.qc_status = 'passed'
+ *   set_featured   — programme les clips en « clip du jour » sur les
+ *                    prochains jours LIBRES à partir d'aujourd'hui (UTC),
+ *                    dans l'ordre de sélection ; n'écrase aucun jour déjà pris
  */
 export async function POST(req: NextRequest) {
   const admin = await requireAdmin();
@@ -76,7 +83,9 @@ export async function POST(req: NextRequest) {
       patch = { fight_type: payload.fight_type };
       break;
     case "mark_reanalyze":
-      patch = { status: "clipped", retry_count: 0 };
+    case "approve_qc":
+    case "set_featured":
+      complexUpdate = true;
       break;
     case "add_tags":
     case "remove_tags":
@@ -92,7 +101,59 @@ export async function POST(req: NextRequest) {
   let affected = 0;
   let writeError: string | null = null;
 
-  if (complexUpdate) {
+  if (action === "mark_reanalyze") {
+    const results = await Promise.all(
+      ids.map((id) =>
+        sb.from("pipeline_jobs").insert({
+          type: "clip.analyze",
+          entity_type: "kill",
+          entity_id: id,
+          priority: 80,
+          payload: { kill_id: id, requested_by: "admin_bulk" },
+        }),
+      ),
+    );
+    for (const r of results) {
+      // 23505 : un job identique attend déjà, c'est le résultat voulu.
+      if (!r.error || r.error.code === "23505") affected++;
+      else writeError ??= r.error.message;
+    }
+  } else if (action === "approve_qc") {
+    const { data, error } = await sb
+      .from("game_events")
+      .update({ qc_human_approved: true, publish_blocked_reason: null })
+      .in("kill_id", ids)
+      .select("kill_id");
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    const { error: kErr } = await sb
+      .from("kills")
+      .update({ qc_status: "passed", updated_at: new Date().toISOString() })
+      .in("id", ids);
+    writeError = kErr?.message ?? null;
+    affected = data?.length ?? 0;
+  } else if (action === "set_featured") {
+    const today = new Date();
+    const horizon = new Date(today.getTime() + 366 * 86_400_000);
+    const iso = (d: Date) => d.toISOString().slice(0, 10);
+    const { data: taken, error } = await sb
+      .from("featured_clips")
+      .select("feature_date")
+      .gte("feature_date", iso(today))
+      .lte("feature_date", iso(horizon));
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    const busy = new Set((taken ?? []).map((r) => r.feature_date as string));
+    const rows: { feature_date: string; kill_id: string; set_by_actor: string; notes: string }[] = [];
+    const cursor = new Date(today);
+    for (const id of ids.slice(0, 60)) {
+      while (busy.has(iso(cursor))) cursor.setUTCDate(cursor.getUTCDate() + 1);
+      rows.push({ feature_date: iso(cursor), kill_id: id, set_by_actor: "admin", notes: "programmé en lot" });
+      busy.add(iso(cursor));
+    }
+    const { data, error: insErr } = await sb.from("featured_clips").insert(rows).select("feature_date");
+    if (insErr) return NextResponse.json({ error: insErr.message }, { status: 500 });
+    affected = data?.length ?? 0;
+    payload.dates = rows.map((r) => r.feature_date);
+  } else if (complexUpdate) {
     // Read current tags, merge, write back (per-row)
     const { data: current, error: readError } = await sb
       .from("kills")

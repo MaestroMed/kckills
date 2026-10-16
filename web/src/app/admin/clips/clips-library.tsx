@@ -97,6 +97,16 @@ interface ToastMsg {
   tone: "success" | "error" | "info";
 }
 
+const BULK_LABELS: Partial<Record<ClipBulkAction, string>> = {
+  hide: "Masqués",
+  unhide: "Réaffichés",
+  mark_reclip: "Marqués pour re-clip",
+  set_fight_type: "Type de combat changé",
+  mark_reanalyze: "Analyse mise en file",
+  approve_qc: "QC validé",
+  set_featured: "Programmés en clip du jour",
+};
+
 export function ClipsLibrary() {
   const [clips, setClips] = useState<ClipRow[]>([]);
   const [total, setTotal] = useState(0);
@@ -231,15 +241,6 @@ export function ClipsLibrary() {
       action: ClipBulkAction,
       payload?: Record<string, unknown>,
     ): Promise<ClipBulkResult> => {
-      // approve_qc / set_featured aren't part of /api/admin/clips/bulk yet —
-      // surface a friendly toast and bail without a request that 400s.
-      if (action === "approve_qc" || action === "set_featured") {
-        pushToast(
-          `Action « ${action} » : endpoint non disponible côté serveur (à câbler).`,
-          "info",
-        );
-        return { ok: false };
-      }
       try {
         const r = await fetch("/api/admin/clips/bulk", {
           method: "POST",
@@ -247,7 +248,8 @@ export function ClipsLibrary() {
           body: JSON.stringify({ ids: [...selected], action, payload }),
         });
         if (r.ok) {
-          pushToast(`${action} appliqué à ${selected.size} clip(s).`, "success");
+          const res = (await r.json().catch(() => ({}))) as { affected?: number };
+          pushToast(`${BULK_LABELS[action] ?? action} : ${res.affected ?? 0} / ${selected.size} clip(s).`, "success");
           clearSelection();
           reloadFromStart();
           return { ok: true };
