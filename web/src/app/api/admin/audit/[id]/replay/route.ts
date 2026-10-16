@@ -6,6 +6,7 @@ import {
   logAdminAction,
   requireAdmin,
 } from "@/lib/admin/audit";
+import { pickRestorable } from "@/lib/admin/restorable";
 
 /**
  * POST /api/admin/audit/[id]/replay
@@ -51,7 +52,8 @@ export async function POST(
     if (action.action.startsWith("kill.") && action.entity_id) {
       const { data, error } = await sb
         .from("kills")
-        .update(after)
+        // Colonnes réelles seulement (jamais `status`, cf. lib/admin/restorable).
+        .update(pickRestorable("kills", after))
         .eq("id", action.entity_id)
         .select("id");
       if (error) throw error;
@@ -59,7 +61,7 @@ export async function POST(
     } else if (action.action.startsWith("player.") && action.entity_id) {
       const { data, error } = await sb
         .from("players")
-        .update(after)
+        .update(pickRestorable("players", after))
         .eq("id", action.entity_id)
         .select("id");
       if (error) throw error;
