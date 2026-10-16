@@ -6,6 +6,7 @@ import { AdminTopbar } from "@/components/admin/AdminTopbar";
 import { AdminMobileNav } from "@/components/admin/AdminMobileNav";
 import { AdminQuickActions } from "@/components/admin/AdminQuickActions";
 import { ActivityFeed } from "@/components/admin/ActivityFeed";
+import { AdminAlerts } from "@/components/admin/AdminAlerts";
 import { requireAdmin } from "@/lib/admin/audit";
 
 /**
@@ -73,6 +74,7 @@ export default async function AdminLayout({ children }: { children: ReactNode })
       <div className="flex-1 min-w-0 flex flex-col xl:pr-64">
         <AdminTopbar />
         <main className="flex-1 overflow-x-hidden">
+          <AdminAlerts />
           <div className="p-4 md:p-6 max-w-7xl">{children}</div>
         </main>
       </div>
