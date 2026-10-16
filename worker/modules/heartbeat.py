@@ -1,5 +1,6 @@
 """
-HEARTBEAT — Pings Supabase every 6 hours to prevent auto-pause.
+HEARTBEAT — Pings Supabase every 5 minutes (keeps the free tier awake and
+tells /admin whether the worker is alive).
 Supabase free tier pauses after 7 days of inactivity.
 
 Also records the latest scheduler stats so the Next.js /api/worker-status
