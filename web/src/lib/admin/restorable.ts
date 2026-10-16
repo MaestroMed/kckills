@@ -9,7 +9,7 @@
 export const RESTORABLE = {
   kills: [
     "ai_description", "fight_type", "ai_tags", "highlight_score", "kill_visible",
-    "needs_reclip", "reclip_reason", "publication_status", "qc_status",
+    "needs_reclip", "reclip_reason", "publication_status", "qc_status", "thumbnail_url",
   ],
   players: ["ign", "real_name", "nationality", "image_url", "team_id", "role", "display_order"],
 } as const;
