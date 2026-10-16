@@ -5,6 +5,6 @@ export const metadata = {
   robots: { index: false, follow: false },
 };
 
-export default function AdminLoginPage({ searchParams }: { searchParams?: Promise<{ from?: string; token?: string }> }) {
+export default function AdminLoginPage({ searchParams }: { searchParams?: Promise<{ from?: string; next?: string; logout?: string }> }) {
   return <LoginForm searchParamsPromise={searchParams} />;
 }

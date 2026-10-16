@@ -20,7 +20,7 @@
  * guard at the page level.
  */
 import Image from "next/image";
-import { createServerSupabase } from "@/lib/supabase/server";
+import { adminPageDb } from "@/lib/admin/db";
 import { championIconUrl } from "@/lib/constants";
 import { LabVoteButtons } from "./vote-buttons";
 import { AdminPage, AdminSection, AdminEmptyState } from "@/components/admin/ui";
@@ -64,7 +64,7 @@ async function fetchLabData(): Promise<{
   evals: LabEvaluation[];
   kills: Map<string, KillRow>;
 }> {
-  const sb = await createServerSupabase();
+  const sb = await adminPageDb();
   const { data: evals } = await sb
     .from("lab_evaluations")
     .select("*")

@@ -13,45 +13,15 @@
  */
 
 import { NextResponse } from "next/server";
-import { readFile } from "fs/promises";
-import path from "path";
-import {
-  DEFAULT_PLAYLISTS,
-  type BgmTrack,
-  type PlaylistId,
-} from "@/lib/audio/playlists";
+import { loadPlaylists } from "@/lib/audio/playlists-store";
 
-const STORAGE_PATH = path.join(process.cwd(), ".cache", "playlists.json");
-
-export const runtime = "nodejs"; // need fs for the cache file
-export const revalidate = 900; // 15-min ISR
+export const runtime = "nodejs";
+export const revalidate = 900; // 15 min ; l'admin revalide à chaque enregistrement
 
 export async function GET() {
-  let playlists: Record<PlaylistId, BgmTrack[]> = { ...DEFAULT_PLAYLISTS };
-  try {
-    const raw = await readFile(STORAGE_PATH, "utf-8");
-    const parsed = JSON.parse(raw);
-    if (parsed?.playlists?.homepage && parsed?.playlists?.scroll) {
-      // Merge with defaults so curated edits to homepage/scroll don't drop
-      // the canonical `bcc` cave playlist (which is NOT operator-editable
-      // and lives only in the code-side DEFAULT_PLAYLISTS).
-      playlists = {
-        ...DEFAULT_PLAYLISTS,
-        ...parsed.playlists,
-        bcc: DEFAULT_PLAYLISTS.bcc,
-      };
-    }
-  } catch {
-    // First-time load — defaults are fine
-  }
-
+  const { playlists } = await loadPlaylists();
   return NextResponse.json(
     { playlists },
-    {
-      headers: {
-        "Cache-Control":
-          "public, s-maxage=900, stale-while-revalidate=3600",
-      },
-    },
+    { headers: { "Cache-Control": "public, s-maxage=900, stale-while-revalidate=3600" } },
   );
 }

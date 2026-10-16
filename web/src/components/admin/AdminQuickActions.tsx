@@ -9,6 +9,7 @@ import {
   useState,
 } from "react";
 import { useRouter } from "next/navigation";
+import { ADMIN_NAV } from "@/lib/admin/nav";
 
 /**
  * AdminQuickActions — admin-scoped ⌘K palette.
@@ -45,28 +46,16 @@ interface Entry {
   searchText: string;
 }
 
-const PAGES: Entry[] = [
-  { id: "p-dashboard",      group: "navigation", label: "Dashboard live",     subtitle: "Vue temps réel", href: "/admin",                              searchText: "dashboard live ops home overview accueil" },
-  { id: "p-clips",          group: "navigation", label: "Clip Library",       subtitle: "Bibliothèque",   href: "/admin/clips",                        searchText: "clips library bibliotheque kills clip" },
-  { id: "p-editorial",      group: "navigation", label: "Editorial",          subtitle: "Curation",       href: "/admin/editorial",                    searchText: "editorial curation curate" },
-  { id: "p-featured",       group: "navigation", label: "Featured du jour",   subtitle: "Spotlight",       href: "/admin/featured",                     searchText: "featured spotlight day jour" },
-  { id: "p-playlists",      group: "navigation", label: "Wolf player vibes",  subtitle: "Playlists",       href: "/admin/playlists",                    searchText: "playlists wolf vibes audio" },
-  { id: "p-bgm",            group: "navigation", label: "BGM (legacy)",       subtitle: "Audio scroll",    href: "/admin/bgm",                          searchText: "bgm music background audio scroll" },
-  { id: "p-push",           group: "navigation", label: "Push Broadcast",     subtitle: "Notifications",   href: "/admin/push",                         searchText: "push notifications broadcast send" },
-  { id: "p-mod",            group: "navigation", label: "Modération",         subtitle: "Comments",        href: "/admin/moderation",                   searchText: "moderation comments commentaires modere" },
-  { id: "p-mod-reports",    group: "navigation", label: "Reports",            subtitle: "Signalements",    href: "/admin/moderation/reports",           searchText: "reports signalements moderation reports" },
-  { id: "p-pipeline",       group: "navigation", label: "Daemon Status",      subtitle: "Pipeline",        href: "/admin/pipeline",                     searchText: "pipeline daemon status worker" },
-  { id: "p-jobs",           group: "navigation", label: "Job Queue",          subtitle: "pipeline_jobs",   href: "/admin/pipeline/jobs",                searchText: "jobs queue pipeline files attente" },
-  { id: "p-trigger",        group: "navigation", label: "Trigger Run",        subtitle: "Lancer un job",   href: "/admin/pipeline/trigger",             searchText: "trigger run lancer pipeline job" },
-  { id: "p-run",            group: "navigation", label: "Pipeline Run",       subtitle: "Manual run",      href: "/admin/pipeline/run",                 searchText: "pipeline run manual" },
-  { id: "p-dlq",            group: "navigation", label: "Dead Letter",        subtitle: "Jobs morts",      href: "/admin/pipeline/dlq",                 searchText: "dlq dead letter morts failed echec" },
-  { id: "p-roster",         group: "navigation", label: "Roster",             subtitle: "Joueurs",         href: "/admin/roster",                       searchText: "roster joueurs players team" },
-  { id: "p-analytics",      group: "navigation", label: "Analytics",          subtitle: "Métriques",       href: "/admin/analytics",                    searchText: "analytics metriques umami stats" },
-  { id: "p-audit",          group: "navigation", label: "Audit Log",          subtitle: "admin_actions",   href: "/admin/audit",                        searchText: "audit log actions historique trail" },
-  { id: "p-perf",           group: "navigation", label: "Web Vitals",         subtitle: "Performance",     href: "/admin/perf",                         searchText: "perf performance web vitals lcp cls fid" },
-  { id: "p-lab",            group: "navigation", label: "Lab",                subtitle: "Expérimentations", href: "/admin/lab",                          searchText: "lab experiments evaluations test" },
-  { id: "p-search",         group: "navigation", label: "Recherche globale",  subtitle: "Cross-entity",    href: "/admin/search",                       searchText: "search recherche global cross entity" },
-];
+const PAGES: Entry[] = ADMIN_NAV.flatMap((g) =>
+  g.items.map((i) => ({
+    id: `p-${i.href}`,
+    group: "navigation" as const,
+    label: i.label,
+    subtitle: g.label,
+    href: i.href,
+    searchText: `${i.label} ${g.label} ${i.keywords}`.toLowerCase(),
+  })),
+);
 
 // Quick actions — POST to /api/admin/* and surface a toast.
 function buildActions(notify: (msg: string, ok: boolean) => void): Entry[] {
@@ -95,42 +84,49 @@ function buildActions(notify: (msg: string, ok: boolean) => void): Entry[] {
 
   return [
     {
-      id: "a-backfill",
+      id: "a-stuck",
       group: "action",
-      label: "Lancer backfill complet",
-      subtitle: "POST /api/admin/pipeline/run/backfill",
+      label: "Débloquer les kills coincés",
+      subtitle: "Script backfill_stuck_pipeline (exécuté par le worker)",
       hint: "POST",
-      searchText: "backfill rerun rebuild full reanalyse rejouer",
-      action: () => fire("/api/admin/pipeline/run/backfill", "POST", "Backfill démarré"),
+      searchText: "backfill stuck coinces debloquer pipeline rejouer",
+      action: () => fire("/api/admin/pipeline/run/backfill-stuck", "POST", "Script mis en file pour le worker", { state: "all" }),
+    },
+    {
+      id: "a-clip-errors",
+      group: "action",
+      label: "Re-clipper les clips en erreur",
+      subtitle: "Script backfill_clip_errors (exécuté par le worker)",
+      hint: "POST",
+      searchText: "clip errors erreur reclip backfill",
+      action: () => fire("/api/admin/pipeline/run/backfill-clip-errors", "POST", "Script mis en file pour le worker", {}),
     },
     {
       id: "a-channel-recon",
       group: "action",
-      label: "Channel reconciler — run now",
-      subtitle: "POST /api/admin/pipeline/run/channel-reconcile",
+      label: "Réconcilier les chaînes YouTube",
+      subtitle: "Script recon_videos_now (exécuté par le worker)",
       hint: "POST",
-      searchText: "channel reconcile reconciler youtube vod sync",
-      action: () =>
-        fire("/api/admin/pipeline/run/channel-reconcile", "POST", "Reconciler en cours"),
+      searchText: "channel reconcile reconciler youtube vod sync chaines",
+      action: () => fire("/api/admin/pipeline/run/recon-channels", "POST", "Script mis en file pour le worker", {}),
     },
     {
       id: "a-release-leases",
       group: "action",
-      label: "Libérer les leases obsolètes",
-      subtitle: "POST /api/admin/pipeline/release-stale",
+      label: "Libérer les jobs bloqués",
+      subtitle: "Jobs réservés dont le bail a expiré → remis en attente",
       hint: "POST",
-      searchText: "release stale leases libere obsolete bloque jobs",
-      action: () =>
-        fire("/api/admin/pipeline/release-stale", "POST", "Leases libérées"),
+      searchText: "release stale leases libere obsolete bloque jobs bail",
+      action: () => fire("/api/admin/pipeline/release-stale", "POST", "Jobs bloqués libérés"),
     },
     {
       id: "a-cache-flush",
       group: "action",
-      label: "Flush cache CDN",
-      subtitle: "POST /api/admin/cache/flush",
+      label: "Rafraîchir le cache du site",
+      subtitle: "Toutes les pages se régénèrent à la prochaine visite",
       hint: "POST",
-      searchText: "cache flush cdn purge invalidate vider",
-      action: () => fire("/api/admin/cache/flush", "POST", "Cache flushé"),
+      searchText: "cache flush cdn purge invalidate vider rafraichir",
+      action: () => fire("/api/admin/cache/flush", "POST", "Cache du site rafraîchi"),
     },
   ];
 }

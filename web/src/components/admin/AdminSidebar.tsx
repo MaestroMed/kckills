@@ -1,5 +1,6 @@
 "use client";
 
+import { ADMIN_NAV, type AdminNavGroup } from "@/lib/admin/nav";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
@@ -25,90 +26,8 @@ import { AdminEnvBadge } from "./AdminEnvBadge";
  *     without the sticky/desktop shell (used by AdminMobileNav)
  */
 
-interface NavItem {
-  href: string;
-  label: string;
-  icon: string;
-  badge?: string;
-}
-
-interface NavGroup {
-  id: string;
-  label: string;
-  items: NavItem[];
-}
-
-const NAV: NavGroup[] = [
-  {
-    id: "overview",
-    label: "Overview",
-    items: [{ href: "/admin", label: "Dashboard", icon: "▣" }],
-  },
-  {
-    id: "content",
-    label: "Content",
-    items: [
-      { href: "/admin/clips", label: "Clip Library", icon: "▶" },
-      { href: "/admin/editorial", label: "Editorial", icon: "✦" },
-      { href: "/admin/featured", label: "Featured du jour", icon: "★" },
-      { href: "/admin/playlists", label: "Wolf player vibes", icon: "♬" },
-      { href: "/admin/hero-videos", label: "Hero videos", icon: "🎬" },
-      { href: "/admin/bgm", label: "BGM (legacy /scroll)", icon: "♪" },
-      { href: "/admin/push", label: "Push Broadcast", icon: "✉" },
-    ],
-  },
-  {
-    id: "moderation",
-    label: "Moderation",
-    items: [
-      { href: "/admin/moderation", label: "Comments", icon: "✎" },
-      { href: "/admin/moderation/reports", label: "Reports", icon: "⚠" },
-    ],
-  },
-  {
-    // Wave 31a — Community & Events hub for the Wave-30 features.
-    // Bracket tournaments, face-off duels, compilations, quote moderation,
-    // achievements, BCC interactions. The /admin/community page is a
-    // dashboard with stats + deep-links to per-table editors.
-    id: "community",
-    label: "Community & Events",
-    items: [
-      { href: "/admin/community", label: "Hub", icon: "✦" },
-      { href: "/admin/community/bracket", label: "Bracket", icon: "▦" },
-      { href: "/admin/community/face-off", label: "Face-off", icon: "⚔" },
-      { href: "/admin/community/compilations", label: "Compilations", icon: "▸" },
-      { href: "/admin/community/quotes", label: "Quotes", icon: "❝" },
-      { href: "/admin/community/achievements", label: "Achievements", icon: "🏆" },
-    ],
-  },
-  {
-    id: "pipeline",
-    label: "Pipeline",
-    items: [
-      { href: "/admin/pipeline", label: "Daemon Status", icon: "◉" },
-      { href: "/admin/pipeline/jobs", label: "Job Queue", icon: "⚙" },
-      { href: "/admin/pipeline/trigger", label: "Trigger Run", icon: "⚡" },
-      { href: "/admin/pipeline/run", label: "Manual Run", icon: "▶" },
-      { href: "/admin/pipeline/dlq", label: "Dead Letter", icon: "☠" },
-      { href: "/admin/ledger", label: "Clip Ledger", icon: "▤" },
-    ],
-  },
-  {
-    id: "data",
-    label: "Data",
-    items: [
-      { href: "/admin/roster", label: "Roster", icon: "●" },
-      { href: "/admin/analytics", label: "Analytics", icon: "▲" },
-      { href: "/admin/audit", label: "Audit Log", icon: "◎" },
-      { href: "/admin/perf", label: "Web Vitals", icon: "♡" },
-    ],
-  },
-  {
-    id: "lab",
-    label: "Lab",
-    items: [{ href: "/admin/lab", label: "Experiments", icon: "⚗" }],
-  },
-];
+type NavGroup = AdminNavGroup;
+const NAV = ADMIN_NAV;
 
 const STORAGE_GROUPS = "kc-admin-sidebar-collapsed";
 const STORAGE_RAIL = "kc-admin-sidebar-rail-collapsed";

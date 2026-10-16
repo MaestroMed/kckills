@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createServerSupabase } from "@/lib/supabase/server";
-import { ADMIN_DB_UNAVAILABLE, requireAdmin } from "@/lib/admin/audit";
+import { createServiceSupabase } from "@/lib/supabase/server";
+import { ADMIN_DB_UNAVAILABLE, adminDbUnavailable, requireAdmin } from "@/lib/admin/audit";
 import { enqueueJob } from "@/app/admin/pipeline/trigger/actions";
 
 /** GET /api/admin/pipeline/jobs?status=&kind=&limit= */
@@ -13,7 +13,9 @@ export async function GET(req: NextRequest) {
   const kind = sp.get("kind");
   const limit = Math.min(200, parseInt(sp.get("limit") ?? "50", 10));
 
-  const sb = await createServerSupabase();
+  const sb = createServiceSupabase();
+
+  if (!sb) return adminDbUnavailable();
   let query = sb
     .from("worker_jobs")
     .select("*")

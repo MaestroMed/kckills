@@ -21,6 +21,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { revalidatePath } from "next/cache";
 import { randomUUID } from "crypto";
 import {
   deriveActorRole,
@@ -248,6 +249,8 @@ export async function POST(request: NextRequest) {
       { status: 500 },
     );
   }
+
+  revalidatePath("/api/hero-videos");
 
   await logAdminAction({
     action: "hero.videos.upload",

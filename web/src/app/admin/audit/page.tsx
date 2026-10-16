@@ -12,7 +12,7 @@
  * same filters via query string (the link in the header preserves them).
  */
 
-import { createServerSupabase, createServiceSupabase } from "@/lib/supabase/server";
+import { adminPageDb } from "@/lib/admin/db";
 import { AdminPage, AdminButton } from "@/components/admin/ui";
 import { AuditView } from "./audit-view";
 
@@ -58,7 +58,7 @@ export default async function AuditPage({
   // Migration 090 flipped v_admin_actions_7d to security_invoker → anon reads
   // return 0 rows. Admin-gated, server-only page → read via the service-role
   // client (bypasses RLS), falling back to anon if the key isn't provisioned.
-  const sb = createServiceSupabase() ?? (await createServerSupabase());
+  const sb = await adminPageDb();
 
   // Base list query
   let query = sb

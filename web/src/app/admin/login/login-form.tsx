@@ -26,6 +26,11 @@ import { useRouter } from "next/navigation";
 import { createBrowserClient } from "@supabase/ssr";
 import { AdminButton } from "@/components/admin/ui/AdminButton";
 
+/** Chemin interne de l'admin (`/admin…`), jamais une URL absolue ni `//hôte`. */
+function safeAdminPath(p: string): boolean {
+  return /^\/admin(\/|$|\?)/.test(p) && !p.startsWith("//") && !p.includes("\\");
+}
+
 const KONAMI = [
   "ArrowUp",
   "ArrowUp",
@@ -42,7 +47,7 @@ const KONAMI = [
 export function LoginForm({
   searchParamsPromise,
 }: {
-  searchParamsPromise?: Promise<{ from?: string; token?: string; next?: string }>;
+  searchParamsPromise?: Promise<{ from?: string; next?: string; logout?: string }>;
 }) {
   const router = useRouter();
   const [mode, setMode] = useState<"email" | "token" | "signup">("email");
@@ -55,18 +60,32 @@ export function LoginForm({
   const [from, setFrom] = useState("/admin");
   const [vibe, setVibe] = useState(false);
   const konamiBuf = useRef<string[]>([]);
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "";
+  const supabase =
+    supabaseUrl && supabaseAnonKey
+      ? createBrowserClient(supabaseUrl, supabaseAnonKey)
+      : null;
   const iddqdBuf = useRef<string>("");
 
   useEffect(() => {
     if (!searchParamsPromise) return;
-    searchParamsPromise.then((sp) => {
+    searchParamsPromise.then(async (sp) => {
+      // Retour uniquement vers une page admin du même site : pas de
+      // redirection ouverte (`?from=//evil.tld`, `?from=https://…`).
       const target = sp?.next ?? sp?.from;
-      if (target) setFrom(target);
-      if (sp?.token) {
-        setToken(sp.token);
-        setMode("token");
+      if (target && safeAdminPath(target)) setFrom(target);
+      // Le token ne se passe plus dans l'URL : il finissait dans l'historique,
+      // les logs et l'en-tête Referer.
+      if (sp?.logout) {
+        await fetch("/api/admin/login", { method: "DELETE" }).catch(() => {});
+        await supabase?.auth.signOut().catch(() => {});
+        setInfo("Déconnecté.");
+        router.replace("/admin/login");
       }
     });
+    // supabase/router : stables pour la durée de la page
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParamsPromise]);
 
   // ─── Easter egg listeners ────────────────────────────────────────────
@@ -108,12 +127,6 @@ export function LoginForm({
     return () => document.removeEventListener("keydown", handler);
   }, []);
 
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
-  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "";
-  const supabase =
-    supabaseUrl && supabaseAnonKey
-      ? createBrowserClient(supabaseUrl, supabaseAnonKey)
-      : null;
 
   const submitEmail = async (e: React.FormEvent) => {
     e.preventDefault();

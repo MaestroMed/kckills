@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { createServerSupabase } from "@/lib/supabase/server";
-import { requireAdmin } from "@/lib/admin/audit";
+import { createServiceSupabase } from "@/lib/supabase/server";
+import { adminDbUnavailable, requireAdmin } from "@/lib/admin/audit";
 
 /**
  * GET /api/admin/perf/vitals-by-page
@@ -120,7 +120,9 @@ export async function GET(req: Request) {
   const ms = timeWindow === "7d" ? 7 * 24 * 60 * 60 * 1000 : 24 * 60 * 60 * 1000;
   const since = new Date(Date.now() - ms).toISOString();
 
-  const sb = await createServerSupabase();
+  const sb = createServiceSupabase();
+
+  if (!sb) return adminDbUnavailable();
   const { data, error } = await sb
     .from("user_events")
     .select("metadata, client_kind")

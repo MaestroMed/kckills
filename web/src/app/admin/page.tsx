@@ -11,7 +11,7 @@
  */
 import Link from "next/link";
 import type { Metadata } from "next";
-import { createServerSupabase } from "@/lib/supabase/server";
+import { adminPageDb } from "@/lib/admin/db";
 import { LiveDashboard } from "@/components/admin/LiveDashboard";
 
 export const metadata: Metadata = {
@@ -32,7 +32,7 @@ interface RecentAction {
 }
 
 export default async function AdminDashboard() {
-  const sb = await createServerSupabase();
+  const sb = await adminPageDb();
 
   // Pull recent activity server-side (20 rows). The tiles fetch via API,
   // but the activity feed is below-the-fold and changes slowly enough

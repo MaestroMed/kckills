@@ -21,7 +21,7 @@
  * duplicate the cookie+session lookup on every render).
  */
 
-import { createServerSupabase } from "@/lib/supabase/server";
+import { adminPageDb } from "@/lib/admin/db";
 import { EditorialBoard } from "./editorial-board";
 
 export const dynamic = "force-dynamic";
@@ -63,7 +63,7 @@ interface EditorialActionRow {
 }
 
 export default async function EditorialPage() {
-  const sb = await createServerSupabase();
+  const sb = await adminPageDb();
 
   // 14-day lookback window — matches the curating cadence the editor
   // would scan during a typical session. Past 14d is plenty even for

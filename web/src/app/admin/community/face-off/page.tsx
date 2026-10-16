@@ -10,7 +10,7 @@ import Link from "next/link";
 import { AdminPage } from "@/components/admin/ui/AdminPage";
 import { AdminCard } from "@/components/admin/ui/AdminCard";
 import { getTopFaceOffDuels } from "@/lib/supabase/face-off";
-import { createAnonSupabase } from "@/lib/supabase/server";
+import { adminPageDb } from "@/lib/admin/db";
 
 export const metadata: Metadata = {
   title: "Face-off Admin",
@@ -24,7 +24,7 @@ export default async function FaceOffAdminPage() {
     getTopFaceOffDuels(20),
     (async () => {
       try {
-        const sb = createAnonSupabase();
+        const sb = await adminPageDb();
         const { count } = await sb
           .from("face_off_votes")
           .select("*", { count: "planned", head: true });

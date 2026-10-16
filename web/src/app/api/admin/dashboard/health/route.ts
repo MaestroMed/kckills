@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { createServerSupabase } from "@/lib/supabase/server";
-import { requireAdmin } from "@/lib/admin/audit";
+import { createServiceSupabase } from "@/lib/supabase/server";
+import { adminDbUnavailable, requireAdmin } from "@/lib/admin/audit";
 
 /**
  * GET /api/admin/dashboard/health
@@ -52,7 +52,9 @@ export async function GET() {
     return NextResponse.json({ error: admin.error }, { status: 403 });
   }
 
-  const sb = await createServerSupabase();
+  const sb = createServiceSupabase();
+
+  if (!sb) return adminDbUnavailable();
   const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
 
   const { data, error } = await sb

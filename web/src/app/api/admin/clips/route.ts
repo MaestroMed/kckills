@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createServerSupabase } from "@/lib/supabase/server";
-import { requireAdmin } from "@/lib/admin/audit";
+import { createServiceSupabase } from "@/lib/supabase/server";
+import { adminDbUnavailable, requireAdmin } from "@/lib/admin/audit";
 
 /**
  * GET /api/admin/clips
@@ -42,7 +42,9 @@ export async function GET(req: NextRequest) {
   // exploration the operator should use filters to narrow first.
   const offset = Math.min(5000, Math.max(0, parseInt(sp.get("offset") ?? "0", 10)));
 
-  const sb = await createServerSupabase();
+  const sb = createServiceSupabase();
+
+  if (!sb) return adminDbUnavailable();
   let query = sb
     .from("kills")
     .select(

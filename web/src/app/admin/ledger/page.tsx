@@ -14,7 +14,7 @@
  */
 
 import Link from "next/link";
-import { createServerSupabase, createServiceSupabase } from "@/lib/supabase/server";
+import { adminPageDb } from "@/lib/admin/db";
 import { AdminPage, AdminBadge } from "@/components/admin/ui";
 import type { AdminBadgeVariant } from "@/components/admin/ui";
 
@@ -118,7 +118,7 @@ export default async function LedgerPage({
   const sp = await searchParams;
   const filter = (FILTERS.find((f) => f.id === sp.filter)?.id ?? "all") as FilterId;
 
-  const sb = createServiceSupabase() ?? (await createServerSupabase());
+  const sb = await adminPageDb();
 
   let query = sb
     .from("v_clip_ledger_full")

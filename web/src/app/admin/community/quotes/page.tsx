@@ -14,7 +14,7 @@ import { AdminPage } from "@/components/admin/ui/AdminPage";
 import { AdminCard } from "@/components/admin/ui/AdminCard";
 import { getQuotesStats } from "@/lib/supabase/quotes";
 import { QuoteRowActions } from "@/components/admin/quotes/QuoteRowActions";
-import { createServerSupabase } from "@/lib/supabase/server";
+import { adminPageDb } from "@/lib/admin/db";
 
 export const metadata: Metadata = {
   title: "Quotes Admin",
@@ -49,7 +49,7 @@ export default async function QuotesAdminPage({ searchParams }: PageProps) {
   const onlyHidden = filter === "hidden";
   const onlyReported = filter === "reported";
 
-  const sb = await createServerSupabase();
+  const sb = await adminPageDb();
   let query = sb
     .from("kill_quotes")
     .select(

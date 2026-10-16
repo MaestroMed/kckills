@@ -17,6 +17,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { revalidatePath } from "next/cache";
 import {
   deriveActorRole,
   logAdminAction,
@@ -90,6 +91,7 @@ export async function POST(request: NextRequest) {
     request,
   });
 
+  revalidatePath("/api/hero-videos");
   return NextResponse.json({ ok: true, videos: saved });
 }
 
@@ -124,6 +126,7 @@ export async function DELETE(request: NextRequest) {
 
   const next = before.filter((v) => v.id !== id);
   await saveHeroVideos(next);
+  revalidatePath("/api/hero-videos");
 
   await logAdminAction({
     action: "hero.videos.delete",

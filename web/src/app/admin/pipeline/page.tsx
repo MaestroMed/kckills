@@ -16,7 +16,7 @@
  * AdminCard + AdminBadge consumed from EA primitives.
  */
 import Link from "next/link";
-import { createServerSupabase, createServiceSupabase } from "@/lib/supabase/server";
+import { adminPageDb } from "@/lib/admin/db";
 import { AdminCard } from "@/components/admin/ui/AdminCard";
 import { AdminBadge } from "@/components/admin/ui/AdminBadge";
 
@@ -65,7 +65,7 @@ export default async function PipelineDashboardPage() {
   // Migration 090 flipped v_pipeline_health to security_invoker → anon reads
   // return 0 rows. Admin-gated, server-only page → read via the service-role
   // client (bypasses RLS), falling back to anon if the key isn't provisioned.
-  const sb = createServiceSupabase() ?? (await createServerSupabase());
+  const sb = await adminPageDb();
 
   const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
   const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
