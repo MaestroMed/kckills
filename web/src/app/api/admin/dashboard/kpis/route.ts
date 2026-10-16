@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { createServerSupabase } from "@/lib/supabase/server";
-import { requireAdmin } from "@/lib/admin/audit";
+import { createServiceSupabase } from "@/lib/supabase/server";
+import { adminDbUnavailable, requireAdmin } from "@/lib/admin/audit";
 
 /**
  * GET /api/admin/dashboard/kpis
@@ -63,7 +63,9 @@ export async function GET() {
     return NextResponse.json({ error: admin.error }, { status: 403 });
   }
 
-  const sb = await createServerSupabase();
+  const sb = createServiceSupabase();
+
+  if (!sb) return adminDbUnavailable();
   const now = Date.now();
   const ms24h = 24 * 60 * 60 * 1000;
   const ms48h = 48 * 60 * 60 * 1000;
@@ -80,6 +82,9 @@ export async function GET() {
     queueAllRes,
     queueRecentRes,
     dlqAllRes,
+    queueCountRes,
+    queueOldCountRes,
+    dlqOpenRes,
   ] = await Promise.all([
     // Published kills in the last 48h, filtered by `publication_status`
     // (preferred) with a fallback to legacy `status` column. The OR
@@ -115,6 +120,22 @@ export async function GET() {
       .gte("failed_at", t48hAgo)
       .order("failed_at", { ascending: true })
       .limit(5000),
+
+    // Comptes exacts (head) : PostgREST plafonne les SELECT à 1 000 lignes,
+    // la profondeur de file affichait 1 000 alors qu'il y en avait 4 553.
+    sb
+      .from("pipeline_jobs")
+      .select("id", { count: "exact", head: true })
+      .in("status", ["pending", "claimed"]),
+    sb
+      .from("pipeline_jobs")
+      .select("id", { count: "exact", head: true })
+      .in("status", ["pending", "claimed"])
+      .lte("created_at", new Date(now - ms24h).toISOString()),
+    sb
+      .from("dead_letter_jobs")
+      .select("id", { count: "exact", head: true })
+      .eq("resolution_status", "pending"),
   ]);
 
   // ─── Hour-bucket helpers ─────────────────────────────────────────
@@ -158,8 +179,7 @@ export async function GET() {
   }
 
   // ─── Queue depth + history ───────────────────────────────────────
-  const queueAll = (queueAllRes.data ?? []) as PipelineJobRow[];
-  const queueDepth = queueAll.length;
+  const queueDepth = queueCountRes.count ?? (queueAllRes.data ?? []).length;
 
   const queueRecent = (queueRecentRes.data ?? []) as PipelineJobRow[];
   const queueRecentTs = queueRecent.map((r) => r.created_at);
@@ -170,9 +190,7 @@ export async function GET() {
   // pending+claimed AND created before that point. Since jobs that
   // finished are excluded (status filter above), this isn't exact,
   // but it's directionally correct for trending signal.
-  const queue24hAgoApprox = queueAll.filter(
-    (r) => new Date(r.created_at).getTime() <= now - ms24h
-  ).length;
+  const queue24hAgoApprox = queueOldCountRes.count ?? 0;
 
   // ─── DLQ ─────────────────────────────────────────────────────────
   const dlqRows = (dlqAllRes.data ?? []) as DlqRow[];
@@ -198,7 +216,8 @@ export async function GET() {
     kills24h,
     clipRate, // already a /h count
     queueDepth,
-    dlqCount: dlqLast24h,
+    // En-tête : DLQ ouverte (non traitée), toutes dates ; delta sur les entrées du jour.
+    dlqCount: dlqOpenRes.count ?? dlqLast24h,
     deltas: {
       kills24h: pctDelta(kills24h, killsPrev24h),
       clipRate: pctDelta(clipRate, clipRatePrev),

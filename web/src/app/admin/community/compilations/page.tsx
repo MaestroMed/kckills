@@ -10,7 +10,7 @@ import Link from "next/link";
 
 import { AdminPage } from "@/components/admin/ui/AdminPage";
 import { AdminCard } from "@/components/admin/ui/AdminCard";
-import { createAnonSupabase } from "@/lib/supabase/server";
+import { adminPageDb } from "@/lib/admin/db";
 
 export const metadata: Metadata = {
   title: "Compilations Admin",
@@ -31,7 +31,7 @@ interface CompilationRowLite {
 export default async function CompilationsAdminPage() {
   let recent: CompilationRowLite[] = [];
   try {
-    const sb = createAnonSupabase();
+    const sb = await adminPageDb();
     const { data } = await sb
       .from("compilations")
       .select("short_code,title,status,view_count,output_duration_seconds,created_at")

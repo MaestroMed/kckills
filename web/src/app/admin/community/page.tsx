@@ -24,7 +24,7 @@ import { AdminCard } from "@/components/admin/ui/AdminCard";
 import { getCurrentBracket, currentRound, openMatchCount } from "@/lib/supabase/bracket";
 import { getRecentUnlocks } from "@/lib/supabase/achievements";
 import { getTopFaceOffDuels } from "@/lib/supabase/face-off";
-import { createAnonSupabase } from "@/lib/supabase/server";
+import { adminPageDb } from "@/lib/admin/db";
 
 export const metadata: Metadata = {
   title: "Community & Events — Admin",
@@ -40,7 +40,7 @@ async function plannedCount(table: string): Promise<number | null> {
   // Returns null when the request fails (RLS, missing table) so the
   // caller can render a "—" placeholder rather than a noisy 0.
   try {
-    const sb = createAnonSupabase();
+    const sb = await adminPageDb();
     const { count, error } = await sb
       .from(table)
       .select("*", { count: "planned", head: true });

@@ -1,4 +1,4 @@
-import { createServerSupabase } from "@/lib/supabase/server";
+import { adminPageDb } from "@/lib/admin/db";
 import { RosterEditor } from "./roster-editor";
 
 export const dynamic = "force-dynamic";
@@ -8,7 +8,7 @@ export const metadata = {
 };
 
 export default async function RosterPage() {
-  const sb = await createServerSupabase();
+  const sb = await adminPageDb();
 
   // Get all players + their teams
   const [players, teams, killsAgg] = await Promise.all([

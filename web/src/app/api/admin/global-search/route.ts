@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createServerSupabase } from "@/lib/supabase/server";
-import { requireAdmin } from "@/lib/admin/audit";
+import { createServiceSupabase } from "@/lib/supabase/server";
+import { adminDbUnavailable, requireAdmin } from "@/lib/admin/audit";
 
 /**
  * GET /api/admin/global-search
@@ -106,7 +106,9 @@ export async function GET(req: NextRequest) {
     .map((s) => s.trim())
     .filter(Boolean);
 
-  const sb = await createServerSupabase();
+  const sb = createServiceSupabase();
+
+  if (!sb) return adminDbUnavailable();
   const safe = escapeLike(q);
   const idLike = looksLikeId(q);
 

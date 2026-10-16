@@ -15,7 +15,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { notFound } from "next/navigation";
-import { createServerSupabase } from "@/lib/supabase/server";
+import { adminPageDb } from "@/lib/admin/db";
 import { JobRowActions } from "../job-row-actions";
 import { AdminBadge, type AdminBadgeVariant } from "@/components/admin/ui/AdminBadge";
 
@@ -87,7 +87,7 @@ export default async function JobDetailPage({
   const { id } = await params;
   if (!id) notFound();
 
-  const sb = await createServerSupabase();
+  const sb = await adminPageDb();
 
   const { data, error } = await sb
     .from("pipeline_jobs")

@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { createServerSupabase } from "@/lib/supabase/server";
+import { adminPageDb } from "@/lib/admin/db";
 import { ClipDetailEditor } from "./clip-detail-editor";
 
 export const dynamic = "force-dynamic";
@@ -15,7 +15,7 @@ export default async function ClipDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const sb = await createServerSupabase();
+  const sb = await adminPageDb();
   const { data: clip } = await sb
     .from("kills")
     .select(

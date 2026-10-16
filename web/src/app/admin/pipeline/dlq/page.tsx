@@ -18,7 +18,7 @@
  * requeued today / cancelled today), and a celebratory empty state.
  */
 import Link from "next/link";
-import { createServerSupabase } from "@/lib/supabase/server";
+import { adminPageDb } from "@/lib/admin/db";
 import { DlqRowActions } from "./row-actions";
 import { DlqBulkDrain } from "./bulk-drain";
 
@@ -44,7 +44,7 @@ interface DlqRow {
 }
 
 export default async function DlqPage() {
-  const sb = await createServerSupabase();
+  const sb = await adminPageDb();
 
   const todayStart = new Date();
   todayStart.setHours(0, 0, 0, 0);

@@ -18,7 +18,7 @@
  * don't want a fast-clicking operator hammering the DB.
  */
 
-import { createServerSupabase } from "@/lib/supabase/server";
+import { adminPageDb, type AdminDb } from "@/lib/admin/db";
 import { AdminCard } from "@/components/admin/ui/AdminCard";
 import { AdminBadge } from "@/components/admin/ui/AdminBadge";
 
@@ -55,7 +55,7 @@ interface CountResult {
 }
 
 async function fetchCounts(
-  sb: Awaited<ReturnType<typeof createServerSupabase>>,
+  sb: AdminDb,
 ): Promise<{
   pubByWindow: Record<string, number>;
   detectByWindow: Record<string, number>;
@@ -175,7 +175,7 @@ async function fetchCounts(
 }
 
 export default async function PipelineRatePage() {
-  const sb = await createServerSupabase();
+  const sb = await adminPageDb();
   const data = await fetchCounts(sb);
 
   const totalCatalog = Object.values(data.statusDist).reduce(

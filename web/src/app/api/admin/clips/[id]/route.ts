@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createServerSupabase } from "@/lib/supabase/server";
-import { ADMIN_DB_UNAVAILABLE, requireAdmin } from "@/lib/admin/audit";
+import { createServiceSupabase } from "@/lib/supabase/server";
+import { ADMIN_DB_UNAVAILABLE, adminDbUnavailable, requireAdmin } from "@/lib/admin/audit";
 import { patchClip } from "@/app/admin/clips/actions";
 
 /** GET /api/admin/clips/[id] */
@@ -9,7 +9,8 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   if (!admin.ok) return NextResponse.json({ error: admin.error }, { status: 403 });
 
   const { id } = await params;
-  const sb = await createServerSupabase();
+  const sb = createServiceSupabase();
+  if (!sb) return adminDbUnavailable();
   const { data, error } = await sb
     .from("kills")
     .select(

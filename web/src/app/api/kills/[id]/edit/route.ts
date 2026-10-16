@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createServerSupabase } from "@/lib/supabase/server";
-import { deriveActorRole, logAdminAction, requireAdmin } from "@/lib/admin/audit";
+import { createServiceSupabase } from "@/lib/supabase/server";
+import { adminDbUnavailable, deriveActorRole, logAdminAction, requireAdmin } from "@/lib/admin/audit";
 
 const VALID_FIGHT_TYPES = [
   "solo_kill", "pick", "gank", "skirmish_2v2", "skirmish_3v3",
@@ -63,7 +63,10 @@ export async function PATCH(
     return NextResponse.json({ error: "No valid fields to update" }, { status: 400 });
   }
 
-  const sb = await createServerSupabase();
+  // Service role : kills n'a pas de policy UPDATE pour la session ; par la
+  // session l'UPDATE touchait 0 ligne sans erreur et l'audit notait un succès.
+  const sb = createServiceSupabase();
+  if (!sb) return adminDbUnavailable();
 
   // Snapshot only the columns we're about to modify so the audit diff
   // shows the exact fields that changed (not the entire kill row).
@@ -73,13 +76,17 @@ export async function PATCH(
     .eq("id", id)
     .maybeSingle();
 
-  const { error } = await sb
+  const { data: updated, error } = await sb
     .from("kills")
     .update(patch)
-    .eq("id", id);
+    .eq("id", id)
+    .select("id");
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+  if (!updated?.length) {
+    return NextResponse.json({ error: "Kill introuvable" }, { status: 404 });
   }
 
   await logAdminAction({

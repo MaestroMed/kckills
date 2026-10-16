@@ -19,7 +19,7 @@ import {
   RARITY_LABEL,
   CATEGORY_LABEL,
 } from "@/lib/supabase/achievements-types";
-import { createAnonSupabase } from "@/lib/supabase/server";
+import { adminPageDb } from "@/lib/admin/db";
 
 export const metadata: Metadata = {
   title: "Achievements Admin",
@@ -36,7 +36,7 @@ export default async function AchievementsAdminPage() {
     getRecentUnlocks(20, { buildTime: true }),
     (async () => {
       try {
-        const sb = createAnonSupabase();
+        const sb = await adminPageDb();
         const { count } = await sb
           .from("user_achievements")
           .select("*", { count: "planned", head: true });

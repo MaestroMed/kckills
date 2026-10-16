@@ -1,4 +1,4 @@
-import { createServerSupabase } from "@/lib/supabase/server";
+import { adminPageDb } from "@/lib/admin/db";
 import { getPublishedKills } from "@/lib/supabase/kills";
 import { FeaturedPicker } from "./featured-picker";
 
@@ -9,7 +9,7 @@ export const metadata = {
 };
 
 export default async function FeaturedPage() {
-  const sb = await createServerSupabase();
+  const sb = await adminPageDb();
 
   // Get featured for last 14 + next 7 days
   const today = new Date();

@@ -23,8 +23,8 @@
  *   }
  */
 import { NextRequest, NextResponse } from "next/server";
-import { createServerSupabase } from "@/lib/supabase/server";
-import { requireAdmin } from "@/lib/admin/audit";
+import { createServiceSupabase } from "@/lib/supabase/server";
+import { adminDbUnavailable, requireAdmin } from "@/lib/admin/audit";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -95,7 +95,9 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Invalid target_type" }, { status: 400 });
   }
 
-  const sb = await createServerSupabase();
+  const sb = createServiceSupabase();
+
+  if (!sb) return adminDbUnavailable();
 
   // 1. Fetch the base report rows
   let q = sb
