@@ -43,6 +43,7 @@ export const ADMIN_NAV: AdminNavGroup[] = [
       { href: "/admin/editorial", label: "Éditorial", icon: "✦", keywords: "editorial curation masquer discord" },
       { href: "/admin/featured", label: "Clip du jour", icon: "★", keywords: "featured spotlight jour une" },
       { href: "/admin/playlists", label: "Playlists", icon: "♬", keywords: "playlists musique lecteur audio wolf" },
+      { href: "/admin/themes", label: "Thèmes d'accueil", icon: "◐", keywords: "themes accueil match jour etendards forcer" },
       { href: "/admin/hero-videos", label: "Vidéos du hero", icon: "◫", keywords: "hero videos accueil" },
       { href: "/admin/push", label: "Notifications push", icon: "✉", keywords: "push notifications broadcast envoyer" },
     ],

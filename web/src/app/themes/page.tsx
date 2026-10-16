@@ -12,6 +12,7 @@ import type { Metadata } from "next";
 import { GALLERY_THEMES, HOME_THEMES, type HomeTheme } from "@/lib/home-themes";
 import { fetchNextKcMatch } from "@/lib/next-match-server";
 import { activeHomeTheme } from "@/lib/home-themes";
+import { getHomeThemeOverride } from "@/lib/home-theme-settings";
 
 export const metadata: Metadata = { title: "Thèmes de l'accueil", robots: { index: false, follow: false } };
 export const dynamic = "force-dynamic";
@@ -27,7 +28,8 @@ function when(th: HomeTheme): string {
 
 export default async function ThemesGallery() {
   const next = await fetchNextKcMatch().catch(() => null);
-  const live = activeHomeTheme(new Date(), null, next);
+  const forced = (await getHomeThemeOverride().catch(() => null)) ?? process.env.KCKILLS_HOME_THEME;
+  const live = activeHomeTheme(new Date(), forced, next);
   const groups: { title: string; items: HomeTheme[] }[] = [
     { title: "En ce moment", items: [live] },
     { title: "Datés", items: HOME_THEMES.filter((t) => t.id !== live.id) },
