@@ -51,7 +51,6 @@ const PAGES: Entry[] = [
   { id: "p-editorial",      group: "navigation", label: "Editorial",          subtitle: "Curation",       href: "/admin/editorial",                    searchText: "editorial curation curate" },
   { id: "p-featured",       group: "navigation", label: "Featured du jour",   subtitle: "Spotlight",       href: "/admin/featured",                     searchText: "featured spotlight day jour" },
   { id: "p-playlists",      group: "navigation", label: "Wolf player vibes",  subtitle: "Playlists",       href: "/admin/playlists",                    searchText: "playlists wolf vibes audio" },
-  { id: "p-bgm",            group: "navigation", label: "BGM (legacy)",       subtitle: "Audio scroll",    href: "/admin/bgm",                          searchText: "bgm music background audio scroll" },
   { id: "p-push",           group: "navigation", label: "Push Broadcast",     subtitle: "Notifications",   href: "/admin/push",                         searchText: "push notifications broadcast send" },
   { id: "p-mod",            group: "navigation", label: "Modération",         subtitle: "Comments",        href: "/admin/moderation",                   searchText: "moderation comments commentaires modere" },
   { id: "p-mod-reports",    group: "navigation", label: "Reports",            subtitle: "Signalements",    href: "/admin/moderation/reports",           searchText: "reports signalements moderation reports" },

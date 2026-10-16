@@ -18,76 +18,17 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { readFile } from "fs/promises";
-import path from "path";
 import { requireAdmin } from "@/lib/admin/audit";
-import {
-  DEFAULT_PLAYLISTS,
-  type BgmTrack,
-  type PlaylistId,
-} from "@/lib/audio/playlists";
+import type { BgmTrack, PlaylistId } from "@/lib/audio/playlists";
+import { loadPlaylists } from "@/lib/audio/playlists-store";
 import { savePlaylists } from "@/app/admin/playlists/actions";
-
-const STORAGE_PATH = path.join(process.cwd(), ".cache", "playlists.json");
-
-interface StoredShape {
-  playlists: Record<PlaylistId, BgmTrack[]>;
-  updatedAt: string;
-}
-
-function isValidTrack(t: unknown): t is BgmTrack {
-  if (!t || typeof t !== "object") return false;
-  const o = t as Record<string, unknown>;
-  return (
-    typeof o.id === "string" &&
-    typeof o.title === "string" &&
-    typeof o.artist === "string" &&
-    typeof o.youtubeId === "string" &&
-    /^[A-Za-z0-9_-]{11}$/.test(o.youtubeId) &&
-    typeof o.durationSeconds === "number" &&
-    o.durationSeconds > 0 &&
-    typeof o.genre === "string"
-  );
-}
-
-/** Validates the operator-editable subset (homepage + scroll). `bcc` is
- *  patched in by savePlaylists() before disk write so it can't be edited
- *  from this endpoint. */
-function isValidPlaylists(
-  obj: unknown,
-): obj is Record<PlaylistId, BgmTrack[]> {
-  if (!obj || typeof obj !== "object") return false;
-  const o = obj as Record<string, unknown>;
-  for (const id of ["homepage", "scroll"] as PlaylistId[]) {
-    if (!Array.isArray(o[id])) return false;
-    if (!o[id].every(isValidTrack)) return false;
-    if (o[id].length > 100) return false; // sanity cap
-  }
-  return true;
-}
-
-async function loadStored(): Promise<StoredShape> {
-  try {
-    const raw = await readFile(STORAGE_PATH, "utf-8");
-    const parsed = JSON.parse(raw);
-    if (parsed?.playlists && isValidPlaylists(parsed.playlists)) {
-      return parsed as StoredShape;
-    }
-  } catch {
-    // File missing or malformed — return defaults
-  }
-  return {
-    playlists: { ...DEFAULT_PLAYLISTS },
-    updatedAt: new Date(0).toISOString(),
-  };
-}
 
 export async function GET(_request: NextRequest) {
   const admin = await requireAdmin();
   if (!admin.ok) {
     return NextResponse.json({ error: admin.error }, { status: 403 });
   }
-  const stored = await loadStored();
+  const stored = await loadPlaylists();
   return NextResponse.json(stored, {
     headers: { "Cache-Control": "private, max-age=0, must-revalidate" },
   });

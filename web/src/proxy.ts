@@ -63,7 +63,7 @@ export async function proxy(request: NextRequest) {
   }
 
   // The matcher (see config below) ONLY routes /admin/*, /api/admin/*,
-  // /api/kills/:id/edit and /api/bgm to this proxy as of the
+  // /api/kills/:id/edit to this proxy as of the
   // 2026-04-27 cache fix. Public pages skip the proxy entirely so they
   // can stay statically cached on the Vercel CDN. The `needsAuth` check
   // here is belt-and-braces : if the matcher ever expands again, the
@@ -168,7 +168,7 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  // PR-SECURITY-A : matcher covers /admin + /api/admin + /api/kills/edit + /api/bgm
+  // PR-SECURITY-A : matcher covers /admin + /api/admin + /api/kills/edit
   // — these were intentionally outside /api/admin/* but mutate sensitive
   // data and need the same gate.
   //
@@ -189,7 +189,6 @@ export const config = {
     "/admin/:path*",
     "/api/admin/:path*",
     "/api/kills/:id/edit",
-    "/api/bgm",
     // porte de l'Antre (cachée) : page dynamique de toute façon (cookie)
     "/antre",
     // pages en chantier — liste littérale exigée par Next, à garder

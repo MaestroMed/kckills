@@ -9,7 +9,7 @@
  *      compatible) and returns the public URL on success. Used by
  *      /api/admin/hero-videos/upload (path A — direct multipart).
  *   2. `loadHeroVideos()` / `saveHeroVideos()` — reads/writes the
- *      `web/.cache/hero-videos.json` metadata list. Mirrors the
+ *      metadata list on R2 (`config/hero-videos.json`, lib/admin/config-store). Mirrors the
  *      `/api/admin/playlists` pattern (single-operator, no concurrent
  *      writes — Mehdi-only for now).
  *
@@ -19,18 +19,17 @@
 
 import "server-only";
 
-import { S3Client, PutObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
+import { PutObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
-import { mkdir, readFile, writeFile } from "fs/promises";
-import path from "path";
 import { randomUUID } from "crypto";
+import { getR2Bucket, getR2Client, getR2PublicUrl } from "@/lib/r2-server";
+import { readConfig, writeConfig } from "@/lib/admin/config-store";
 import {
   type HeroVideo,
   isHeroVideoList,
   MAX_HERO_VIDEOS,
 } from "./types";
 
-const STORAGE_PATH = path.join(process.cwd(), ".cache", "hero-videos.json");
 
 interface StoredShape {
   videos: HeroVideo[];
@@ -38,60 +37,6 @@ interface StoredShape {
 }
 
 // ─── R2 client ──────────────────────────────────────────────────────────
-
-/** Lazily instantiated so the module can be imported in environments that
- *  don't have R2 configured (e.g. local dev without credentials).
- *  Throws a friendly error at first use if env vars are missing. */
-let _s3Client: S3Client | null = null;
-
-function getR2Client(): S3Client {
-  if (_s3Client) return _s3Client;
-
-  // Accept both naming schemes :
-  //   • Worker scheme (CLAUDE.md spec)  : R2_ACCOUNT_ID
-  //   • Web scheme (web/.env.example)  : R2_ENDPOINT (full URL)
-  const accountId = process.env.R2_ACCOUNT_ID;
-  const explicitEndpoint = process.env.R2_ENDPOINT;
-  const accessKeyId = process.env.R2_ACCESS_KEY_ID;
-  const secretAccessKey = process.env.R2_SECRET_ACCESS_KEY;
-
-  if ((!accountId && !explicitEndpoint) || !accessKeyId || !secretAccessKey) {
-    throw new Error(
-      "R2 storage non configuré — définis R2_ACCOUNT_ID (ou R2_ENDPOINT) + R2_ACCESS_KEY_ID + R2_SECRET_ACCESS_KEY côté serveur.",
-    );
-  }
-
-  const endpoint = explicitEndpoint
-    ?? `https://${accountId}.r2.cloudflarestorage.com`;
-
-  _s3Client = new S3Client({
-    region: "auto",
-    endpoint,
-    credentials: { accessKeyId: accessKeyId, secretAccessKey: secretAccessKey },
-  });
-  return _s3Client;
-}
-
-function getR2Bucket(): string {
-  // Worker uses R2_BUCKET_NAME, web/.env.example uses R2_BUCKET — accept both.
-  const bucket = process.env.R2_BUCKET_NAME ?? process.env.R2_BUCKET;
-  if (!bucket) {
-    throw new Error("R2_BUCKET_NAME (ou R2_BUCKET) non défini.");
-  }
-  return bucket;
-}
-
-function getR2PublicUrl(): string {
-  // Worker uses R2_PUBLIC_URL ; web exposes the same value as
-  // NEXT_PUBLIC_R2_PUBLIC_URL for client consumption — accept both.
-  const url = process.env.R2_PUBLIC_URL ?? process.env.NEXT_PUBLIC_R2_PUBLIC_URL;
-  if (!url) {
-    throw new Error("R2_PUBLIC_URL non défini (custom domain de R2, ex. https://clips.kckills.com).");
-  }
-  return url.replace(/\/+$/, "");
-}
-
-// ─── Slug helper ────────────────────────────────────────────────────────
 
 /** Slugify a filename — keep extension, ASCII only, lowercased, hyphenated.
  *  Falls back to "video.mp4" if the input is empty after sanitisation. */
@@ -225,14 +170,9 @@ export async function deleteHeroVideoAsset(videoUrl: string): Promise<void> {
  * don't have to repeat the sort.
  */
 export async function loadHeroVideos(): Promise<HeroVideo[]> {
-  try {
-    const raw = await readFile(STORAGE_PATH, "utf-8");
-    const parsed = JSON.parse(raw) as StoredShape;
-    if (parsed?.videos && isHeroVideoList(parsed.videos)) {
-      return [...parsed.videos].sort((a, b) => a.order - b.order);
-    }
-  } catch {
-    // File missing or malformed — return empty list.
+  const parsed = await readConfig<StoredShape>("hero-videos");
+  if (parsed?.videos && isHeroVideoList(parsed.videos)) {
+    return [...parsed.videos].sort((a, b) => a.order - b.order);
   }
   return [];
 }
@@ -252,22 +192,21 @@ export async function saveHeroVideos(videos: HeroVideo[]): Promise<HeroVideo[]> 
   if (videos.length > MAX_HERO_VIDEOS) {
     throw new Error(`Trop de hero videos — maximum ${MAX_HERO_VIDEOS}.`);
   }
+  // Vidéos et posters servis par notre R2 uniquement : le hero de l'accueil
+  // ne doit jamais charger un média d'un domaine tiers.
+  const r2 = getR2PublicUrl();
+  const ours = (u: string | undefined) => !u || u.startsWith(`${r2}/`);
+  const foreign = videos.find((v) => !ours(v.videoUrl) || !ours(v.posterUrl));
+  if (foreign) {
+    throw new Error(`« ${foreign.title} » : la vidéo et le poster doivent être hébergés sur ${r2}.`);
+  }
 
   // Normalise order to a contiguous 0..N-1 sequence.
   const sorted = [...videos]
     .sort((a, b) => a.order - b.order)
     .map((v, i) => ({ ...v, order: i }));
 
-  await mkdir(path.dirname(STORAGE_PATH), { recursive: true });
-  await writeFile(
-    STORAGE_PATH,
-    JSON.stringify(
-      { videos: sorted, updatedAt: new Date().toISOString() } satisfies StoredShape,
-      null,
-      2,
-    ),
-    "utf-8",
-  );
+  await writeConfig("hero-videos", { videos: sorted, updatedAt: new Date().toISOString() } satisfies StoredShape);
 
   return sorted;
 }

@@ -53,7 +53,6 @@ const NAV: NavGroup[] = [
       { href: "/admin/featured", label: "Featured du jour", icon: "★" },
       { href: "/admin/playlists", label: "Wolf player vibes", icon: "♬" },
       { href: "/admin/hero-videos", label: "Hero videos", icon: "🎬" },
-      { href: "/admin/bgm", label: "BGM (legacy /scroll)", icon: "♪" },
       { href: "/admin/push", label: "Push Broadcast", icon: "✉" },
     ],
   },

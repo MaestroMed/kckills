@@ -3,7 +3,7 @@
 /**
  * Server Actions for /admin/playlists (Wave 18 — migrate fetch POST →
  * Server Action). Saves both wolf-player playlists (homepage + scroll)
- * to the project-root JSON file and audits the change.
+ * to R2 (lib/audio/playlists-store) and audits the change.
  *
  * The legacy /api/admin/playlists POST/GET is KEPT — the GET hydrates
  * the editor on first load (still a fetch from the client, fine as
@@ -12,81 +12,17 @@
  */
 import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
-import { readFile, writeFile, mkdir } from "fs/promises";
-import path from "path";
 import {
   deriveActorRole,
   logAdminAction,
   requireAdmin,
 } from "@/lib/admin/audit";
+import type { BgmTrack, EditablePlaylistId, PlaylistId } from "@/lib/audio/playlists";
 import {
-  DEFAULT_PLAYLISTS,
-  type BgmTrack,
-  type EditablePlaylistId,
-  type PlaylistId,
-} from "@/lib/audio/playlists";
-
-const STORAGE_PATH = path.join(process.cwd(), ".cache", "playlists.json");
-
-interface StoredShape {
-  playlists: Record<PlaylistId, BgmTrack[]>;
-  updatedAt: string;
-}
-
-function isValidTrack(t: unknown): t is BgmTrack {
-  if (!t || typeof t !== "object") return false;
-  const o = t as Record<string, unknown>;
-  return (
-    typeof o.id === "string"
-    && typeof o.title === "string"
-    && typeof o.artist === "string"
-    && typeof o.youtubeId === "string"
-    && /^[A-Za-z0-9_-]{11}$/.test(o.youtubeId)
-    && typeof o.durationSeconds === "number"
-    && o.durationSeconds > 0
-    && typeof o.genre === "string"
-  );
-}
-
-/**
- * Validates ONLY the operator-editable playlists (homepage + scroll).
- * The `bcc` key is added by savePlaylists() before writing to disk so
- * the canonical OTT loop is never dropped by an admin save.
- */
-function isValidEditablePlaylists(
-  obj: unknown,
-): obj is Record<EditablePlaylistId, BgmTrack[]> {
-  if (!obj || typeof obj !== "object") return false;
-  const o = obj as Record<string, unknown>;
-  for (const id of ["homepage", "scroll"] as EditablePlaylistId[]) {
-    if (!Array.isArray(o[id])) return false;
-    if (!o[id].every(isValidTrack)) return false;
-    if (o[id].length > 100) return false;
-  }
-  return true;
-}
-
-function isValidPlaylists(obj: unknown): obj is Record<PlaylistId, BgmTrack[]> {
-  if (!isValidEditablePlaylists(obj)) return false;
-  // bcc is allowed but not required ; if absent we'll patch it in on save.
-  return true;
-}
-
-async function loadStored(): Promise<StoredShape> {
-  try {
-    const raw = await readFile(STORAGE_PATH, "utf-8");
-    const parsed = JSON.parse(raw);
-    if (parsed?.playlists && isValidPlaylists(parsed.playlists)) {
-      return parsed as StoredShape;
-    }
-  } catch {
-    /* fall back to defaults */
-  }
-  return {
-    playlists: { ...DEFAULT_PLAYLISTS },
-    updatedAt: new Date(0).toISOString(),
-  };
-}
+  isValidEditablePlaylists,
+  loadPlaylists,
+  savePlaylistsToStore,
+} from "@/lib/audio/playlists-store";
 
 async function buildAuditRequest(): Promise<Request> {
   const h = await headers();
@@ -122,26 +58,13 @@ export async function savePlaylists(
     };
   }
 
-  const before = await loadStored();
-  // Force the canonical `bcc` cave playlist back in — it's NOT operator-
-  // editable (it's the Antre's signature OTT loop) but the admin POST
-  // body only carries homepage + scroll. Without this, every admin save
-  // would silently drop the bcc key from disk.
-  const next: StoredShape = {
-    playlists: {
-      homepage: (playlists as Record<EditablePlaylistId, BgmTrack[]>).homepage,
-      scroll: (playlists as Record<EditablePlaylistId, BgmTrack[]>).scroll,
-      bcc: DEFAULT_PLAYLISTS.bcc,
-    },
-    updatedAt: new Date().toISOString(),
-  };
-
+  const before = await loadPlaylists();
+  let next;
   try {
-    await mkdir(path.dirname(STORAGE_PATH), { recursive: true });
-  } catch {
-    /* may already exist */
+    next = await savePlaylistsToStore(playlists as Record<EditablePlaylistId, BgmTrack[]>);
+  } catch (err) {
+    return { ok: false, error: `Enregistrement impossible : ${(err as Error).message}` };
   }
-  await writeFile(STORAGE_PATH, JSON.stringify(next, null, 2), "utf-8");
 
   const auditReq = await buildAuditRequest();
   await logAdminAction({
@@ -155,6 +78,7 @@ export async function savePlaylists(
   });
 
   revalidatePath("/admin/playlists");
+  revalidatePath("/api/playlists");
   // The wolf player reads playlists at request time so no extra path to
   // revalidate here, but homepage/scroll might cache the response.
   revalidatePath("/");
