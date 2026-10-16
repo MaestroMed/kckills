@@ -126,6 +126,15 @@ interface Props {
   };
 }
 
+const ACTION_LABELS = {
+  republish: "Clip réaffiché.",
+  hide: "Clip masqué du feed.",
+  reanalyze: "Analyse mise en file.",
+  reclip: "Clip marqué pour re-clip.",
+  feature: "Clip mis en avant aujourd'hui.",
+  delete: "Clip retiré du site.",
+} as const;
+
 interface ToastMsg {
   id: number;
   text: string;
@@ -238,7 +247,7 @@ export function ClipDetailEditor({ clip }: Props) {
   };
 
   const headerAction = async (action: "republish" | "hide" | "reanalyze" | "reclip" | "feature" | "delete") => {
-    if (action === "delete" && !confirm("Supprimer définitivement ce clip ? Cette action est irréversible.")) {
+    if (action === "delete" && !confirm("Retirer ce clip du site ? (réversible avec Republier)")) {
       return;
     }
     if (action === "hide" && !confirm("Masquer ce clip du feed public ?")) return;
@@ -253,10 +262,9 @@ export function ClipDetailEditor({ clip }: Props) {
         body: JSON.stringify({ action }),
       });
       if (r.ok) {
-        pushToast(`${action} appliqué.`);
-        if (action === "delete") {
-          window.location.href = "/admin/clips";
-        }
+        pushToast(ACTION_LABELS[action]);
+        // Les badges d'état viennent du rendu serveur : on recharge pour les voir.
+        if (action !== "feature" && action !== "reanalyze") window.setTimeout(() => window.location.reload(), 800);
       } else {
         const e = await r.json().catch(() => ({}));
         pushToast(`Erreur : ${e.error ?? `HTTP ${r.status}`}`, "error");
@@ -351,7 +359,7 @@ export function ClipDetailEditor({ clip }: Props) {
           onClick={() => headerAction("delete")}
           className="ml-auto"
         >
-          Supprimer
+          Retirer
         </AdminButton>
       </div>
 
@@ -557,7 +565,7 @@ export function ClipDetailEditor({ clip }: Props) {
             <AdminEmptyState
               icon="✦"
               title="Aucune version d'annotation"
-              body="Le pipeline n'a pas encore produit d'analyse pour ce clip, ou l'endpoint /annotations n'est pas câblé."
+              body="Le pipeline n'a pas encore produit d'analyse pour ce clip, ou son analyse date d'avant le suivi des versions."
               compact
             />
           ) : (

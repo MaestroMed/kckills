@@ -27,8 +27,8 @@ export default async function ClipDetailPage({
         "confidence, fight_type, lane_phase, matchup_lane, champion_class, " +
         "kill_visible, needs_reclip, reclip_reason, status, retry_count, " +
         "created_at, updated_at, " +
-        "games!inner (external_id, game_number, vod_youtube_id, vod_offset_seconds, " +
-        "  matches!inner (external_id, stage, scheduled_at))",
+        "games (external_id, game_number, vod_youtube_id, vod_offset_seconds, " +
+        "  matches (external_id, stage, scheduled_at))",
     )
     .eq("id", id)
     .single();
