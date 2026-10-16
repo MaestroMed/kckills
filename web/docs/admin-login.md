@@ -10,4 +10,4 @@ générer une valeur aléatoire, `vercel env rm KCKILLS_ADMIN_TOKEN production`,
 qui touche `web/` sur `main`). Les cookies déjà émis restent valides (ils dépendent de
 `KCKILLS_ADMIN_JWT_SECRET`, pas du jeton).
 
-Dernier changement : 16/10/2026 (l'ancienne valeur était introuvable).
+Dernier changement : 16/10/2026 — nouveau jeton (l'ancien était introuvable) et `KCKILLS_ADMIN_JWT_SECRET` créé (il manquait : la connexion répondait « Server misconfigured »).
