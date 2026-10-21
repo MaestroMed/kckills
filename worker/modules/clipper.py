@@ -1720,7 +1720,23 @@ async def run() -> int:
                             if _frz.verdict == "fail":
                                 qc_local_ok = False
                                 qc_why = f"start_not_frozen: {_frz.detail}"
+                        # QC v3 (21/10/2026) : chrono à l'instant du kill + score du
+                        # bandeau, depuis la chronologie du feed en cache. Quand il
+                        # rend un verdict, il remplace la lecture à t=15 ci-dessous
+                        # (biaisée : elle supposait 30 s avant le kill pour tous).
+                        qc3_v = None
                         if qc_local_ok and twitch_section is None:
+                            try:
+                                from qc3.daemon_check import check as _qc3_check
+                                _tier = config.CLIP_TIMING.get(kill.get("multi_kill") or "", config.CLIP_TIMING["default"])
+                                qc3_v = await asyncio.to_thread(
+                                    _qc3_check, kill, game.get("external_id") or "", _local_h, float(_tier["before"]))
+                            except Exception as _e3:
+                                log.warn("clipper_qc3_error", kill_id=kill["id"][:8], error=str(_e3)[:120])
+                            if qc3_v is not None and qc3_v.verdict not in ("pass", "pass_timer"):
+                                qc_local_ok = False
+                                qc_why = f"qc3:{qc3_v.verdict}: {qc3_v.detail}"
+                        if qc_local_ok and twitch_section is None and qc3_v is None:
                             from modules import timer_ocr
                             if timer_ocr.is_calibrated():
                                 from modules.decryptage import (
@@ -1753,8 +1769,12 @@ async def run() -> int:
                 if urls and urls.get("clip_url_horizontal") and not qc_local_ok:
                     log.warn("clipper_local_qc_rejected",
                              kill_id=kill["id"][:8], reason=qc_why[:120])
+                    # Un refus QC v3 est définitif (la diffusion ne montre pas le
+                    # kill, ou l'ancre de la game est fausse et se corrige par
+                    # qc3_sync) : needs_reclip=false, aucune boucle de re-clip.
+                    _final = qc_why.startswith("qc3:")
                     await batched_safe_update(
-                        "kills", {"status": "needs_review", "needs_reclip": True,
+                        "kills", {"status": "needs_review", "needs_reclip": not _final,
                                   "reclip_reason": f"clip_qc_local: {qc_why}"[:240]},
                         "id", kill["id"])
                     try:
