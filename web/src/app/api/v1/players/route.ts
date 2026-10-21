@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { loadRealData, getKCRoster } from "@/lib/real-data";
+import { getKCRoster } from "@/lib/real-data";
+import { getRealData } from "@/lib/real-data-server";
 
 /**
  * GET /api/v1/players — Public API for KC roster with stats.
@@ -23,7 +24,7 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  const data = loadRealData();
+  const data = await getRealData();
   const roster = getKCRoster(data);
 
   const players = roster.map((p) => ({

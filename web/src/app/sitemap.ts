@@ -1,7 +1,8 @@
 import type { MetadataRoute } from "next";
 import { ERAS } from "@/lib/eras";
 import { ALUMNI } from "@/lib/alumni";
-import { loadRealData, getKCRoster } from "@/lib/real-data";
+import { getKCRoster } from "@/lib/real-data";
+import { getRealData } from "@/lib/real-data-server";
 import { getSitemapKills, getSitemapVideoKills } from "@/lib/supabase/kills";
 import { pickAssetUrl } from "@/lib/kill-assets";
 import { SITE_URL } from "@/lib/site-url";
@@ -60,7 +61,7 @@ const MULTI_LABEL: Record<string, string> = {
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const now = new Date();
-  const data = loadRealData();
+  const data = await getRealData();
   const roster = getKCRoster(data);
 
   // Pull the top published clips for indexation. Sorted by highlight_score

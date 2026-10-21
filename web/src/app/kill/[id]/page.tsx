@@ -1,7 +1,8 @@
 import { notFound, permanentRedirect } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
-import { loadRealData, displayRole } from "@/lib/real-data";
+import { displayRole, type RealData } from "@/lib/real-data";
+import { getRealData } from "@/lib/real-data-server";
 import { championIconUrl } from "@/lib/constants";
 import { computeKillScore } from "@/lib/feed-algorithm";
 import { getDuplicateKeeperId, getKillById, getKillsByMatchExternalId, getPublishedKills } from "@/lib/supabase/kills";
@@ -86,7 +87,7 @@ interface LegacyKill {
   multiKill: string | null;
 }
 
-function buildLegacyKillIndex(data: ReturnType<typeof loadRealData>): LegacyKill[] {
+function buildLegacyKillIndex(data: RealData): LegacyKill[] {
   const kills: LegacyKill[] = [];
   for (const match of data.matches) {
     for (const game of match.games) {
@@ -167,7 +168,7 @@ async function getKillPlayerNames(
 
 function opponentFromMatchExternalId(
   matchExternalId: string,
-  data: ReturnType<typeof loadRealData>
+  data: RealData
 ): { code: string; name: string } | null {
   const hit = data.matches.find((m) => m.id === matchExternalId);
   // cleanTeamCode filtre les codes non affichables (vide, id numérique
@@ -239,7 +240,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     if (keeper) permanentRedirect(`/kill/${keeper}`);
   }
 
-  const data = loadRealData();
+  const data = await getRealData();
   const kills = buildLegacyKillIndex(data);
   const kill = kills.find((k) => k.id === id);
   if (!kill) return { title: "Kill introuvable" };
@@ -260,7 +261,7 @@ export default async function KillDetailPage({ params }: Props) {
   if (isUuid(id)) {
     const kill = await getKillById(id, { buildTime: true });
     if (kill) {
-      const data = loadRealData();
+      const data = await getRealData();
       const opponent = opponentFromMatchExternalId(
         kill.games?.matches?.external_id ?? "",
         data
@@ -438,7 +439,7 @@ export default async function KillDetailPage({ params }: Props) {
     if (keeper) permanentRedirect(`/kill/${keeper}`);
   }
 
-  const data = loadRealData();
+  const data = await getRealData();
   const kills = buildLegacyKillIndex(data);
   const kill = kills.find((k) => k.id === id);
   if (!kill) notFound();

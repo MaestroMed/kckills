@@ -174,6 +174,7 @@ DAEMON_MODULES: list[tuple[str, int, str]] = [
     # VAPID env, so both are safe as always-scheduled daemons.
     ("kill_of_the_week",  _get_interval("kill_of_the_week"),  "modules.kill_of_the_week"),       # default 3600s  — weekly KOTW pin (window-gated)
     ("push_notifier",     _get_interval("push_notifier"),     "modules.push_notifier"),          # default 300s   — drain push queue (VAPID-gated)
+    ("real_data_export",  _get_interval("real_data_export"),  "modules.real_data_export"),       # default 10800s — kc_matches.json (stats des séries) -> R2, relu par le site
 ]
 
 RESTART_DELAY = 10  # seconds between a module crash and its next attempt

@@ -36,7 +36,8 @@ import {
   type FaceOffTopKill,
   type MostKilledOpponent,
 } from "@/lib/supabase/face-off";
-import { loadRealData, getCurrentRoster, type RosterPlayer } from "@/lib/real-data";
+import { getCurrentRoster, type RosterPlayer } from "@/lib/real-data";
+import { getRealData } from "@/lib/real-data-server";
 import { ALUMNI, type Alumni } from "@/lib/alumni";
 import { PLAYER_PHOTOS } from "@/lib/kc-assets";
 import { JsonLd, breadcrumbLD } from "@/lib/seo/jsonld";
@@ -107,8 +108,8 @@ function capitalize(s: string): string {
 // Player option list — current 2026 roster + alumni
 // ════════════════════════════════════════════════════════════════════
 
-function buildPlayerOptions(): FaceOffPlayerOption[] {
-  const data = loadRealData();
+async function buildPlayerOptions(): Promise<FaceOffPlayerOption[]> {
+  const data = await getRealData();
   const current = getCurrentRoster(data);
 
   const out: FaceOffPlayerOption[] = [];
@@ -249,7 +250,7 @@ export default async function FaceOffPage({ searchParams }: PageProps) {
   const aRaw = (sp.a ?? "").trim().toLowerCase();
   const bRaw = (sp.b ?? "").trim().toLowerCase();
 
-  const players = buildPlayerOptions();
+  const players = await buildPlayerOptions();
   const playersBySlug: Record<string, FaceOffPlayerOption> = {};
   for (const p of players) playersBySlug[p.slug] = p;
 

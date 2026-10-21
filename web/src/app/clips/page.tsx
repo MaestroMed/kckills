@@ -5,7 +5,8 @@ import { getKillsForGrid, isDataOnlyKill } from "@/lib/supabase/kills";
 // 2000 lignes (top highlight_score). Le total vient désormais du compteur
 // canonique partagé avec /scroll, la home et /matches.
 import { getCachedPublishedClipsCount } from "@/lib/stats-scopes";
-import { loadRealData } from "@/lib/real-data";
+
+import { getRealData } from "@/lib/real-data-server";
 import { JsonLd, clipsCollectionLD } from "@/lib/seo/jsonld";
 import { getAssetMetadata, pickAssetUrl } from "@/lib/kill-assets";
 import { ClipsGrid, type ClipCard, type InitialFilters } from "./clips-grid";
@@ -67,7 +68,7 @@ export default async function ClipsPage({ searchParams }: { searchParams?: Promi
     // to use getPublishedKills (clip-only) — only browse pages here
     // get the full 6-year catalog.
     getKillsForGrid(2000),
-    Promise.resolve(loadRealData()),
+    getRealData(),
     getCachedPublishedClipsCount(),
   ]);
 

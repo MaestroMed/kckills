@@ -3,7 +3,8 @@ import Image from "next/image";
 import Link from "next/link";
 import type { Metadata } from "next";
 
-import { loadRealData, getPlayerStats, getCurrentRoster } from "@/lib/real-data";
+import { getPlayerStats, getCurrentRoster, type RealData } from "@/lib/real-data";
+import { getRealData } from "@/lib/real-data-server";
 import { championSplashUrl, championIconUrl } from "@/lib/constants";
 import { PLAYER_PHOTOS } from "@/lib/kc-assets";
 import { ALUMNI } from "@/lib/alumni";
@@ -97,7 +98,7 @@ const ROLE_POSTER: Record<string, string> = {
 async function getRealKillsForPlayer(
   playerCleanName: string,
   topChampions: { name: string }[],
-  data: ReturnType<typeof loadRealData>,
+  data: RealData,
 ): Promise<PublishedKillRow[]> {
   if (topChampions.length === 0) return [];
   const championNames = topChampions.slice(0, 5).map((c) => c.name);
@@ -132,7 +133,7 @@ async function getRealKillsForPlayer(
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params;
   const name = safeDecode(slug);
-  const data = loadRealData();
+  const data = await getRealData();
   const stats = getPlayerStats(data, name);
   const photo = PLAYER_PHOTOS[name];
   const canonicalPath = `/player/${encodeURIComponent(name)}`;
@@ -170,7 +171,7 @@ export default async function PlayerPage({ params }: Props) {
   const { slug } = await params;
   const name = safeDecode(slug);
   const { lang, t } = getStaticT();
-  const data = loadRealData();
+  const data = await getRealData();
   const stats = getPlayerStats(data, name);
 
   if (stats.gamesPlayed === 0) notFound();

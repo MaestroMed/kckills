@@ -14,7 +14,8 @@
  */
 
 import { cookies, headers } from "next/headers";
-import { loadRealData } from "@/lib/real-data";
+
+import { getRealData } from "@/lib/real-data-server";
 import {
   getKillById,
   getPublishedKills,
@@ -295,7 +296,7 @@ export default async function ScrollV2Page({ searchParams }: ScrollPageProps) {
       ? feedSeed % (poolCount - KILLS_LIMIT)
       : 0;
   const [data, topPool, windowKills, roster] = await Promise.all([
-    Promise.resolve(loadRealData()),
+    getRealData(),
     catalogEnabled ? getTopScrollKills(OPENER_POOL) : Promise.resolve([]),
     catalogEnabled
       ? getScrollFeedKills(KILLS_LIMIT, windowOffset, QUALITY_FLOOR)

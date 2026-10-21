@@ -1,7 +1,8 @@
 import Link from "next/link";
 import Image from "next/image";
 import type { Metadata } from "next";
-import { loadRealData, getKCRoster, displayRole, roleIcon } from "@/lib/real-data";
+import { getKCRoster, displayRole, roleIcon } from "@/lib/real-data";
+import { getRealData } from "@/lib/real-data-server";
 import { championIconUrl, championLoadingUrl } from "@/lib/constants";
 import { PLAYER_PHOTOS } from "@/lib/kc-assets";
 import { ALUMNI } from "@/lib/alumni";
@@ -25,7 +26,7 @@ export const metadata: Metadata = {
 
 export default async function PlayersPage() {
   const { t } = getStaticT();
-  const data = loadRealData();
+  const data = await getRealData();
 
   const data2026 = { ...data, matches: data.matches.filter((m) => m.date >= "2026-01-01") };
   const data2025 = { ...data, matches: data.matches.filter((m) => m.date >= "2025-01-01" && m.date < "2026-01-01") };

@@ -43,7 +43,8 @@ import { cache } from "react";
 import { unstable_cache } from "next/cache";
 import { createAnonSupabase, rethrowIfDynamic } from "@/lib/supabase/server";
 import { getPublishedKcKillCount } from "@/lib/supabase/kills";
-import { loadRealData } from "@/lib/real-data";
+
+import { getRealData } from "@/lib/real-data-server";
 
 /** Tag d'invalidation : `revalidateTag(STATS_SCOPES_TAG)` après un write
  *  worker. On garde aussi le tag 'hero-stats' historique côté wrappers
@@ -297,11 +298,11 @@ export async function fetchGamesAllCompetCount(): Promise<number> {
 
 /**
  * Périmètre « log détaillé » — agrégats du snapshot statique
- * kc_matches.json (la source de /stats). Synchrone, zéro egress.
+ * kc_matches.json (la source de /stats), relu sur R2 (getRealData).
  * Implémentation unique de la boucle qui vivait dans app/stats/page.tsx.
  */
-export function getTrackedGamesDetailed(): TrackedGamesDetailed {
-  const data = loadRealData();
+export async function getTrackedGamesDetailed(): Promise<TrackedGamesDetailed> {
+  const data = await getRealData();
   let games = 0;
   let gameWins = 0;
   let kcKills = 0;

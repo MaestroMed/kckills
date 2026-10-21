@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
-import { loadRealData, getKCRoster, getPlayerStats } from "@/lib/real-data";
+import { getKCRoster, getPlayerStats } from "@/lib/real-data";
+import { getRealData } from "@/lib/real-data-server";
 import { Breadcrumb } from "@/components/Breadcrumb";
 import { getStaticT } from "@/lib/i18n/server-lang";
 import { CompareClient, type ComparablePlayer } from "./compare-client";
@@ -22,7 +23,7 @@ export const metadata: Metadata = {
 
 export default async function ComparePage() {
   const { t } = getStaticT();
-  const data = loadRealData();
+  const data = await getRealData();
   const roster = getKCRoster(data);
 
   const players: ComparablePlayer[] = roster.map((p) => {

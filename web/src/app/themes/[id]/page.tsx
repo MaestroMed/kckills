@@ -6,7 +6,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
-import { loadRealData, getCurrentRoster, getMatchesSorted } from "@/lib/real-data";
+import { getCurrentRoster, getMatchesSorted } from "@/lib/real-data";
+import { getRealData } from "@/lib/real-data-server";
 import { HomeHero } from "@/components/home/HomeHero";
 import { findHomeTheme, GALLERY_THEMES, toClientTheme } from "@/lib/home-themes";
 
@@ -17,7 +18,7 @@ export default async function ThemePreview({ params }: { params: Promise<{ id: s
   const { id } = await params;
   const theme = findHomeTheme(id);
   if (!theme) notFound();
-  const data = loadRealData();
+  const data = await getRealData();
   const i = GALLERY_THEMES.findIndex((t) => t.id === id);
   const prev = GALLERY_THEMES[(i - 1 + GALLERY_THEMES.length) % GALLERY_THEMES.length];
   const next = GALLERY_THEMES[(i + 1) % GALLERY_THEMES.length];

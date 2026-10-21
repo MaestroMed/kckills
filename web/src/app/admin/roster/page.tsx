@@ -1,6 +1,7 @@
 import { adminPageDb } from "@/lib/admin/db";
 import { fetchAll } from "@/lib/admin/paginate";
-import { loadRealData, getCurrentRoster } from "@/lib/real-data";
+import { getCurrentRoster } from "@/lib/real-data";
+import { getRealData } from "@/lib/real-data-server";
 import { RosterEditor } from "./roster-editor";
 
 export const dynamic = "force-dynamic";
@@ -27,7 +28,7 @@ export default async function RosterPage() {
 
   // Titulaires = les joueurs KC alignés en 2026 (même source que le site).
   // is_tracked seul désigne l'équipe : tous les anciens de KC y sont encore.
-  const starters = new Set(getCurrentRoster(loadRealData()).map((p) => p.name.toLowerCase()));
+  const starters = new Set(getCurrentRoster(await getRealData()).map((p) => p.name.toLowerCase()));
 
   // Build kill counts per player
   const killCount = new Map<string, number>();

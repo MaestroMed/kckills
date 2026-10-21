@@ -45,6 +45,7 @@ _run-*.ps1
 # TypeScript incremental build cache
 **/tsconfig.tsbuildinfo
 worker/golgg_backfill_state.json
+worker/real_data_export_state.json
 
 # YouTube auth cookies — contains active session tokens, NEVER commit
 worker/.youtube_cookies.txt
