@@ -4,9 +4,10 @@
  * Command Palette — ⌘K / Ctrl+K global search.
  *
  * Self-contained: no cmdk dep, no shadcn, ~4 KB after tree-shaking.
- * Indexes eras + current roster + recent matches + static routes at module load
- * time (baked from the existing static imports), so search runs client-side
- * against a fixed JSON list.
+ * Indexes static routes + eras + alumni at module load time ; players,
+ * champions and recent matches (/api/palette/data, built from the R2
+ * kc_matches.json) and clips (/api/palette/clips) are fetched on first open.
+ * Search runs client-side.
  *
  * Keyboard:
  *  ⌘K / Ctrl+K     open
@@ -27,7 +28,7 @@ import {
 } from "react";
 import { useRouter } from "next/navigation";
 
-import kcMatchesJson from "@/data/kc_matches.json";
+import type { PaletteEntry, PaletteGroup } from "@/lib/palette-data";
 import { ERAS } from "@/lib/eras";
 import { ALUMNI } from "@/lib/alumni";
 import { isHiddenRoute } from "@/lib/hidden-routes";
@@ -35,17 +36,8 @@ import { useT, type TranslateFn } from "@/lib/i18n/use-lang";
 
 // ─── Index types ────────────────────────────────────────────────────────────
 
-type Group = "era" | "player" | "match" | "page" | "champion" | "clip";
-
-interface Entry {
-  id: string;
-  group: Group;
-  label: string;          // main title shown in the list
-  subtitle?: string;      // secondary line (period, code, stage…)
-  href: string;
-  hint?: string;          // tiny right-aligned hint (result, score, icon…)
-  searchText: string;     // concatenated lowercased tokens for matching
-}
+type Group = PaletteGroup;
+type Entry = PaletteEntry;
 
 // ─── Static routes ──────────────────────────────────────────────────────────
 
@@ -115,119 +107,10 @@ const ERA_ENTRIES: Entry[] = ERAS.map((era) => ({
     .toLowerCase(),
 }));
 
-// ─── Players index (built from the static kc_matches.json) ──────────────────
-
-interface MiniMatch {
-  id: string;
-  date: string;
-  league: string;
-  stage: string;
-  kc_won: boolean;
-  kc_score: number;
-  opp_score: number;
-  best_of: number;
-  opponent: { name: string; code: string };
-  games: {
-    kc_players: { name: string; role: string; champion?: string }[];
-    opp_players?: { name: string; role: string; champion?: string }[];
-  }[];
-}
-const kc = kcMatchesJson as unknown as { matches: MiniMatch[] };
-
-function cleanName(raw: string): string {
-  return raw.replace(/^[A-Z]{2,}\s+/, "").trim();
-}
-function isKCPlayer(name: string): boolean {
-  return name.startsWith("KC ") || name.startsWith("KCB ");
-}
-
-const PLAYER_ENTRIES: Entry[] = (() => {
-  const seen = new Map<string, { role: string; games: number }>();
-  for (const match of kc.matches) {
-    for (const game of match.games) {
-      for (const p of game.kc_players) {
-        if (!isKCPlayer(p.name)) continue;
-        const slug = cleanName(p.name).toLowerCase();
-        if (!slug) continue;
-        const prev = seen.get(slug);
-        if (prev) {
-          prev.games += 1;
-        } else {
-          seen.set(slug, { role: p.role, games: 1 });
-        }
-      }
-    }
-  }
-  return Array.from(seen.entries())
-    .sort((a, b) => b[1].games - a[1].games)
-    .map(([slug, { role, games }]) => {
-      const display = slug.charAt(0).toUpperCase() + slug.slice(1);
-      return {
-        id: `player-${slug}`,
-        group: "player" as const,
-        label: display,
-        subtitle: `${role.toUpperCase()} - ${games} games`,
-        href: `/player/${slug}`,
-        hint: role.toUpperCase(),
-        searchText: `${display} ${role}`.toLowerCase(),
-      };
-    });
-})();
-
-// ─── Champions index (every champion seen in any kc_players or opp_players) ─
-
-const CHAMPION_ENTRIES: Entry[] = (() => {
-  const seen = new Map<string, number>();
-  for (const match of kc.matches) {
-    for (const game of match.games) {
-      const all = [...(game.kc_players ?? []), ...(game.opp_players ?? [])];
-      for (const p of all) {
-        const c = p.champion;
-        if (!c) continue;
-        seen.set(c, (seen.get(c) ?? 0) + 1);
-      }
-    }
-  }
-  return Array.from(seen.entries())
-    .sort((a, b) => b[1] - a[1])
-    .map(([champ, count]) => ({
-      id: `champion-${champ}`,
-      group: "champion" as const,
-      label: champ,
-      subtitle: `${count} apparition${count > 1 ? "s" : ""}`,
-      href: `/champion/${encodeURIComponent(champ)}`,
-      hint: "CHAMP",
-      searchText: champ.toLowerCase(),
-    }));
-})();
-
-// ─── Matches index (last 40, newest first) ──────────────────────────────────
-
-const MATCH_ENTRIES: Entry[] = kc.matches
-  .slice()
-  .sort((a, b) => (a.date > b.date ? -1 : 1))
-  .slice(0, 40)
-  .map((m) => {
-    const date = m.date.slice(0, 10);
-    const score = `${m.kc_score}-${m.opp_score}`;
-    return {
-      id: `match-${m.id}`,
-      group: "match" as const,
-      label: `KC vs ${m.opponent.name}`,
-      subtitle: `${date} - ${m.league} ${m.stage}`,
-      href: `/match/${m.id}`,
-      hint: `${m.kc_won ? "W" : "L"} ${score}`,
-      searchText: `${m.opponent.name} ${m.opponent.code} ${m.league} ${m.stage} ${date}`.toLowerCase(),
-    };
-  });
-
 const INDEX: Entry[] = [
   ...PAGES,
   ...ERA_ENTRIES,
   ...ALUMNI_ENTRIES,
-  ...PLAYER_ENTRIES,
-  ...CHAMPION_ENTRIES,
-  ...MATCH_ENTRIES,
 ];
 
 // ─── Fuzzy-ish match (substring + token scoring) ────────────────────────────
@@ -325,6 +208,8 @@ export function CommandPalette() {
   const [active, setActive] = useState(0);
   const [clipEntries, setClipEntries] = useState<Entry[]>([]);
   const clipFetchedRef = useRef(false);
+  const [dataEntries, setDataEntries] = useState<Entry[]>([]);
+  const dataFetchedRef = useRef(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
 
@@ -369,6 +254,23 @@ export function CommandPalette() {
     return () => ac.abort();
   }, [open]);
 
+  // Joueurs / champions / séries : même chargement paresseux, une
+  // tentative ; en cas d'échec on réessaie à la prochaine ouverture.
+  useEffect(() => {
+    if (!open || dataFetchedRef.current) return;
+    dataFetchedRef.current = true;
+    const ac = new AbortController();
+    fetch("/api/palette/data", { signal: ac.signal })
+      .then((res) => (res.ok ? res.json() : Promise.reject(new Error(String(res.status)))))
+      .then((rows: Entry[]) => {
+        if (!ac.signal.aborted && Array.isArray(rows)) setDataEntries(rows);
+      })
+      .catch((err) => {
+        if ((err as { name?: string })?.name !== "AbortError") dataFetchedRef.current = false;
+      });
+    return () => ac.abort();
+  }, [open]);
+
   // Global ⌘K / Ctrl+K listener
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -400,7 +302,8 @@ export function CommandPalette() {
     }
   }, [open]);
 
-  const results = useMemo(() => search(query, clipEntries), [query, clipEntries]);
+  const extraEntries = useMemo(() => [...dataEntries, ...clipEntries], [dataEntries, clipEntries]);
+  const results = useMemo(() => search(query, extraEntries), [query, extraEntries]);
 
   // Keep active in bounds
   useEffect(() => {
