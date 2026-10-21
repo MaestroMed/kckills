@@ -8,6 +8,7 @@ chaque chiffre à des modèles appris sur quelques images étiquetées.
 Profils (fractions de l'image, 16:9) :
   worlds26_row : HUD Worlds 2026 / LEC 2026 — chrono sur la 2e ligne du
                  bandeau du haut, centré (1080p : x 937-985, y 78-100).
+  ewc26        : HUD Esports World Cup 2026, même zone, autre police.
 
 Garde-fous : la lecture exige exactement 4 chiffres + 2 points au bon
 endroit (MM:SS, secondes < 60) et un score de ressemblance minimal par
@@ -26,6 +27,10 @@ import numpy as np
 PROFILES: dict[str, tuple[float, float, float, float]] = {
     # x0, y0, x1, y1 — un peu plus large que les chiffres pour tolérer ±10 px
     "worlds26_row": (0.470, 0.062, 0.530, 0.100),
+    # HUD Esports World Cup 2026 : même emplacement, police différente
+    # (scores 0,68-0,72 avec les modèles Worlds). Modèles appris le 21/10
+    # sur 32 lectures à l'œil de 9 clips EWC (KC–DK, KC–GEN, KC–TS).
+    "ewc26": (0.470, 0.062, 0.530, 0.100),
 }
 
 # Versionnés avec le code : le moteur lit dès le premier lancement.

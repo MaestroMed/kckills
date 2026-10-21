@@ -755,7 +755,8 @@ async def run() -> int:
             "id, killer_champion, victim_champion, is_first_blood, multi_kill, "
             "tracked_team_involvement, fight_type, matchup_lane, lane_phase, "
             "kill_visible, assistants, shutdown_bounty, retry_count, "
-            "clip_url_vertical, clip_url_horizontal, game_time_seconds, event_epoch, game_id",
+            "clip_url_vertical, clip_url_horizontal, game_time_seconds, event_epoch, game_id, "
+            "killer_player_id, victim_player_id",
             id=kill_id,
         )
         if not rows:
@@ -778,7 +779,8 @@ async def run() -> int:
             "id, killer_champion, victim_champion, is_first_blood, multi_kill, "
             "tracked_team_involvement, fight_type, matchup_lane, lane_phase, "
             "kill_visible, assistants, shutdown_bounty, retry_count, "
-            "clip_url_vertical, clip_url_horizontal, game_time_seconds, event_epoch, game_id",
+            "clip_url_vertical, clip_url_horizontal, game_time_seconds, event_epoch, game_id, "
+            "killer_player_id, victim_player_id",
             status="clipped",
             _order="event_epoch.desc.nullslast",
             _limit=ANALYZER_BATCH_SIZE,
@@ -930,8 +932,9 @@ async def _process_one(kill: dict, clip_path: str | None,
                 attempts = int((job or {}).get("attempts", 0) or 0)
             except (TypeError, ValueError):
                 attempts = 0
-            if job is not None and attempts < 3:
-                # Transient — retry with backoff.
+            if job is not None and attempts < 3 and config.GEMINI_ENABLED:
+                # Transient — retry with backoff. (Gemini éteint : rien à
+                # retenter, on publie tout de suite le titre des données.)
                 await asyncio.to_thread(
                     job_queue.fail, job["id"],
                     "gemini returned no result", 300, "gemini_empty",
@@ -947,6 +950,14 @@ async def _process_one(kill: dict, clip_path: str | None,
                 f"{killer} élimine {victim} — analyse IA en attente, "
                 f"clip disponible."
             )
+            pipeline_version = "degraded-local-heuristic"
+            if not config.GEMINI_ENABLED:
+                # QC v3 (21/10/2026) : Gemini éteint par choix, pas en panne.
+                # Titre écrit depuis les données, version « qc3-data » : pas
+                # une analyse « en attente » qu'un backfill viendrait payer.
+                from qc3.titles import title_from_row
+                degraded_desc = title_from_row(kill)
+                pipeline_version = "qc3-data"
             # Décryptage vague 2 (2026-07-14) — ce chemin validait le QC
             # EN AVEUGLE (kill_visible=True, qc_status=passed, gate
             # tickée) dès que Gemini était à sec : les 212 clips muets
@@ -978,7 +989,7 @@ async def _process_one(kill: dict, clip_path: str | None,
                 "highlight_score": heuristic_score(kill),
                 "kill_visible": True if media_ok else None,
                 "qc_status": "passed" if media_ok else "failed",
-                "ai_pipeline_version": "degraded-local-heuristic",
+                "ai_pipeline_version": pipeline_version,
             }, "id", kill["id"])
             # Tick the game_events QC gates so the publisher can surface it
             # (no-op if the event row isn't mapped yet — event.map below

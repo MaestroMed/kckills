@@ -43,6 +43,13 @@ def get_client(prefer_free: bool = True):
     (backward-compatible). Returns None if no key at all OR the SDK is missing,
     so callers can degrade to a text-only / no-AI mode.
     """
+    if not config.GEMINI_ENABLED:
+        # Interrupteur général (config.GEMINI_ENABLED, éteint par défaut
+        # depuis le 21/10/2026) : aucun appel payant possible.
+        if not _clients.get("_disabled_logged"):
+            log.warn("gemini_disabled", hint="KCKILLS_GEMINI_ENABLED=1 pour réactiver")
+            _clients["_disabled_logged"] = True
+        return None
     key = (config.GEMINI_API_KEY_FREE if prefer_free else "") or config.GEMINI_API_KEY
     if not key:
         return None

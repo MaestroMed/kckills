@@ -22,6 +22,20 @@ import numpy as np
 XP = {"left": 731, "right": 1185}
 Y = [836, 888, 940, 993, 1045]
 
+# (x gauche, x droite, lignes y) en 1080p, par habillage. EWC 2026 mesuré
+# le 21/10 sur un clip KC–T1 (tableau ~20 px plus bas, portraits gris +
+# compte à rebours de réapparition).
+PROFILES = {
+    "worlds26": ({"left": 731, "right": 1185}, [836, 888, 940, 993, 1045]),
+    "ewc26": ({"left": 745, "right": 1172}, [857, 908, 960, 1012, 1063]),
+}
+
+
+def portrait_sats(im: np.ndarray, profile: str = "worlds26") -> list[float]:
+    """Saturation des 10 portraits (5 gauche puis 5 droite) sur une image."""
+    xp, ys = PROFILES[profile]
+    return [_sat(im, xp[s], y) for s in ("left", "right") for y in ys]
+
 
 @dataclass
 class Death:
