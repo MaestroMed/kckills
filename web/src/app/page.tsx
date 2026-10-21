@@ -1,7 +1,8 @@
 import Link from "next/link";
 import Image from "next/image";
 import { Suspense } from "react";
-import { loadRealData, getCurrentRoster, getMatchesSorted } from "@/lib/real-data";
+import { getCurrentRoster, getMatchesSorted } from "@/lib/real-data";
+import { getRealData } from "@/lib/real-data-server";
 import { PLAYER_PHOTOS } from "@/lib/kc-assets";
 import { getStaticT } from "@/lib/i18n/server-lang";
 // 🔴 2026-04-28 — heavy desktop-only sections live in a client wrapper
@@ -65,7 +66,7 @@ export const revalidate = 1800;
 
 export default async function HomePage() {
   const { t } = getStaticT();
-  const data = loadRealData();
+  const data = await getRealData();
   const roster = getCurrentRoster(data);
   const allMatches = getMatchesSorted(data);
   // Thème du jour (lib/home-themes) : prochain match officiel s'il est dans sa

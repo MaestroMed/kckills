@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
-import { loadRealData, getMatchesSorted } from "@/lib/real-data";
+import { getMatchesSorted } from "@/lib/real-data";
+import { getRealData } from "@/lib/real-data-server";
 import { getPublishedKills } from "@/lib/supabase/kills";
 // Audit compteurs 2026-08-12 — la chip « clips » affichait
 // `allClips.length` = le CAP de fetch (300), pas un total. Elle affiche
@@ -50,13 +51,13 @@ export default async function MatchesPage() {
   // Could be swapped for a HEAD count + group-by RPC later, but trimming
   // saves ~400KB egress per cache miss in the meantime.
   const [data, allClips, publishedClipsTotal, dbMatchesRes, dbTeamsRes, dbGamesRes] = await Promise.all([
-    Promise.resolve(loadRealData()),
+    getRealData(),
     getPublishedKills(300),
     getCachedPublishedClipsCount(),
     sb
       ? sb.from("matches").select("id,external_id,scheduled_at,stage,format,team_blue_id,team_red_id,winner_team_id")
       : Promise.resolve(emptyRes),
-    sb ? sb.from("teams").select("id,code,name") : Promise.resolve(emptyRes),
+    sb ? sb.from("teams").select("id,code,name,logo_url") : Promise.resolve(emptyRes),
     // 2026-09-24 : vainqueurs des games -> score des séries hors
     // kc_matches.json (ils s'affichaient sans score).
     sb ? sb.from("games").select("match_id,winner_team_id").limit(5000) : Promise.resolve(emptyRes),
@@ -65,6 +66,26 @@ export default async function MatchesPage() {
 
   // Build team lookup
   const teams = new Map((dbTeamsRes.data ?? []).map((t) => [t.id, t]));
+
+  // Logos : l'accordéon ne connaissait que 13 équipes LEC (TEAM_LOGOS) ;
+  // MSI, Worlds, EWC s'affichaient avec le seul code. On passe l'image de
+  // l'API (kc_matches.json) ou teams.logo_url, limitée aux domaines que
+  // next/image accepte (un autre domaine ferait planter la page).
+  const LOGO_HOSTS = new Set(["static.lolesports.com", "static.wikia.nocookie.net", "clips.kckills.com"]);
+  const safeLogo = (url: string | null | undefined): string | null => {
+    if (!url) return null;
+    try {
+      const u = new URL(url);
+      return u.protocol === "https:" && LOGO_HOSTS.has(u.hostname) ? url : null;
+    } catch {
+      return null;
+    }
+  };
+  const logoByCode = new Map<string, string>();
+  for (const m of matches) {
+    const img = safeLogo(m.opponent.image);
+    if (img && m.opponent.code) logoByCode.set(m.opponent.code, img);
+  }
   const dbMatches = dbMatchesRes.data ?? [];
 
   // Score d'une série depuis ses games : seulement si TOUTES ont un
@@ -96,7 +117,11 @@ export default async function MatchesPage() {
       date: (m.scheduled_at ?? "").slice(0, 10),
       stage: m.stage ?? "LEC",
       best_of: Number.isFinite(bestOfNum) && bestOfNum > 0 ? bestOfNum : 1,
-      opponent: { code: opponent?.code ?? "?", name: opponent?.name ?? "?" },
+      opponent: {
+        code: opponent?.code ?? "?",
+        name: opponent?.name ?? "?",
+        image: safeLogo(opponent?.logo_url) ?? logoByCode.get(opponent?.code ?? "") ?? null,
+      },
       // Unknown winner (no winner_team_id yet) → null = neutral "À venir",
       // NOT a false (which would render a red Loss + skew the W/L tally).
       kc_won: m.winner_team_id ? winner?.code === "KC" : null,
@@ -152,7 +177,7 @@ export default async function MatchesPage() {
       year,
       matches: yearMatches.map((match) => ({
         id: match.id,
-        opponent: match.opponent,
+        opponent: { code: match.opponent.code, name: match.opponent.name, image: safeLogo(match.opponent.image) },
         kc_won: match.kc_won,
         kc_score: match.kc_score,
         opp_score: match.opp_score,

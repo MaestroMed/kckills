@@ -5,7 +5,8 @@ import { getCardKills, type CardKillRow } from "@/lib/supabase/kills";
 import { championIconUrl } from "@/lib/constants";
 import { isDescriptionClean } from "@/lib/scroll/sanitize-description";
 import { TEAM_LOGOS } from "@/lib/kc-assets";
-import { loadRealData } from "@/lib/real-data";
+import { type RealData } from "@/lib/real-data";
+import { getRealData } from "@/lib/real-data-server";
 import { Breadcrumb } from "@/components/Breadcrumb";
 import { JsonLd, breadcrumbLD, weekCollectionLD } from "@/lib/seo/jsonld";
 import { Description } from "@/components/i18n/Description";
@@ -97,7 +98,7 @@ export default async function WeekPage() {
   // fat loader's ~25 extra columns were pure waste. Stacks with the
   // 200-row cap to cut per-cache-miss egress another ~2-3×.
   const all = await getCardKills(200, { buildTime: true });
-  const data = loadRealData();
+  const data = await getRealData();
 
   // Filter: visible KC-killer clips from last 7 days
   const recent = all.filter((k) => {
@@ -324,7 +325,7 @@ function PodiumCard({
 }: {
   kill: CardKillRow;
   rank: number;
-  data: ReturnType<typeof loadRealData>;
+  data: RealData;
 }) {
   const matchExt = kill.games?.matches?.external_id;
   const matchJson = matchExt ? data.matches.find((m) => m.id === matchExt) : null;
@@ -447,7 +448,7 @@ function MiniCard({
   t,
 }: {
   kill: CardKillRow;
-  data: ReturnType<typeof loadRealData>;
+  data: RealData;
   t: ServerTranslateFn;
 }) {
   const matchExt = kill.games?.matches?.external_id;

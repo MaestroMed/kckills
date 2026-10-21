@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
-import { loadRealData, getMatchesSorted } from "@/lib/real-data";
+import { getMatchesSorted } from "@/lib/real-data";
+import { getRealData } from "@/lib/real-data-server";
 // Audit compteurs 2026-08-12 — les KPI viennent du périmètre canonique
 // « log détaillé » (stats-scopes.getTrackedGamesDetailed) et les libellés
 // le disent : ce sont les games du snapshot statique (stats par game
@@ -29,13 +30,13 @@ export const metadata: Metadata = {
 
 export default async function StatsPage() {
   const { t } = getStaticT();
-  const data = loadRealData();
+  const data = await getRealData();
   const matches = getMatchesSorted(data);
 
   // Périmètre « log détaillé » — une seule implémentation (stats-scopes).
   // NB : le winrate par game est ESTIMÉ (proxy kc_kills > opp_kills, le
   // log ne porte pas le vainqueur par game) — le libellé KPI le précise.
-  const detailed = getTrackedGamesDetailed();
+  const detailed = await getTrackedGamesDetailed();
   const winrate =
     detailed.gameWinratePct != null ? Math.round(detailed.gameWinratePct) : 0;
 

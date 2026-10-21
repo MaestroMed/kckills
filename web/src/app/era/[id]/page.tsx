@@ -3,7 +3,8 @@ import Link from "next/link";
 import Image from "next/image";
 import type { Metadata } from "next";
 import { getEraById, getErasSortedByDate, type Era } from "@/lib/eras";
-import { loadRealData, type RealMatch } from "@/lib/real-data";
+import { type RealMatch } from "@/lib/real-data";
+import { getRealData } from "@/lib/real-data-server";
 import { championSplashUrl } from "@/lib/constants";
 import { KC_LOGO, TEAM_LOGOS } from "@/lib/kc-assets";
 import { EraClipsSection } from "./era-clips";
@@ -87,7 +88,7 @@ export default async function EraPage({ params }: Props) {
   if (!era) notFound();
 
   const { lang, t } = getStaticT();
-  const data = loadRealData();
+  const data = await getRealData();
   const periodMatches = matchesInEra(data.matches, era);
   const wins = periodMatches.filter((m) => m.kc_won).length;
   const losses = periodMatches.length - wins;

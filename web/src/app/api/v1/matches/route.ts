@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { loadRealData, getMatchesSorted } from "@/lib/real-data";
+import { getMatchesSorted } from "@/lib/real-data";
+import { getRealData } from "@/lib/real-data-server";
 
 /**
  * GET /api/v1/matches — Public API for KC match history.
@@ -28,7 +29,7 @@ export async function GET(request: NextRequest) {
   }
   const { limit, year } = parsed.data;
 
-  const data = loadRealData();
+  const data = await getRealData();
   const matches = getMatchesSorted(data, year).slice(0, limit);
 
   const result = matches.map((m) => ({

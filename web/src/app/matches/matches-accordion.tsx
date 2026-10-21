@@ -38,7 +38,7 @@ interface MatchSummary {
   // null = unknown winner (upcoming / not yet resolved) → neutral "À venir",
   // excluded from the W/L tally and the W/L filters.
   kc_won: boolean | null;
-  opponent: { code: string; name: string };
+  opponent: { code: string; name: string; image?: string | null };
   kc_score: number;
   opp_score: number;
   stage: string;
@@ -205,8 +205,8 @@ export function MatchesAccordion({ years }: { years: YearGroup[] }) {
                       <div className="flex items-center gap-2">
                         <Image src={KC_LOGO} alt="KC" width={26} height={26} className="rounded" />
                         <span className="text-[10px] text-[var(--text-disabled)]">vs</span>
-                        {TEAM_LOGOS[match.opponent.code] ? (
-                          <Image src={TEAM_LOGOS[match.opponent.code]} alt={match.opponent.code} width={26} height={26} className="rounded" />
+                        {match.opponent.image || TEAM_LOGOS[match.opponent.code] ? (
+                          <Image src={match.opponent.image || TEAM_LOGOS[match.opponent.code]} alt={match.opponent.code} width={26} height={26} className="rounded object-contain" />
                         ) : (
                           <span className="text-xs font-bold text-[var(--text-muted)]">{match.opponent.code}</span>
                         )}

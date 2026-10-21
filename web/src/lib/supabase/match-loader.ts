@@ -27,13 +27,8 @@
  * so the page stays cacheable per its `revalidate = 600` ISR setting.
  */
 
-import {
-  loadRealData,
-  getMatchById,
-  type RealMatch,
-  type RealGame,
-  type RealPlayer,
-} from "@/lib/real-data";
+import { getMatchById, type RealMatch, type RealGame, type RealPlayer } from "@/lib/real-data";
+import { getRealData } from "@/lib/real-data-server";
 import { createAnonSupabase, rethrowIfDynamic } from "./server";
 
 // ─── Lightweight Supabase row shapes ──────────────────────────────────
@@ -128,7 +123,7 @@ export async function getMatchByIdHybrid(
   slug: string,
 ): Promise<RealMatch | undefined> {
   // 1. Try the static curated snapshot first (free, no DB call).
-  const staticData = loadRealData();
+  const staticData = await getRealData();
   const staticMatch = getMatchById(staticData, slug);
   if (staticMatch) return staticMatch;
 
