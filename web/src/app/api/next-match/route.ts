@@ -21,5 +21,6 @@ export async function GET() {
 }
 
 function cacheHeaders(): Record<string, string> {
-  return { "Cache-Control": "public, s-maxage=300, stale-while-revalidate=60" };
+  // max-age=0 : le navigateur revalide toujours ; seul le CDN garde 5 min.
+  return { "Cache-Control": "public, max-age=0, s-maxage=300, stale-while-revalidate=60" };
 }

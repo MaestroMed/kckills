@@ -27,6 +27,9 @@ const EVENTS: { date: string; impact: number; label: string }[] = [
   // 19/09/2026, Nice : défaite 0-3 contre MKOI mais 3e place, première
   // qualification aux Worlds de l'histoire du club (lib/eras.ts).
   { date: "2026-09-19", impact: 2.5, label: "qualifiés pour les Worlds" },
+  // 18/10/2026 : trois séries gagnées en play-ins (C9 3-2, MVK 3-0 deux fois),
+  // KC passe en phase suisse des Worlds.
+  { date: "2026-10-18", impact: 2, label: "qualifiés pour la phase suisse des Worlds" },
 ];
 
 interface Series {
