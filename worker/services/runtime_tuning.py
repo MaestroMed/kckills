@@ -112,6 +112,10 @@ DEFAULTS: Final[dict[str, dict[str, int]]] = {
     # drains the push queue and no-ops without VAPID env.
     "kill_of_the_week":    {"parallel": 1, "interval": 3600, "batch":   1, "lease":  300},
     "push_notifier":       {"parallel": 1, "interval":  300, "batch":  50, "lease":  120},
+    # 21/10/2026 : stats des séries KC (kc_matches.json) régénérées et
+    # publiées sur R2 ; le site les relit toutes les 30 min. Incrémental,
+    # 25 games max par passe.
+    "real_data_export":    {"parallel": 1, "interval": 10800, "batch":  25, "lease":  1800},
 }
 
 # Generic fallback when a module isn't listed above. Conservative on
