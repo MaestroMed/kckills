@@ -69,7 +69,7 @@ def fetch_all(db, table, params):
 
 
 async def reclip_one(db, entry: dict, kill: dict, game: dict,
-                     local_vod: str, args) -> str:
+                     local_vod: str | None, args) -> str:
     """→ 'ok' | 'qc_fail' | 'clip_fail'"""
     gt = kill.get("game_time_seconds") or 0
     resolved_vt = entry.get("resolved_vod_time")
@@ -213,6 +213,9 @@ async def main():
                     help="actors_match seul en échec (chrono validé) = avis, pas blocage")
     ap.add_argument("--permissive-advisory", action="store_true",
                     help="actors_match / kill_visible en échec (chrono validé) = avis")
+    ap.add_argument("--per-kill", action="store_true",
+                    help="pas de VOD complète : un segment yt-dlp par kill "
+                         "(VOD de 10 h d'une journée de diffusion, disque presque plein)")
     ap.add_argument("--restore-ids", dest="restore_ids_file", type=str, default=None,
                     help="fichier JSON (liste d'uuid) : kills à republier si le re-clip passe")
     args = ap.parse_args()
@@ -288,8 +291,8 @@ async def main():
 
     stats = {"ok": 0, "qc_fail": 0, "clip_fail": 0}
     for yt, ents in by_vod.items():
-        local_vod = await clipper.download_full_vod(yt)
-        if not local_vod:
+        local_vod = None if args.per_kill else await clipper.download_full_vod(yt)
+        if not local_vod and not args.per_kill:
             print(f"  SKIP VOD {yt} (téléchargement impossible)")
             stats["clip_fail"] += len(ents)
             continue
@@ -308,7 +311,8 @@ async def main():
             print(f"  {e['kill_id'][:8]} → {outcome}", flush=True)
         # Même hygiène que le clipper : cache borné (~60 Go), VOD retirée si
         # le disque passe sous 40 Go libres.
-        await asyncio.to_thread(clipper._vod_cache_hygiene, local_vod)
+        if local_vod:
+            await asyncio.to_thread(clipper._vod_cache_hygiene, local_vod)
 
     print(f"\nRÉSULTAT : {stats}")
     return 0
