@@ -914,7 +914,6 @@ def _classify_fight_type(n_concurrent: int, n_assists: int, multi_kill: str | No
 GAMES_PER_CYCLE = 100
 
 
-@run_logged()
 def _record_game_winner(game: dict, outcome: dict) -> None:
     """Vainqueur de la game, lu dans le feed (FrameKillMatcher.winner_side).
 
@@ -962,6 +961,7 @@ def _tracked_team_id() -> str | None:
     return _TRACKED_TEAM["id"]
 
 
+@run_logged()
 async def run() -> int:
     """Scan games whose kills haven't been extracted yet and fill them in.
 
