@@ -162,3 +162,23 @@ def test_gemini_switch_off_by_default(monkeypatch):
     monkeypatch.setattr(config, "GEMINI_ENABLED", False)
     monkeypatch.setattr(config, "GEMINI_API_KEY", "x")
     assert gemini_client.get_client() is None
+
+
+def test_qc3_sync_gives_up_after_three_attempts(monkeypatch, tmp_path):
+    import asyncio
+    from modules import qc3_sync as Q
+
+    monkeypatch.setattr(Q, "STATE_PATH", str(tmp_path / "state.json"))
+    monkeypatch.setattr(Q, "RETRY_AFTER_S", 0)
+    monkeypatch.setattr(Q, "_pending_games", lambda n: [{"id": "g1", "external_id": "x", "vod_youtube_id": "y"}])
+    calls = []
+
+    async def failing(game):
+        calls.append(game["id"])
+        return "unreadable", None
+
+    monkeypatch.setattr(Q, "sync_game", failing)
+    for _ in range(5):
+        asyncio.run(Q.run.__wrapped__())
+    assert calls == ["g1", "g1", "g1"]                      # 3 essais, puis abandon
+    assert Q._state()["g1"]["status"] == "unreadable"

@@ -38,7 +38,7 @@ def player(name: str | None) -> str:
     """« KC Caliste » → « Caliste »."""
     if not name:
         return "?"
-    parts = name.split(" ", 1)
+    parts = name.strip().split(" ", 1)
     return parts[1] if len(parts) == 2 and parts[0].isupper() and len(parts[0]) <= 5 else name
 
 

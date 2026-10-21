@@ -143,7 +143,9 @@ DAEMON_MODULES: list[tuple[str, int, str]] = [
     ("harvester",         _get_interval("harvester"),         "modules.harvester"),              # default 600s   — 10 min
     ("event_mapper",      _get_interval("event_mapper"),      "modules.event_mapper"),           # default 600s   — populate canonical game_events table (PR6-B)
     ("transitioner",      _get_interval("transitioner"),      "modules.transitioner"),           # default 300s   — raw -> vod_found
-    ("vod_offset_finder", _get_interval("vod_offset_finder"), "modules.vod_offset_finder_v2"),   # default 3600s  — multi-candidate scan (PR23.3)
+    # 21/10/2026 — QC v3 : ancre VOD lue en local (3 chronos, 0 jeton), 3 essais
+    # max par game. Remplace vod_offset_finder_v2 (balayage Gemini horaire sans fin).
+    ("qc3_sync",          _get_interval("qc3_sync"),          "modules.qc3_sync"),               # default 1800s  — ancre VOD locale
     ("clipper",           _get_interval("clipper"),           "modules.clipper"),                # default 300s   — 5 min
     ("analyzer",          _get_interval("analyzer"),          "modules.analyzer"),               # default 600s   — 10 min
     ("og_generator",      _get_interval("og_generator"),      "modules.og_generator"),           # default 900s   — 15 min

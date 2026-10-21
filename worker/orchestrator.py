@@ -18,7 +18,7 @@ Usage:
 Process layout:
     A — clipper    (CPU + GPU bound: clipper, hls_packager)
     B — analyzer   (network + Gemini: analyzer, qc_sampler, og_generator, event_publisher)
-    C — discovery  (external APIs: sentinel, harvester, transitioner, channel_*, match_planner, event_mapper, vod_offset_finder)
+    C — discovery  (external APIs: sentinel, harvester, transitioner, channel_*, match_planner, event_mapper, qc3_sync)
     D — control    (admin + housekeeping: moderator, job_runner, heartbeat, watchdog)
 """
 
@@ -73,7 +73,7 @@ ROLE_MODULES: dict[str, list[str]] = {
                   "embedder", "quote_extractor", "translator"],
     "discovery": ["sentinel", "harvester", "transitioner", "channel_discoverer",
                   "channel_reconciler", "vod_fallback_finder",
-                  "match_planner", "event_mapper", "vod_offset_finder",
+                  "match_planner", "event_mapper", "qc3_sync",
                   "real_data_export"],
     "control":   ["moderator", "job_runner", "job_dispatcher",
                   "kill_of_the_week", "push_notifier", "heartbeat",
