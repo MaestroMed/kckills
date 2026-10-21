@@ -67,6 +67,7 @@ async def extract_kills_from_game(
     max_game_minutes: int = 65,
     max_consecutive_empty: int = 60,
     precomputed_anchor: tuple[datetime, dict] | None = None,
+    outcome: dict | None = None,
 ) -> list[KillEvent]:
     """Extract every kill from a completed game by diffing window snapshots.
 
@@ -82,6 +83,8 @@ async def extract_kills_from_game(
         precomputed_anchor: Optional (datetime, full_frame_response) tuple from
             a previous get_game_anchor call — avoids a redundant livestats hit
             when the pipeline already fetched the anchor to compute VOD offsets.
+        outcome: dict rempli au retour avec {"winner_side", "kc_side"} quand la
+            game est terminée dans le feed (voir FrameKillMatcher.winner_side).
     """
     kills: list[KillEvent] = []
 
@@ -166,6 +169,9 @@ async def extract_kills_from_game(
 
     kills.extend(matcher.flush())
     assign_multikill_labels(kills)
+    if outcome is not None:
+        outcome["winner_side"] = matcher.winner_side()
+        outcome["kc_side"] = kc_side
 
     # Horloge de la game (pauses) : gratuite, le parcours vient de la voir.
     clock = None
@@ -555,6 +561,35 @@ class FrameKillMatcher:
         self.finished = False
         self.unmatched_kills = 0
         self.orphan_deaths = 0          # exécutions (tour, sbires, monstres) : ignorées
+        self.final_teams: dict[str, dict] = {}                          # stats d'équipe de la dernière frame
+
+    def winner_side(self) -> str | None:
+        """Camp vainqueur lu dans la dernière frame d'une game terminée.
+
+        Le feed ne donne pas le vainqueur ; on le lit dans ce qu'il a détruit.
+        Détruire le nexus impose au moins un inhibiteur et les tours qui le
+        protègent : le vainqueur a plus d'inhibiteurs ET au moins autant de
+        tours, ou 3 tours de plus. Sinon (feed coupé, abandon…) : None, on
+        n'écrit rien. Vérifié sur KC–C9 (Worlds 2026, 5 games) : écarts de
+        2 à 8 tours, toujours du côté du vainqueur réel.
+        """
+        if not self.finished or not self.final_teams:
+            return None
+        try:
+            b, r = self.final_teams["blue"], self.final_teams["red"]
+            bt, rt = int(b.get("towers") or 0), int(r.get("towers") or 0)
+            bi, ri = int(b.get("inhibitors") or 0), int(r.get("inhibitors") or 0)
+        except (KeyError, TypeError, ValueError):
+            return None
+        if bi > ri and bt >= rt:
+            return "blue"
+        if ri > bi and rt >= bt:
+            return "red"
+        if bt - rt >= 3:
+            return "blue"
+        if rt - bt >= 3:
+            return "red"
+        return None
 
     def _side(self, pid: str | None) -> str | None:
         return (self.participants.get(pid or "") or {}).get("side")
@@ -574,6 +609,8 @@ class FrameKillMatcher:
             self.states.append((epoch, state))
         if state == "finished":
             self.finished = True
+        if frame.get("blueTeam") and frame.get("redTeam"):
+            self.final_teams = {"blue": frame["blueTeam"], "red": frame["redTeam"]}
 
         curr = livestats_api.extract_kda(frame)
         if self.hwm is None:
@@ -878,6 +915,53 @@ GAMES_PER_CYCLE = 100
 
 
 @run_logged()
+def _record_game_winner(game: dict, outcome: dict) -> None:
+    """Vainqueur de la game, lu dans le feed (FrameKillMatcher.winner_side).
+
+    Le sentinel ne connaît que le score de la série : sur un 3-2 il ne peut
+    attribuer que la dernière game. Ici on a la dernière frame de chaque
+    game. On n'écrase jamais une valeur existante (filtre is.null), et on
+    ne devine pas : camp vainqueur ou camp KC inconnu → rien n'est écrit.
+    """
+    win, kc = outcome.get("winner_side"), outcome.get("kc_side")
+    m = game.get("matches") or {}
+    if not win or not kc or game.get("winner_team_id") or not isinstance(m, dict):
+        return
+    tracked = _tracked_team_id()
+    sides = {m.get("team_blue_id"), m.get("team_red_id")} - {None}
+    if not tracked or tracked not in sides or len(sides) != 2:
+        return
+    opponent = next(t for t in sides if t != tracked)
+    winner = tracked if win == kc else opponent
+    try:
+        from services.supabase_client import get_db
+        db = get_db()
+        if db is None:
+            return
+        r = db._get_client().patch(
+            f"{db.base}/games",
+            params={"id": f"eq.{game['id']}", "winner_team_id": "is.null"},
+            json={"winner_team_id": winner},
+            headers={**db.headers, "Prefer": "return=minimal"},
+        )
+        log.info("harvester_game_winner", game_id=game["id"][:8], winner_side=win, kc_side=kc,
+                 kc_won=win == kc, status=r.status_code)
+    except Exception as e:  # jamais bloquant pour le harvest
+        log.warn("harvester_game_winner_failed", game_id=game["id"][:8], error=str(e)[:120])
+
+
+_TRACKED_TEAM: dict[str, str | None] = {}
+
+
+def _tracked_team_id() -> str | None:
+    """Équipe suivie (KC) : la ligne teams.is_tracked, pas le code « KC »
+    (un doublon « KC » non suivi existe, cf. correctif du 21/10)."""
+    if "id" not in _TRACKED_TEAM:
+        rows = safe_select("teams", "id", is_tracked=True, _limit=1) or []
+        _TRACKED_TEAM["id"] = rows[0]["id"] if rows else None
+    return _TRACKED_TEAM["id"]
+
+
 async def run() -> int:
     """Scan games whose kills haven't been extracted yet and fill them in.
 
@@ -903,8 +987,8 @@ async def run() -> int:
     # generating 70+ unhealthy_window warnings per hour for nothing.
     games = safe_select(
         "games",
-        "id, external_id, kills_extracted, state, "
-        "matches!games_match_id_fkey(scheduled_at)",
+        "id, external_id, kills_extracted, state, winner_team_id, "
+        "matches!games_match_id_fkey(scheduled_at, team_blue_id, team_red_id)",
         kills_extracted=False,
         _limit=GAMES_PER_CYCLE,
         _order="created_at.asc",
@@ -955,10 +1039,13 @@ async def run() -> int:
                      external=game["external_id"], state=live_state)
             continue
 
+        outcome: dict = {}
         kills = await extract_kills_from_game(
             external_game_id=game["external_id"],
             db_game_id=game["id"],
+            outcome=outcome,
         )
+        _record_game_winner(game, outcome)
 
         # 🐛 2026-04-28 fix : KC-only filter at insertion time.
         #

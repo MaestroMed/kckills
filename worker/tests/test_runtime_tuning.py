@@ -195,7 +195,7 @@ def test_defaults_table_matches_main_py_intervals(monkeypatch: pytest.MonkeyPatc
         "moderator":        180,
         "discord_autopost": 60,
         "hls_packager":     1800,
-        "heartbeat":        21600,
+        "heartbeat":        300,     # 5 min depuis le 16/10 (l'admin juge le worker vivant là-dessus)
         "watchdog":         1800,
         "queue_health":     900,  # Wave 35 #4 — bumped 300 → 900
         "job_runner":       30,
