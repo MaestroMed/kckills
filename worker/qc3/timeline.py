@@ -94,6 +94,21 @@ class Timeline:
     def epoch_at_chrono(self, chrono_s: float) -> int:
         return int(self.clock.epoch_ms_at_ingame(chrono_s))
 
+    def team_kills_at(self, epoch_ms: int) -> tuple[int, int]:
+        """(kills bleus, kills rouges) au dernier état connu avant `epoch_ms`
+        (somme des compteurs des joueurs 1-5 et 6-10)."""
+        lo, hi = 0, len(self.frames) - 1
+        if not self.frames or self.frames[0][0] > epoch_ms:
+            return 0, 0
+        while lo < hi:
+            mid = (lo + hi + 1) // 2
+            if self.frames[mid][0] <= epoch_ms:
+                lo = mid
+            else:
+                hi = mid - 1
+        rows = self.frames[lo][2]
+        return sum(r[0] for r in rows[:5]), sum(r[0] for r in rows[5:])
+
 
 # ─── Frames compactes ──────────────────────────────────────────────────────
 

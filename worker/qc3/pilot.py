@@ -24,6 +24,7 @@ import subprocess
 from collections import Counter
 
 from engine_v2.chrono import ChronoReader
+from engine_v2.score import ScoreReader
 from qc3 import sync as S
 from qc3 import titles as T
 from qc3.timeline import CACHE_DIR, KillMoment, Timeline, load_timeline
@@ -52,6 +53,15 @@ def match_db_kills(tl: Timeline, db_kills: list[dict]) -> list[tuple[dict, KillM
             used.add(id(k))
         out.append((d, k))
     return out
+
+
+def expected_scores(tl: Timeline, k: KillMoment):
+    """Scores admissibles à kill_t + dt : ceux du feed entre E+dt−1 s et
+    E+dt+SCREEN_LEAD+1 s (l'écran précède le feed de 0 à ~4 s)."""
+    def at(dt: float) -> set[tuple[int, int]]:
+        base = k.epoch_ms + int(dt * 1000)
+        return {tl.team_kills_at(base + ms) for ms in range(-1000, int((SCREEN_LEAD_S + 2) * 1000) + 1, 250)}
+    return at
 
 
 def clip_window(k: KillMoment, vs: S.VodSync) -> tuple[float, float, float]:
@@ -94,6 +104,7 @@ async def run(game_id: str, video: str, origin: float, prior_offset: float | Non
         raise SystemExit("ni --prior-offset ni games.vod_offset_seconds")
     src = S.LocalVideo(video, origin)
     reader = ChronoReader(profile)
+    score_reader = ScoreReader(hud_profile)
     vs = S.measure(tl, src, reader, prior_pos=lambda e: base + tl.chrono_at(e))
     src.close()
 
@@ -119,7 +130,9 @@ async def run(game_id: str, video: str, origin: float, prior_offset: float | Non
                 slot = None
                 if k.victim_pid and k.victim_side:
                     slot = (0 if k.victim_side == "blue" else 5) + (int(k.victim_pid) - 1) % 5
-                v = verify_clip(out, kill_t, k.chrono_s, reader, victim_slot=slot, hud_profile=hud_profile)
+                v = verify_clip(out, kill_t, k.chrono_s, reader, victim_slot=slot, hud_profile=hud_profile,
+                                score_reader=score_reader, killer_side=k.killer_side,
+                                expected_score_at=expected_scores(tl, k))
                 row.update({"clip": out, "window": [round(start, 1), round(end, 1)], "verdict": v.verdict,
                             "timer_hits": v.timer_hits, "hud_delta_s": v.hud_delta_s, "detail": v.detail})
             else:

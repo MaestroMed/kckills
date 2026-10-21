@@ -8,13 +8,16 @@ image (kill_visible, actors_match : faux négatifs en série).
 
 Preuve indépendante (la synchro E2 repose aussi sur le chrono, donc le
 chrono seul ne peut pas déceler un décalage constant feed ↔ écran) : le
-portrait de la victime grise dans le tableau du HUD à l'instant prévu
-(engine_v2.hud_deaths, 33/46 kills confirmés sur KC–C9).
+score de kills du bandeau du haut (engine_v2.score, appris depuis le feed)
+vaut, juste avant le kill, ce que dit le feed, et celui de l'équipe du
+tueur a augmenté juste après. 111/111 lectures justes sur KC–C9 G4-G5.
+Les portraits du tableau du bas (hud_deaths) ne servent qu'en secours : la
+régie change de mise en page pendant les combats (7 faux refus sur G4).
 
 Verdicts :
-  pass       chrono confirmé ET mort de la victime vue au HUD à l'instant prévu
-  pass_timer chrono confirmé, tableau du HUD masqué (caméras, replay) : mort
-             non observable, pas contredite
+  pass       chrono confirmé ET score avant/après conforme au feed
+  pass_timer chrono confirmé, score illisible (bandeau masqué) : kill non
+             observable, pas contredit
   off_air    aucune lecture du chrono autour du kill : la régie est ailleurs
              (foule, caméra joueur, replay sans HUD). Définitif : re-couper
              ne changera rien, c'est la diffusion.
@@ -106,9 +109,53 @@ def hud_death(path: str, slot: int, kill_t: float, dur: float, profile: str) -> 
     return None, visible
 
 
+SCORE_BEFORE = (-8.0, -4.5)    # s autour du kill (instant du feed) dans le clip
+SCORE_AFTER = (1.0, 6.0)
+SCORE_STEP = 0.5
+
+
+def score_check(path: str, kill_t: float, dur: float, score_reader, expected_at, killer_side: str) -> tuple[str, dict]:
+    """('ok' | 'unreadable' | 'contradicts', détail). `expected_at(dt)` rend les
+    scores (gauche, droite) admissibles à kill_t + dt (le feed suit l'écran de
+    0 à ~4 s : plusieurs valeurs admises autour d'un kill)."""
+    cap = cv2.VideoCapture(path)
+
+    def read_at(t: float):
+        im = frame_at(cap, t)
+        if im is None:
+            return None
+        r = score_reader.read(im)
+        return (r.left, r.right) if r.left is not None and r.right is not None else None
+
+    def first_read(lo: float, hi: float):
+        """Première lecture CONFIRMÉE (même score 0,5 s plus tard) : une
+        incrustation sur le bandeau fait confondre 6 et 8 (KC–C9 G5 27:50)."""
+        t = kill_t + lo
+        while t + SCORE_STEP <= min(kill_t + hi, dur - 0.2):
+            a = read_at(t)
+            if a is not None and a == read_at(t + SCORE_STEP):
+                return t - kill_t, a
+            t += SCORE_STEP
+        return None, None
+
+    tb, before = first_read(*SCORE_BEFORE)
+    ta, after = first_read(*SCORE_AFTER)
+    cap.release()
+    detail = {"before": before, "after": after, "t_before": tb, "t_after": ta}
+    if before is None or after is None:
+        return "unreadable", detail
+    # un score ne descend pas et ne saute pas de 6 kills en 10 s : lecture fausse
+    if any(a < b or a - b > 5 for a, b in zip(after, before)):
+        return "unreadable", detail
+    i = 0 if killer_side == "blue" else 1
+    ok = before in expected_at(tb) and after in expected_at(ta) and after[i] > before[i]
+    return ("ok" if ok else "contradicts"), detail
+
+
 def verify_clip(path: str, kill_t: float, expected_chrono_at_kill: float, reader: ChronoReader,
                 victim_slot: int | None = None, hud_profile: str = "worlds26",
-                require_audio: bool = True) -> ClipVerdict:
+                require_audio: bool = True, score_reader=None, expected_score_at=None,
+                killer_side: str | None = None) -> ClipVerdict:
     """`kill_t` = position du kill dans le clip (s) ; `expected_chrono_at_kill`
     = chrono du feed à l'instant du kill. Le chrono attendu à kill_t + dt
     vaut expected + dt (pas de pause dans 10 s de clip ; sinon la lecture
@@ -135,14 +182,24 @@ def verify_clip(path: str, kill_t: float, expected_chrono_at_kill: float, reader
                 misses += 1
     cap.release()
     if hits >= MIN_TIMER_HITS and hits > misses:
+        if score_reader is not None and expected_score_at is not None and killer_side:
+            st, det = score_check(path, kill_t, dur, score_reader, expected_score_at, killer_side)
+            if st == "ok":
+                return ClipVerdict("pass", hits, reads, dur, audio, detail=f"score {det['before']}→{det['after']}")
+            if st == "contradicts":
+                return ClipVerdict("mistimed", hits, reads, dur, audio,
+                                   detail=f"score lu {det['before']}→{det['after']} ≠ feed")
+            # illisible : secours par les portraits du bas
         if victim_slot is None:
             return ClipVerdict("pass_timer", hits, reads, dur, audio, detail="victime inconnue")
         ht, board = hud_death(path, victim_slot, kill_t, dur, hud_profile)
         if ht is not None:
             return ClipVerdict("pass", hits, reads, dur, audio, ht, round(ht - kill_t, 1))
-        if not board:
-            return ClipVerdict("pass_timer", hits, reads, dur, audio, detail="tableau du HUD masqué")
-        return ClipVerdict("mistimed", hits, reads, dur, audio, detail="mort de la victime absente du HUD")
+        # Les portraits ne font que confirmer : la régie change la mise en
+        # page du tableau pendant les combats, une mort « non vue » ne
+        # contredit rien.
+        return ClipVerdict("pass_timer", hits, reads, dur, audio,
+                           detail="score illisible, mort non observée" if board else "score et tableau masqués")
     if misses == 0:
         return ClipVerdict("off_air", hits, reads, dur, audio, "chrono illisible autour du kill")
     return ClipVerdict("mistimed", hits, reads, dur, audio, f"{misses} lecture(s) hors tolérance")
