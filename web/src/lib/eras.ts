@@ -918,7 +918,7 @@ export const ERAS: Era[] = [
     label: "Le R\u00EAve Mondial",
     subtitle: "Premiers Worlds du club",
     color: "#C8AA6E",
-    result: "Play-ins \u00b7 15-18 oct.",
+    result: "Play-ins gagn\u00e9s \u00b7 phase suisse d\u00E8s le 23 oct.",
     icon: "\uD83C\uDFC6",
     image: "/images/eras/2026-worlds.jpg",
     dateStart: "2026-10-15",
@@ -928,7 +928,10 @@ export const ERAS: Era[] = [
     keyMoment:
       "Pour sa premi\u00E8re participation, KC entre par les play-ins, du 15 au 18 octobre au Riot Games Arena de Los Angeles. La phase suisse et les phases finales se jouent \u00E0 Allen (Texas), la finale le 14 novembre au Barclays Center de New York.",
     events: [
-      "Play-ins \u2014 15-18 octobre, Los Angeles",
+      "15 oct. \u2014 KC 3-2 Cloud9 (play-ins)",
+      "16 oct. \u2014 KC 3-0 MVK Esports (play-ins)",
+      "18 oct. \u2014 KC 3-0 MVK Esports, qualifi\u00E9s pour la phase suisse",
+      "23 oct. \u2014 Anyone's Legend, premier match de la phase suisse (BO1)",
       "Phase suisse \u2014 23-31 octobre, Allen (Texas)",
       "Finale \u2014 14 novembre, Barclays Center (New York)",
     ],

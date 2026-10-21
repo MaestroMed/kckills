@@ -46,6 +46,8 @@ interface ApiMatch {
  * Honors `prefers-reduced-motion` by freezing the entry animation and the
  * pulse dot so a vestibular user isn't bothered.
  */
+const LIVE_WINDOW_MS = 4 * 60 * 60 * 1000;
+
 export function NextMatchOverlay() {
   const t = useT();
   const [now, setNow] = useState<Date | null>(null);
@@ -65,7 +67,10 @@ export function NextMatchOverlay() {
     const ac = new AbortController();
     const fetchNext = async () => {
       try {
-        const r = await fetch("/api/next-match", { signal: ac.signal });
+        // no-store : la route est mise en cache par le CDN (5 min) ; sans ça
+        // le navigateur gardait une vieille réponse (« EN LIVE KC vs MVK »
+        // trois jours après le match).
+        const r = await fetch("/api/next-match", { signal: ac.signal, cache: "no-store" });
         if (!r.ok) return;
         const d = await r.json();
         if (d?.next?.kickoffISO) setApiMatch(d.next as ApiMatch);
@@ -99,7 +104,12 @@ export function NextMatchOverlay() {
 
   const kickoff = new Date(next.kickoffISO);
   const ms = kickoff.getTime() - now.getTime();
-  const isLive = ms <= 0;
+  // « En direct » seulement si l'API le dit, ou dans les 4 h qui suivent le
+  // coup d'envoi. Au-delà, le match est fini : on n'affiche rien plutôt
+  // qu'un faux direct (avant : ms <= 0 suffisait, pour toujours).
+  const apiLive = apiMatch !== null && next === apiMatch && Boolean((apiMatch as { isLive?: boolean }).isLive);
+  if (!apiLive && ms < -LIVE_WINDOW_MS) return null;
+  const isLive = apiLive || ms <= 0;
   const soon = !isLive && ms <= 60 * 60 * 1000;
 
   const accent = isLive ? "var(--red)" : soon ? "var(--orange)" : "var(--gold)";
