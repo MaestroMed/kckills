@@ -75,8 +75,9 @@ export default async function MatchesPage() {
   const safeLogo = (url: string | null | undefined): string | null => {
     if (!url) return null;
     try {
-      const u = new URL(url);
-      return u.protocol === "https:" && LOGO_HOSTS.has(u.hostname) ? url : null;
+      // l'API lolesports sert une partie des logos en http:// (même hôte en https)
+      const u = new URL(url.replace(/^http:\/\//, "https://"));
+      return u.protocol === "https:" && LOGO_HOSTS.has(u.hostname) ? u.toString() : null;
     } catch {
       return null;
     }

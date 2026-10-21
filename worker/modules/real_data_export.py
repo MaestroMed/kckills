@@ -56,6 +56,11 @@ def _game_ok(g: dict) -> bool:
     return bool(g.get("kc_players")) and all(_is_kc_name(p.get("name")) for p in g["kc_players"])
 
 
+def _https(url: str | None) -> str | None:
+    """L'API sert une partie des logos en http:// ; même hôte en https."""
+    return "https://" + url[len("http://"):] if url and url.startswith("http://") else url
+
+
 def _expected_games(m: dict) -> int:
     return int(m.get("kc_score") or 0) + int(m.get("opp_score") or 0)
 
@@ -199,8 +204,8 @@ def match_meta(event: dict) -> dict | None:
         "league": (event.get("league") or {}).get("name") or "LEC",
         "stage": event.get("blockName") or "",
         "kc_side": "blue" if teams[0] is kc_team else "red",
-        "opponent": {"name": opp_team.get("name"), "code": opp_team.get("code"), "image": opp_team.get("image")},
-        "kc_image": kc_team.get("image"),
+        "opponent": {"name": opp_team.get("name"), "code": opp_team.get("code"), "image": _https(opp_team.get("image"))},
+        "kc_image": _https(kc_team.get("image")),
         "kc_won": kc_res.get("outcome") == "win",
         "kc_score": kc_res.get("gameWins", 0),
         "opp_score": opp_res.get("gameWins", 0),
