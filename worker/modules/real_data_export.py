@@ -46,6 +46,12 @@ RECHECK_DAYS = 30            # passe ordinaire : on relit le calendrier sur 30 j
 MAX_GAMES_PER_RUN = 25
 MAX_ATTEMPTS = 3
 FRAME_PROBES_MIN = (85, 70, 60, 50, 40, 30)
+# Ligues lues par l'export en plus des ligues suivies (league_config).
+# Elles n'entrent pas dans le pipeline de clips : seulement scores et stats.
+# id lolesports -> nom tel que l'API le renvoie dans event.league.name.
+EXTRA_LEAGUES = {
+    "116838530616006090": "Esports World Cup",   # ewc_lol, juillet 2026
+}
 
 
 def _is_kc_name(name: str | None) -> bool:
@@ -280,11 +286,14 @@ async def run(full: bool = False) -> int:
     by_id = {m["id"]: m for m in prev.get("matches") or [] if m.get("id")}
     changed = 0
 
-    for league in league_config.load_tracked_leagues():
-        lid = getattr(league, "lolesports_league_id", None)
+    leagues = {getattr(lg, "lolesports_league_id", None): lg.short_name or ""
+               for lg in league_config.load_tracked_leagues()}
+    for lid, label in EXTRA_LEAGUES.items():
+        leagues.setdefault(lid, label)
+    for lid, label in leagues.items():
         if not lid:
             continue
-        name = (league.short_name or "").lower()
+        name = label.lower()
         known = [m["date"] for m in by_id.values() if (m.get("league") or "").lower() == name and m.get("date")]
         for meta in await _scan_schedule(lid, full, max(known) if known else None):
             old = by_id.get(meta["id"])
@@ -312,6 +321,10 @@ async def run(full: bool = False) -> int:
         return 0
 
     matches = sorted(by_id.values(), key=lambda m: m.get("date") or "", reverse=True)
+    for m in matches:
+        m["kc_image"] = _https(m.get("kc_image"))
+        if isinstance(m.get("opponent"), dict):
+            m["opponent"]["image"] = _https(m["opponent"].get("image"))
     payload = {
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "source": "LoL Esports API (worker real_data_export)",
