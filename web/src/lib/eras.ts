@@ -918,7 +918,7 @@ export const ERAS: Era[] = [
     label: "Le R\u00EAve Mondial",
     subtitle: "Premiers Worlds du club",
     color: "#C8AA6E",
-    result: "Play-ins 3/3 \u00b7 phase suisse d\u00E8s le 23 oct.",
+    result: "Play-ins gagn\u00e9s \u00b7 phase suisse d\u00E8s le 23 oct.",
     icon: "\uD83C\uDFC6",
     image: "/images/eras/2026-worlds.jpg",
     dateStart: "2026-10-15",
