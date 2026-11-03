@@ -1,5 +1,6 @@
 /**
- * Ouverture de l'accueil — 2,3 s, une fois par session.
+ * Ouverture de l'accueil — 1,2 s, une fois par session (allégée le 03/11 :
+ * plus de flou animé, transform/opacity seulement).
  *
  *   nuit KC → un filet d'or s'ouvre au centre → les blasons glissent l'un vers
  *   l'autre (KC à gauche, l'adversaire à droite un jour de match ; KC seul et
@@ -11,7 +12,7 @@
  * <head> par app/layout.tsx, avant la page) règle <html data-intro> :
  *   · déjà vue dans la session, ou mouvement réduit demandé → "seen" (rien) ;
  *   · première arrivée sur l'accueil → "play" (rideau + cascade du hero).
- * OpeningControl (client) gère le passage (clic, touche) et la fin (2,6 s).
+ * OpeningControl (client) gère le passage (clic, touche) et la fin (1,3 s).
  * Sans JavaScript, le rideau joue quand même et s'efface seul (fill-mode).
  */
 import type { HomeTheme } from "@/lib/home-themes";

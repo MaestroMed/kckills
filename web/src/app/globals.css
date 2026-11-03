@@ -1340,7 +1340,7 @@ nav[data-scrolled="true"] .kc-pennant-wrap {
   z-index: 100;
   pointer-events: auto;
   cursor: pointer;
-  animation: op-end 0.01s linear 2.3s forwards;
+  animation: op-end 0.01s linear 1.2s forwards;
 }
 html[data-intro="seen"] #kc-opening,
 html[data-intro="done"] #kc-opening { display: none; }
@@ -1355,11 +1355,11 @@ html[data-intro="done"] #kc-opening { display: none; }
     radial-gradient(90% 120% at 50% 100%, #0b1a38 0%, #030b18 55%, #010a13 100%);
   will-change: transform;
 }
-.op-half--top { top: 0; animation: op-up 0.78s var(--op-curtain) 1.5s forwards; }
+.op-half--top { top: 0; animation: op-up 0.42s var(--op-curtain) 0.78s forwards; }
 .op-half--bottom {
   bottom: 0;
   background: radial-gradient(90% 120% at 50% 0%, #0b1a38 0%, #030b18 55%, #010a13 100%);
-  animation: op-down 0.78s var(--op-curtain) 1.5s forwards;
+  animation: op-down 0.42s var(--op-curtain) 0.78s forwards;
 }
 @keyframes op-up { to { transform: translateY(-101%); } }
 @keyframes op-down { to { transform: translateY(101%); } }
@@ -1374,14 +1374,13 @@ html[data-intro="done"] #kc-opening { display: none; }
   transform: scaleX(0);
   background: linear-gradient(90deg, transparent, var(--op-accent) 20%, #fff3d6 50%, var(--op-accent) 80%, transparent);
   box-shadow: 0 0 18px var(--op-accent), 0 0 42px color-mix(in srgb, var(--op-accent) 60%, transparent);
-  animation: op-line 1.95s var(--op-ease) 0.08s forwards;
+  animation: op-line 1s var(--op-ease) 0.04s forwards;
 }
 @keyframes op-line {
   0% { transform: scaleX(0); opacity: 1; }
   32% { transform: scaleX(1); opacity: 1; }
-  74% { transform: scaleX(1); opacity: 1; height: 1px; }
-  80% { opacity: 1; height: 3px; }
-  100% { transform: scaleX(1); opacity: 0; height: 1px; }
+  74% { transform: scaleX(1); opacity: 1; }
+  100% { transform: scaleX(1); opacity: 0; }
 }
 
 /* éclat quand les blasons se rejoignent */
@@ -1390,7 +1389,7 @@ html[data-intro="done"] #kc-opening { display: none; }
   inset: 0;
   opacity: 0;
   background: radial-gradient(40% 30% at 50% 50%, rgba(255, 246, 225, 0.55), transparent 70%);
-  animation: op-flash 0.5s ease-out 1.08s forwards;
+  animation: op-flash 0.3s ease-out 0.55s forwards;
 }
 @keyframes op-flash { 0% { opacity: 0; } 30% { opacity: 1; } 100% { opacity: 0; } }
 
@@ -1402,9 +1401,9 @@ html[data-intro="done"] #kc-opening { display: none; }
   align-items: center;
   justify-content: center;
   gap: 22px;
-  animation: op-stage-out 0.6s var(--op-ease) 1.42s forwards;
+  animation: op-stage-out 0.3s var(--op-ease) 0.72s forwards;
 }
-@keyframes op-stage-out { to { opacity: 0; transform: scale(1.06); filter: blur(6px); } }
+@keyframes op-stage-out { to { opacity: 0; transform: scale(1.06); } }
 .op-row { display: flex; align-items: center; gap: clamp(18px, 4vw, 44px); }
 
 .op-crest {
@@ -1420,18 +1419,18 @@ html[data-intro="done"] #kc-opening { display: none; }
   background: linear-gradient(160deg, #fbf8f2, var(--op-primary) 55%, #ddd5c4);
   border: 2px solid var(--op-accent);
   box-shadow: 0 0 50px color-mix(in srgb, var(--op-accent) 45%, transparent), 0 24px 60px rgba(0, 0, 0, 0.6);
-  animation: op-from-left 0.95s var(--op-ease) 0.3s forwards;
+  animation: op-from-left 0.5s var(--op-ease) 0.12s forwards;
 }
-.op--home .op-crest--home { background: linear-gradient(160deg, #0f1d36, #061023); animation: op-rise 0.9s var(--op-ease) 0.3s forwards; }
+.op--home .op-crest--home { background: linear-gradient(160deg, #0f1d36, #061023); animation: op-rise 0.5s var(--op-ease) 0.12s forwards; }
 .op-crest--away {
   background: linear-gradient(160deg, #0f1d36, #050c1a);
   border: 2px solid color-mix(in srgb, var(--op-rival) 75%, transparent);
   box-shadow: 0 0 50px color-mix(in srgb, var(--op-rival) 40%, transparent), 0 24px 60px rgba(0, 0, 0, 0.6);
-  animation: op-from-right 0.95s var(--op-ease) 0.3s forwards;
+  animation: op-from-right 0.5s var(--op-ease) 0.12s forwards;
 }
-@keyframes op-from-left { from { opacity: 0; transform: translateX(-38vw) scale(0.9); filter: blur(10px); } to { opacity: 1; transform: none; filter: blur(0); } }
-@keyframes op-from-right { from { opacity: 0; transform: translateX(38vw) scale(0.9); filter: blur(10px); } to { opacity: 1; transform: none; filter: blur(0); } }
-@keyframes op-rise { from { opacity: 0; transform: translateY(18px) scale(0.86); filter: blur(10px); } to { opacity: 1; transform: none; filter: blur(0); } }
+@keyframes op-from-left { from { opacity: 0; transform: translateX(-38vw) scale(0.9); } to { opacity: 1; transform: none; } }
+@keyframes op-from-right { from { opacity: 0; transform: translateX(38vw) scale(0.9); } to { opacity: 1; transform: none; } }
+@keyframes op-rise { from { opacity: 0; transform: translateY(18px) scale(0.86); } to { opacity: 1; transform: none; } }
 
 .op-vs {
   font-family: var(--font-display, inherit);
@@ -1443,9 +1442,9 @@ html[data-intro="done"] #kc-opening { display: none; }
   background-clip: text;
   color: transparent;
   opacity: 0;
-  animation: op-vs 0.55s var(--op-ease) 0.85s forwards;
+  animation: op-vs 0.32s var(--op-ease) 0.4s forwards;
 }
-@keyframes op-vs { from { opacity: 0; transform: scale(1.7); filter: blur(8px); } to { opacity: 1; transform: none; filter: drop-shadow(0 0 16px color-mix(in srgb, var(--op-accent) 70%, transparent)); } }
+@keyframes op-vs { from { opacity: 0; transform: scale(1.7); } to { opacity: 1; transform: none; } }
 
 .op-meta,
 .op-word {
@@ -1457,10 +1456,10 @@ html[data-intro="done"] #kc-opening { display: none; }
 .op-meta {
   font-family: var(--font-data, ui-monospace, monospace);
   font-size: 12px;
-  letter-spacing: 0.6em;
-  animation: op-track 0.7s var(--op-ease) 0.95s forwards;
+  letter-spacing: 0.34em;
+  animation: op-track 0.35s var(--op-ease) 0.45s forwards;
 }
-@keyframes op-track { from { opacity: 0; letter-spacing: 0.9em; } to { opacity: 0.85; letter-spacing: 0.34em; } }
+@keyframes op-track { from { opacity: 0; transform: translateY(6px); } to { opacity: 0.85; transform: none; } }
 .op-word {
   font-family: var(--font-display, inherit);
   font-weight: 900;
@@ -1471,16 +1470,16 @@ html[data-intro="done"] #kc-opening { display: none; }
   background-clip: text;
   color: transparent;
   clip-path: inset(0 100% 0 0);
-  animation: op-wipe 0.8s var(--op-ease) 0.7s forwards;
+  animation: op-wipe 0.45s var(--op-ease) 0.3s forwards;
 }
 @keyframes op-wipe { from { opacity: 1; clip-path: inset(0 100% 0 0); } to { opacity: 1; clip-path: inset(0 0 0 0); } }
 
 /* le hero entre en cascade quand le rideau s'ouvre (seulement si l'ouverture joue) */
 html[data-intro="play"] .hero-in {
-  animation: hero-in 1s cubic-bezier(0.16, 1, 0.3, 1) both;
-  animation-delay: calc(1.7s + var(--i, 0) * 90ms);
+  animation: hero-in 0.6s cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation-delay: calc(0.85s + var(--i, 0) * 60ms);
 }
-@keyframes hero-in { from { opacity: 0; transform: translateY(22px); filter: blur(6px); } to { opacity: 1; transform: none; filter: blur(0); } }
+@keyframes hero-in { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: none; } }
 
 @media (prefers-reduced-motion: reduce) {
   #kc-opening { display: none; }

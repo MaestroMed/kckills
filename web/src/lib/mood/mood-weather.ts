@@ -1,6 +1,10 @@
 import { createAnonSupabase } from "@/lib/supabase/server";
 import { fetchNextKcMatch } from "@/lib/next-match-server";
 import { WEATHER, forcedWeather, type Mood, type MoodWeather } from "./presets";
+import { T1_MATCH } from "@/lib/t1-match";
+
+/** Jusqu'à la fin du quart contre T1 : pluie, vent, tonnerre (« c'est la guerre », Mehdi, 03/11). */
+const WAR = { until: Date.parse(T1_MATCH.endsAt), reason: "Quart des Worlds contre T1 : c'est la guerre" };
 
 /**
  * Météo du site d'après la forme de la KC.
@@ -113,7 +117,8 @@ export async function getMoodWeather(now: number = Date.now()): Promise<MoodWeat
   ]);
   // Sans les résultats, on ne devine pas : temps neutre (les événements
   // seuls feraient croire à la gloire).
-  if (!series) return { ...forcedWeather("variable"), reason: "Forme de la KC indisponible" };
+  const war = now < WAR.until;
+  if (!series) return war ? { ...forcedWeather("tempete"), reason: WAR.reason } : { ...forcedWeather("variable"), reason: "Forme de la KC indisponible" };
 
   // ── moral ──
   let sum = 0;
@@ -147,13 +152,14 @@ export async function getMoodWeather(now: number = Date.now()): Promise<MoodWeat
   else if (morale > -0.2) mood = "variable";
   else if (morale > -0.55) mood = "gris";
   else mood = "tempete";
+  if (war) mood = "tempete"; // même en direct : l'orage ne retombe qu'après le dernier game
 
   const base = WEATHER[mood];
   // Le vent se lève à l'approche du match.
   const wind = +(base.wind * (1 + 0.25 * tension)).toFixed(2);
   const gustAmp = +(base.gustAmp * (1 + 0.3 * tension)).toFixed(2);
 
-  const parts: string[] = [];
+  const parts: string[] = war ? [WAR.reason] : [];
   const last = series[0];
   if (last) {
     parts.push(`${last.kcWon ? "Victoire" : "Défaite"} ${last.kcScore}-${last.oppScore} contre ${last.opp} ${ago(now - last.at)}`);

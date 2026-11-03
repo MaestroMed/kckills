@@ -18,6 +18,8 @@ export interface FullKillsGridProps {
   opponentCode: string;
   /** Anchor id — referenced by the hero CTA + page nav. */
   anchorId?: string;
+  /** Titre affiché à la place de « Tous les kills · N ». */
+  title?: string;
 }
 
 function formatMinSec(seconds: number | null): string {
@@ -38,6 +40,7 @@ export async function FullKillsGrid({
   kills,
   opponentCode,
   anchorId = "kills-feed",
+  title,
 }: FullKillsGridProps) {
   const { t } = await getServerT();
   if (kills.length === 0) {
@@ -55,15 +58,15 @@ export async function FullKillsGrid({
   return (
     <section
       id={anchorId}
-      aria-labelledby="kills-feed-heading"
+      aria-labelledby={`${anchorId}-heading`}
       className="space-y-4 scroll-mt-32"
     >
       <div className="flex items-baseline justify-between gap-4">
         <h2
-          id="kills-feed-heading"
+          id={`${anchorId}-heading`}
           className="font-display text-xl font-black uppercase tracking-widest text-[var(--gold)]"
         >
-          {t("p6_matchpg.all_kills", { n: kills.length })}
+          {title ?? t("p6_matchpg.all_kills", { n: kills.length })}
         </h2>
         <Link
           href="/scroll"
