@@ -5,6 +5,8 @@ import { usePathname } from "next/navigation";
 import { useEffect } from "react";
 import { Navbar } from "@/components/navbar";
 import { LiveBanner } from "@/components/LiveBanner";
+import { AnnouncementBar } from "@/components/banner/AnnouncementBar";
+import { CONTACT_EMAIL } from "@/lib/contact";
 import { PushOptIn } from "@/components/PushOptIn";
 import { useT } from "@/lib/i18n/use-lang";
 import { mergeLocalBookmarksOnce } from "@/lib/bookmarks";
@@ -58,6 +60,7 @@ export function LayoutChrome({ children }: { children: React.ReactNode }) {
   return (
     <>
       <LiveBanner />
+      <AnnouncementBar />
       <Navbar />
       <main id="main-content" className="mx-auto max-w-7xl px-4 py-6">
         {children}
@@ -82,6 +85,7 @@ export function LayoutChrome({ children }: { children: React.ReactNode }) {
               <Link href="/players" className="hover:text-[var(--gold)]">{t("nav.players")}</Link>
               <Link href="/matches" className="hover:text-[var(--gold)]">{t("nav.matches")}</Link>
               <Link href="/privacy" className="hover:text-[var(--gold)]">{t("footer.privacy")}</Link>
+              <a href={`mailto:${CONTACT_EMAIL}`} className="hover:text-[var(--gold)]">{CONTACT_EMAIL}</a>
             </div>
             <Link href="/login" className="inline-flex items-center gap-2 rounded-lg border border-[#5865F2]/20 bg-[#5865F2]/5 px-3 py-1.5 text-xs text-[#8B9DFF] hover:bg-[#5865F2]/10">
               <svg className="h-3.5 w-3.5" fill="currentColor" viewBox="0 0 24 24">

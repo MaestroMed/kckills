@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 import { getStaticT } from "@/lib/i18n/server-lang";
+import { CONTACT_EMAIL } from "@/lib/contact";
 
 export const metadata: Metadata = {
   title: "Politique de confidentialit\u00e9",
@@ -125,6 +126,11 @@ export default async function PrivacyPage() {
             {t("p_pubpages.privacy_contact_heading")}
           </h2>
           <p>{t("p_pubpages.privacy_contact_body")}</p>
+          <p className="mt-2">
+            <a href={`mailto:${CONTACT_EMAIL}`} className="text-[var(--gold)] underline underline-offset-2">
+              {CONTACT_EMAIL}
+            </a>
+          </p>
         </section>
       </div>
 
