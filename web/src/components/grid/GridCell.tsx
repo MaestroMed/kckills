@@ -90,6 +90,7 @@ export const GridCell = memo(function GridCell({
               ? ({ viewTransitionName: `kill-${cell.top_kill_id}` } as React.CSSProperties)
               : undefined
           }
+          unoptimized
         />
       ) : (
         <div className="absolute inset-0 bg-gradient-to-br from-[var(--bg-elevated)] to-[var(--bg-surface)]" />

@@ -220,6 +220,7 @@ function PodiumColumn({
             sizes={mobile ? "100vw" : "(max-width: 1024px) 33vw, 30vw"}
             className="object-cover transition-transform duration-700 group-hover:scale-105"
             priority={rank === 0}
+            unoptimized
           />
         ) : (
           <div className="absolute inset-0 grid place-items-center bg-gradient-to-br from-[var(--bg-elevated)] to-[var(--bg-surface)]">

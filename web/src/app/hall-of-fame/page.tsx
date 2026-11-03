@@ -71,6 +71,7 @@ export default async function HallOfFamePage() {
                       fill
                       sizes="(max-width: 640px) 50vw, 25vw"
                       className="object-cover transition-transform duration-500 group-hover:scale-105 motion-reduce:transition-none"
+                      unoptimized
                     />
                   )}
                   <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-transparent to-black/30" />

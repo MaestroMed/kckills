@@ -41,6 +41,7 @@ export async function SimilarClipsCarousel({ killId }: { killId: string }) {
                   height={126}
                   loading="lazy"
                   className="h-full w-full object-cover group-hover:scale-110 transition-transform duration-700 ease-out"
+                  unoptimized
                 />
               ) : (
                 <div className="grid place-items-center h-full text-[var(--text-muted)] text-xs">

@@ -192,6 +192,7 @@ function EraKillCard({ kill, accentColor }: EraKillCardProps) {
           fill
           sizes="(max-width: 768px) 128px, 16vw"
           className="object-cover group-hover:scale-105 transition-transform duration-500"
+          unoptimized
         />
       )}
 

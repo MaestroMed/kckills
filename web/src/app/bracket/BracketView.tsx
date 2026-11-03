@@ -430,6 +430,7 @@ function ChampionBanner({ champion, readOnly }: { champion: BracketMatch; readOn
               fill
               sizes="100px"
               className="object-cover"
+              unoptimized
             />
           ) : null}
         </div>
@@ -848,7 +849,7 @@ function SideRow({
         }}
       >
         {thumb ? (
-          <Image src={thumb} alt="" fill sizes="36px" className="object-cover" />
+          <Image src={thumb} alt="" fill sizes="36px" className="object-cover" unoptimized />
         ) : null}
         {isWinner && (
           <span
@@ -1204,7 +1205,7 @@ function ModalClipPanel({
             aria-label={t("p_bracketv.clip_aria", { label, name: killerName ?? killerChampion ?? "?" })}
           />
         ) : thumb ? (
-          <Image src={thumb} alt={t("p_bracketv.clip_alt", { label })} fill sizes="(max-width: 768px) 50vw, 400px" className="object-cover" />
+          <Image src={thumb} alt={t("p_bracketv.clip_alt", { label })} fill sizes="(max-width: 768px) 50vw, 400px" className="object-cover" unoptimized />
         ) : (
           <div className="absolute inset-0 flex items-center justify-center text-[var(--text-muted)] text-xs">
             {t("p_bracketv.clip_unavailable")}
@@ -1350,6 +1351,7 @@ function PastWinnersGallery({
                   fill
                   sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, (max-width: 1280px) 33vw, 25vw"
                   className="object-cover group-hover:scale-105 transition-transform"
+                  unoptimized
                 />
               ) : (
                 <div className="absolute inset-0 flex items-center justify-center text-[var(--gold)]/25">

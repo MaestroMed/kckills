@@ -204,6 +204,7 @@ function RowDesktop({
                 fill
                 sizes="56px"
                 className="object-cover transition-transform duration-500 group-hover/inner:scale-110"
+                unoptimized
               />
             ) : (
               <div className="absolute inset-0 grid place-items-center bg-gradient-to-br from-[var(--bg-elevated)] to-[var(--bg-surface)]">
@@ -313,6 +314,7 @@ function RowCard({
               fill
               sizes="58px"
               className="object-cover"
+              unoptimized
             />
           ) : (
             <div className="absolute inset-0 grid place-items-center bg-gradient-to-br from-[var(--bg-elevated)] to-[var(--bg-surface)]">

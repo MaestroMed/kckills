@@ -1368,6 +1368,7 @@ function KillCardRow({
             fill
             sizes="64px"
             className="object-cover group-hover:scale-105 transition-transform"
+            unoptimized
           />
         ) : null}
       </div>

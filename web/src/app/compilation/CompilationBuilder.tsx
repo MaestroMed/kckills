@@ -790,6 +790,7 @@ function PickerCard({
             fill
             sizes="(min-width: 1024px) 16rem, (min-width: 640px) 33vw, 50vw"
             className="object-cover transition group-hover:scale-105"
+            unoptimized
           />
         ) : (
           <div className="absolute inset-0 bg-[var(--bg-surface)]" />
@@ -926,6 +927,7 @@ function ReorderStep({
                   fill
                   sizes="160px"
                   className="object-cover"
+                  unoptimized
                 />
               ) : null}
               <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-black/40" />

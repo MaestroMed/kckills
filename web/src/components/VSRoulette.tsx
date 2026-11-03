@@ -1246,6 +1246,7 @@ function RouletteReel({
             })`,
             opacity: 0.92,
           }}
+          unoptimized
         />
       ) : (
         <div

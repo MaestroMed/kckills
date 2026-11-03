@@ -265,6 +265,7 @@ export function HeroClipBackground({ clips, posterSrc = "/images/hero-bg.jpg", m
         sizes="100vw"
         priority
         className="object-cover"
+        unoptimized
       />
     );
   }
@@ -291,6 +292,7 @@ export function HeroClipBackground({ clips, posterSrc = "/images/hero-bg.jpg", m
         sizes="100vw"
         priority
         className="hero-poster-breathe object-cover"
+        unoptimized
       />
 
       {/* 🔴 2026-04-27 mobile crash mitigation Tier 2 :

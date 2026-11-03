@@ -139,6 +139,7 @@ export function CommentTriageCard({
               height={80}
               className="h-20 w-12 rounded object-cover"
               loading="lazy"
+              unoptimized
             />
           </Link>
         ) : (

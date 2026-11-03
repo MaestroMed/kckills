@@ -182,6 +182,7 @@ export function FeaturedCalendar({
                     fill
                     sizes="80px"
                     className="object-cover opacity-60"
+                    unoptimized
                   />
                 ) : null}
                 <span className="absolute inset-x-0 top-0 px-1 py-0.5 text-[8px] font-bold uppercase tracking-widest bg-black/60 text-[var(--text-secondary)] text-center">
@@ -268,6 +269,7 @@ export function FeaturedCalendar({
                       fill
                       sizes="120px"
                       className="object-cover"
+                      unoptimized
                     />
                   )}
                   <button

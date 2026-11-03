@@ -178,6 +178,7 @@ export function EditorialCard(props: EditorialCardProps) {
             fill
             sizes="(max-width: 640px) 100vw, 33vw"
             className="object-cover"
+            unoptimized
           />
         ) : (
           <div className="flex h-full items-center justify-center text-xs text-[var(--text-muted)]">
