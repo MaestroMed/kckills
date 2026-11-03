@@ -21,6 +21,7 @@
  * choix.
  */
 import { teamBrand, WORLDS_2026_TEAMS, type TeamBrand } from "./team-brands";
+import { T1_MATCH } from "./t1-match";
 
 export interface BannerLook {
   /** Drap : deux teintes marbrées (sombre → claire), 0xRRGGBB. */
@@ -147,6 +148,11 @@ const C9 = teamBrand("C9")!;
 export const HOME_THEMES: readonly HomeTheme[] = [
   // KC – C9, Mondial 2026, Play-ins, BO5, 15/10/2026 18:00 UTC (getSchedule lolesports, relevé le 15/10).
   worldsMatchTheme(C9, { kickoffISO: "2026-10-15T18:00:00Z", competition: "Mondial 2026", stage: "Play-ins", format: "BO5" }),
+  // KC – T1, quart de finale, BO5 : affiche montée dès le 03/11 (trois jours d'attente, pas 20 h).
+  {
+    ...worldsMatchTheme(teamBrand("T1")!, { kickoffISO: T1_MATCH.startsAt, competition: "Mondial 2026", stage: "Quarts de finale", format: "BO5" }),
+    from: "2026-11-03T00:00:00Z",
+  },
 ];
 
 /** Tous les thèmes explorables dans la galerie : maison + KC contre chaque équipe du Mondial 2026. */

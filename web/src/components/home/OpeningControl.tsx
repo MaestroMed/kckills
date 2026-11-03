@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Pilote de l'ouverture (HomeOpening) : clic ou touche = passer, fin à 2,6 s,
+ * Pilote de l'ouverture (HomeOpening) : clic ou touche = passer, fin à 1,3 s,
  * et première arrivée sur l'accueil par navigation interne (le script de
  * <head> n'a alors pas tourné) : on marque la session et on lance la cascade.
  */
@@ -29,7 +29,7 @@ export function OpeningControl() {
     const el = document.getElementById("kc-opening");
     el?.addEventListener("click", end);
     window.addEventListener("keydown", end, { once: true });
-    const id = window.setTimeout(end, 2600);
+    const id = window.setTimeout(end, 1300);
     return () => {
       el?.removeEventListener("click", end);
       window.removeEventListener("keydown", end);
