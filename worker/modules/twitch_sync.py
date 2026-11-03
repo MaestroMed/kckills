@@ -86,8 +86,49 @@ def media_duration(path: str) -> float:
         return 0.0
 
 
+# Lecteur local d'abord (engine_v2.chrono, 0 jeton) : depuis la QC v3, Gemini
+# est éteint par défaut et toute calibration Twitch tombait à 0 lecture.
+LOCAL_PROFILES = ("worlds26_row", "ewc26")
+_readers: list | None = None
+
+
+def _local_readers() -> list:
+    global _readers
+    if _readers is None:
+        try:
+            from engine_v2.chrono import ChronoReader
+            _readers = [r for r in (ChronoReader(p) for p in LOCAL_PROFILES) if r.calibrated]
+        except Exception as e:  # cv2 absent, modèles illisibles : on retombe sur Gemini
+            log.warn("twitch_sync_local_reader_unavailable", error=str(e)[:120])
+            _readers = []
+    return _readers
+
+
+def _read_timer_local(path: str, pos: float) -> int | None:
+    readers = _local_readers()
+    if not readers:
+        return None
+    import cv2
+    cap = cv2.VideoCapture(path)
+    try:
+        cap.set(cv2.CAP_PROP_POS_MSEC, max(0.0, pos) * 1000.0)
+        ok, img = cap.read()
+    finally:
+        cap.release()
+    if not ok:
+        return None
+    for r in readers:
+        rd = r.read(img)
+        if rd.seconds is not None:
+            return rd.seconds
+    return None
+
+
 async def read_timer_at(path: str, pos: float, tmp_dir: str) -> int | None:
     """Chrono affiché à `pos` secondes dans le fichier (None si illisible)."""
+    t_local = await asyncio.to_thread(_read_timer_local, path, pos)
+    if t_local is not None:
+        return t_local
     os.makedirs(tmp_dir, exist_ok=True)
     crop = os.path.join(tmp_dir, f"timer_{abs(hash(path)) % 99999}_{int(pos * 10)}.png")
     proc = await asyncio.create_subprocess_exec(
