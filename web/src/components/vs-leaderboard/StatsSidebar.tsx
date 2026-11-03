@@ -334,7 +334,7 @@ function KillSpotlight({
         }}
       >
         {thumb ? (
-          <Image src={thumb} alt="" fill sizes="44px" className="object-cover" />
+          <Image src={thumb} alt="" fill sizes="44px" className="object-cover" unoptimized />
         ) : (
           <div className="absolute inset-0 grid place-items-center bg-[var(--bg-elevated)]">
             <span className="font-display text-[10px] text-[var(--gold-dark)]">KC</span>

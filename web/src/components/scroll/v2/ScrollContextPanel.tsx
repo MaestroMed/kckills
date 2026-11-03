@@ -413,6 +413,7 @@ const RelatedThumb = memo(function RelatedThumb({
           placeholder="blur"
           blurDataURL={BLUR_PLACEHOLDER}
           className="object-cover transition-transform duration-300 group-hover:scale-105"
+          unoptimized
         />
       ) : (
         <div className="absolute inset-0 bg-[var(--bg-elevated)]" />

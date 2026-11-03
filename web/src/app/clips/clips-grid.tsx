@@ -459,6 +459,7 @@ function ClipCardComponent({ card }: { card: ClipCard }) {
             className={`object-cover group-hover:scale-105 transition-transform duration-500 ${
               card.isDataOnly ? "opacity-60" : ""
             }`}
+            unoptimized
           />
         ) : card.isDataOnly ? (
           // Data-only without thumbnail : show large champion icons as the

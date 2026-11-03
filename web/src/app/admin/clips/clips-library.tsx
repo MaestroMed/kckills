@@ -587,7 +587,7 @@ function ClipRowView({
       <td className="px-2 py-2">
         {clip.thumbnail_url ? (
           <div className="relative w-14 h-24 rounded overflow-hidden bg-black">
-            <Image src={clip.thumbnail_url} alt="" fill sizes="56px" className="object-cover" loading="lazy" />
+            <Image src={clip.thumbnail_url} alt="" fill sizes="56px" className="object-cover" loading="lazy" unoptimized />
             {clip.multi_kill && (
               <span className="absolute top-0.5 right-0.5 rounded bg-[var(--orange)] text-[8px] font-black text-black px-1">
                 {clip.multi_kill[0].toUpperCase()}
@@ -691,6 +691,7 @@ function ClipGridCard({
             sizes="(max-width: 768px) 50vw, 25vw"
             className="object-cover"
             loading="lazy"
+            unoptimized
           />
         ) : (
           <div className="absolute inset-0 flex items-center justify-center text-[var(--text-muted)] text-sm">

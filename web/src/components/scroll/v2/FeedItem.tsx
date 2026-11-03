@@ -356,6 +356,7 @@ export function FeedItemVideo({
           placeholder="blur"
           blurDataURL={BLUR_PLACEHOLDER}
           className="object-cover opacity-0"
+          unoptimized
         />
       )}
 
@@ -925,6 +926,7 @@ export function FeedItemMoment({
           placeholder="blur"
           blurDataURL={BLUR_PLACEHOLDER}
           className="object-cover opacity-0"
+          unoptimized
         />
       )}
       <div

@@ -1171,6 +1171,7 @@ function NewspaperClipping({
             fill
             sizes="(max-width: 768px) 100vw, 300px"
             className="object-cover"
+            unoptimized
           />
         </div>
       )}
@@ -1664,6 +1665,7 @@ function MurAhouAhouRoom({ sessionHashRef, supabaseRef }: RpcRefs) {
                     sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
                     className="object-cover transition-transform duration-700 group-hover:scale-105"
                     style={{ filter: "sepia(0.3) contrast(1.05) brightness(0.92)" }}
+                    unoptimized
                   />
                 ) : (
                   <div className="absolute inset-0" style={{ background: "#1a0808" }} />

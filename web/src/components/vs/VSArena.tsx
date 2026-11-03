@@ -798,7 +798,7 @@ function VoteScreen({
         style={{ borderColor: `rgba(${rgb},${won ? 1 : 0.45})`, boxShadow: won ? `0 0 48px rgba(${rgb},0.5)` : "none" }}
       >
         <div className="relative aspect-[9/16] max-h-[56vh] w-full">
-          {kill.thumbnail_url && <Image src={kill.thumbnail_url} alt="" fill sizes="(max-width: 768px) 45vw, 360px" className="object-cover" />}
+          {kill.thumbnail_url && <Image src={kill.thumbnail_url} alt="" fill sizes="(max-width: 768px) 45vw, 360px" className="object-cover" unoptimized />}
           <span className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black via-black/70 to-transparent p-3 pt-16">
             <span className="block font-data text-[10px] uppercase tracking-[0.25em]" style={{ color: `rgb(${rgb})` }}>
               {side === "a" ? "Bleu" : "Rouge"} · {f.ign}

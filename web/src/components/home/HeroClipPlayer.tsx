@@ -45,7 +45,7 @@ export function HeroClipPlayer({ src, poster, alt }: { src: string | null; poste
 
   return (
     <>
-      <Image src={poster} alt={alt} fill priority sizes="96px" className="object-cover" />
+      <Image src={poster} alt={alt} fill priority sizes="96px" className="object-cover" unoptimized />
       {autoplay && src ? (
         <video
           ref={ref}

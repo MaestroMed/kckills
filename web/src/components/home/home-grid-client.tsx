@@ -119,6 +119,7 @@ function GridMobileRow({
                   fill
                   sizes="62vw"
                   className="object-cover"
+                  unoptimized
                 />
               )}
               <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/20 to-transparent" />

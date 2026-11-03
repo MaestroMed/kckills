@@ -179,7 +179,7 @@ export function PlayerPoster({
         {sig && (
           <Link href={`/kill/${sig.id}`} className="group mt-4 flex items-center gap-4" aria-label={`Le kill signature de ${name} : ${sigMeta}`}>
             <span className="relative h-[100px] w-16 shrink-0 overflow-hidden rounded-lg border border-[var(--gold)]/55 bg-black">
-              {sig.thumbnail && <Image src={sig.thumbnail} alt="" fill sizes="64px" className="object-cover transition-transform duration-500 group-hover:scale-110" />}
+              {sig.thumbnail && <Image src={sig.thumbnail} alt="" fill sizes="64px" className="object-cover transition-transform duration-500 group-hover:scale-110" unoptimized />}
             </span>
             <span className="min-w-0">
               <span className="block font-display text-[22px] font-bold uppercase leading-tight text-white group-hover:text-[var(--gold)]">

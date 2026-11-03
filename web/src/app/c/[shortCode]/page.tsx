@@ -284,6 +284,7 @@ export default async function CompilationViewerPage({ params }: Props) {
                       fill
                       sizes="(min-width: 1024px) 22rem, (min-width: 640px) 50vw, 100vw"
                       className="object-cover transition group-hover:scale-105"
+                      unoptimized
                     />
                   ) : k.killerChampion ? (
                     <Image

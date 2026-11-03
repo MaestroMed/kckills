@@ -374,7 +374,7 @@ function PickerModal({
               >
                 {k.thumbnail && (
                   <div className="relative h-12 w-20 flex-shrink-0 overflow-hidden rounded bg-black">
-                    <Image src={k.thumbnail} alt="" fill sizes="80px" className="object-cover" />
+                    <Image src={k.thumbnail} alt="" fill sizes="80px" className="object-cover" unoptimized />
                   </div>
                 )}
                 <div className="flex-1 min-w-0">

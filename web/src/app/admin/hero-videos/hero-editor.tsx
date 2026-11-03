@@ -508,6 +508,7 @@ export function HeroVideosEditor() {
                       fill
                       sizes="(max-width: 768px) 100vw, 120px"
                       className="object-cover"
+                      unoptimized
                     />
                   ) : (
                     <video

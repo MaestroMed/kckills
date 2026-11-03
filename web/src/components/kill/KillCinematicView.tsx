@@ -695,6 +695,7 @@ export function KillCinematicView({
                       sizes="224px"
                       className="object-cover group-hover:scale-105 transition-transform duration-500"
                       loading="lazy"
+                      unoptimized
                     />
                   ) : (
                     <div className="grid place-items-center h-full text-[var(--text-muted)] text-xs">no clip</div>
