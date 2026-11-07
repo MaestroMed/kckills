@@ -9,20 +9,28 @@ import { SITE_URL } from "@/lib/site-url";
 import { T1_MATCH } from "@/lib/t1-match";
 
 /**
- * /t1 — la rivalité KC × T1, mise en avant pour le quart de finale des
- * Worlds 2026 (vendredi 6 novembre, 23 h à Paris).
+ * /t1 — la rivalité KC × T1.
  *
- * Toutes les séries KC–T1 de l'histoire présentes en base (03/11/2026) :
+ * Toutes les séries KC–T1 de l'histoire présentes en base (07/11/2026) :
+ *   - Worlds 2026, quart de finale, Bo5 : T1 3-1 KC (Riot 115660540726095103,
+ *     KC gagne la game 3 ; vainqueurs lus dans games.winner_team_id)
  *   - MSI 2026, Play-In Knockouts, Bo5 : T1 3-0 KC   (Riot 115570934355614509)
  *   - EWC 2026, demi-finale, Bo3      : KC 2-1 T1   (Riot 116855104460702372)
  * Les lignes gol.gg 79534-79536 sont les mêmes games du MSI (doublons
  * gol.gg/feed, cf. pièges de données) : volontairement ignorées.
- * Ajouter le quart des Worlds ici quand le worker l'aura clippé.
  */
 
 export const revalidate = 600;
 
 const SERIES = [
+  {
+    externalId: "115660540726095103",
+    title: "Worlds 2026 · Quart de finale",
+    date: "6 novembre 2026",
+    score: "T1 3 – 1 KC",
+    kcWon: false,
+    blurb: "Le Bo5 des Worlds. KC arrache la game 3, T1 referme la série au quatrième match.",
+  },
   {
     externalId: "116855104460702372",
     title: "EWC 2026 · Demi-finale",
@@ -44,11 +52,11 @@ const SERIES = [
 export const metadata: Metadata = {
   title: "KC × T1 — tous les kills de la rivalité",
   description:
-    "Quart de finale des Worlds 2026 vendredi 6 novembre à 23 h : revois tous les kills des séries Karmine Corp contre T1 (MSI 2026, EWC 2026).",
+    "Revois tous les kills des séries Karmine Corp contre T1 : MSI 2026, EWC 2026 et le quart de finale des Worlds 2026.",
   alternates: { canonical: `${SITE_URL}/t1` },
   openGraph: {
     title: "KC × T1 — tous les kills de la rivalité",
-    description: "Avant le quart des Worlds, revois chaque kill KC contre T1.",
+    description: "MSI, EWC, Worlds : chaque kill KC contre T1.",
     url: `${SITE_URL}/t1`,
   },
 };
@@ -91,11 +99,11 @@ export default async function T1RivalryPage() {
         <dl className="mx-auto mt-8 grid max-w-md grid-cols-3 gap-3 font-data">
           <div className="rounded-xl bg-black/30 p-3">
             <dt className="text-[10px] uppercase tracking-widest text-[var(--text-muted)]">Séries</dt>
-            <dd className="mt-1 text-xl font-bold text-[var(--gold-bright)]">1 – 1</dd>
+            <dd className="mt-1 text-xl font-bold text-[var(--gold-bright)]">1 – 2</dd>
           </div>
           <div className="rounded-xl bg-black/30 p-3">
             <dt className="text-[10px] uppercase tracking-widest text-[var(--text-muted)]">Games</dt>
-            <dd className="mt-1 text-xl font-bold text-[var(--gold-bright)]">2 – 4</dd>
+            <dd className="mt-1 text-xl font-bold text-[var(--gold-bright)]">3 – 7</dd>
           </div>
           <div className="rounded-xl bg-black/30 p-3">
             <dt className="text-[10px] uppercase tracking-widest text-[var(--text-muted)]">Clips</dt>
