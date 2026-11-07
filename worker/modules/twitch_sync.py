@@ -88,7 +88,7 @@ def media_duration(path: str) -> float:
 
 # Lecteur local d'abord (engine_v2.chrono, 0 jeton) : depuis la QC v3, Gemini
 # est éteint par défaut et toute calibration Twitch tombait à 0 lecture.
-LOCAL_PROFILES = ("worlds26_row", "ewc26")
+LOCAL_PROFILES = ("worlds26_row", "ewc26", "lec26")
 _readers: list | None = None
 
 
