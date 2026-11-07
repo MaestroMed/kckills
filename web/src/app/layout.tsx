@@ -411,6 +411,15 @@ export default async function RootLayout({
             can never loop. If sessionStorage is unavailable (private mode,
             storage disabled) we do NOT reload — a missed auto-update beats an
             infinite loop. */}
+        {/* Régime R2 (07/11/2026) — v.mp4 n'est plus produit : la colonne
+            clip_url_vertical pointe sur h.mp4 (16:9). Toute vidéo paysage
+            jouée dans une boîte portrait est donc recadrée ici, une fois
+            pour tous les lecteurs : cover + 62 % reproduit exactement le
+            recadrage de l'ancien v.mp4 (crop centré décalé de +8 % de la
+            largeur, cf. worker/modules/clipper.py). Une vidéo portrait
+            (anciens v.mp4, v_low) ou une boîte paysage retrouve son style
+            d'origine. Capture sur document : loadedmetadata ne remonte pas. */}
+        <script dangerouslySetInnerHTML={{ __html: `(function(){function f(v){if(!(v instanceof HTMLVideoElement))return;var w=v.videoWidth,h=v.videoHeight,bw=v.clientWidth,bh=v.clientHeight;if(!w||!h||!bw||!bh)return;var d=v.dataset;if(w>h&&bh>bw*1.2){if(d.kcCrop!=='1'){d.kcFit=v.style.objectFit;d.kcPos=v.style.objectPosition;d.kcCrop='1'}v.style.objectFit='cover';v.style.objectPosition='62% 50%'}else if(d.kcCrop==='1'){v.style.objectFit=d.kcFit||'';v.style.objectPosition=d.kcPos||'';d.kcCrop=''}}document.addEventListener('loadedmetadata',function(e){f(e.target)},true);var t;addEventListener('resize',function(){clearTimeout(t);t=setTimeout(function(){document.querySelectorAll('video').forEach(f)},150)})})()` }} />
         <script dangerouslySetInnerHTML={{ __html: `if('serviceWorker' in navigator){navigator.serviceWorker.register('/sw.js?v=${SW_BUILD_ID}',{updateViaCache:'none'});if(navigator.serviceWorker.controller){navigator.serviceWorker.addEventListener('controllerchange',function(){var k='kc_sw_reloaded_build',b='${SW_BUILD_ID}';try{if(sessionStorage.getItem(k)===b)return;sessionStorage.setItem(k,b)}catch(e){return}location.reload()})}}` }} />
       </body>
     </html>
