@@ -77,7 +77,8 @@ export function createAnonSupabase() {
  * the rows it can see are identical for logged-in users too. Never use
  * it for user-scoped queries (comments by user, profiles, etc.).
  */
-export function createCachedAnonSupabase(revalidateSeconds = 300) {
+// Saison 2026 close : données figées, cache d'une semaine par défaut.
+export function createCachedAnonSupabase(revalidateSeconds = 604800) {
   return createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,

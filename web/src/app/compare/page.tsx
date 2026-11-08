@@ -13,7 +13,7 @@ import { CompareClient, type ComparablePlayer } from "./compare-client";
  * for every roster player; the client only switches which two are
  * displayed.
  */
-export const revalidate = 3600;
+export const revalidate = 604800; // saison 2026 close : données figées (08/11)
 export const metadata: Metadata = {
   title: "Comparateur",
   description:

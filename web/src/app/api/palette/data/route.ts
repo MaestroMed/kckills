@@ -7,7 +7,7 @@ import { buildPaletteDataEntries } from "@/lib/palette-data";
  * la palette ⌘K, depuis le kc_matches.json publié sur R2 par le worker.
  * Même fraîcheur que getRealData (30 min).
  */
-export const revalidate = 1800;
+export const revalidate = 604800; // saison 2026 close : données figées (08/11)
 
 export async function GET() {
   const data = await getRealData();

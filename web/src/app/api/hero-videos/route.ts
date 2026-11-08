@@ -19,7 +19,7 @@ import { NextResponse } from "next/server";
 import { loadHeroVideos } from "@/lib/hero-videos/storage";
 
 export const runtime = "nodejs"; // fs/promises requires node, not edge
-export const revalidate = 900; // 15 min
+export const revalidate = 604800; // saison 2026 close : données figées (08/11) // 15 min
 
 export async function GET() {
   const videos = await loadHeroVideos();

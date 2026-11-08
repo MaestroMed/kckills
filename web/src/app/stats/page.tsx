@@ -20,7 +20,7 @@ import { getStaticT } from "@/lib/i18n/server-lang";
  * homepage components and the aggregates come from the static
  * kc_matches.json (zero Supabase egress).
  */
-export const revalidate = 3600;
+export const revalidate = 604800; // saison 2026 close : données figées (08/11)
 export const metadata: Metadata = {
   title: "Stats",
   description:

@@ -54,7 +54,7 @@ interface LolEsportsResponse {
   data?: { schedule?: { events?: LolEsportsEvent[] } };
 }
 
-export const revalidate = 60;
+export const revalidate = 3600; // saison 2026 close : données figées (08/11)
 
 export async function GET() {
   try {

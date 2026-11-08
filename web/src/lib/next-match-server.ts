@@ -48,7 +48,7 @@ async function leagueEvents(leagueId: string): Promise<ScheduleEvent[]> {
     const r = await fetch(`${API}/getSchedule?hl=fr-FR&leagueId=${leagueId}`, {
       headers: { "x-api-key": API_KEY },
       signal: AbortSignal.timeout(8000),
-      next: { revalidate: 300 },
+      next: { revalidate: 604800 },
     });
     if (!r.ok) return [];
     const data = await r.json();

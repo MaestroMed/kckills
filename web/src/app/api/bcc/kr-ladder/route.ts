@@ -20,7 +20,7 @@ import { NextResponse } from "next/server";
  *
  * Caching :
  *   - `revalidate = 300` (5 min, matches the user-spec refresh cadence).
- *   - `fetch(..., { next: { revalidate: 300 } })` does double-duty :
+ *   - `fetch(..., { next: { revalidate: 86400 } })` does double-duty :
  *     Vercel ISR layer dedupes concurrent requests AND tags the response
  *     so manual `revalidatePath('/api/bcc/kr-ladder')` invalidates it.
  *   - Cache-Control header is `s-maxage=300, stale-while-revalidate=600`
@@ -28,7 +28,7 @@ import { NextResponse } from "next/server";
  *     for another 10 min while it backfills.
  */
 
-export const revalidate = 300;
+export const revalidate = 604800; // saison 2026 close : données figées (08/11)
 export const runtime = "nodejs";
 
 const RIOT_KR_CHALLENGER_URL =
@@ -101,7 +101,7 @@ export async function GET() {
     const res = await fetch(RIOT_KR_CHALLENGER_URL, {
       headers: { "X-Riot-Token": apiKey },
       // Tag for Vercel ISR — same revalidation window as the route.
-      next: { revalidate: 300 },
+      next: { revalidate: 86400 },
     });
 
     if (!res.ok) {

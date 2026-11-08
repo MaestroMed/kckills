@@ -42,7 +42,7 @@ import { SITE_URL } from "@/lib/site-url";
  * compatibility.
  */
 
-export const revalidate = 600;
+export const revalidate = 604800; // saison 2026 close : données figées (08/11)
 
 interface Props {
   params: Promise<{ slug: string }>;

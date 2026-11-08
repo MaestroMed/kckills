@@ -333,23 +333,23 @@ export async function getTrackedGamesDetailed(): Promise<TrackedGamesDetailed> {
 export const getCachedPublishedClipsCount = unstable_cache(
   async (): Promise<number> => fetchPublishedClipsCount(),
   ["stats-scopes-published-clips"],
-  { revalidate: 300, tags: [STATS_SCOPES_TAG, "hero-stats"] },
+  { revalidate: 604800, tags: [STATS_SCOPES_TAG, "hero-stats"] },
 );
 
 export const getCachedDetectedKcKillsCount = unstable_cache(
   async (): Promise<number> => fetchDetectedKcKillsCount(),
   ["stats-scopes-detected-kc-kills"],
-  { revalidate: 300, tags: [STATS_SCOPES_TAG, "hero-stats"] },
+  { revalidate: 604800, tags: [STATS_SCOPES_TAG, "hero-stats"] },
 );
 
 export const getCachedMatchesAllCompet = unstable_cache(
   async (): Promise<MatchesAllCompet | null> => fetchMatchesAllCompet(),
   ["stats-scopes-matches-all-compet"],
-  { revalidate: 300, tags: [STATS_SCOPES_TAG, "hero-stats"] },
+  { revalidate: 604800, tags: [STATS_SCOPES_TAG, "hero-stats"] },
 );
 
 export const getCachedGamesAllCompetCount = unstable_cache(
   async (): Promise<number> => fetchGamesAllCompetCount(),
   ["stats-scopes-games-all-compet"],
-  { revalidate: 300, tags: [STATS_SCOPES_TAG, "hero-stats"] },
+  { revalidate: 604800, tags: [STATS_SCOPES_TAG, "hero-stats"] },
 );

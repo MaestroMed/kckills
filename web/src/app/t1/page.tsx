@@ -20,7 +20,7 @@ import { T1_MATCH } from "@/lib/t1-match";
  * gol.gg/feed, cf. pièges de données) : volontairement ignorées.
  */
 
-export const revalidate = 600;
+export const revalidate = 604800; // saison 2026 close : données figées (08/11)
 
 const SERIES = [
   {

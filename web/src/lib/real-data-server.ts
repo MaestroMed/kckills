@@ -28,7 +28,7 @@ export function loadEmbeddedRealData(): RealData {
 export const getRealData = cache(async (): Promise<RealData> => {
   try {
     const r = await fetch(REAL_DATA_URL, {
-      next: { revalidate: 1800, tags: ["real-data"] },
+      next: { revalidate: 604800, tags: ["real-data"] },
       signal: AbortSignal.timeout(5000),
     });
     if (r.ok) {

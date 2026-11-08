@@ -47,7 +47,7 @@ export async function getGridCells(
     // anon client + GET-mode RPC (the function is STABLE) so N visitors
     // in the 30 min window cost ONE Supabase call. A plain .rpc() would
     // POST and bypass the Next Data Cache entirely.
-    const supabase = createCachedAnonSupabase(1800);
+    const supabase = createCachedAnonSupabase(604800);
     const { data, error } = await supabase.rpc(
       "fn_get_grid_cells",
       {

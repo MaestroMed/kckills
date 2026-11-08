@@ -31,7 +31,7 @@ import {
 import { JsonLd, breadcrumbLD } from "@/lib/seo/jsonld";
 import { getStaticT, type ServerTranslateFn } from "@/lib/i18n/server-lang";
 
-export const revalidate = 1800; // Wave 13d : DB pressure
+export const revalidate = 604800; // saison 2026 close : données figées (08/11) // Wave 13d : DB pressure
 
 interface Props {
   params: Promise<{ slug: string }>;

@@ -9,7 +9,7 @@ import { ALUMNI } from "@/lib/alumni";
 import { Breadcrumb } from "@/components/Breadcrumb";
 import { getStaticT } from "@/lib/i18n/server-lang";
 
-export const revalidate = 1800; // Wave 13d : DB pressure (roster stable)
+export const revalidate = 604800; // saison 2026 close : données figées (08/11) // Wave 13d : DB pressure (roster stable)
 export const metadata: Metadata = {
   title: "Joueurs KC",
   description:

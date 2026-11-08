@@ -68,7 +68,7 @@ export const getVSFighters = cache(async function getVSFighters(): Promise<VSFig
     })),
   ];
   try {
-    const sb = createCachedAnonSupabase(1800);
+    const sb = createCachedAnonSupabase(604800);
     const counts = await Promise.all(
       candidates.map(async (c) => {
         try {

@@ -21,7 +21,7 @@ import {
 } from "@/lib/leagues-loader";
 
 export const runtime = "edge";
-export const revalidate = 300;
+export const revalidate = 604800; // saison 2026 close : données figées (08/11)
 
 interface WireLeague {
   slug: string;

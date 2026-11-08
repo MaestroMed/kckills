@@ -90,7 +90,7 @@ export async function fetchChannelVideos(
       signal: ctrl.signal,
       // Re-fetch every 10 minutes — RSS is cheap and YouTube updates the
       // feed within ~minutes of an upload going public.
-      next: { revalidate: 600, tags: ["youtube-rss", `channel-${channel.channelId}`] },
+      next: { revalidate: 86400, tags: ["youtube-rss", `channel-${channel.channelId}`] },
       headers: { "User-Agent": "kckills.com (+youtube-showcase)" },
     });
     if (!res.ok) return [];

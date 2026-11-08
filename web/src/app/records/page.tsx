@@ -44,7 +44,7 @@ import { getStaticT, type ServerTranslateFn } from "@/lib/i18n/getServerLang";
  *   Target    Snipes longue dist.  (ai_tags contains "snipe" / "flash_predict")
  */
 
-export const revalidate = 3600; // Wave 13d : records change rarely
+export const revalidate = 604800; // saison 2026 close : données figées (08/11) // Wave 13d : records change rarely
 
 export const metadata: Metadata = {
   title: "Records Absolus",

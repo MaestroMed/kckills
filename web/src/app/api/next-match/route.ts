@@ -9,7 +9,7 @@ import { fetchNextKcMatch } from "@/lib/next-match-server";
  * lib/next-match-server). Falls back to null if the API is down.
  */
 
-export const revalidate = 300;
+export const revalidate = 86400; // saison 2026 close : données figées (08/11)
 
 export async function GET() {
   try {
