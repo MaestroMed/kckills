@@ -9,7 +9,7 @@
  */
 
 import "server-only";
-import { createServerSupabase, rethrowIfDynamic } from "./server";
+import { createCachedAnonSupabase, rethrowIfDynamic } from "./server";
 
 export interface PublicRiotStats {
   summonerName: string;
@@ -55,7 +55,8 @@ export async function getPublicRiotStatsBySummoner(
 ): Promise<PublicRiotStats | null> {
   if (!summonerName || summonerName.trim().length === 0) return null;
   try {
-    const supabase = await createServerSupabase();
+    // Client anonyme sans cookies() : sinon la page entière sort de l'ISR.
+    const supabase = createCachedAnonSupabase();
     const { data, error } = await supabase
       .from("profiles")
       .select(

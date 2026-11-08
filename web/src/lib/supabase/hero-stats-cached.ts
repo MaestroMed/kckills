@@ -46,19 +46,19 @@ const HERO_TAG = "hero-stats" as const;
 export const getCachedHeroLastMatch = unstable_cache(
   async (): Promise<HeroLastMatch | null> => _getHeroLastMatch(true),
   ["hero-last-match"],
-  { revalidate: 300, tags: [HERO_TAG] },
+  { revalidate: 604800, tags: [HERO_TAG] },
 );
 
 export const getCachedHeroCareerStats = unstable_cache(
   async (): Promise<HeroCareerStats | null> => _getHeroCareerStats(true),
   ["hero-career-stats"],
-  { revalidate: 300, tags: [HERO_TAG] },
+  { revalidate: 604800, tags: [HERO_TAG] },
 );
 
 export const getCachedHeroTopScorer = unstable_cache(
   async (): Promise<HeroTopScorer | null> => _getHeroTopScorer(true),
   ["hero-top-scorer"],
-  { revalidate: 1800, tags: [HERO_TAG] },
+  { revalidate: 604800, tags: [HERO_TAG] },
 );
 
 /** ♻️ Audit compteurs 2026-08-12 — alias du compteur canonique « clips »

@@ -27,7 +27,7 @@ import {
 
 import { BracketView } from "./BracketView";
 
-export const revalidate = 120;
+export const revalidate = 604800; // saison 2026 close : données figées (08/11)
 
 export const metadata: Metadata = {
   title: "Tournoi du Mois — KCKILLS Bracket",

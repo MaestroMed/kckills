@@ -74,5 +74,5 @@ export const SIMILAR_KILLS_TAG = "similar-kills" as const;
 export const getCachedSimilarKills = unstable_cache(
   async (killId: string): Promise<SimilarKill[]> => fetchSimilarUncached(killId),
   ["similar-kills"],
-  { revalidate: 3600, tags: [SIMILAR_KILLS_TAG] },
+  { revalidate: 604800, tags: [SIMILAR_KILLS_TAG] },
 );

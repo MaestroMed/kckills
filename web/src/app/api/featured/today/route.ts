@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createAnonSupabase } from "@/lib/supabase/server";
 
-export const revalidate = 300; // 5 min cache
+export const revalidate = 604800; // saison 2026 close : données figées (08/11) // 5 min cache
 
 /** GET /api/featured/today — public endpoint for homepage hero */
 export async function GET() {

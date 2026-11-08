@@ -12,7 +12,7 @@ import { Breadcrumb } from "@/components/Breadcrumb";
 import { getStaticT } from "@/lib/i18n/getServerLang";
 import { MatchesAccordion } from "./matches-accordion";
 
-export const revalidate = 600; // Wave 13d : new match every 1-3 days
+export const revalidate = 604800; // saison 2026 close : données figées (08/11) // Wave 13d : new match every 1-3 days
 
 export const metadata: Metadata = {
   title: "Matchs KC",

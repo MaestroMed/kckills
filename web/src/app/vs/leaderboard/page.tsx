@@ -36,7 +36,7 @@ import { getStaticT } from "@/lib/i18n/server-lang";
 import { VSLeaderboard } from "@/components/vs-leaderboard/VSLeaderboard";
 import { formatNumber } from "@/lib/i18n/lang";
 
-export const revalidate = 300;
+export const revalidate = 604800; // saison 2026 close : données figées (08/11)
 
 export const metadata: Metadata = {
   title: "Classement ELO · KCKILLS",

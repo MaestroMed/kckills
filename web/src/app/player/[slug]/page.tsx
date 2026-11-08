@@ -70,7 +70,9 @@ function safeDecode(value: string): string {
 
 // Wave 13d (2026-04-28) : 300 → 1800. Player stats are essentially
 // static between matches (one new game every 1-3 days for KC).
-export const revalidate = 1800;
+export const revalidate = 604800; // saison 2026 close : données figées (08/11)
+// Une dépendance lit cookies() : sans ça la page est rendue à chaque visite (08/11, ~75 % de la facture Vercel).
+export const dynamic = "force-static";
 
 interface Props {
   params: Promise<{ slug: string }>;

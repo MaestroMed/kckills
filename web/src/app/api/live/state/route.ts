@@ -34,7 +34,7 @@ import {
  *     — CDN-level cache, lets Vercel serve the same JSON to every
  *     visitor for 10 s without re-running this handler.
  */
-export const revalidate = 10;
+export const revalidate = 3600; // saison 2026 close : données figées (08/11)
 // 2026-05-13 — query param ?since=<iso> bypasses the cache entirely.
 // Without `dynamic = 'force-dynamic'` for that path the route would
 // serve a cached payload regardless of `since`. We can't easily mix

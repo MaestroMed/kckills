@@ -19,7 +19,7 @@ import { z } from "zod";
 import { getSearchFacets } from "@/lib/supabase/search";
 
 export const runtime = "nodejs";
-export const revalidate = 3600;
+export const revalidate = 604800; // saison 2026 close : données figées (08/11)
 
 // No filters today — schema is in place so future facet params are
 // validated on arrival (and so the validation pattern matches the rest

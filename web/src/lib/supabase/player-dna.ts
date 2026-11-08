@@ -60,7 +60,7 @@ interface Row {
 
 export const getPlayerDna = cache(async function getPlayerDna(ign: string): Promise<PlayerDna | null> {
   try {
-    const sb = createCachedAnonSupabase(1800);
+    const sb = createCachedAnonSupabase(604800);
     // select() d'abord : les filtres n'existent que sur le constructeur filtré.
     const base = (cols: string) =>
       sb

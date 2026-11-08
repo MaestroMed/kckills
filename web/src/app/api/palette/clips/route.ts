@@ -18,7 +18,7 @@ import { createServerSupabase } from "@/lib/supabase/server";
  * and throw "Dynamic server usage" because cookies aren't available.
  */
 export const dynamic = "force-dynamic";
-export const revalidate = 300;
+export const revalidate = 604800; // saison 2026 close : données figées (08/11)
 
 export async function GET() {
   try {

@@ -18,7 +18,7 @@ import { cleanTeamCode } from "@/lib/team-display";
 // 300s cache — /clips pulls 500 kills and filters client-side. The
 // catalog doesn't churn per-minute; 5-min ISR is plenty.
 // Wave 13d : 300 → 1800 (catalog page, lower freshness need).
-export const revalidate = 1800;
+export const revalidate = 604800; // saison 2026 close : données figées (08/11)
 
 export const metadata: Metadata = {
   title: "Clips",

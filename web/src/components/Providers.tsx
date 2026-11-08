@@ -11,7 +11,6 @@ import { AuthEventTracker } from "./analytics/AuthEventTracker";
 import { WebVitalsReporter } from "./analytics/WebVitalsReporter";
 import { FloatingPlayerProvider } from "@/lib/audio/use-floating-player";
 import { WolfFloatingPlayer } from "./player/WolfFloatingPlayer";
-import { LiveHotNow } from "./LiveHotNow";
 import { AchievementToast } from "./AchievementToast";
 
 /**
@@ -50,7 +49,6 @@ export function Providers({
             <AuthEventTracker />
             <WebVitalsReporter />
             <WolfFloatingPlayer />
-            <LiveHotNow />
             <AchievementToast />
           </FloatingPlayerProvider>
         </ToastProvider>

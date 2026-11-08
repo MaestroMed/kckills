@@ -169,9 +169,9 @@ export const getQuotesForKill = cache(async function getQuotesForKill(
 ): Promise<KillQuoteRow[]> {
   if (!killId) return [];
   try {
-    const supabase = opts.buildTime
-      ? createAnonSupabase()
-      : await createServerSupabase();
+    // Lecture publique : jamais cookies(), sinon /kill/[id] sort de l'ISR.
+    void opts;
+    const supabase = createAnonSupabase();
     const { data, error } = await supabase.rpc("fn_quotes_for_kill", {
       p_kill_id: killId,
     });

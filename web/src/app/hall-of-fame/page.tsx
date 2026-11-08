@@ -13,7 +13,7 @@ import { getStaticT } from "@/lib/i18n/server-lang";
  * clips of all time (community score, Wilson-adjusted by rating
  * volume) + the legendary TCG cards showcase reused from the home.
  */
-export const revalidate = 3600;
+export const revalidate = 604800; // saison 2026 close : données figées (08/11)
 export const metadata: Metadata = {
   title: "Hall of Fame",
   description:

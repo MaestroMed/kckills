@@ -11,7 +11,7 @@ import type { Metadata } from "next";
 import { getChamberCircles } from "@/lib/supabase/chamber";
 import { ChamberExperience } from "@/components/chambre/ChamberExperience";
 
-export const revalidate = 600;
+export const revalidate = 604800; // saison 2026 close : données figées (08/11)
 
 export const metadata: Metadata = {
   // Wave 36 — the root layout template already appends "— KCKILLS" ;

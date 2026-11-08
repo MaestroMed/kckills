@@ -26,7 +26,7 @@ import {
 
 import { BracketView } from "../BracketView";
 
-export const revalidate = 3600;
+export const revalidate = 604800; // saison 2026 close : données figées (08/11)
 
 interface PageProps {
   params: Promise<{ slug: string }>;

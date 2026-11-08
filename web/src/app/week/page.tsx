@@ -26,7 +26,7 @@ import type { Lang, ServerTranslateFn } from "@/lib/i18n/server-lang";
  * hammer the DB on every pageview.
  */
 
-export const revalidate = 600;
+export const revalidate = 604800; // saison 2026 close : données figées (08/11)
 
 export const metadata: Metadata = {
   title: "Cette semaine",

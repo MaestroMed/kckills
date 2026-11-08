@@ -24,7 +24,7 @@ import {
 } from "@/lib/teams-loader";
 
 export const runtime = "edge";
-export const revalidate = 300;
+export const revalidate = 604800; // saison 2026 close : données figées (08/11)
 
 /** Wire shape — narrower than TeamRow so future internal fields can be
  *  added to the loader without leaking. */

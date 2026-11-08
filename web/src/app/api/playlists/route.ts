@@ -16,7 +16,7 @@ import { NextResponse } from "next/server";
 import { loadPlaylists } from "@/lib/audio/playlists-store";
 
 export const runtime = "nodejs";
-export const revalidate = 900; // 15 min ; l'admin revalide à chaque enregistrement
+export const revalidate = 604800; // saison 2026 close : données figées (08/11) // 15 min ; l'admin revalide à chaque enregistrement
 
 export async function GET() {
   const { playlists } = await loadPlaylists();

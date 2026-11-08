@@ -13,7 +13,7 @@ import { getStaticT } from "@/lib/i18n/server-lang";
  * killer_champion (cached anon read) into a browsable icon grid that
  * links into the existing /champion/[name] detail pages.
  */
-export const revalidate = 3600;
+export const revalidate = 604800; // saison 2026 close : données figées (08/11)
 export const metadata: Metadata = {
   title: "Champions",
   description:

@@ -30,7 +30,7 @@ import { Breadcrumb } from "@/components/Breadcrumb";
 import { CompilationBuilder } from "./CompilationBuilder";
 import type { BuilderKill } from "./CompilationBuilder";
 
-export const revalidate = 600;
+export const revalidate = 604800; // saison 2026 close : données figées (08/11)
 
 export const metadata = {
   title: "Compilation Builder",

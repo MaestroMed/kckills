@@ -62,7 +62,7 @@ import { getHomeThemeOverride } from "@/lib/home-theme-settings";
 // vs the previous 5 min. Live Banner + NextMatchOverlay still poll
 // separately for sub-minute freshness, so the user-perceived
 // "liveness" is unchanged.
-export const revalidate = 1800;
+export const revalidate = 604800; // saison 2026 close : données figées (08/11)
 
 export default async function HomePage() {
   const { t } = getStaticT();

@@ -13,14 +13,16 @@ import { SimilarClipsCarousel } from "@/components/kill/SimilarClipsCarousel";
 import { KillQuotesPanel } from "@/components/quotes/KillQuotesPanel";
 import { getAssetMetadata, pickAssetUrl } from "@/lib/kill-assets";
 import { JsonLd, breadcrumbLD } from "@/lib/seo/jsonld";
-import { getServerT } from "@/lib/i18n/server-lang";
+import { getStaticT } from "@/lib/i18n/server-lang";
 import { cleanTeamCode } from "@/lib/team-display";
 import type { Metadata } from "next";
 import { SITE_URL } from "@/lib/site-url";
 
 // ISR: pre-render the top N clips at build time, regenerate every 10 min
 // so freshly-rated kills bubble up without a deploy.
-export const revalidate = 600;
+export const revalidate = 604800; // saison 2026 close : données figées (08/11)
+// Une dépendance lit cookies() : sans ça la page est rendue à chaque visite (08/11, ~75 % de la facture Vercel).
+export const dynamic = "force-static";
 // Other ids fall back to on-demand SSG with the same revalidate window.
 export const dynamicParams = true;
 
@@ -449,7 +451,7 @@ export default async function KillDetailPage({ params }: Props) {
 // ─── Legacy aggregate detail view ──────────────────────────────────────
 
 async function LegacyKillDetail({ kill, id }: { kill: LegacyKill; id: string }) {
-  const { t } = await getServerT();
+  const { t } = getStaticT();
   const kda = kill.deaths > 0
     ? ((kill.kills + kill.assists) / kill.deaths).toFixed(1)
     : "Perfect";

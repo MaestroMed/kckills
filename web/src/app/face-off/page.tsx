@@ -50,7 +50,7 @@ import {
   type FaceOffPresetDuel,
 } from "@/components/FaceOff";
 
-export const revalidate = 900;
+export const revalidate = 604800; // saison 2026 close : données figées (08/11)
 
 // ════════════════════════════════════════════════════════════════════
 // Metadata

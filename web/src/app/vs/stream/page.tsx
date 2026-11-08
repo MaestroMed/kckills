@@ -20,7 +20,7 @@ import type { Metadata } from "next";
 import { Suspense } from "react";
 import { VSStreamMode } from "@/components/vs-stream/VSStreamMode";
 
-export const revalidate = 3600;
+export const revalidate = 604800; // saison 2026 close : données figées (08/11)
 
 export const metadata: Metadata = {
   title: "VS Roulette — Mode Stream",

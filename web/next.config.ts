@@ -116,6 +116,9 @@ const nextConfig: NextConfig = {
   poweredByHeader: false,
 
   images: {
+    // Saison close (08/11/2026) : plus d'optimisation Vercel (~2,8 $/mois).
+    // Vignettes servies par R2 (egress gratuit) et Data Dragon.
+    unoptimized: true,
     remotePatterns: [
       { protocol: "https", hostname: "ddragon.leagueoflegends.com" },
       { protocol: "https", hostname: "*.r2.cloudflarestorage.com" },

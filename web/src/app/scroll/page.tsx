@@ -71,7 +71,7 @@ const FILTERABLE_AXES: ReadonlySet<string> = new Set<GridAxisId>([
 // during active match days, but 5 min was overkill (8 visitors / 5 min
 // peak ≠ data churn). 10 min keeps the feed feeling fresh while
 // halving SSR DB pressure.
-export const revalidate = 600;
+export const revalidate = 604800; // saison 2026 close : données figées (08/11)
 export const metadata = {
   title: "Scroll",
   description:

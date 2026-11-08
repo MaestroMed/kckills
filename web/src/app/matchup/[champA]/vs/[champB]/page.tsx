@@ -24,7 +24,9 @@ function safeDecode(value: string): string {
   }
 }
 
-export const revalidate = 600;
+export const revalidate = 604800; // saison 2026 close : données figées (08/11)
+// Une dépendance lit cookies() : sans ça la page est rendue à chaque visite (08/11, ~75 % de la facture Vercel).
+export const dynamic = "force-static";
 
 interface Props {
   params: Promise<{ champA: string; champB: string }>;

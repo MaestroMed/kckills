@@ -7,7 +7,7 @@
  */
 
 import "server-only";
-import { createServerSupabase, rethrowIfDynamic } from "./server";
+import { createCachedAnonSupabase, rethrowIfDynamic } from "./server";
 
 // ─── Filter type — every key is optional. Mirrors the JSONB the RPC parses.
 export interface ClipFilter {
@@ -189,7 +189,8 @@ export async function getClipsFiltered(
   limit = 24,
 ): Promise<FilteredClip[]> {
   try {
-    const supabase = await createServerSupabase();
+    // Client anonyme sans cookies() : sinon la page entière sort de l'ISR.
+    const supabase = createCachedAnonSupabase();
     const { data, error } = await supabase.rpc("fn_get_clips_filtered", {
       p_filter: buildJsonbFilter(filter),
       p_limit: limit,

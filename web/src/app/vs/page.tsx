@@ -48,7 +48,7 @@ import { getVSFighters } from "@/lib/supabase/vs-fighters";
 import { JsonLd, breadcrumbLD } from "@/lib/seo/jsonld";
 import { getStaticT } from "@/lib/i18n/server-lang";
 
-export const revalidate = 1800;
+export const revalidate = 604800; // saison 2026 close : données figées (08/11)
 
 export const metadata: Metadata = {
   title: "VS Roulette",
@@ -124,7 +124,7 @@ async function buildPlayerOptions(): Promise<VSPlayerOption[]> {
 async function buildAvailableEras(): Promise<VSEraOption[]> {
   const all = buildEraOptions(ERAS);
   try {
-    const sb = createCachedAnonSupabase(1800);
+    const sb = createCachedAnonSupabase(604800);
     const counts = await Promise.all(
       all.map(async (era) => {
         try {

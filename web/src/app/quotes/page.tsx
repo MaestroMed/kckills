@@ -23,7 +23,7 @@ import { JsonLd, breadcrumbLD } from "@/lib/seo/jsonld";
 import { getStaticT } from "@/lib/i18n/server-lang";
 import type { QuoteCardData } from "@/components/quotes/QuoteCard";
 
-export const revalidate = 900;
+export const revalidate = 604800; // saison 2026 close : données figées (08/11)
 
 export const metadata: Metadata = {
   title: "Phrases Cultes",
