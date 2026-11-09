@@ -97,7 +97,7 @@ async def main() -> None:
         segs = [s for s in segs if abs(s[-1][1] - want) <= 45]
     else:  # durée inconnue : la game dont le chrono couvre le dernier kill
         last = max(int(k["game_time_seconds"]) for k in kills)
-        segs = [s for s in segs if s[-1][1] >= last - 30 and s[0][1] <= 600]
+        segs = [s for s in segs if s[-1][1] >= last - 60 and s[0][1] <= 600]
     if len(segs) != 1:
         print(f"segment ambigu ou absent (durée cherchée {want}s) : {len(segs)}")
         return
