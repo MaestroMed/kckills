@@ -382,18 +382,8 @@ async def clip_kill(
         v_crop = _FPS_VF + "crop=ih*9/16:ih:iw/2-ih*9/32+iw*0.08:0,scale=1080:1920"
         v_filter = "h.mp4 recadré côté client (object-position 62% 50%)"
 
-        # ─── 4. Encode vertical 9:16 low (540p, no overlay for perf) ──
-        await scheduler.wait_for("ffmpeg_cooldown")
-        if not await _ffmpeg([
-            "-i", raw_path,
-            "-vf", _FPS_VF + "crop=ih*9/16:ih:iw/2-ih*9/32:0,scale=540:960",
-            *video_codec_args("low"),
-            "-af", "loudnorm=I=-16:TP=-1.5:LRA=11",
-            "-c:a", "aac", "-b:a", "80k",
-            "-movflags", "+faststart",
-            "-y", vl_path,
-        ]):
-            log.warn("ffmpeg_low_failed", kill_id=kill_id)  # non-fatal
+        # ─── 4. Plus de v_low.mp4 (régime R2, 09/11/2026) : comme le v.mp4,
+        # clip_url_vertical_low pointe sur h.mp4 recadré par le site.
 
         # ─── 5. Smart thumbnail extraction — best of 3 frames ─────
         # Extract 3 candidate frames at -1s, +0.5s, +2s around the
@@ -522,10 +512,6 @@ async def clip_kill(
             uploads = [
                 r2_client.upload_versioned(game_id, kill_id, version, h_path, "horizontal"),
                 (
-                    r2_client.upload_versioned(game_id, kill_id, version, vl_path, "vertical_low")
-                    if os.path.exists(vl_path) else _noop()
-                ),
-                (
                     r2_client.upload_versioned(game_id, kill_id, version, thumb_path, "thumbnail")
                     if os.path.exists(thumb_path) else _noop()
                 ),
@@ -533,7 +519,6 @@ async def clip_kill(
         else:
             uploads = [
                 r2_client.upload_clip(kill_id, h_path, "h"),
-                r2_client.upload_clip(kill_id, vl_path, "v_low") if os.path.exists(vl_path) else _noop(),
                 r2_client.upload_clip(kill_id, thumb_path, "thumb") if os.path.exists(thumb_path) else _noop(),
             ]
 
@@ -544,8 +529,8 @@ async def clip_kill(
         async with asyncio.TaskGroup() as tg:
             for coro in uploads:
                 upload_tasks.append(tg.create_task(coro))
-        h_url, vl_url, thumb_url = [t.result() for t in upload_tasks]
-        v_url = h_url  # régime R2 : le 9:16 HQ est h.mp4 recadré par le site
+        h_url, thumb_url = [t.result() for t in upload_tasks]
+        v_url = vl_url = h_url  # régime R2 : le 9:16 (HQ et low) est h.mp4 recadré par le site
         # kill_assets rows reuse the same versioned URLs.
         h_url_v, v_url_v, vl_url_v, thumb_url_v = (
             (h_url, v_url, vl_url, thumb_url) if game_id else (None, None, None, None)
@@ -562,7 +547,7 @@ async def clip_kill(
                 "preset": "fast",
                 "vf_horizontal": "scale=1920:1080:force_original_aspect_ratio=decrease,pad",
                 "vf_vertical": v_filter,
-                "vf_vertical_low": "crop=ih*9/16:ih:iw/2-ih*9/32:0,scale=540:960",
+                "vf_vertical_low": v_filter,
                 "movflags": "+faststart",
                 "a_codec": "aac",
                 "a_bitrate_hq": "128k",
@@ -574,7 +559,7 @@ async def clip_kill(
             assets_to_insert = [
                 ("horizontal",   h_path,     h_url_v,     h_url),
                 ("vertical",     h_path,     v_url_v,     v_url),
-                ("vertical_low", vl_path,    vl_url_v,    vl_url),
+                ("vertical_low", h_path,     vl_url_v,    vl_url),
                 ("thumbnail",    thumb_path, thumb_url_v, thumb_url),
             ]
             for asset_type, local_path, versioned_url, _legacy_url in assets_to_insert:
@@ -589,7 +574,7 @@ async def clip_kill(
                 # Per-asset hashes : SHA-256 always (cheap, byte-exact);
                 # pHash only on thumbnail (DCT is the same data we need).
                 # Reuse already-computed h_path / thumb_path hashes when we can.
-                if asset_type in ("horizontal", "vertical"):
+                if asset_type in ("horizontal", "vertical", "vertical_low"):
                     asset_content_hash = c_hash
                     asset_phash = None
                 elif asset_type == "thumbnail":
@@ -604,10 +589,10 @@ async def clip_kill(
                     "version": version,
                     "type": asset_type,
                     "url": versioned_url,
-                    # vertical = le même objet que horizontal (régime R2)
+                    # vertical / vertical_low = le même objet que horizontal (régime R2)
                     "r2_key": r2_client.versioned_key(
                         game_id, kill_id, version,
-                        "horizontal" if asset_type == "vertical" else asset_type),
+                        "horizontal" if asset_type in ("vertical", "vertical_low") else asset_type),
                     "width": probe.get("width"),
                     "height": probe.get("height"),
                     "duration_ms": probe.get("duration_ms"),
@@ -746,19 +731,6 @@ async def clip_moment(
         # ─── 3. Plus de v.mp4 (régime R2, 07/11/2026) : le site recadre h.mp4
         v_crop = _FPS_VF + "crop=ih*9/16:ih:iw/2-ih*9/32+iw*0.08:0,scale=1080:1920"
 
-        # ─── 4. Vertical 9:16 low (540p) ───────────────────────────
-        await scheduler.wait_for("ffmpeg_cooldown")
-        if not await _ffmpeg([
-            "-i", raw_path,
-            "-vf", _FPS_VF + "crop=ih*9/16:ih:iw/2-ih*9/32:0,scale=540:960",
-            *video_codec_args("low"),
-            "-af", "loudnorm=I=-16:TP=-1.5:LRA=11",
-            "-c:a", "aac", "-b:a", "80k",
-            "-movflags", "+faststart",
-            "-y", vl_path,
-        ]):
-            log.warn("moment_vl_failed", moment_id=moment_id)
-
         # ─── 5. Thumbnail at mid-clip ──────────────────────────────
         thumb_at = clip_duration // 2
         await _ffmpeg([
@@ -775,16 +747,12 @@ async def clip_moment(
         # status=clip_error). Sibling uploads cancel cleanly.
         async with asyncio.TaskGroup() as tg:
             t_h = tg.create_task(r2_client.upload_moment(moment_id, h_path, "h"))
-            t_vl = tg.create_task(
-                r2_client.upload_moment(moment_id, vl_path, "v_low")
-                if os.path.exists(vl_path) else _noop()
-            )
             t_thumb = tg.create_task(
                 r2_client.upload_moment(moment_id, thumb_path, "thumb")
                 if os.path.exists(thumb_path) else _noop()
             )
-        h_url, vl_url, thumb_url = t_h.result(), t_vl.result(), t_thumb.result()
-        v_url = h_url  # régime R2 : le site recadre h.mp4
+        h_url, thumb_url = t_h.result(), t_thumb.result()
+        v_url = vl_url = h_url  # régime R2 : le site recadre h.mp4 (plus de v.mp4 ni de v_low.mp4)
 
         log.info(
             "moment_clip_done",
