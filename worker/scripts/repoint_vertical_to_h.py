@@ -41,6 +41,7 @@ URL = os.environ["SUPABASE_URL"]
 KEY = os.environ["SUPABASE_SERVICE_KEY"]
 H = {"apikey": KEY, "Authorization": f"Bearer {KEY}"}
 PAGE = 1000
+KIND = "vertical"  # ou "vertical_low" (--kind), régime R2 du 09/11/2026
 CONC = 12
 
 
@@ -59,24 +60,25 @@ def fetch_all(c: httpx.Client, table: str, params: dict) -> list[dict]:
 
 
 def plan(c: httpx.Client) -> list[dict]:
+    col = f"clip_url_{KIND}"
     """Liste des écritures : {table, id, new: {...}, old: {...}}."""
     ops: list[dict] = []
     for table in ("kills", "moments"):
         rows = fetch_all(c, table, {
-            "select": "id,clip_url_horizontal,clip_url_vertical",
-            "clip_url_vertical": "not.is.null",
+            "select": f"id,clip_url_horizontal,{col}",
+            col: "not.is.null",
             "clip_url_horizontal": "not.is.null",
         })
         for r in rows:
-            if r["clip_url_vertical"] != r["clip_url_horizontal"]:
+            if r[col] != r["clip_url_horizontal"]:
                 ops.append({"table": table, "id": r["id"],
-                            "old": {"clip_url_vertical": r["clip_url_vertical"]},
-                            "new": {"clip_url_vertical": r["clip_url_horizontal"]}})
+                            "old": {col: r[col]},
+                            "new": {col: r["clip_url_horizontal"]}})
     sel = "id,kill_id,type,url,r2_key"
     hz = {a["kill_id"]: a for a in fetch_all(c, "kill_assets", {
         "select": sel, "type": "eq.horizontal", "is_current": "eq.true"})}
     vt = fetch_all(c, "kill_assets", {
-        "select": sel, "type": "eq.vertical", "is_current": "eq.true"})
+        "select": sel, "type": f"eq.{KIND}", "is_current": "eq.true"})
     orphan = 0
     for a in vt:
         h = hz.get(a["kill_id"])
@@ -122,7 +124,10 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--apply", action="store_true")
     ap.add_argument("--rollback")
+    ap.add_argument("--kind", default="vertical", choices=["vertical", "vertical_low"])
     a = ap.parse_args()
+    global KIND
+    KIND = a.kind
     if a.rollback:
         ops = [json.loads(l) for l in Path(a.rollback).read_text(encoding="utf-8").splitlines() if l]
         print(f"rollback : {len(ops)} écritures")
@@ -142,7 +147,7 @@ def main() -> None:
         return
     logs = Path.cwd() / "logs"
     logs.mkdir(exist_ok=True)
-    journal = logs / f"repoint_vertical_{time.strftime('%Y%m%d_%H%M%S')}.jsonl"
+    journal = logs / f"repoint_{KIND}_{time.strftime('%Y%m%d_%H%M%S')}.jsonl"
     fails = asyncio.run(run(ops, "new", journal))
     print(f"fini, journal {journal}, échecs : {fails}")
 

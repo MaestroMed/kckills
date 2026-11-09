@@ -41,7 +41,12 @@ PUBLIC = os.getenv("R2_PUBLIC_URL", "").rstrip("/")
 FRESH_S = 2 * 3600
 
 
+LOW = False  # --low : cible les v_low (régime R2 du 09/11/2026)
+
+
 def is_target(key: str) -> bool:
+    if LOW:
+        return key.endswith("/v_low.mp4") or key.endswith("_v_low.mp4")
     return key.endswith("/v.mp4") or (key.endswith("_v.mp4") and not key.endswith("_v_low.mp4"))
 
 
@@ -81,7 +86,10 @@ def referenced() -> set[str]:
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--apply", action="store_true")
+    ap.add_argument("--low", action="store_true")
     a = ap.parse_args()
+    global LOW
+    LOW = a.low
 
     s3 = boto3.client(
         "s3",
