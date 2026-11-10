@@ -55,6 +55,8 @@ DEFAULTS: Final[dict[str, dict[str, int]]] = {
     "event_mapper":        {"parallel": 1, "interval":  600, "batch": 100, "lease":  300},
     "transitioner":        {"parallel": 1, "interval":  300, "batch":  50, "lease":  300},
     "vod_offset_finder":   {"parallel": 1, "interval": 3600, "batch":  50, "lease":  600},
+    # 21/10/2026 — remplace vod_offset_finder dans le démon (QC v3).
+    "qc3_sync":            {"parallel": 1, "interval": 1800, "batch":   3, "lease": 1500},
     # Clip pipeline --------------------------------------------------------
     "clipper":             {"parallel": 8, "interval":  300, "batch": 200, "lease":  600},
     "analyzer":            {"parallel": 5, "interval":  600, "batch":  80, "lease":  900},

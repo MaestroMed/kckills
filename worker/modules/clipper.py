@@ -372,47 +372,18 @@ async def clip_kill(
             log.error("ffmpeg_horizontal_failed", kill_id=kill_id)
             return None
 
-        # ─── 3. Encode vertical 9:16 HQ + text overlays ─────────────
-        # Smart crop: shift 8% right of center to capture kill feed + action.
-        # The LoL broadcast camera tracks action slightly right-of-center,
-        # and the kill feed is in the top-right quadrant.
-        # Standard center: iw/2 - ih*9/32. Shifted right: + iw*0.08
+        # ─── 3. Plus de v.mp4 (régime R2, 07/11/2026) ───────────────
+        # Le 9:16 HQ n'était qu'un recadrage du 16:9 (décalé de 8 % à
+        # droite) : le site recadre h.mp4 en direct (object-fit cover,
+        # object-position 62 % 50 %, script global de layout.tsx). On
+        # n'encode ni n'uploade plus ce fichier : ~248 Go de moins sur R2.
+        # clip_url_vertical pointe sur h.mp4 (une vingtaine de requêtes
+        # filtrent sur clip_url_vertical IS NOT NULL).
         v_crop = _FPS_VF + "crop=ih*9/16:ih:iw/2-ih*9/32+iw*0.08:0,scale=1080:1920"
-        if killer_champion and victim_champion:
-            overlay = _build_overlay_filter(
-                killer_champion, victim_champion,
-                context=match_context or "",
-                is_vertical=True,
-            )
-            v_filter = f"{v_crop},{overlay}"
-        else:
-            v_filter = v_crop
+        v_filter = "h.mp4 recadré côté client (object-position 62% 50%)"
 
-        await scheduler.wait_for("ffmpeg_cooldown")
-        if not await _ffmpeg([
-            "-i", raw_path,
-            "-vf", v_filter,
-            *video_codec_args("hq"),
-            "-af", "loudnorm=I=-16:TP=-1.5:LRA=11",
-            "-c:a", "aac", "-b:a", "128k",
-            "-movflags", "+faststart",
-            "-y", v_path,
-        ]):
-            log.error("ffmpeg_vertical_failed", kill_id=kill_id)
-            return None
-
-        # ─── 4. Encode vertical 9:16 low (540p, no overlay for perf) ──
-        await scheduler.wait_for("ffmpeg_cooldown")
-        if not await _ffmpeg([
-            "-i", raw_path,
-            "-vf", _FPS_VF + "crop=ih*9/16:ih:iw/2-ih*9/32:0,scale=540:960",
-            *video_codec_args("low"),
-            "-af", "loudnorm=I=-16:TP=-1.5:LRA=11",
-            "-c:a", "aac", "-b:a", "80k",
-            "-movflags", "+faststart",
-            "-y", vl_path,
-        ]):
-            log.warn("ffmpeg_low_failed", kill_id=kill_id)  # non-fatal
+        # ─── 4. Plus de v_low.mp4 (régime R2, 09/11/2026) : comme le v.mp4,
+        # clip_url_vertical_low pointe sur h.mp4 recadré par le site.
 
         # ─── 5. Smart thumbnail extraction — best of 3 frames ─────
         # Extract 3 candidate frames at -1s, +0.5s, +2s around the
@@ -432,7 +403,8 @@ async def clip_kill(
             try:
                 await _ffmpeg([
                     "-ss", str(max(0, before + offset_s)),
-                    "-i", v_path,
+                    "-i", raw_path,
+                    "-vf", v_crop,
                     "-vframes", "1",
                     "-q:v", "2",
                     "-y", cand_path,
@@ -539,11 +511,6 @@ async def clip_kill(
         if game_id:
             uploads = [
                 r2_client.upload_versioned(game_id, kill_id, version, h_path, "horizontal"),
-                r2_client.upload_versioned(game_id, kill_id, version, v_path, "vertical"),
-                (
-                    r2_client.upload_versioned(game_id, kill_id, version, vl_path, "vertical_low")
-                    if os.path.exists(vl_path) else _noop()
-                ),
                 (
                     r2_client.upload_versioned(game_id, kill_id, version, thumb_path, "thumbnail")
                     if os.path.exists(thumb_path) else _noop()
@@ -552,8 +519,6 @@ async def clip_kill(
         else:
             uploads = [
                 r2_client.upload_clip(kill_id, h_path, "h"),
-                r2_client.upload_clip(kill_id, v_path, "v"),
-                r2_client.upload_clip(kill_id, vl_path, "v_low") if os.path.exists(vl_path) else _noop(),
                 r2_client.upload_clip(kill_id, thumb_path, "thumb") if os.path.exists(thumb_path) else _noop(),
             ]
 
@@ -564,7 +529,8 @@ async def clip_kill(
         async with asyncio.TaskGroup() as tg:
             for coro in uploads:
                 upload_tasks.append(tg.create_task(coro))
-        h_url, v_url, vl_url, thumb_url = [t.result() for t in upload_tasks]
+        h_url, thumb_url = [t.result() for t in upload_tasks]
+        v_url = vl_url = h_url  # régime R2 : le 9:16 (HQ et low) est h.mp4 recadré par le site
         # kill_assets rows reuse the same versioned URLs.
         h_url_v, v_url_v, vl_url_v, thumb_url_v = (
             (h_url, v_url, vl_url, thumb_url) if game_id else (None, None, None, None)
@@ -581,7 +547,7 @@ async def clip_kill(
                 "preset": "fast",
                 "vf_horizontal": "scale=1920:1080:force_original_aspect_ratio=decrease,pad",
                 "vf_vertical": v_filter,
-                "vf_vertical_low": "crop=ih*9/16:ih:iw/2-ih*9/32:0,scale=540:960",
+                "vf_vertical_low": v_filter,
                 "movflags": "+faststart",
                 "a_codec": "aac",
                 "a_bitrate_hq": "128k",
@@ -592,8 +558,8 @@ async def clip_kill(
 
             assets_to_insert = [
                 ("horizontal",   h_path,     h_url_v,     h_url),
-                ("vertical",     v_path,     v_url_v,     v_url),
-                ("vertical_low", vl_path,    vl_url_v,    vl_url),
+                ("vertical",     h_path,     v_url_v,     v_url),
+                ("vertical_low", h_path,     vl_url_v,    vl_url),
                 ("thumbnail",    thumb_path, thumb_url_v, thumb_url),
             ]
             for asset_type, local_path, versioned_url, _legacy_url in assets_to_insert:
@@ -608,7 +574,7 @@ async def clip_kill(
                 # Per-asset hashes : SHA-256 always (cheap, byte-exact);
                 # pHash only on thumbnail (DCT is the same data we need).
                 # Reuse already-computed h_path / thumb_path hashes when we can.
-                if asset_type == "horizontal":
+                if asset_type in ("horizontal", "vertical", "vertical_low"):
                     asset_content_hash = c_hash
                     asset_phash = None
                 elif asset_type == "thumbnail":
@@ -623,7 +589,10 @@ async def clip_kill(
                     "version": version,
                     "type": asset_type,
                     "url": versioned_url,
-                    "r2_key": r2_client.versioned_key(game_id, kill_id, version, asset_type),
+                    # vertical / vertical_low = le même objet que horizontal (régime R2)
+                    "r2_key": r2_client.versioned_key(
+                        game_id, kill_id, version,
+                        "horizontal" if asset_type in ("vertical", "vertical_low") else asset_type),
                     "width": probe.get("width"),
                     "height": probe.get("height"),
                     "duration_ms": probe.get("duration_ms"),
@@ -759,41 +728,15 @@ async def clip_moment(
             log.error("moment_h_failed", moment_id=moment_id)
             return None
 
-        # ─── 3. Vertical 9:16 HQ (no burnt-in overlay — frontend handles badges)
+        # ─── 3. Plus de v.mp4 (régime R2, 07/11/2026) : le site recadre h.mp4
         v_crop = _FPS_VF + "crop=ih*9/16:ih:iw/2-ih*9/32+iw*0.08:0,scale=1080:1920"
-        v_filter = v_crop
-
-        await scheduler.wait_for("ffmpeg_cooldown")
-        if not await _ffmpeg([
-            "-i", raw_path,
-            "-vf", v_filter,
-            *video_codec_args("hq"),
-            "-af", "loudnorm=I=-16:TP=-1.5:LRA=11",
-            "-c:a", "aac", "-b:a", "128k",
-            "-movflags", "+faststart",
-            "-y", v_path,
-        ]):
-            log.error("moment_v_failed", moment_id=moment_id)
-            return None
-
-        # ─── 4. Vertical 9:16 low (540p) ───────────────────────────
-        await scheduler.wait_for("ffmpeg_cooldown")
-        if not await _ffmpeg([
-            "-i", raw_path,
-            "-vf", _FPS_VF + "crop=ih*9/16:ih:iw/2-ih*9/32:0,scale=540:960",
-            *video_codec_args("low"),
-            "-af", "loudnorm=I=-16:TP=-1.5:LRA=11",
-            "-c:a", "aac", "-b:a", "80k",
-            "-movflags", "+faststart",
-            "-y", vl_path,
-        ]):
-            log.warn("moment_vl_failed", moment_id=moment_id)
 
         # ─── 5. Thumbnail at mid-clip ──────────────────────────────
         thumb_at = clip_duration // 2
         await _ffmpeg([
             "-ss", str(thumb_at),
-            "-i", v_path,
+            "-i", raw_path,
+            "-vf", v_crop,
             "-vframes", "1", "-q:v", "2",
             "-y", thumb_path,
         ])
@@ -804,18 +747,12 @@ async def clip_moment(
         # status=clip_error). Sibling uploads cancel cleanly.
         async with asyncio.TaskGroup() as tg:
             t_h = tg.create_task(r2_client.upload_moment(moment_id, h_path, "h"))
-            t_v = tg.create_task(r2_client.upload_moment(moment_id, v_path, "v"))
-            t_vl = tg.create_task(
-                r2_client.upload_moment(moment_id, vl_path, "v_low")
-                if os.path.exists(vl_path) else _noop()
-            )
             t_thumb = tg.create_task(
                 r2_client.upload_moment(moment_id, thumb_path, "thumb")
                 if os.path.exists(thumb_path) else _noop()
             )
-        h_url, v_url, vl_url, thumb_url = (
-            t_h.result(), t_v.result(), t_vl.result(), t_thumb.result(),
-        )
+        h_url, thumb_url = t_h.result(), t_thumb.result()
+        v_url = vl_url = h_url  # régime R2 : le site recadre h.mp4 (plus de v.mp4 ni de v_low.mp4)
 
         log.info(
             "moment_clip_done",
@@ -1720,7 +1657,23 @@ async def run() -> int:
                             if _frz.verdict == "fail":
                                 qc_local_ok = False
                                 qc_why = f"start_not_frozen: {_frz.detail}"
+                        # QC v3 (21/10/2026) : chrono à l'instant du kill + score du
+                        # bandeau, depuis la chronologie du feed en cache. Quand il
+                        # rend un verdict, il remplace la lecture à t=15 ci-dessous
+                        # (biaisée : elle supposait 30 s avant le kill pour tous).
+                        qc3_v = None
                         if qc_local_ok and twitch_section is None:
+                            try:
+                                from qc3.daemon_check import check as _qc3_check
+                                _tier = config.CLIP_TIMING.get(kill.get("multi_kill") or "", config.CLIP_TIMING["default"])
+                                qc3_v = await asyncio.to_thread(
+                                    _qc3_check, kill, game.get("external_id") or "", _local_h, float(_tier["before"]))
+                            except Exception as _e3:
+                                log.warn("clipper_qc3_error", kill_id=kill["id"][:8], error=str(_e3)[:120])
+                            if qc3_v is not None and qc3_v.verdict not in ("pass", "pass_timer"):
+                                qc_local_ok = False
+                                qc_why = f"qc3:{qc3_v.verdict}: {qc3_v.detail}"
+                        if qc_local_ok and twitch_section is None and qc3_v is None:
                             from modules import timer_ocr
                             if timer_ocr.is_calibrated():
                                 from modules.decryptage import (
@@ -1753,8 +1706,12 @@ async def run() -> int:
                 if urls and urls.get("clip_url_horizontal") and not qc_local_ok:
                     log.warn("clipper_local_qc_rejected",
                              kill_id=kill["id"][:8], reason=qc_why[:120])
+                    # Un refus QC v3 est définitif (la diffusion ne montre pas le
+                    # kill, ou l'ancre de la game est fausse et se corrige par
+                    # qc3_sync) : needs_reclip=false, aucune boucle de re-clip.
+                    _final = qc_why.startswith("qc3:")
                     await batched_safe_update(
-                        "kills", {"status": "needs_review", "needs_reclip": True,
+                        "kills", {"status": "needs_review", "needs_reclip": not _final,
                                   "reclip_reason": f"clip_qc_local: {qc_why}"[:240]},
                         "id", kill["id"])
                     try:

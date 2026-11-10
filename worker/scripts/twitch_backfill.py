@@ -264,6 +264,15 @@ async def clip_one(kill: dict, game: dict, clock: feed_clock.FeedClock, sync: tw
             # Analyse ratée : la visibilité de l'ANCIEN clip ne vaut rien pour
             # le nouveau. Inconnue (NULL) = porte permissive, comme au pipeline.
             patch["kill_visible"] = None
+            if not config.GEMINI_ENABLED:
+                # QC v3 : Gemini éteint par choix. Même repli que l'analyzer
+                # (titre depuis les données, « qc3-data ») ; sans lui chaque
+                # clip Twitch restait en revue faute de description.
+                from modules.local_scorer import heuristic_tags
+                from qc3.titles import title_from_row
+                desc = title_from_row(kill)
+                patch.update({"ai_description": desc, "ai_description_fr": desc,
+                              "ai_tags": heuristic_tags(kill), "ai_pipeline_version": "qc3-data"})
         og_local = og_generator.generate_og_image(
             kill_id=kill["id"],
             killer_name=row["_killer_name_hint"] or ("KC" if kill.get("tracked_team_involvement") == "team_killer" else "Opponent"),

@@ -60,6 +60,13 @@ class Config:
     # public VOD content is ever sent to Gemini (no user data), so the free
     # tier's "Google may train on prompts" is acceptable here (see CLAUDE.md 7).
     GEMINI_API_KEY_FREE: str = os.getenv("GEMINI_API_KEY_FREE", "")
+    # 21/10/2026 — interrupteur général, ÉTEINT par défaut. Mehdi : « ça va
+    # nous coûter trop d'argent si on continue comme ça à l'infini ». La QC
+    # v3 (worker/qc3) ne dépend plus de Gemini : timing du feed, ancre VOD et
+    # contrôle des clips lus en local, titres écrits depuis les données.
+    # Tant que KCKILLS_GEMINI_ENABLED != 1, get_client() rend None : aucun
+    # module ni script ne peut dépenser (les appelants dégradent déjà sur None).
+    GEMINI_ENABLED: bool = os.getenv("KCKILLS_GEMINI_ENABLED", "0") == "1"
     ANTHROPIC_API_KEY: str = os.getenv("ANTHROPIC_API_KEY", "")
 
     # ─── Encoding ────────────────────────────────────────────

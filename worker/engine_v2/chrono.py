@@ -8,6 +8,7 @@ chaque chiffre à des modèles appris sur quelques images étiquetées.
 Profils (fractions de l'image, 16:9) :
   worlds26_row : HUD Worlds 2026 / LEC 2026 — chrono sur la 2e ligne du
                  bandeau du haut, centré (1080p : x 937-985, y 78-100).
+  ewc26        : HUD Esports World Cup 2026, même zone, autre police.
 
 Garde-fous : la lecture exige exactement 4 chiffres + 2 points au bon
 endroit (MM:SS, secondes < 60) et un score de ressemblance minimal par
@@ -26,6 +27,20 @@ import numpy as np
 PROFILES: dict[str, tuple[float, float, float, float]] = {
     # x0, y0, x1, y1 — un peu plus large que les chiffres pour tolérer ±10 px
     "worlds26_row": (0.470, 0.062, 0.530, 0.100),
+    # HUD Esports World Cup 2026 : même emplacement, police différente
+    # (scores 0,68-0,72 avec les modèles Worlds). Modèles appris le 21/10
+    # sur 32 lectures à l'œil de 9 clips EWC (KC–DK, KC–GEN, KC–TS).
+    "ewc26": (0.470, 0.062, 0.530, 0.100),
+    # HUD LEC 2026 (Versus, Spring, Summer) : même emplacement, police plus
+    # grasse dont les chiffres se collent au seuil 165. Modèles appris le
+    # 07/11 sur des lectures à l'œil de 3 VOD Twitch lec (2700264066,
+    # 2733798919, 2827787919).
+    "lec26": (0.470, 0.062, 0.530, 0.100),
+}
+
+# Seuils de luminosité essayés dans l'ordre jusqu'à obtenir 4 chiffres séparés.
+VTHRESH: dict[str, tuple[int, ...]] = {
+    "lec26": (210, 220, 195, 230, 180),
 }
 
 # Versionnés avec le code : le moteur lit dès le premier lancement.
@@ -48,10 +63,10 @@ def _crop(img: np.ndarray, profile: str) -> np.ndarray:
     return img[int(y0 * h):int(y1 * h), int(x0 * w):int(x1 * w)]
 
 
-def _binarize(crop: np.ndarray) -> np.ndarray:
+def _binarize(crop: np.ndarray, v: int = 165) -> np.ndarray:
     hsv = cv2.cvtColor(crop, cv2.COLOR_BGR2HSV)
     # chiffres : blanc cassé, peu saturés, très lumineux
-    mask = (hsv[..., 2] > 165) & (hsv[..., 1] < 70)
+    mask = (hsv[..., 2] > v) & (hsv[..., 1] < 70)
     return mask.astype(np.uint8) * 255
 
 
@@ -89,6 +104,17 @@ def _split(bw: np.ndarray):
     return digits
 
 
+def _segment(img: np.ndarray, profile: str):
+    """(image binaire, 4 boîtes de chiffres) au premier seuil qui découpe, ou (None, None)."""
+    crop = _crop(img, profile)
+    for v in VTHRESH.get(profile, (165,)):
+        bw = _binarize(crop, v)
+        digits = _split(bw)
+        if digits is not None:
+            return bw, digits
+    return None, None
+
+
 def _norm(bw: np.ndarray, box) -> np.ndarray:
     x, y, w, h, _ = box
     d = bw[y:y + h, x:x + w]
@@ -116,11 +142,10 @@ class ChronoReader:
 
     def learn(self, img: np.ndarray, mmss: str) -> bool:
         """Apprend les 4 chiffres d'une image dont on connaît le chrono (« 16:06 »)."""
-        digits = _split(_binarize(_crop(img, self.profile)))
+        bw, digits = _segment(img, self.profile)
         labels = mmss.replace(":", "")
         if digits is None or len(labels) != 4:
             return False
-        bw = _binarize(_crop(img, self.profile))
         d = STORE / self.profile
         d.mkdir(parents=True, exist_ok=True)
         for lab, box in zip(labels, digits):
@@ -144,8 +169,7 @@ class ChronoReader:
     def read(self, img: np.ndarray) -> Read:
         if not self.calibrated:
             return Read(None, 0.0, None)
-        bw = _binarize(_crop(img, self.profile))
-        digits = _split(bw)
+        bw, digits = _segment(img, self.profile)
         if digits is None:
             return Read(None, 0.0, None)
         labs, scores = [], []
